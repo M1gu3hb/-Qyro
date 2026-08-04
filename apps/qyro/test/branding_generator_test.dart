@@ -21,31 +21,30 @@ void main() {
     'backgroundColor': '#03070D',
   };
 
-  test('valid branding generates non-provisional compile-time constants', () {
+  test('valid config emits constants', () {
     final result = generator.generate(jsonEncode(validConfig()));
+    const colorConstant = 'static const primaryColorValue = 0xFF168BFF;';
 
     expect(result.isProvisional, isFalse);
     expect(result.dartSource, contains('static const appName = "Qyro";'));
-    expect(
-      result.dartSource,
-      contains('static const primaryColorValue = 0xFF168BFF;'),
-    );
+    expect(result.dartSource, contains(colorConstant));
     expect(result.provisionalFields, isEmpty);
   });
 
-  test('placeholder values are detected and not exposed as visible branding', () {
+  test('placeholders are provisional and hidden', () {
     final config = validConfig()
       ..['creatorName'] = 'REPLACE_WITH_CREATOR_NAME'
       ..['signatureText'] = 'Built by REPLACE_WITH_CREATOR_NAME'
       ..['bundleIdBase'] = 'com.owner.qyro';
-
     final result = generator.generate(jsonEncode(config));
+    final expectedFields = <String>[
+      'creatorName',
+      'signatureText',
+      'bundleIdBase',
+    ];
 
     expect(result.isProvisional, isTrue);
-    expect(
-      result.provisionalFields,
-      containsAll(<String>['creatorName', 'signatureText', 'bundleIdBase']),
-    );
+    expect(result.provisionalFields, containsAll(expectedFields));
     expect(result.dartSource, contains('static const creatorName = "";'));
     expect(result.dartSource, contains('static const signatureText = "";'));
     expect(result.dartSource, isNot(contains('REPLACE_WITH_CREATOR_NAME')));
@@ -66,7 +65,7 @@ void main() {
     );
   });
 
-  test('invalid colors, control characters, and bundle IDs are rejected', () {
+  test('invalid values are rejected', () {
     for (final invalid in <Map<String, Object?>>[
       validConfig()..['primaryColor'] = 'blue',
       validConfig()..['appName'] = 'Qyro\nInjected',
@@ -79,11 +78,11 @@ void main() {
     }
   });
 
-  test('committed branding is generated from the development fallback', () {
-    final example =
-        File('../../config/branding.example.json').readAsStringSync();
-    final committed = File('lib/generated/branding.g.dart').readAsStringSync();
+  test('committed branding matches the development fallback', () {
+    final example = File('../../config/branding.example.json');
+    final committed = File('lib/generated/branding.g.dart');
+    final expected = generator.generate(example.readAsStringSync()).dartSource;
 
-    expect(committed, generator.generate(example).dartSource);
+    expect(committed.readAsStringSync(), expected);
   });
 }
