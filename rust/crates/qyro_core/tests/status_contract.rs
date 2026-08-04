@@ -1,4 +1,4 @@
-use qyro_core::{protocol_version, readiness, Component, ComponentState};
+use qyro_core::{Component, ComponentState, protocol_version, readiness};
 
 #[test]
 fn protocol_version_is_qyro_one() {
