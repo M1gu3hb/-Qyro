@@ -68,9 +68,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          qyro_app=build/ios/iphoneos/Runner.app
           qyro_symbols="$RUNNER_TEMP/qyro-runner.symbols"
-          nm -gU "$qyro_runner" > "$qyro_symbols"
+          : > "$qyro_symbols"
+          for qyro_binary in "$qyro_app/Runner" "$qyro_app/Runner.debug.dylib"; do
+            if [[ -f "$qyro_binary" ]]; then
+              nm -gU "$qyro_binary" >> "$qyro_symbols"
+            fi
+          done
           grep -q ' _qyro_protocol_version_ptr$' "$qyro_symbols"
           grep -q ' _qyro_protocol_version_len$' "$qyro_symbols"
       - name: Boot an available iOS simulator
