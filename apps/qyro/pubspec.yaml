@@ -1,5 +1,5 @@
 name: qyro
-description: Private peer-to-peer file transfer.
+description: Cross-platform interface baseline for Qyro.
 publish_to: none
 version: 0.0.1+1
 
@@ -23,3 +23,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/brand/qyro-logo.png
+    - assets/generated/logo_ascii.json

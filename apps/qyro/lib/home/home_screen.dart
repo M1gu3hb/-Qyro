@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../generated/branding.g.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Qyro')),
+      appBar: AppBar(title: const Text(GeneratedBranding.appName)),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -17,8 +19,12 @@ class HomeScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (GeneratedBranding.isProvisional) ...[
+                    const _ProvisionalNotice(),
+                    const SizedBox(height: 24),
+                  ],
                   Text(
-                    'Transferencia privada, directamente entre dispositivos.',
+                    'Base de interfaz local en preparación.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
@@ -34,7 +40,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Los transportes todavía no están configurados.',
+                    'Funciones de transferencia aún no implementadas.',
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -61,6 +67,32 @@ class _PrimaryAction extends StatelessWidget {
       label: Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
         child: Text(label),
+      ),
+    );
+  }
+}
+
+class _ProvisionalNotice extends StatelessWidget {
+  const _ProvisionalNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color(0x26168BFF),
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(10),
+        child: Text(
+          'DATOS DE MARCA PROVISIONALES',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF9FCFFF),
+            fontFamily: 'monospace',
+            fontSize: 11,
+          ),
+        ),
       ),
     );
   }
