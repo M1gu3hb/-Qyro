@@ -1,0 +1,34 @@
+# Local configuration and secrets
+config/branding.json
+config/features.json
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.mobileprovision
+.env
+.env.*
+
+# Rust
+target/
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Release binaries
+release/android/*
+release/ios/*
+release/windows/*
+!release/android/.gitkeep
+!release/ios/.gitkeep
+!release/windows/.gitkeep

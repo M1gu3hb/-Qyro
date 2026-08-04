@@ -1,0 +1,14 @@
+# Índice de decisiones
+
+- ADR-0001: Flutter + Rust para multiplataforma.
+- ADR-0002: Rust como núcleo compartido.
+- ADR-0003: protocolo QYRO/1 versionado.
+- ADR-0004: TLS 1.3 más cifrado de contenido.
+- ADR-0005: RaptorQ para modo óptico, pendiente de benchmark.
+- ADR-0006: SQLite local desde Rust.
+- ADR-0007: política sin nube.
+- ADR-0008: launch estático y boot Flutter.
+- ADR-0009: Bluetooth limitado a control/experimental.
+- ADR-0010: paquetes por plataforma y releases reproducibles.
+
+Consulta docs/adr/.

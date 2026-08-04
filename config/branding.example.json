@@ -1,0 +1,12 @@
+{
+  "appName": "Qyro",
+  "creatorName": "REPLACE_WITH_CREATOR_NAME",
+  "studioName": "REPLACE_WITH_STUDIO_NAME",
+  "signatureText": "Built by REPLACE_WITH_CREATOR_NAME",
+  "bundleIdBase": "com.owner.qyro",
+  "website": "",
+  "repository": "",
+  "primaryColor": "#168BFF",
+  "secondaryColor": "#51C8FF",
+  "backgroundColor": "#03070D"
+}

@@ -1,0 +1,11 @@
+{
+  "lan": false,
+  "manualIp": false,
+  "networkPairingQr": false,
+  "optical": false,
+  "wifiDirect": false,
+  "multipeerConnectivity": false,
+  "bluetoothExperimental": false,
+  "cloud": false,
+  "telemetry": false
+}
