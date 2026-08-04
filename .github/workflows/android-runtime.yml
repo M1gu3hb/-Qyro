@@ -29,22 +29,35 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
       - name: Enable KVM access for the hosted runner
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Build and package qyro_ffi for the emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-linux-android
+          qyro_ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}}"
+          test -n "$qyro_ndk"
+          qyro_toolchain="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$qyro_toolchain/x86_64-linux-android21-clang"
+          cargo build --locked --package qyro_ffi --target x86_64-linux-android
+          qyro_library="target/x86_64-linux-android/debug/libqyro_ffi.so"
+          "$qyro_toolchain/llvm-nm" -g --defined-only "$qyro_library" | grep -q ' qyro_protocol_version_ptr$'
+          "$qyro_toolchain/llvm-nm" -g --defined-only "$qyro_library" | grep -q ' qyro_protocol_version_len$'
+          install -D "$qyro_library" apps/qyro/android/app/src/main/jniLibs/x86_64/libqyro_ffi.so
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           channel: stable
           cache: true
-      - name: Resolve Flutter dependencies
+      - name: Resolve locked Flutter dependencies
         working-directory: apps/qyro
-        run: |
-          flutter pub get
-          cat pubspec.lock
+        run: flutter pub get --enforce-lockfile
       - name: Execute native ABI smoke test in an Android emulator
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
