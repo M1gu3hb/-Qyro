@@ -68,3 +68,10 @@ jobs:
           bash scripts/tests/docs_consistency_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/docs_consistency_contract_test.ps1 || status=1
           exit "$status"
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check_docs_consistency.sh
+      - run: pwsh -NoProfile -File scripts/check_docs_consistency.ps1
