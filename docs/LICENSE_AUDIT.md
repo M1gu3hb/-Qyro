@@ -8,6 +8,7 @@ Fecha: 2026-08-04. Apache-2.0 es provisional y requiere aprobación antes de 1.0
 |---|---:|---|---|---|---|
 | Rust std | 1.88.0 | rust-lang/rust | MIT/Apache-2.0 | núcleo/ABI | bajo |
 | Flutter/Dart SDK | Flutter 3.44.8 | flutter/flutter, dart-lang/sdk | BSD-3-Clause | UI/runtime | bajo |
+| integration_test | Flutter 3.44.8 | Flutter SDK | BSD-3-Clause | instrumentación móvil | dev |
 | flutter_lints | 5.0.0 | pub.dev | BSD-3-Clause | lint dev | bajo |
 | async | 2.13.1 | pub.dev | BSD-3-Clause | tests SDK transitivos | dev |
 | boolean_selector | 2.1.2 | pub.dev | BSD-3-Clause | tests | dev |
@@ -32,7 +33,15 @@ Fecha: 2026-08-04. Apache-2.0 es provisional y requiere aprobación antes de 1.0
 | vector_math | 2.2.0 | pub.dev | BSD-3-Clause | Flutter | bajo |
 | vm_service | 15.2.0 | pub.dev | BSD-3-Clause | tests/debug | dev |
 
-sky_engine, flutter y flutter_test vienen del SDK. Las versiones/hashes están fijadas en apps/qyro/pubspec.lock. Cargo no tiene crates externos.
+sky_engine, flutter, flutter_test e integration_test vienen del SDK. Las versiones/hashes de paquetes alojados están fijadas en apps/qyro/pubspec.lock. Cargo no tiene crates externos.
+
+## Infraestructura de CI
+
+| Dependencia | Versión fijada | Licencia | Función | Riesgo |
+|---|---|---|---|---|
+| ReactiveCircus/android-emulator-runner | a421e43855164a8197daf9d8d40fe71c6996bb0d (v2.38.0) | Apache-2.0 | emulador Android para prueba ABI real | dev |
+
+La versión y licencia de android-emulator-runner se verificaron contra su tag y archivo LICENSE publicados. El SHA completo evita cambios implícitos de la action.
 
 ## Política y pendiente
 

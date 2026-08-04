@@ -1,0 +1,44 @@
+name: Android runtime ABI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/android-runtime.yml"
+      - "apps/qyro/**"
+      - "crates/qyro_ffi/**"
+      - "Cargo.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve Flutter dependencies
+        working-directory: apps/qyro
+        run: |
+          flutter pub get
+          cat pubspec.lock
+      - name: Execute native ABI smoke test in an Android emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: cd apps/qyro && flutter test integration_test/native_abi_smoke_test.dart -d emulator-5554
