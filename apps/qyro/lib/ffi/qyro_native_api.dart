@@ -10,19 +10,15 @@ typedef _ProtocolVersionLengthDart = int Function();
 _ProtocolVersionPointerDart _lookupProtocolVersionPointer(
   DynamicLibrary library,
 ) {
-  return library.lookupFunction<
-    _ProtocolVersionPointerNative,
-    _ProtocolVersionPointerDart
-  >('qyro_protocol_version_ptr');
+  return library.lookupFunction<_ProtocolVersionPointerNative,
+      _ProtocolVersionPointerDart>('qyro_protocol_version_ptr');
 }
 
 _ProtocolVersionLengthDart _lookupProtocolVersionLength(
   DynamicLibrary library,
 ) {
-  return library.lookupFunction<
-    _ProtocolVersionLengthNative,
-    _ProtocolVersionLengthDart
-  >('qyro_protocol_version_len');
+  return library.lookupFunction<_ProtocolVersionLengthNative,
+      _ProtocolVersionLengthDart>('qyro_protocol_version_len');
 }
 
 class QyroNativeApi {
@@ -58,8 +54,8 @@ class QyroNativeApi {
       'windows' => 'qyro_ffi.dll',
       'macos' => 'libqyro_ffi.dylib',
       _ => throw UnsupportedError(
-        'qyro_ffi does not support $operatingSystem as a dynamic library.',
-      ),
+          'qyro_ffi does not support $operatingSystem as a dynamic library.',
+        ),
     };
   }
 
