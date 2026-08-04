@@ -1,25 +1,26 @@
 # Contexto del proyecto
 
+## Fuente de verdad
+
+El estado actual, evidencia, plataformas y bloqueos viven exclusivamente en [STATUS.md](STATUS.md).
+
 ## Visión
 
-Qyro mueve archivos, carpetas y texto de forma privada y directa entre dispositivos cercanos, sin cuentas, nube ni internet.
+Qyro pretende mover archivos, carpetas y texto de forma privada y directa entre dispositivos cercanos, sin cuentas, nube ni internet. La visión no implica que esas funciones existan hoy.
 
 ## Plataformas
 
-Android, iOS y Windows son obligatorias y ya tienen runners Flutter oficiales. Linux/web quedan fuera del alcance inicial.
+Android, iOS y Windows son obligatorias. Linux solo se usa como host de CI.
 
-## Alcance
+## Arquitectura aprobada
 
-Selección múltiple, LAN/IP/QR, cifrado, integridad, pausa/reanudación, historial local opcional, confianza revocable, modo óptico FEC e integraciones nativas graduales.
+- Monorepo Flutter/Rust.
+- Flutter para UI y coordinación.
+- Rust para dominio/protocolo futuro.
+- Integraciones nativas aisladas por plataforma.
+- Apache-2.0 y los identificadores siguen provisionales.
+- El logo PNG fue suministrado por el propietario, con autoría/licencia pendiente.
 
-## Fuera de alcance inicial
+## Fuera del sprint baseline
 
-Backend, cuentas, almacenamiento remoto, publicación automática, Bluetooth principal y QUIC crítico.
-
-## Decisiones del propietario
-
-Qyro/Kiro; monorepo Flutter/Rust; Apache-2.0 provisional; logo PNG suministrado; trabajo de repositorio solo en GitHub.
-
-## Estado actual
-
-Base técnica del Hito 0 comprobada. La app compila debug para Android/Windows e iOS sin firma. Boot/Home y tests existen. ABI Rust existe pero Dart aún no la carga. No hay selección, red, cifrado, persistencia, transferencia ni óptico.
+Transferencia, selección, manifest, red, cifrado, persistencia, QR óptico, Wi-Fi Direct y Bluetooth. Consultar NEXT_STEPS.md para el orden futuro.
