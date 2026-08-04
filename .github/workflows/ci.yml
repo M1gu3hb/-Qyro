@@ -78,6 +78,8 @@ jobs:
           bash scripts/tests/docs_consistency_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/docs_consistency_contract_test.ps1 || status=1
           pwsh -NoProfile -File scripts/tests/windows_package_contract_test.ps1 || status=1
+          bash scripts/tests/launch_surface_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/launch_surface_contract_test.ps1 || status=1
           python3 -m unittest tools/logo_ascii_generator/test_logo_ascii_generator.py || status=1
           exit "$status"
 
