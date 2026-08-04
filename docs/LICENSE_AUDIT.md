@@ -40,8 +40,9 @@ sky_engine, flutter, flutter_test e integration_test vienen del SDK. Las version
 | Dependencia | Versión fijada | Licencia | Función | Riesgo |
 |---|---|---|---|---|
 | ReactiveCircus/android-emulator-runner | a421e43855164a8197daf9d8d40fe71c6996bb0d (v2.38.0) | Apache-2.0 | emulador Android para prueba ABI real | dev |
+| actions/upload-artifact | ea165f8d65b6e75b540449e92b4886f43607fa02 (v4) | MIT | publicación del ZIP portable de Windows | dev |
 
-La versión y licencia de android-emulator-runner se verificaron contra su tag y archivo LICENSE publicados. El SHA completo evita cambios implícitos de la action.
+Las versiones y licencias se verificaron contra los tags y archivos LICENSE publicados. Los SHA completos evitan cambios implícitos de las actions fijadas.
 
 ## Política y pendiente
 

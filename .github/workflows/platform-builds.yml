@@ -8,6 +8,7 @@ on:
       - "rust/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "scripts/verify_windows_package.ps1"
       - ".github/workflows/platform-builds.yml"
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - "rust/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "scripts/verify_windows_package.ps1"
       - ".github/workflows/platform-builds.yml"
 
 permissions:
@@ -40,8 +42,8 @@ jobs:
           qyro_toolchain="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$qyro_toolchain/aarch64-linux-android21-clang"
           export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$qyro_toolchain/x86_64-linux-android21-clang"
-          cargo build --package qyro_ffi --target aarch64-linux-android
-          cargo build --package qyro_ffi --target x86_64-linux-android
+          cargo build --locked --package qyro_ffi --target aarch64-linux-android
+          cargo build --locked --package qyro_ffi --target x86_64-linux-android
           mkdir -p apps/qyro/android/app/src/main/jniLibs/arm64-v8a
           mkdir -p apps/qyro/android/app/src/main/jniLibs/x86_64
           cp target/aarch64-linux-android/debug/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/arm64-v8a/
@@ -68,7 +70,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Build qyro_ffi for Windows
         working-directory: .
-        run: cargo build --package qyro_ffi
+        run: cargo build --locked --package qyro_ffi
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
@@ -80,15 +82,60 @@ jobs:
         env:
           QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}\target\debug\qyro_ffi.dll
       - run: flutter build windows --debug
-      - name: Package qyro_ffi beside qyro.exe
+      - name: Package and verify the Windows x64 bundle
+        shell: pwsh
+        working-directory: .
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Debug'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'target\debug\qyro_ffi.dll'
+          Copy-Item -LiteralPath $source -Destination (Join-Path $bundle 'qyro_ffi.dll')
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts\verify_windows_package.ps1') -BundlePath $bundle
+      - name: Smoke-launch qyro.exe
         shell: pwsh
         run: |
-          $source = Join-Path $env:GITHUB_WORKSPACE 'target\debug\qyro_ffi.dll'
-          $destination = Join-Path $PWD 'build\windows\x64\runner\Debug\qyro_ffi.dll'
-          Copy-Item -LiteralPath $source -Destination $destination
-          if (-not (Test-Path -LiteralPath $destination)) {
-            throw 'qyro_ffi.dll was not packaged beside qyro.exe.'
+          $exe = Join-Path $PWD 'build\windows\x64\runner\Debug\qyro.exe'
+          $process = Start-Process -FilePath $exe -PassThru
+          try {
+              Start-Sleep -Seconds 5
+              if ($process.HasExited) {
+                  throw "qyro.exe exited prematurely with code $($process.ExitCode)"
+              }
+              Write-Host '[PASS] qyro.exe remained alive during the launch smoke window'
           }
+          finally {
+              if (-not $process.HasExited) {
+                  Stop-Process -Id $process.Id -Force
+              }
+          }
+      - name: Create portable Windows ZIP
+        shell: pwsh
+        working-directory: .
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Debug'
+          $artifactDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          $zip = Join-Path $artifactDirectory 'qyro-windows-x64-portable-debug.zip'
+          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip -Force
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+              $names = $archive.Entries.FullName
+              foreach ($required in @('qyro.exe', 'qyro_ffi.dll')) {
+                  if ($required -notin $names) {
+                      throw "Portable ZIP is missing $required"
+                  }
+              }
+          }
+          finally {
+              $archive.Dispose()
+          }
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qyro-windows-x64-portable-debug
+          path: artifacts/qyro-windows-x64-portable-debug.zip
+          if-no-files-found: error
+          retention-days: 14
 
   ios:
     runs-on: macos-latest
@@ -97,9 +144,32 @@ jobs:
         working-directory: apps/qyro
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build and stage qyro_ffi for iOS
+        working-directory: .
+        shell: bash
+        run: |
+          rustup target add aarch64-apple-ios
+          cargo build --locked --package qyro_ffi --target aarch64-apple-ios
+          mkdir -p apps/qyro/ios/Native/iphoneos
+          cp target/aarch64-apple-ios/debug/libqyro_ffi.a apps/qyro/ios/Native/iphoneos/
+          xcrun nm -gU apps/qyro/ios/Native/iphoneos/libqyro_ffi.a > /tmp/qyro-ios-static-symbols.txt
+          grep ' _qyro_protocol_version_ptr$' /tmp/qyro-ios-static-symbols.txt
+          grep ' _qyro_protocol_version_len$' /tmp/qyro-ios-static-symbols.txt
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           cache: true
       - run: flutter pub get
       - run: flutter build ios --debug --no-codesign
+      - name: Verify qyro_ffi symbols are linked into the iOS app
+        shell: bash
+        run: |
+          : > /tmp/qyro-ios-app-symbols.txt
+          for binary in build/ios/iphoneos/Runner.app/Runner build/ios/iphoneos/Runner.app/Runner.debug.dylib; do
+            if [[ -f "$binary" ]]; then
+              xcrun nm -gU "$binary" >> /tmp/qyro-ios-app-symbols.txt
+            fi
+          done
+          grep ' _qyro_protocol_version_ptr$' /tmp/qyro-ios-app-symbols.txt
+          grep ' _qyro_protocol_version_len$' /tmp/qyro-ios-app-symbols.txt
