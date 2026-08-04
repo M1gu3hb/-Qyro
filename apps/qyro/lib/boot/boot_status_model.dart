@@ -12,8 +12,7 @@ final class BootStatusModel {
 
   factory BootStatusModel.fromSnapshot(StartupSnapshot snapshot) {
     final diagnostic = snapshot.diagnostic;
-    final progress =
-        snapshot.completedTasks.length / StartupTask.values.length;
+    final progress = snapshot.completedTasks.length / StartupTask.values.length;
     final messageKey = switch (snapshot.phase) {
       StartupPhase.idle => 'startupIdle',
       StartupPhase.running => _taskMessageKey(snapshot.currentTask),

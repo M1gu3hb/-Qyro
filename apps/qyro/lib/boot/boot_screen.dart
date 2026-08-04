@@ -375,9 +375,7 @@ class _BootStatus extends StatelessWidget {
     final diagnosticCode =
         status.diagnosticCode ?? (assetLoadFailed ? 'asset_invalid' : null);
     final technicalSummary = status.technicalSummary ??
-        (assetLoadFailed
-            ? 'Generated ASCII logo could not be loaded'
-            : null);
+        (assetLoadFailed ? 'Generated ASCII logo could not be loaded' : null);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 480),
