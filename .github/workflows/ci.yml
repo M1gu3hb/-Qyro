@@ -38,7 +38,13 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed .
+      - name: Check Dart formatting
+        shell: bash
+        run: |
+          if ! dart format --output=none --set-exit-if-changed .; then
+            git diff -- .
+            exit 1
+          fi
       - run: flutter analyze
       - name: Run Flutter and native ABI tests
         run: flutter test
