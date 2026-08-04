@@ -10,7 +10,7 @@ import 'package:qyro/boot/scramble_decode_engine.dart';
 import 'package:qyro/startup/startup_coordinator.dart';
 
 void main() {
-  test('boot status reports obligatory task progress and safe message keys', () {
+  test('boot status reports obligatory task progress and safe message keys',\n      () {
     final status = BootStatusModel.fromSnapshot(
       StartupSnapshot(
         phase: StartupPhase.running,

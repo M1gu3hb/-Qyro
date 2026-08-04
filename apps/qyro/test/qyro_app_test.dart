@@ -38,7 +38,7 @@ void main() {
     expect(finished, isTrue);
   });
 
-  testWidgets('reduced motion still waits for startup readiness', (tester) async {
+  testWidgets('reduced motion still waits for startup readiness',\n      (tester) async {
     final native = Completer<NativeBridge>();
     final coordinator = _coordinator(loadNativeBridge: () => native.future);
     var finished = false;
