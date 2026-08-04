@@ -86,7 +86,7 @@ void main() {
     });
 
     test('null pointer is typed', () {
-      final api = QyroNativeApi.fromResolver(_FakeResolver(bytes: null));
+      final api = QyroNativeApi.fromResolver(_FakeResolver(nullPointer: true));
 
       expect(
         api.protocolVersion,
@@ -162,17 +162,19 @@ void main() {
 final class _FakeResolver implements QyroNativeSymbolResolver {
   _FakeResolver({
     this.length = 6,
+    this.nullPointer = false,
     Uint8List? bytes,
   }) : bytes = bytes ?? Uint8List.fromList('QYRO/1'.codeUnits);
 
   final int length;
-  final Uint8List? bytes;
+  final bool nullPointer;
+  final Uint8List bytes;
   final Map<String, Object> failureBySymbol = <String, Object>{};
 
   @override
   ProtocolVersionBytesReader lookupBytes(String symbol) {
     _throwFor(symbol);
-    return (length) => bytes;
+    return (length) => nullPointer ? null : bytes;
   }
 
   @override
