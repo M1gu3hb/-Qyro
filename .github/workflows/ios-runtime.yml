@@ -45,9 +45,300 @@ jobs:
             apps/qyro/ios/Native/iphoneos/libqyro_ffi.a
           cp target/aarch64-apple-ios-sim/debug/libqyro_ffi.a \
             apps/qyro/ios/Native/iphonesimulator/libqyro_ffi.a
-          for qyro_library in apps/qyro/ios/Native/*/libqyro_ffi.a; do
-            nm -gU "$qyro_library" | grep -q ' _qyro_protocol_version_ptr$'
-            nm -gU "$qyro_library" | grep -q ' _qyro_protocol_version_len$'
+          for qyro_platform in iphoneos iphonesimulator; do
+            qyro_library="apps/qyro/ios/Native/$qyro_platform/libqyro_ffi.a"
+            qyro_symbols="$RUNNER_TEMP/qyro-$qyro_platform.symbols"
+            nm -gU "$qyro_library" > "$qyro_symbols"
+            grep -q ' _qyro_protocol_version_ptr
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/qyro
+        run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          qyro_symbols="$RUNNER_TEMP/qyro-runner.symbols"
+          nm -gU "$qyro_runner" > "$qyro_symbols"
+          grep -q ' _qyro_protocol_version_ptr
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+            grep -q ' _qyro_protocol_version_len
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/qyro
+        run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_ptr$'
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_len$'
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+          done
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/qyro
+        run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_ptr$'
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_len$'
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+          grep -q ' _qyro_protocol_version_len
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+            grep -q ' _qyro_protocol_version_len
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/qyro
+        run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_ptr$'
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_len$'
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+          done
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/qyro
+        run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_ptr$'
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_len$'
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
+            grep -q ' _qyro_protocol_version_len
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          channel: stable
+          cache: true
+      - name: Resolve locked Flutter dependencies
+        working-directory: apps/qyro
+        run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_ptr$'
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_len$'
+      - name: Boot an available iOS simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          qyro_simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          test -n "$qyro_simulator_id"
+          echo "id=$qyro_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$qyro_simulator_id" 2>/dev/null || true
+          xcrun simctl bootstatus "$qyro_simulator_id" -b
+      - name: Execute qyro_ffi XCTest through the Runner host
+        working-directory: apps/qyro
+        run: >-
+          xcodebuild test
+          -workspace ios/Runner.xcworkspace
+          -scheme Runner
+          -configuration Debug
+          -destination id=${{ steps.simulator.outputs.id }}
+          CODE_SIGNING_ALLOWED=NO
+ "$qyro_symbols"
           done
       - uses: subosito/flutter-action@v2
         with:
