@@ -48,8 +48,7 @@ class _BootScreenState extends State<BootScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_reducedMotionScheduled &&
-        MediaQuery.disableAnimationsOf(context)) {
+    if (!_reducedMotionScheduled && MediaQuery.disableAnimationsOf(context)) {
       _reducedMotionScheduled = true;
       _controller.stop();
       WidgetsBinding.instance.addPostFrameCallback((_) {
