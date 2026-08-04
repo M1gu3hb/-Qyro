@@ -59,9 +59,7 @@ const REQUIRED_COMPONENTS: [Component; 3] = [
 ];
 
 /// Builds a readiness snapshot from actual initialization results.
-pub fn readiness(
-    results: impl IntoIterator<Item = (Component, bool)>,
-) -> ReadinessReport {
+pub fn readiness(results: impl IntoIterator<Item = (Component, bool)>) -> ReadinessReport {
     let mut states = REQUIRED_COMPONENTS
         .into_iter()
         .map(|component| (component, ComponentState::Unavailable))

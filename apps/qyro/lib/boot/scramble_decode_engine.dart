@@ -19,8 +19,7 @@ final class ScrambleDecodeEngine {
   final String noiseAlphabet;
 
   late final List<int> _targetRunes = target.runes.toList(growable: false);
-  late final List<int> _noiseRunes =
-      noiseAlphabet.runes.toList(growable: false);
+  late final List<int> _noiseRunes = noiseAlphabet.runes.toList(growable: false);
 
   /// Returns how many target cells are permanently revealed.
   int revealedCellCount(double progress) {
