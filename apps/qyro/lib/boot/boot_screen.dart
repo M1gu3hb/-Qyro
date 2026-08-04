@@ -258,7 +258,7 @@ class _BootScreenState extends State<BootScreen>
                       else
                         const SizedBox(height: 24),
                       Expanded(
-                        child: Center(
+                        child: SingleChildScrollView(
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 680),
                             child: Column(
