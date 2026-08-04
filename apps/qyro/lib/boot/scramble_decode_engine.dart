@@ -11,7 +11,7 @@ final class ScrambleDecodeEngine {
   }) : assert(noiseAlphabet.length > 1, 'Noise alphabet is too small');
 
   static const String _defaultNoiseAlphabet =
-      r'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%&*+=<>/|.:;[]{}()_';
+      r'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%&*+=<>/\|.:;[]{}()_';
 
   final String target;
   final int seed;
@@ -19,7 +19,8 @@ final class ScrambleDecodeEngine {
   final String noiseAlphabet;
 
   late final List<int> _targetRunes = target.runes.toList(growable: false);
-  late final List<int> _noiseRunes = noiseAlphabet.runes.toList(growable: false);
+  late final List<int> _noiseRunes =
+      noiseAlphabet.runes.toList(growable: false);
 
   /// Returns how many target cells are permanently revealed.
   int revealedCellCount(double progress) {
@@ -56,6 +57,5 @@ final class ScrambleDecodeEngine {
     return String.fromCharCodes(frame);
   }
 
-  static int _next(int value) =>
-      (value * 1103515245 + 12345) & 0x7fffffff;
+  static int _next(int value) => (value * 1103515245 + 12345) & 0x7fffffff;
 }
