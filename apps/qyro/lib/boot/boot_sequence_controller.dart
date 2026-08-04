@@ -36,8 +36,8 @@ final class BootSequenceController extends ChangeNotifier {
 
   void updateElapsed(Duration elapsed) {
     final normalizedElapsed = elapsed.isNegative ? Duration.zero : elapsed;
-    final progress = normalizedElapsed.inMicroseconds /
-        sequenceDuration.inMicroseconds;
+    final progress =
+        normalizedElapsed.inMicroseconds / sequenceDuration.inMicroseconds;
     final nextProgress = (_reducedMotion || _skipped)
         ? 1.0
         : progress.clamp(0.0, 1.0).toDouble();
