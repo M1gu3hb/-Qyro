@@ -5,10 +5,22 @@ import 'package:qyro/ffi/qyro_native_api.dart';
 
 void main() {
   test('maps supported operating systems to native library names', () {
-    expect(QyroNativeApi.libraryNameForOperatingSystem('android'), 'libqyro_ffi.so');
-    expect(QyroNativeApi.libraryNameForOperatingSystem('linux'), 'libqyro_ffi.so');
-    expect(QyroNativeApi.libraryNameForOperatingSystem('windows'), 'qyro_ffi.dll');
-    expect(QyroNativeApi.libraryNameForOperatingSystem('macos'), 'libqyro_ffi.dylib');
+    expect(
+      QyroNativeApi.libraryNameForOperatingSystem('android'),
+      'libqyro_ffi.so',
+    );
+    expect(
+      QyroNativeApi.libraryNameForOperatingSystem('linux'),
+      'libqyro_ffi.so',
+    );
+    expect(
+      QyroNativeApi.libraryNameForOperatingSystem('windows'),
+      'qyro_ffi.dll',
+    );
+    expect(
+      QyroNativeApi.libraryNameForOperatingSystem('macos'),
+      'libqyro_ffi.dylib',
+    );
   });
 
   final libraryPath = Platform.environment['QYRO_FFI_LIBRARY_PATH'];
