@@ -7,12 +7,13 @@ Qyro es una aplicación de transferencia privada y directa de archivos para Andr
 ## Comprobado
 
 - Workspace Rust 1.88.0 con núcleo y ABI C mínima QYRO/1.
-- ScrambleDecodeEngine determinista.
-- Boot de 5.5 s, omisión por toque/teclado tras 1 s y reduced motion.
+- Puente Dart FFI que lee QYRO/1 desde la biblioteca Rust en Linux y Windows.
+- APK Android con libqyro_ffi.so para arm64-v8a y x86_64.
+- Windows distribuye qyro_ffi.dll junto a qyro.exe.
+- ScrambleDecodeEngine determinista y boot accesible de 5.5 s.
 - Home honesto con Enviar/Recibir deshabilitados hasta implementar transportes.
-- Runners oficiales Android, iOS y Windows.
 - doctor, bootstrap y test_all equivalentes en Bash y PowerShell.
-- CI verde y builds debug reales en las tres plataformas.
+- CI y builds debug Android/iOS/Windows verdes.
 
 ## Desarrollo
 

@@ -2,8 +2,8 @@
 
 ## P0
 
-1. Conectar Dart con qyro_ffi.
-   - Aceptación: test real lee QYRO/1 desde biblioteca compilada en Android y Windows.
+1. Cerrar integración móvil de qyro_ffi.
+   - Aceptación: Android lee QYRO/1 en emulador/dispositivo e iOS resuelve los símbolos enlazados.
 2. Crear modelo QYRO/1 y manifest mediante TDD.
    - Aceptación: round-trip, límites, Unicode y path traversal comprobados.
 3. Hacer dinámico el branding y advertir valores provisionales.
@@ -32,5 +32,6 @@
 ## Completado el 2026-08-04
 
 - doctor/bootstrap/test_all en Bash y PowerShell mediante TDD.
-- Categorías OK/advertencia/bloqueo/no aplica y códigos de salida comprobados.
 - bootstrap crea configuración desde examples sin sobrescribir al usuario.
+- Puente Dart↔qyro_ffi con lectura real QYRO/1 en Linux y Windows.
+- APK contiene bibliotecas Rust arm64-v8a/x86_64 y Windows distribuye la DLL junto al ejecutable.
