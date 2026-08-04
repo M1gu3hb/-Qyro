@@ -8,6 +8,13 @@ on:
       - "apps/qyro/**"
       - "crates/qyro_ffi/**"
       - "Cargo.*"
+  push:
+    branches: [audit/baseline-hardening]
+    paths:
+      - ".github/workflows/android-runtime.yml"
+      - "apps/qyro/**"
+      - "crates/qyro_ffi/**"
+      - "Cargo.*"
 
 permissions:
   contents: read
