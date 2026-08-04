@@ -129,11 +129,9 @@ StartupCoordinator _coordinator({
   Duration timeout = const Duration(seconds: 1),
 }) {
   return StartupCoordinator(
-    loadBranding: () async =>
-        const StartupBranding(isProvisional: true),
+    loadBranding: () async => const StartupBranding(isProvisional: true),
     verifyAssets: verifyAssets ?? () async {},
-    loadNativeBridge:
-        loadNativeBridge ?? () async => const _FakeBridge(),
+    loadNativeBridge: loadNativeBridge ?? () async => const _FakeBridge(),
     initializeInterface: () async {},
     timeout: timeout,
   );
