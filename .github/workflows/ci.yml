@@ -38,6 +38,9 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Verify generated branding
+        working-directory: .
+        run: dart tools/branding_generator/bin/generate.dart --check
       - name: Check Dart formatting
         shell: bash
         run: |

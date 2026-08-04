@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
 
 dev_dependencies:
+  branding_generator:
+    path: ../../tools/branding_generator
   flutter_lints: 5.0.0
   flutter_test:
     sdk: flutter

@@ -1,9 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:branding_generator/branding_generator.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import '../../../tools/branding_generator/lib/branding_generator.dart';
 
 void main() {
   const generator = BrandingGenerator();
