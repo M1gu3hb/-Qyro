@@ -138,12 +138,8 @@ StartupCoordinator _coordinator({
 }
 
 final class _FakeBridge implements NativeBridge {
-  const _FakeBridge({
-    this.version = 'QYRO/1',
-    this.failure,
-  });
+  const _FakeBridge({this.failure});
 
-  final String version;
   final QyroNativeFailure? failure;
 
   @override
@@ -152,6 +148,6 @@ final class _FakeBridge implements NativeBridge {
     if (currentFailure != null) {
       throw currentFailure;
     }
-    return version;
+    return 'QYRO/1';
   }
 }

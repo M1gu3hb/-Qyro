@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../ffi/qyro_native_api.dart';
@@ -55,7 +54,7 @@ final class StartupTaskFailure implements Exception {
 final class StartupSnapshot {
   StartupSnapshot({
     required this.phase,
-    required this.completedTasks,
+    required Set<StartupTask> completedTasks,
     required this.reducedMotion,
     required this.lifecycleState,
     this.currentTask,
