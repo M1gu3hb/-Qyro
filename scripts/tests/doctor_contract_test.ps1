@@ -6,6 +6,28 @@ if (-not (Test-Path -LiteralPath $doctor)) {
     throw "Expected $doctor to exist."
 }
 
+function Invoke-Doctor {
+    param([string] $SimulateMissing)
+
+    try {
+        if ($SimulateMissing) {
+            $env:QYRO_DOCTOR_SIMULATE_MISSING = $SimulateMissing
+        }
+        else {
+            Remove-Item Env:QYRO_DOCTOR_SIMULATE_MISSING -ErrorAction SilentlyContinue
+        }
+
+        $output = & pwsh -NoProfile -File $doctor 2>&1
+        [PSCustomObject]@{
+            ExitCode = $LASTEXITCODE
+            Output = [string[]] $output
+        }
+    }
+    finally {
+        Remove-Item Env:QYRO_DOCTOR_SIMULATE_MISSING -ErrorAction SilentlyContinue
+    }
+}
+
 function Assert-Contains {
     param(
         [string[]] $Output,
@@ -18,33 +40,26 @@ function Assert-Contains {
     }
 }
 
-$output = & $doctor
-if ($LASTEXITCODE -ne 0) {
+$normal = Invoke-Doctor
+if ($normal.ExitCode -ne 0) {
     throw "Expected doctor.ps1 to succeed in the configured CI environment."
 }
-Assert-Contains $output '[OK] Git'
-Assert-Contains $output '[OK] Flutter'
-Assert-Contains $output '[OK] Dart'
-Assert-Contains $output '[OK] Rust'
-Assert-Contains $output '[OK] Cargo'
-Assert-Contains $output '[N/A] Xcode'
-Assert-Contains $output '[N/A] Visual Studio Build Tools'
+Assert-Contains $normal.Output '[OK] Git'
+Assert-Contains $normal.Output '[OK] Flutter'
+Assert-Contains $normal.Output '[OK] Dart'
+Assert-Contains $normal.Output '[OK] Rust'
+Assert-Contains $normal.Output '[OK] Cargo'
+Assert-Contains $normal.Output '[N/A] Xcode'
+Assert-Contains $normal.Output '[N/A] Visual Studio Build Tools'
 
-try {
-    $env:QYRO_DOCTOR_SIMULATE_MISSING = 'fvm'
-    $warningOutput = & $doctor
-    if ($LASTEXITCODE -ne 0) {
-        throw 'An optional missing tool must not fail the diagnostic.'
-    }
-    Assert-Contains $warningOutput '[WARNING] FVM'
+$warning = Invoke-Doctor -SimulateMissing 'fvm'
+if ($warning.ExitCode -ne 0) {
+    throw 'An optional missing tool must not fail the diagnostic.'
+}
+Assert-Contains $warning.Output '[WARNING] FVM'
 
-    $env:QYRO_DOCTOR_SIMULATE_MISSING = 'git'
-    $blockerOutput = & $doctor 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        throw 'A required missing tool must return a non-zero exit code.'
-    }
-    Assert-Contains $blockerOutput '[BLOCKER] Git'
+$blocker = Invoke-Doctor -SimulateMissing 'git'
+if ($blocker.ExitCode -eq 0) {
+    throw 'A required missing tool must return a non-zero exit code.'
 }
-finally {
-    Remove-Item Env:QYRO_DOCTOR_SIMULATE_MISSING -ErrorAction SilentlyContinue
-}
+Assert-Contains $blocker.Output '[BLOCKER] Git'

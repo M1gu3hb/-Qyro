@@ -48,5 +48,10 @@ jobs:
           flutter-version: 3.44.8
           channel: stable
           cache: true
-      - run: bash scripts/tests/doctor_contract_test.sh
-      - run: pwsh -NoProfile -File scripts/tests/doctor_contract_test.ps1
+      - name: Verify Bash and PowerShell doctor contracts
+        shell: bash
+        run: |
+          status=0
+          bash scripts/tests/doctor_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/doctor_contract_test.ps1 || status=1
+          exit "$status"
