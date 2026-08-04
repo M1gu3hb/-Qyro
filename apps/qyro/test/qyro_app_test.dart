@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qyro/app.dart';
 import 'package:qyro/boot/ascii_logo_model.dart';
 import 'package:qyro/boot/boot_screen.dart';
+import 'package:qyro/l10n/generated/app_localizations.dart';
 import 'package:qyro/startup/native_bridge.dart';
 import 'package:qyro/startup/startup_coordinator.dart';
 
@@ -16,7 +17,7 @@ void main() {
     var finished = false;
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: BootScreen(
           coordinator: coordinator,
           logoModel: _logo(),
@@ -45,7 +46,7 @@ void main() {
     var finished = false;
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: MediaQuery(
           data: const MediaQueryData(disableAnimations: true),
           child: BootScreen(
@@ -71,7 +72,7 @@ void main() {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: BootScreen(
           coordinator: _coordinator(),
           logoModel: _logo(),
@@ -91,7 +92,7 @@ void main() {
     var finished = false;
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: BootScreen(
           coordinator: _coordinator(),
           logoModel: _logo(),
@@ -125,7 +126,7 @@ void main() {
     var finished = false;
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: MediaQuery(
           data: const MediaQueryData(disableAnimations: true),
           child: BootScreen(
@@ -148,9 +149,32 @@ void main() {
     expect(finished, isTrue);
   });
 
+  testWidgets('English locale renders the complete Home baseline',
+      (tester) async {
+    await tester.pumpWidget(
+      QyroApp(
+        locale: const Locale('en'),
+        startupCoordinator: _coordinator(),
+        bootLogoModel: _logo(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1100));
+    await tester.tap(find.byKey(const Key('boot-skip')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send'), findsOneWidget);
+    expect(find.text('Receive'), findsOneWidget);
+    expect(
+      find.text('Transfer features are not implemented yet.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('Home keeps transfer actions visibly disabled', (tester) async {
     await tester.pumpWidget(
       QyroApp(
+        locale: const Locale('es'),
         startupCoordinator: _coordinator(),
         bootLogoModel: _logo(),
       ),
@@ -166,6 +190,22 @@ void main() {
     expect(find.text('Enviar'), findsOneWidget);
     expect(find.text('Recibir'), findsOneWidget);
   });
+}
+
+class _TestApp extends StatelessWidget {
+  const _TestApp({required this.home});
+
+  final Widget home;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      locale: const Locale('es'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: home,
+    );
+  }
 }
 
 StartupCoordinator _coordinator({
