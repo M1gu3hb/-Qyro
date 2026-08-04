@@ -5,11 +5,17 @@ on:
   pull_request:
     paths:
       - "apps/qyro/**"
+      - "rust/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/platform-builds.yml"
   push:
     branches: [main]
     paths:
       - "apps/qyro/**"
+      - "rust/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/platform-builds.yml"
 
 permissions:
@@ -23,12 +29,34 @@ jobs:
         working-directory: apps/qyro
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build qyro_ffi for Android
+        working-directory: .
+        shell: bash
+        run: |
+          rustup target add aarch64-linux-android x86_64-linux-android
+          qyro_ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}}"
+          test -n "$qyro_ndk"
+          qyro_toolchain="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$qyro_toolchain/aarch64-linux-android21-clang"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$qyro_toolchain/x86_64-linux-android21-clang"
+          cargo build --package qyro_ffi --target aarch64-linux-android
+          cargo build --package qyro_ffi --target x86_64-linux-android
+          mkdir -p apps/qyro/android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p apps/qyro/android/app/src/main/jniLibs/x86_64
+          cp target/aarch64-linux-android/debug/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/arm64-v8a/
+          cp target/x86_64-linux-android/debug/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/x86_64/
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           cache: true
       - run: flutter pub get
       - run: flutter build apk --debug
+      - name: Verify qyro_ffi is packaged in the APK
+        shell: bash
+        run: |
+          unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep -q 'lib/arm64-v8a/libqyro_ffi.so'
+          unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep -q 'lib/x86_64/libqyro_ffi.so'
 
   windows:
     runs-on: windows-latest
@@ -37,13 +65,30 @@ jobs:
         working-directory: apps/qyro
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build qyro_ffi for Windows
+        working-directory: .
+        run: cargo build --package qyro_ffi
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           cache: true
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
+      - name: Verify Dart reads QYRO/1 from the Windows DLL
+        run: flutter test test/ffi/qyro_native_api_test.dart
+        env:
+          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}\target\debug\qyro_ffi.dll
       - run: flutter build windows --debug
+      - name: Package qyro_ffi beside qyro.exe
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE 'target\debug\qyro_ffi.dll'
+          $destination = Join-Path $PWD 'build\windows\x64\runner\Debug\qyro_ffi.dll'
+          Copy-Item -LiteralPath $source -Destination $destination
+          if (-not (Test-Path -LiteralPath $destination)) {
+            throw 'qyro_ffi.dll was not packaged beside qyro.exe.'
+          }
 
   ios:
     runs-on: macos-latest
