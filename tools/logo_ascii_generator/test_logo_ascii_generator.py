@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -8,6 +9,7 @@ MODULE_PATH = Path(__file__).with_name("generate.py")
 SPEC = importlib.util.spec_from_file_location("logo_ascii_generator", MODULE_PATH)
 GENERATOR = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
+sys.modules[SPEC.name] = GENERATOR
 SPEC.loader.exec_module(GENERATOR)
 
 
