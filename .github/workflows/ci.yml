@@ -38,7 +38,12 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed .
+      - name: Capture canonical Dart formatting
+        run: |
+          dart format .
+          base64 -w0 lib/ffi/qyro_native_api.dart
+          echo
+          exit 1
       - run: flutter analyze
       - name: Run Flutter and native ABI tests
         run: flutter test
