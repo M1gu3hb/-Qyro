@@ -9,17 +9,17 @@ void main() {
   const generator = BrandingGenerator();
 
   Map<String, Object?> validConfig() => <String, Object?>{
-    'appName': 'Qyro',
-    'creatorName': 'Ada Example',
-    'studioName': 'Example Studio',
-    'signatureText': 'Built by Ada Example',
-    'bundleIdBase': 'dev.example.qyro',
-    'website': 'https://example.test',
-    'repository': 'https://github.com/example/qyro',
-    'primaryColor': '#168BFF',
-    'secondaryColor': '#51C8FF',
-    'backgroundColor': '#03070D',
-  };
+        'appName': 'Qyro',
+        'creatorName': 'Ada Example',
+        'studioName': 'Example Studio',
+        'signatureText': 'Built by Ada Example',
+        'bundleIdBase': 'dev.example.qyro',
+        'website': 'https://example.test',
+        'repository': 'https://github.com/example/qyro',
+        'primaryColor': '#168BFF',
+        'secondaryColor': '#51C8FF',
+        'backgroundColor': '#03070D',
+      };
 
   test('valid config emits constants', () {
     final result = generator.generate(jsonEncode(validConfig()));
