@@ -466,8 +466,7 @@ class _BootStatus extends StatelessWidget {
       'startupCancelled' => strings.bootStatusCancelled,
       'nativeBridgeUnavailable' => strings.bootStatusNativeUnavailable,
       'startupAssetInvalid' => strings.bootStatusAssetInvalid,
-      'startupInterfaceUnavailable' =>
-        strings.bootStatusInterfaceUnavailable,
+      'startupInterfaceUnavailable' => strings.bootStatusInterfaceUnavailable,
       _ => strings.bootStatusFailed,
     };
   }
