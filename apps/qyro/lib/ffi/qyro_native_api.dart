@@ -9,16 +9,14 @@ typedef _ProtocolVersionLengthDart = int Function();
 
 class QyroNativeApi {
   QyroNativeApi._(DynamicLibrary library)
-    : _protocolVersionPointer = library
-          .lookupFunction<
-            _ProtocolVersionPointerNative,
-            _ProtocolVersionPointerDart
-          >('qyro_protocol_version_ptr'),
-      _protocolVersionLength = library
-          .lookupFunction<
-            _ProtocolVersionLengthNative,
-            _ProtocolVersionLengthDart
-          >('qyro_protocol_version_len');
+      : _protocolVersionPointer = library.lookupFunction<
+          _ProtocolVersionPointerNative,
+          _ProtocolVersionPointerDart
+        >('qyro_protocol_version_ptr'),
+        _protocolVersionLength = library.lookupFunction<
+          _ProtocolVersionLengthNative,
+          _ProtocolVersionLengthDart
+        >('qyro_protocol_version_len');
 
   factory QyroNativeApi.open(String path) {
     return QyroNativeApi._(DynamicLibrary.open(path));
