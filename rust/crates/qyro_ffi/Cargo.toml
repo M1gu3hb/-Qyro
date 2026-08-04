@@ -1,0 +1,13 @@
+[package]
+name = "qyro_ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+qyro_core = { path = "../qyro_core" }
