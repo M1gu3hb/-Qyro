@@ -1,8 +1,8 @@
 # Handoff operativo
 
-- Actualizado: 2026-08-04 18:36 UTC
+- Actualizado: 2026-08-04 19:01 UTC
 - Rama: main
-- Commit actual/comprobado por CI: f6bea027e86122e05f880b7552cf72ce6f5db8ad
+- Commit actual/comprobado por CI: 723f04ccd2b6764f088dd408d10d76f1f583c470
 - Commit de builds multiplataforma: 6812c6aafaea2e3844bb42bc078a03ffc83ac9ce
 - Hito: 0 con base técnica alcanzada; Hito 1 parcial
 
@@ -13,24 +13,28 @@
 - Home muestra Enviar/Recibir deshabilitados y declara que faltan transportes.
 - qyro_core informa readiness y QYRO/1.
 - qyro_ffi exporta puntero/longitud de QYRO/1 con memoria estática.
-- CI ejecuta formato, lint, análisis y 11 tests.
+- doctor, bootstrap y test_all equivalentes en Bash y PowerShell.
+- bootstrap instala dependencias, preserva configuraciones locales y activa bindings/codegen solo cuando existe configuración.
+- test_all encadena suites disponibles, valida el ledger de licencias y propaga fallos.
+- CI ejecuta formato, lint, análisis, 11 tests de producto y 6 contratos de scripts.
 - Builds debug Android, Windows e iOS sin firma.
 
 ## No funciona todavía
 
-Enlace Dart↔qyro_ffi real, scripts doctor/bootstrap, branding dinámico, selección, protocolo, criptografía, LAN, base de datos y modo óptico.
+Enlace Dart↔qyro_ffi real, branding dinámico, selección, manifest, criptografía, LAN, base de datos y modo óptico.
 
 ## Pruebas ejecutadas
 
-GitHub Actions CI run 30939294346:
+GitHub Actions CI run 30941263618:
 
 - cargo fmt --all --check: éxito.
 - cargo clippy --workspace --all-targets -- -D warnings: éxito.
 - cargo test --workspace: 4 tests, 0 fallos.
-- dart format: 7 archivos, 0 cambios.
+- dart format: sin cambios.
 - flutter analyze: sin issues.
 - flutter test: 7 tests, 0 fallos.
-- Jobs: Rust 15 s; Flutter 38 s.
+- contratos Bash/PowerShell de doctor, bootstrap y test_all: éxito.
+- Jobs: Rust 14 s; Flutter 39 s; scripts 46 s.
 
 GitHub Actions Platform builds run 30938946789:
 
@@ -53,6 +57,8 @@ No existe IPA firmado, MSIX, AAB ni artefacto de release descargable.
 
 - No se probó ejecución en hardware Android/iOS ni en escritorio interactivo.
 - iOS no está firmado.
+- cargo-audit no está instalado en CI; test_all lo declara como advertencia.
+- No existen suites nativas dedicadas ni corpus de vectores; test_all los declara como no aplicables.
 - Falta identidad legal, bundle IDs finales y aprobación de licencia.
 - Falta scramble-decode-reference.jpg y declaración de autoría/licencia del logo.
 - actions/checkout@v4 emite aviso de Node 20 forzado a Node 24.

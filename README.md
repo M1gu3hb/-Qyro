@@ -11,18 +11,29 @@ Qyro es una aplicación de transferencia privada y directa de archivos para Andr
 - Boot de 5.5 s, omisión por toque/teclado tras 1 s y reduced motion.
 - Home honesto con Enviar/Recibir deshabilitados hasta implementar transportes.
 - Runners oficiales Android, iOS y Windows.
+- doctor, bootstrap y test_all equivalentes en Bash y PowerShell.
 - CI verde y builds debug reales en las tres plataformas.
 
 ## Desarrollo
 
-    cargo fmt --all --check
-    cargo clippy --workspace --all-targets -- -D warnings
-    cargo test --workspace
+Diagnóstico:
+
+    bash scripts/doctor.sh
+    pwsh -NoProfile -File scripts/doctor.ps1
+
+Preparación segura del workspace:
+
+    bash scripts/bootstrap.sh
+    pwsh -NoProfile -File scripts/bootstrap.ps1
+
+Suite completa disponible:
+
+    bash scripts/test_all.sh
+    pwsh -NoProfile -File scripts/test_all.ps1
+
+Ejecución de la app:
+
     cd apps/qyro
-    flutter pub get
-    dart format --output=none --set-exit-if-changed .
-    flutter analyze
-    flutter test
     flutter run
 
 Lee AGENTS.md, PROJECT_CONTEXT.md, HANDOFF.md y NEXT_STEPS.md antes de modificar código.

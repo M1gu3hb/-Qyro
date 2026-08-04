@@ -43,3 +43,14 @@
 - Estado: abierto
 - Dueño: release
 - Fecha: 2026-08-04
+
+## QYR-0005 — Auditorías y suites avanzadas no disponibles
+
+- Plataforma: CI
+- Severidad: P1
+- Esperado: cargo-audit, tests nativos y vectores de protocolo ejecutables
+- Actual: test_all informa WARNING para cargo-audit y N/A para suites/corpus ausentes
+- Workaround: las suites Rust/Flutter y el ledger de licencias sí se validan
+- Estado: abierto
+- Dueño: seguridad/protocolo
+- Fecha: 2026-08-04
