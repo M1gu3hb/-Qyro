@@ -1,17 +1,15 @@
 # Third-party notices
 
-Qyro no reutiliza actualmente código de los repositorios investigados.
+Qyro no reutiliza código de repositorios investigados.
 
-## Dependencias de producto actuales
+## Distribuido o usado por la app
 
-- Flutter SDK — BSD-3-Clause — toolkit/UI.
-- Dart SDK — BSD-3-Clause — lenguaje/runtime.
-- flutter_lints 5.0.0 — BSD-3-Clause — reglas de análisis de desarrollo.
+Flutter/Dart SDK (BSD-3-Clause) y sus paquetes fijados en apps/qyro/pubspec.lock. material_color_utilities, clock y fake_async usan Apache-2.0; los demás paquetes Dart actuales usan BSD-3-Clause. flutter_lints y dependencias de test son herramientas de desarrollo.
 
-Las dependencias transitivas resueltas por Flutter deben fijarse con lockfile y auditarse antes del primer release. Las GitHub Actions son herramientas de CI, no código distribuido, y también se revisarán.
+Rust no tiene crates externos. Los textos completos se incorporarán a release/notices/LICENSES antes del primer release.
 
-## Activos del propietario
+## Activo del propietario
 
-design/brand/source/qyro-logo.png fue suministrado por el propietario. No se declara como tercero; falta registrar su autoría/licencia antes de una publicación.
+design/brand/source/qyro-logo.png fue suministrado por el propietario. Falta registrar autoría/licencia antes de publicación.
 
 Consulta docs/LICENSE_AUDIT.md y docs/RESEARCH_NOTES.md.

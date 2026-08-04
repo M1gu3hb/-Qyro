@@ -1,14 +1,14 @@
 # Releases
 
-Estado: no hay artefactos ni release.
+Estado: builds debug comprobados; no hay release ni artefactos retenidos.
 
-Tags vX.Y.Z deberán validar versión/changelog, ejecutar pruebas, construir plataformas disponibles, generar checksums, SBOM, notices y build-info, y adjuntar artefactos solo con credenciales válidas.
+Run 30938946789 generó APK debug, qyro.exe debug y Runner.app iOS sin firma en runners efímeros. No son paquetes de distribución.
 
-## Objetivos
+Tags vX.Y.Z deberán validar versión/changelog, probar, construir, generar checksums, SBOM, notices y build-info, y adjuntar artefactos solo con credenciales válidas.
 
 - Android: APK/AAB según configuración comprobada.
 - Windows: MSIX y ZIP portable x64.
-- iOS: xcarchive cuando sea viable; IPA solo con firma/provisioning válidos.
-- checksums: SHA256SUMS.txt y firma solo si existe clave autorizada.
+- iOS: xcarchive cuando sea viable; IPA solo firmado.
+- checksums: SHA256SUMS.txt; firma solo con clave autorizada.
 
-Nunca almacenar certificados o secretos. No publicar automáticamente a tiendas. Cada build-info registra commit, herramientas, plataforma, fecha UTC y resultados.
+Nunca almacenar certificados o secretos ni publicar automáticamente a tiendas.

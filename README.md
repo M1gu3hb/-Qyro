@@ -2,15 +2,16 @@
 
 Qyro es una aplicación de transferencia privada y directa de archivos para Android, iOS y Windows. No requiere cuentas, nube, anuncios, telemetría ni un backend central.
 
-> Estado: Hito 0 en progreso. El nombre, los identificadores y la licencia Apache-2.0 son provisionales hasta aprobación del propietario. No existe todavía una transferencia de archivos funcional.
+> Estado: base técnica del Hito 0 alcanzada e interfaz del Hito 1 parcial. El nombre, los identificadores y Apache-2.0 son provisionales. Todavía no existe transferencia de archivos.
 
 ## Comprobado
 
-- Workspace Rust fijado a 1.88.0.
-- Estado de arranque basado en resultados reales.
-- ABI C mínima para consultar QYRO/1.
-- Motor Dart determinista de scramble/reveal con reduced motion.
-- CI en Ubuntu con formato, Clippy, análisis y tests.
+- Workspace Rust 1.88.0 con núcleo y ABI C mínima QYRO/1.
+- ScrambleDecodeEngine determinista.
+- Boot de 5.5 s, omisión por toque/teclado tras 1 s y reduced motion.
+- Home honesto con Enviar/Recibir deshabilitados hasta implementar transportes.
+- Runners oficiales Android, iOS y Windows.
+- CI verde y builds debug reales en las tres plataformas.
 
 ## Desarrollo
 
@@ -22,5 +23,6 @@ Qyro es una aplicación de transferencia privada y directa de archivos para Andr
     dart format --output=none --set-exit-if-changed .
     flutter analyze
     flutter test
+    flutter run
 
 Lee AGENTS.md, PROJECT_CONTEXT.md, HANDOFF.md y NEXT_STEPS.md antes de modificar código.

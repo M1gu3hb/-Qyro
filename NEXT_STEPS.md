@@ -2,26 +2,27 @@
 
 ## P0
 
-1. Generar runners Flutter Android, iOS y Windows.
-   - Aceptación: Android debug y Windows debug compilan; iOS compila sin firma en macOS o queda bloqueo reproducible.
-2. Conectar Dart con qyro_ffi.
-   - Aceptación: test de integración lee QYRO/1 desde la biblioteca real en al menos Windows y Android.
-3. Implementar doctor/bootstrap/test_all en Bash y PowerShell con tests.
-   - Aceptación: salidas OK/advertencia/bloqueo/no aplica y códigos de salida comprobados.
-4. Crear modelo QYRO/1 y validación de manifest mediante TDD.
+1. Conectar Dart con qyro_ffi.
+   - Aceptación: test real lee QYRO/1 desde biblioteca compilada en Android y Windows.
+2. Implementar doctor/bootstrap/test_all en Bash y PowerShell mediante TDD.
+   - Aceptación: OK/advertencia/bloqueo/no aplica y códigos de salida comprobados.
+3. Crear modelo QYRO/1 y manifest mediante TDD.
    - Aceptación: round-trip, límites, Unicode y path traversal comprobados.
+4. Hacer dinámico el branding y advertir valores provisionales.
+   - Aceptación: config validada, sin secretos, banner dev comprobado.
 
 ## P1
 
-- Pantalla boot y Home con Enviar/Recibir, skip y reduced motion.
-- Configuración de branding y aviso cuando permanece com.owner.qyro.
-- CI por Windows/macOS/Android.
-- Lockfiles y auditoría completa de dependencias.
+- Retener artefactos debug y checksums.
+- Launch screens nativas oscuras con activo mínimo.
+- Golden tests boot 0/20/50/80/100 y layouts.
+- CI de licencias/seguridad y scripts check_licenses.
+- Selección de archivos y manifest.
 
 ## P2
 
-- Generador logo→ASCII y golden tests.
-- Persistencia SQLite y migración 0001.
+- Generador logo→ASCII.
+- SQLite/migración 0001.
 - LAN e IP manual.
 
 ## P3

@@ -2,24 +2,38 @@
 
 Fecha: 2026-08-04. Apache-2.0 es provisional y requiere aprobación antes de 1.0.
 
-| Dependencia | Versión | Repositorio | Licencia | Función | Riesgo | Revisado |
-|---|---|---|---|---|---|---|
-| Rust std | 1.88.0 | rust-lang/rust | Apache-2.0 y MIT | núcleo/ABI | bajo | 2026-08-04 |
-| Flutter SDK | stable CI (3.44.8 observada) | flutter/flutter | BSD-3-Clause | UI/tests | fijación exacta pendiente | 2026-08-04 |
-| Dart SDK | incluida en Flutter | dart-lang/sdk | BSD-3-Clause | lenguaje/runtime | fijación exacta pendiente | 2026-08-04 |
-| flutter_lints | 5.0.0 | flutter/packages | BSD-3-Clause | lint dev | bajo | 2026-08-04 |
-| flutter_test | SDK | flutter/flutter | BSD-3-Clause | tests dev | bajo | 2026-08-04 |
+## Producto
 
-Cargo no tiene dependencias externas. El pubspec todavía no tiene lockfile versionado; CI observó dependencias transitivas y debe fijarlas/auditarlas antes del siguiente hito.
+| Dependencia | Versión | Origen | Licencia | Función | Riesgo |
+|---|---:|---|---|---|---|
+| Rust std | 1.88.0 | rust-lang/rust | MIT/Apache-2.0 | núcleo/ABI | bajo |
+| Flutter/Dart SDK | Flutter 3.44.8 | flutter/flutter, dart-lang/sdk | BSD-3-Clause | UI/runtime | bajo |
+| flutter_lints | 5.0.0 | pub.dev | BSD-3-Clause | lint dev | bajo |
+| async | 2.13.1 | pub.dev | BSD-3-Clause | tests SDK transitivos | dev |
+| boolean_selector | 2.1.2 | pub.dev | BSD-3-Clause | tests | dev |
+| characters | 1.4.1 | pub.dev | BSD-3-Clause | Flutter | bajo |
+| clock | 1.1.2 | pub.dev | Apache-2.0 | tests | dev |
+| collection | 1.19.1 | pub.dev | BSD-3-Clause | Flutter | bajo |
+| fake_async | 1.3.3 | pub.dev | Apache-2.0 | tests | dev |
+| leak_tracker | 11.0.2 | pub.dev | BSD-3-Clause | tests | dev |
+| leak_tracker_flutter_testing | 3.0.10 | pub.dev | BSD-3-Clause | tests | dev |
+| leak_tracker_testing | 3.0.2 | pub.dev | BSD-3-Clause | tests | dev |
+| lints | 5.1.1 | pub.dev | BSD-3-Clause | lint | dev |
+| matcher | 0.12.19 | pub.dev | BSD-3-Clause | tests | dev |
+| material_color_utilities | 0.13.0 | pub.dev | Apache-2.0 | Flutter Material | bajo |
+| meta | 1.18.0 | pub.dev | BSD-3-Clause | anotaciones | bajo |
+| path | 1.9.1 | pub.dev | BSD-3-Clause | tests SDK | dev |
+| source_span | 1.10.2 | pub.dev | BSD-3-Clause | tests | dev |
+| stack_trace | 1.12.1 | pub.dev | BSD-3-Clause | tests | dev |
+| stream_channel | 2.1.4 | pub.dev | BSD-3-Clause | tests | dev |
+| string_scanner | 1.4.1 | pub.dev | BSD-3-Clause | tests | dev |
+| term_glyph | 1.2.2 | pub.dev | BSD-3-Clause | tests | dev |
+| test_api | 0.7.11 | pub.dev | BSD-3-Clause | tests | dev |
+| vector_math | 2.2.0 | pub.dev | BSD-3-Clause | Flutter | bajo |
+| vm_service | 15.2.0 | pub.dev | BSD-3-Clause | tests/debug | dev |
 
-## Política
+sky_engine, flutter y flutter_test vienen del SDK. Las versiones/hashes están fijadas en apps/qyro/pubspec.lock. Cargo no tiene crates externos.
 
-Permitidas tras revisión: Apache-2.0, MIT, BSD-2/3, ISC, Zlib y OFL. GPL/AGPL/LGPL, MPL y desconocidas requieren autorización. Ningún código de referencia se reutiliza actualmente.
+## Política y pendiente
 
-## Pendiente
-
-- fijar Flutter/FVM y generar pubspec.lock;
-- verificar cada paquete transitivo;
-- auditar licencias de actions/checkout, flutter-action y rust-toolchain (CI solamente);
-- crear scripts check_licenses con tests;
-- registrar commit/archivo si se reutiliza código.
+Permitidas tras revisión: Apache-2.0, MIT, BSD-2/3, ISC, Zlib y OFL. GPL/AGPL/LGPL, MPL y desconocidas requieren autorización. Falta automatizar verificación y revisar licencias de actions/checkout, flutter-action y rust-toolchain (CI, no distribuidas).
