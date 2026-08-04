@@ -39,7 +39,7 @@ final class AsciiLogoModel {
 
     final rows = _readStringRows(json, 'characterCells', height);
     final maskRows = _readStringRows(json, 'mask', height);
-    final densityRows = _readRows(json, 'density', height);
+    final densityRows = _readListRows(json, 'density', height);
     final mask = <bool>[];
     final density = <double>[];
 
@@ -148,6 +148,24 @@ final class AsciiLogoModel {
       if (value is! String) {
         throw FormatException(
           'ASCII logo field "$key" must contain only strings',
+        );
+      }
+      rows.add(value);
+    }
+    return rows;
+  }
+
+  static List<List<Object?>> _readListRows(
+    Map<String, Object?> json,
+    String key,
+    int height,
+  ) {
+    final values = _readRows(json, key, height);
+    final rows = <List<Object?>>[];
+    for (final value in values) {
+      if (value is! List<Object?>) {
+        throw FormatException(
+          'ASCII logo field "$key" must contain only arrays',
         );
       }
       rows.add(value);
