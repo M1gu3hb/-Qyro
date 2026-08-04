@@ -65,4 +65,6 @@ jobs:
           pwsh -NoProfile -File scripts/tests/bootstrap_contract_test.ps1 || status=1
           bash scripts/tests/test_all_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/test_all_contract_test.ps1 || status=1
+          bash scripts/tests/docs_consistency_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/docs_consistency_contract_test.ps1 || status=1
           exit "$status"
