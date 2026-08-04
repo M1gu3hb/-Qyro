@@ -26,7 +26,10 @@ void main() {
 
     expect(result.isProvisional, isFalse);
     expect(result.dartSource, contains('static const appName = "Qyro";'));
-    expect(result.dartSource, contains('static const primaryColorValue = 0xFF168BFF;'));
+    expect(
+      result.dartSource,
+      contains('static const primaryColorValue = 0xFF168BFF;'),
+    );
     expect(result.provisionalFields, isEmpty);
   });
 
@@ -77,9 +80,9 @@ void main() {
   });
 
   test('committed branding is generated from the development fallback', () {
-    final example = File('../../config/branding.example.json').readAsStringSync();
-    final committed =
-        File('lib/generated/branding.g.dart').readAsStringSync();
+    final example =
+        File('../../config/branding.example.json').readAsStringSync();
+    final committed = File('lib/generated/branding.g.dart').readAsStringSync();
 
     expect(committed, generator.generate(example).dartSource);
   });
