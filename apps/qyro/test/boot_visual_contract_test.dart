@@ -57,13 +57,17 @@ void main() {
         BootSequenceController.skipGuard,
         const Duration(seconds: 1),
       );
-      expect(BootSequenceController.canSkipAt(const Duration(milliseconds: 999)), isFalse);
-      expect(BootSequenceController.canSkipAt(const Duration(seconds: 1)), isTrue);
+      expect(
+          BootSequenceController.canSkipAt(const Duration(milliseconds: 999)),
+          isFalse);
+      expect(
+          BootSequenceController.canSkipAt(const Duration(seconds: 1)), isTrue);
     });
 
     test('maps phases continuously and clamps out-of-range values', () {
       expect(BootSequenceController.phaseProgress(-1, 0, 0.2), 0);
-      expect(BootSequenceController.phaseProgress(0.1, 0, 0.2), closeTo(0.5, 0.001));
+      expect(BootSequenceController.phaseProgress(0.1, 0, 0.2),
+          closeTo(0.5, 0.001));
       expect(BootSequenceController.phaseProgress(0.4, 0, 0.2), 1);
     });
 
