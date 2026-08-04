@@ -4,6 +4,7 @@ import 'boot/ascii_logo_model.dart';
 import 'boot/boot_screen.dart';
 import 'generated/branding.g.dart';
 import 'home/home_screen.dart';
+import 'l10n/generated/app_localizations.dart';
 import 'startup/production_startup.dart';
 import 'startup/startup_coordinator.dart';
 
@@ -11,11 +12,13 @@ class QyroApp extends StatefulWidget {
   const QyroApp({
     this.startupCoordinator,
     this.bootLogoModel,
+    this.locale,
     super.key,
   });
 
   final StartupCoordinator? startupCoordinator;
   final AsciiLogoModel? bootLogoModel;
+  final Locale? locale;
 
   @override
   State<QyroApp> createState() => _QyroAppState();
@@ -59,7 +62,10 @@ class _QyroAppState extends State<QyroApp> with WidgetsBindingObserver {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: GeneratedBranding.appName,
+      locale: widget.locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       theme: ThemeData(
         colorScheme: colors,
         scaffoldBackgroundColor: const Color(

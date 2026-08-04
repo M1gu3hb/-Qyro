@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../generated/branding.g.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../startup/startup_coordinator.dart';
 import 'ascii_logo_model.dart';
 import 'ascii_logo_painter.dart';
@@ -208,6 +209,7 @@ class _BootScreenState extends State<BootScreen>
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
     final snapshot = widget.coordinator.snapshot;
     final status = BootStatusModel.fromSnapshot(snapshot);
     final progress = _sequence.visualProgress;
@@ -254,7 +256,9 @@ class _BootScreenState extends State<BootScreen>
                   child: Column(
                     children: [
                       if (isProvisional)
-                        const _ProvisionalBanner()
+                        _ProvisionalBanner(
+                          label: strings.bootProvisionalBranding,
+                        )
                       else
                         const SizedBox(height: 24),
                       Expanded(
@@ -264,7 +268,10 @@ class _BootScreenState extends State<BootScreen>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _buildLogo(logoProgress),
+                                _buildLogo(
+                                  logoProgress,
+                                  strings.bootLogoSemantics,
+                                ),
                                 const SizedBox(height: 22),
                                 Text(
                                   GeneratedBranding.appName.toUpperCase(),
@@ -283,6 +290,7 @@ class _BootScreenState extends State<BootScreen>
                                   status: status,
                                   protocolVersion: snapshot.protocolVersion,
                                   assetLoadFailed: _assetLoadFailed,
+                                  strings: strings,
                                   onRetry: _retry,
                                 ),
                               ],
@@ -295,7 +303,7 @@ class _BootScreenState extends State<BootScreen>
                         child: TextButton(
                           key: const Key('boot-skip'),
                           onPressed: _sequence.canSkip ? _skip : null,
-                          child: const Text('OMITIR'),
+                          child: Text(strings.bootSkip),
                         ),
                       ),
                     ],
@@ -309,7 +317,7 @@ class _BootScreenState extends State<BootScreen>
     );
   }
 
-  Widget _buildLogo(double progress) {
+  Widget _buildLogo(double progress, String semanticLabel) {
     final model = _model;
     final engine = _engine;
     if (model == null || engine == null) {
@@ -332,7 +340,7 @@ class _BootScreenState extends State<BootScreen>
     return Semantics(
       container: true,
       image: true,
-      label: 'Logo de Qyro',
+      label: semanticLabel,
       child: ExcludeSemantics(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -362,27 +370,28 @@ class _BootStatus extends StatelessWidget {
     required this.status,
     required this.protocolVersion,
     required this.assetLoadFailed,
+    required this.strings,
     required this.onRetry,
   });
 
   final BootStatusModel status;
   final String? protocolVersion;
   final bool assetLoadFailed;
+  final AppLocalizations strings;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final diagnosticCode =
         status.diagnosticCode ?? (assetLoadFailed ? 'asset_invalid' : null);
-    final technicalSummary = status.technicalSummary ??
-        (assetLoadFailed ? 'Generated ASCII logo could not be loaded' : null);
+    final technicalSummary = _diagnosticDetail(strings, diagnosticCode);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 480),
       child: Column(
         children: [
           Text(
-            _messageFor(status.messageKey),
+            _messageFor(strings, status.messageKey),
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Color(0xFFAFC5D9),
@@ -411,7 +420,7 @@ class _BootStatus extends StatelessWidget {
           if (diagnosticCode != null) ...[
             const SizedBox(height: 12),
             Text(
-              'DIAGNÓSTICO: $diagnosticCode',
+              strings.bootDiagnostic(diagnosticCode),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFFFFC86B),
@@ -436,7 +445,7 @@ class _BootStatus extends StatelessWidget {
               key: const Key('boot-retry'),
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              label: const Text('REINTENTAR'),
+              label: Text(strings.bootRetry),
             ),
           ],
         ],
@@ -444,32 +453,55 @@ class _BootStatus extends StatelessWidget {
     );
   }
 
-  static String _messageFor(String key) {
+  static String _messageFor(AppLocalizations strings, String key) {
     return switch (key) {
-      'startupIdle' => 'ARRANQUE EN ESPERA',
-      'startupPreparing' => 'PREPARANDO ARRANQUE LOCAL',
-      'startupBranding' => 'VALIDANDO MARCA',
-      'startupAssets' => 'VALIDANDO RECURSOS GENERADOS',
-      'startupNativeBridge' => 'VERIFICANDO NÚCLEO NATIVO',
-      'startupInterface' => 'INICIALIZANDO INTERFAZ LOCAL',
-      'startupReady' => 'INTERFAZ LOCAL VERIFICADA',
-      'startupTimeout' => 'EL ARRANQUE EXCEDIÓ EL TIEMPO LÍMITE',
-      'startupCancelled' => 'ARRANQUE CANCELADO',
-      'nativeBridgeUnavailable' => 'NÚCLEO NATIVO NO DISPONIBLE',
-      'startupAssetInvalid' => 'RECURSO GENERADO NO VÁLIDO',
-      'startupInterfaceUnavailable' => 'INTERFAZ LOCAL NO DISPONIBLE',
-      _ => 'NO SE PUDO COMPLETAR EL ARRANQUE',
+      'startupIdle' => strings.bootStatusIdle,
+      'startupPreparing' => strings.bootStatusPreparing,
+      'startupBranding' => strings.bootStatusBranding,
+      'startupAssets' => strings.bootStatusAssets,
+      'startupNativeBridge' => strings.bootStatusNativeBridge,
+      'startupInterface' => strings.bootStatusInterface,
+      'startupReady' => strings.bootStatusReady,
+      'startupTimeout' => strings.bootStatusTimeout,
+      'startupCancelled' => strings.bootStatusCancelled,
+      'nativeBridgeUnavailable' => strings.bootStatusNativeUnavailable,
+      'startupAssetInvalid' => strings.bootStatusAssetInvalid,
+      'startupInterfaceUnavailable' =>
+        strings.bootStatusInterfaceUnavailable,
+      _ => strings.bootStatusFailed,
+    };
+  }
+
+  static String? _diagnosticDetail(
+    AppLocalizations strings,
+    String? code,
+  ) {
+    return switch (code) {
+      null => null,
+      'library_not_found' => strings.diagnosticLibraryNotFound,
+      'symbol_not_found' => strings.diagnosticSymbolNotFound,
+      'null_pointer' => strings.diagnosticNullPointer,
+      'invalid_length' => strings.diagnosticInvalidLength,
+      'invalid_utf8' => strings.diagnosticInvalidUtf8,
+      'incompatible_version' => strings.diagnosticIncompatibleVersion,
+      'startup_timeout' => strings.diagnosticStartupTimeout,
+      'startup_failed' => strings.diagnosticStartupFailed,
+      'interface_unavailable' => strings.diagnosticInterfaceUnavailable,
+      'asset_invalid' => strings.diagnosticAssetInvalid,
+      _ => strings.diagnosticUnknown,
     };
   }
 }
 
 class _ProvisionalBanner extends StatelessWidget {
-  const _ProvisionalBanner();
+  const _ProvisionalBanner({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
+    return DecoratedBox(
+      decoration: const BoxDecoration(
         color: Color(0x26168BFF),
         border: Border.fromBorderSide(
           BorderSide(color: Color(0x66168BFF)),
@@ -477,11 +509,11 @@ class _ProvisionalBanner extends StatelessWidget {
         borderRadius: BorderRadius.all(Radius.circular(8)),
       ),
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Text(
-          'DATOS DE MARCA PROVISIONALES',
+          label,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: Color(0xFF9FCFFF),
             fontFamily: 'monospace',
             fontSize: 10,

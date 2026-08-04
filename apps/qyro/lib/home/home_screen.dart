@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../generated/branding.g.dart';
+import '../l10n/generated/app_localizations.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text(GeneratedBranding.appName)),
+      appBar: AppBar(title: Text(strings.appTitle)),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -20,27 +23,29 @@ class HomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (GeneratedBranding.isProvisional) ...[
-                    const _ProvisionalNotice(),
+                    _ProvisionalNotice(
+                      label: strings.bootProvisionalBranding,
+                    ),
                     const SizedBox(height: 24),
                   ],
                   Text(
-                    'Base de interfaz local en preparación.',
+                    strings.homeBaseline,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 36),
-                  const _PrimaryAction(
+                  _PrimaryAction(
                     icon: Icons.upload_file,
-                    label: 'Enviar',
+                    label: strings.homeSend,
                   ),
                   const SizedBox(height: 16),
-                  const _PrimaryAction(
+                  _PrimaryAction(
                     icon: Icons.download,
-                    label: 'Recibir',
+                    label: strings.homeReceive,
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Funciones de transferencia aún no implementadas.',
+                  Text(
+                    strings.homeTransferUnavailable,
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -73,21 +78,23 @@ class _PrimaryAction extends StatelessWidget {
 }
 
 class _ProvisionalNotice extends StatelessWidget {
-  const _ProvisionalNotice();
+  const _ProvisionalNotice({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
+    return DecoratedBox(
+      decoration: const BoxDecoration(
         color: Color(0x26168BFF),
         borderRadius: BorderRadius.all(Radius.circular(8)),
       ),
       child: Padding(
-        padding: EdgeInsets.all(10),
+        padding: const EdgeInsets.all(10),
         child: Text(
-          'DATOS DE MARCA PROVISIONALES',
+          label,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: Color(0xFF9FCFFF),
             fontFamily: 'monospace',
             fontSize: 11,
