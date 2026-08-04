@@ -28,9 +28,27 @@ concurrency:
 jobs:
   ios-runtime:
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build and stage qyro_ffi static libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          export IPHONEOS_DEPLOYMENT_TARGET=13.0
+          cargo build --locked --package qyro_ffi --target aarch64-apple-ios
+          cargo build --locked --package qyro_ffi --target aarch64-apple-ios-sim
+          mkdir -p apps/qyro/ios/Native/iphoneos apps/qyro/ios/Native/iphonesimulator
+          cp target/aarch64-apple-ios/debug/libqyro_ffi.a \
+            apps/qyro/ios/Native/iphoneos/libqyro_ffi.a
+          cp target/aarch64-apple-ios-sim/debug/libqyro_ffi.a \
+            apps/qyro/ios/Native/iphonesimulator/libqyro_ffi.a
+          for qyro_library in apps/qyro/ios/Native/*/libqyro_ffi.a; do
+            nm -gU "$qyro_library" | grep -q ' _qyro_protocol_version_ptr$'
+            nm -gU "$qyro_library" | grep -q ' _qyro_protocol_version_len$'
+          done
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
@@ -39,6 +57,17 @@ jobs:
       - name: Resolve locked Flutter dependencies
         working-directory: apps/qyro
         run: flutter pub get --enforce-lockfile
+      - name: Build unsigned iOS application with qyro_ffi
+        working-directory: apps/qyro
+        run: flutter build ios --debug --no-codesign
+      - name: Verify native symbols in the unsigned application
+        working-directory: apps/qyro
+        shell: bash
+        run: |
+          set -euo pipefail
+          qyro_runner=build/ios/iphoneos/Runner.app/Runner
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_ptr$'
+          nm -gU "$qyro_runner" | grep -q ' _qyro_protocol_version_len$'
       - name: Boot an available iOS simulator
         id: simulator
         shell: bash
