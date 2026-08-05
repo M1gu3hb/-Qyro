@@ -22,11 +22,16 @@ jobs:
       # Covers the wire contracts, the manifest contracts, the property tests
       # and the fuzz corpus smoke tests.
       - run: cargo test --workspace
+      # --all-features turns on qyro_crypto's `test-vectors`, which gates the
+      # fixed-seed constructor. It is not in `default`, so a release build
+      # cannot reach it, but the vectors must still be verified here.
+      - run: cargo test --workspace --all-features
+      - run: cargo test --doc --workspace
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked --version 0.22.2
-      # Mandatory from sprint 2 on. The workspace has no external dependencies,
-      # so an advisory here means one was introduced and needs review before it
-      # reaches the parsing paths.
+      # Mandatory from sprint 2 on. Sprint 4A added the Ed25519 stack, so this
+      # now guards real third-party code on a security-critical path; every
+      # crate and licence is recorded in docs/LICENSE_AUDIT.md.
       - name: Audit dependencies for security advisories
         run: cargo audit --deny warnings
       # rust/fuzz is a separate workspace (libfuzzer-sys needs nightly), so it is

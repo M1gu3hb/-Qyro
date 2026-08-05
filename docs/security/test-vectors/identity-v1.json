@@ -1,0 +1,69 @@
+{
+  "_warning": "TEST ONLY — NEVER PRODUCTION. The seed below is the public RFC 8032 section 7.1 TEST 1 secret key. Any identity derived from it is compromised by definition.",
+  "format": "qyro-identity-v1",
+  "identity_version": 1,
+  "algorithm": "Ed25519 (RFC 8032)",
+  "fingerprint_construction": "SHA-256( \"QYRO-DEVICE-IDENTITY-V1\" || 0x00 || version_u8 || public_key_32 )",
+  "signing_input_construction": "\"QYRO-SIGN-V1\" || 0x00 || domain_u8 || message_len_u64_be || message",
+  "identity": {
+    "seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "seed_source": "RFC 8032 section 7.1, TEST 1",
+    "public_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+    "public_key_matches_rfc8032_test1": true,
+    "fingerprint": "9fd69388e7137a7a7a63c45e6dbc12d539a3d1fad3b42b91b697e6a04074643e",
+    "fingerprint_grouped": "9fd69388-e7137a7a-7a63c45e-6dbc12d5-39a3d1fa-d3b42b91-b697e6a0-4074643e"
+  },
+  "domains": [
+    { "name": "TestVector", "id": 1, "available": true },
+    { "name": "DeviceClaim", "id": 2, "available": true },
+    { "name": "HandshakeTranscript", "id": 3, "available": false, "note": "reserved; signing and verifying are rejected until the handshake format is frozen" }
+  ],
+  "signatures": [
+    {
+      "domain": "TestVector",
+      "domain_id": 1,
+      "message_hex": "",
+      "signing_input_hex": "5159524f2d5349474e2d56310001 0000000000000000",
+      "signing_input_note": "spaces above are for readability only; concatenate without them",
+      "signature": "a869d2a6bcd5d2e8c4b7f80921c450d5fc46d4edf11a5c49e309cc9f4e913b1ce6d653fe5dadd8f950d5834375f0a8f010cfb56867d02847e16f1dfb85680504"
+    },
+    {
+      "domain": "TestVector",
+      "domain_id": 1,
+      "message_hex": "7179726f",
+      "message_utf8": "qyro",
+      "signature": "f0886df7f210317167480a1b2316a0ce0c27a7ee4d107d201ebd9260f6b043ed3e4e4086f337ec8936264018749ecd6813d5f34d28fca0355c471b8c4e79d70e"
+    },
+    {
+      "domain": "DeviceClaim",
+      "domain_id": 2,
+      "message_hex": "",
+      "signature": "3c362c340dc2f7de790e0d31b20b863159c6b2b30ab7ff047a0d42fcfec6b5f05a9fd6cfa04a7cea915347257891112c93aeee8b5bc84a2a5ab82c2838b76206"
+    },
+    {
+      "domain": "DeviceClaim",
+      "domain_id": 2,
+      "message_hex": "7179726f",
+      "message_utf8": "qyro",
+      "signature": "564ee06762dac9a4ff5a53b3b5ce648cdd0e50ae24fdcf51fcdf64f13483b6d7797a0d2a0dc2328e6586e07ce2af30c1197167d6d447c9a1a9500203a25a5c0f"
+    }
+  ],
+  "negative_cases": [
+    {
+      "name": "same message signed in another domain must not verify",
+      "note": "the DeviceClaim signature over \"qyro\" must fail verification under TestVector, and vice versa"
+    },
+    {
+      "name": "altered message",
+      "note": "flipping any byte of the message invalidates the signature"
+    },
+    {
+      "name": "altered signature",
+      "note": "flipping any byte of the signature invalidates it"
+    },
+    {
+      "name": "wrong public key",
+      "note": "a signature from one identity must not verify under another"
+    }
+  ]
+}
