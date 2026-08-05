@@ -5,15 +5,17 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-aead-replay`, que continúa
-   `claude/qyro-handshake-closure` y añade el AEAD de frames.
+2. Confirmar la rama `claude/qyro-crypto-platform-hardening`, que continúa
+   `claude/qyro-aead-replay` y endurece el AEAD sin añadirle funcionalidad.
 3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
    más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
    (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
-   (handshake) y ADR-0022 (AEAD de frames, con su enmienda del sprint 4C). Las
-   especificaciones están en `docs/protocols/` y `docs/security/`; las auditorías
-   de los dos últimos sprints, en `docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md` y
-   `docs/audits/SPRINT4C_AEAD_AUDIT.md`.
+   (handshake), ADR-0022 (AEAD de frames, con sus tres enmiendas) y ADR-0023
+   (harness de criptografía por plataforma). Las especificaciones están en
+   `docs/protocols/` y `docs/security/`; las auditorías de los tres últimos
+   sprints, en `docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md`,
+   `docs/audits/SPRINT4C_AEAD_AUDIT.md` y
+   `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`.
 4. Leer NEXT_STEPS.md y ADR relacionadas.
 5. Ejecutar doctor y tests relevantes.
 6. Continuar con la única “Next task” de STATUS.md.
@@ -30,7 +32,7 @@ contratos `.ps1`.
     cargo test --workspace --all-features
     cargo test --doc --workspace
     cargo audit --deny warnings          # obligatorio desde el sprint 2
-    rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
+    cargo run --package qyro_crypto_smoke -- --json   # el harness, en el host
     cargo build --package qyro_ffi
     cd apps/qyro && flutter pub get --enforce-lockfile
     dart tools/branding_generator/bin/generate.dart --check   # desde la raíz
@@ -54,7 +56,7 @@ Cifrado sí hay, desde el sprint 4C, y no mueve un solo byte a ninguna parte. Qu
 transfiera archivos. Los botones Enviar y Recibir siguen deshabilitados a
 propósito, y el README sigue diciendo que Qyro todavía no transfiere archivos.
 
-Concretamente, después del sprint 4C:
+Concretamente, después del sprint 4C.1:
 
 - El handshake **corre entre dos valores en un proceso**. No hay socket, ni
   descubrimiento, ni integración con el framing. El `SessionId` que deriva sí es
@@ -68,9 +70,35 @@ Concretamente, después del sprint 4C:
   en `qyro_crypto`, con constructores privados.
 - La identidad y las claves viven **solo en memoria**. No hay almacenamiento
   seguro en ninguna plataforma.
+- `qyro_crypto` **se ejecuta** en Linux, Windows, emulador Android y simulador
+  iOS, y se compila además para Android arm64 e iOS device. Antes del sprint
+  4C.1 no había evidencia de ninguna de las tres plataformas: los workflows en
+  verde construían `qyro_ffi`, que no depende de `qyro_crypto`. Emulador y
+  simulador **no son hardware**, y nada se ha medido en un teléfono.
+- La ruta AEAD de producción no puede entrar en pánico y el texto claro
+  autenticado se borra al soltarlo. Ninguna de las dos cosas era cierta antes
+  del sprint 4C.1.
 
 `rust/fuzz` es un workspace aparte y exige nightly; no entra en la compilación
-del producto.
+del producto. Desde el sprint 4C.1 **se puede construir**, que hasta entonces no
+era el caso: el paquete no declaraba `[workspace]` propio y Cargo se negaba a
+hacer nada en ese directorio. Los targets se ejecutan así, desde la raíz:
+
+    rustup toolchain install nightly
+    cargo install cargo-fuzz --locked --version 0.13.1
+    cargo +nightly fuzz run --fuzz-dir rust/fuzz frame_opener \
+        -- -max_total_time=120 -print_final_stats=1
+
+`--fuzz-dir` no es opcional; sin él cargo-fuzz busca `<raíz>/fuzz` y falla con un
+mensaje que no explica el problema.
+
+## El harness de criptografía no entra en el producto
+
+`rust/tools/qyro_crypto_smoke` existe para responder «¿corre `qyro_crypto` en
+esta plataforma?» y no forma parte de la aplicación. Es `publish = false`, no lo
+depende ningún crate del producto, y dos guardas lo mantienen fuera: uno busca su
+símbolo en los bundles que CI construye, y otro rechaza que cualquier workflow
+que no sea `crypto-platform.yml` lo compile y suba como artefacto. Ver ADR-0023.
 
 ## Cómo se comprueba una invariante en este repositorio
 

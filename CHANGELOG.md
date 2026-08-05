@@ -4,6 +4,50 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 4C.1)
+
+- `.github/workflows/crypto-platform.yml`: compila `qyro_crypto` por target
+  explícito para Android x86_64 y arm64, iOS device y simulator, Windows x64 y
+  Linux, y **lo ejecuta** en cuatro de esos seis mediante un harness aislado.
+- `rust/tools/qyro_crypto_smoke`: el harness. `publish = false`, ningún crate del
+  producto depende de él, y dos guardas lo mantienen fuera de los bundles
+  (ADR-0023).
+- `.github/workflows/crypto-fuzz.yml`: seis targets, un job cada uno, sin
+  `fail-fast`, con las estadísticas finales de libFuzzer en el log. Campaña
+  acotada, no exhaustiva.
+- Tres targets nuevos —`encrypted_envelope`, `frame_opener` y `replay_window`—
+  y `qyro_crypto::fuzzing`, disponible solo bajo `--cfg fuzzing` y no como
+  feature de Cargo, porque las features son aditivas y cualquier crate del grafo
+  podría encenderla para todos.
+- `scripts/check_crypto_platform_evidence.{sh,ps1}` y
+  `scripts/check_harness_isolation.{sh,ps1}`.
+- `docs/security/secret-lifecycle-audit.md`,
+  `docs/testing/crypto-platform-matrix.md`, `docs/testing/crypto-fuzzing.md`,
+  ADR-0023 y `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`.
+- `.gitattributes`: el repositorio se extraía con CRLF en Windows y tres pruebas
+  de comparación byte a byte fallaban allí y solo allí.
+
+### Changed (sprint 4C.1)
+
+- `AuthenticatedFrame::payload` pasa a `Zeroizing<Vec<u8>>`, y los búferes
+  temporales de `seal` y `open` con él.
+- El estado del sealer pasa de `Option<u64>` a un enum de tres variantes:
+  cualquier `Err` lo envenena de forma permanente, para que un reintento no
+  reutilice una secuencia que ya se consumió.
+- Features `zeroize` activadas en `sha2` y `hmac`: estaban apagadas, así que el
+  estado de compresión de cada transcript y el estado con clave de cada MAC
+  quedaban en memoria liberada.
+- `rust/fuzz` declara su propio `[workspace]`. Sin él Cargo no podía construir
+  ningún target, y ninguno se había construido nunca.
+
+### Removed (sprint 4C.1)
+
+- `AuthenticatedFrame::into_payload`, que entregaba el texto claro descifrado
+  como un `Vec<u8>` que nadie borra. Lo sustituye `into_zeroizing_payload`.
+- `panic!`, `unreachable!` y `assert!` de la ruta AEAD de producción, con un
+  `deny` de Clippy que lo mantiene así. Un `assert!` no era un control de
+  seguridad: `debug_assertions` está apagado en release.
+
 ### Added (sprint 4C)
 
 - Cifrado autenticado de frames QYRO/1 con ChaCha20-Poly1305 (ADR-0022):

@@ -37,12 +37,21 @@
 - Plataforma: release
 - Severidad: P1
 - Esperado: artefactos debug descargables con checksums
-- Actual: outputs existen solo en runners efímeros
-- Evidencia: run 30938946789
-- Workaround: volver a ejecutar builds
-- Estado: abierto
+- Actual: **parcialmente incorrecto tal y como estaba redactado.** El ZIP
+  portable de Windows sí se retiene desde que existe el job `windows`
+  (`qyro-windows-x64-portable-debug`, 14 días). El APK de Android y el
+  `Runner.app` de iOS no: `platform-builds.yml` tiene un único paso de
+  `upload-artifact` y es el de Windows
+- Lo que sigue faltando: checksum SHA-256 distribuido **dentro** del paquete y
+  la etiqueta DEVELOPMENT / NOT FOR PUBLIC RELEASE, en los tres. El digest que
+  GitHub imprime al subir un artefacto identifica el ZIP de ese run, no el
+  contenido que alguien descarga; usarlo como sustituto cambiaría en silencio lo
+  que se afirma
+- Evidencia: run 30938946789; `.github/workflows/platform-builds.yml:223`
+- Workaround: volver a ejecutar builds para Android e iOS
+- Estado: abierto, con el alcance corregido en el sprint 4C.1
 - Dueño: release
-- Fecha: 2026-08-04
+- Fecha: 2026-08-04, corregido 2026-08-05
 
 ## QYR-0005 — Auditorías y suites avanzadas no disponibles
 
@@ -213,4 +222,113 @@
 - Resolución: eliminadas del enum, con enmienda registrada en ADR-0022
 - Estado: resuelto
 - Evidencia: `docs/audits/SPRINT4C_AEAD_AUDIT.md`, hallazgo H-2
+- Fecha: 2026-08-05
+
+## QYR-0016 — Cuatro workflows en verde no probaban `qyro_crypto` en ninguna plataforma
+
+- Plataforma: Android, iOS, Windows, CI
+- Severidad: P1
+- Esperado: evidencia de que `qyro_crypto` compila y corre en las tres
+  plataformas del producto
+- Actual: `platform-builds.yml`, `android-runtime.yml` e `ios-runtime.yml`
+  construían y ejecutaban `qyro_ffi`. `qyro_ffi` depende de `qyro_core` y de
+  nada más —hay una prueba que falla si alguien añade `qyro_crypto`—, así que
+  ninguno de esos runs tocaba una línea de criptografía fuera de x86_64 Linux
+- Causa: la evidencia se leía por plataforma y no por paquete. Un job llamado
+  `android` en verde parecía cubrir «Android», y cubría un crate concreto
+- Resolución: `crypto-platform.yml` con cuatro jobs que compilan `qyro_crypto`
+  por target explícito y ejecutan un harness aislado en Linux, Windows, emulador
+  Android y simulador iOS
+- Prevención: `scripts/check_crypto_platform_evidence.{sh,ps1}` exige que el
+  nombre del paquete y el `--target` aparezcan **juntos**, y su contrato incluye
+  a propósito una sustitución `qyro_ffi`/`qyro_crypto` para comprobar que el
+  checker la detecta
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
+- Fecha: 2026-08-05
+
+## QYR-0017 — La ruta AEAD podía abortar el proceso con datos de un peer
+
+- Plataforma: criptografía
+- Severidad: P1
+- Esperado: ningún input de peer provoca un pánico
+- Actual: `unreachable!`, `assert!` e indexado sin comprobar en el camino de
+  `seal` y `open`
+- Causa adicional: un `assert!` no era un control. `debug_assertions` está
+  apagado en release, así que la comprobación desaparecía justo en la
+  compilación que se distribuye
+- Resolución: cada estado pasa a ser una variante de `AeadError`
+  (`FrameTemplateRejected`, `EnvelopeConstructionFailed`,
+  `AssociatedDataMismatch`, `ReplayStateCorrupt`, `SealerPoisoned`), bajo `deny`
+  de `clippy::panic`, `unwrap_used`, `expect_used`, `unreachable`, `todo`,
+  `unimplemented` e `indexing_slicing`
+- Segundo defecto que destapó: devolver `Err` sin más deja un sealer que puede
+  haber consumido ya su secuencia. Un reintento reutilizaría el nonce. Ahora
+  cualquier error lo envenena de forma permanente
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
+- Fecha: 2026-08-05
+
+## QYR-0018 — El texto claro descifrado quedaba en memoria sin borrar
+
+- Plataforma: criptografía
+- Severidad: P1
+- Esperado: el texto claro autenticado se borra al soltarlo
+- Actual: `AuthenticatedFrame::payload` era un `Vec<u8>` e `into_payload` lo
+  entregaba desnudo. Los búferes temporales de `seal` y `open` tampoco se
+  borraban
+- Actual, segunda parte: las features `zeroize` de `sha2` y `hmac` estaban
+  apagadas, así que el estado de compresión de cada transcript y el estado con
+  clave de cada MAC de confirmación y de cada expansión HKDF quedaban en memoria
+  liberada
+- Causa: nadie había recorrido los secretos uno por uno. La feature se supuso
+  activa por el nombre en lugar de comprobarse en `Cargo.lock`
+- Resolución: `Zeroizing<Vec<u8>>` en los tres sitios, `into_zeroizing_payload`
+  en lugar de `into_payload`, y ambas features activadas
+- Límite registrado, no cerrado: swap, hibernación, core dumps y registros
+  quedan fuera del alcance de cualquier `Drop`, y nada de esto se ha observado
+  ocurriendo. Ver `docs/security/secret-lifecycle-audit.md`
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
+- Fecha: 2026-08-05
+
+## QYR-0019 — Ningún target de `cargo-fuzz` podía construirse
+
+- Plataforma: pruebas
+- Severidad: P2
+- Esperado: los targets documentados en `parser-threats.md` se ejecutan con el
+  recetario que ese archivo publica
+- Actual: dos fallos encadenados. `rust/fuzz/Cargo.toml` decía «excluded from
+  the main workspace» y nada lo excluía —el manifest raíz ni lo listaba ni lo
+  excluía, y el paquete no declaraba `[workspace]` propio—, así que Cargo
+  respondía «current package believes it's in a workspace when it's not». Detrás
+  de eso, `frame_decoder` seguía usando una API que cambió en el sprint 2
+- Tercer fallo, en la documentación: el recetario omitía `--fuzz-dir rust/fuzz`,
+  sin el cual cargo-fuzz busca `<raíz>/fuzz` y falla con un mensaje que no dice
+  cuál es el problema
+- Causa: lo único que CI ejecutaba sobre estos archivos era `rustfmt --check`,
+  que no necesita tipos para pasar
+- Resolución: `[workspace]` propio, target reparado, tres targets nuevos y
+  `crypto-fuzz.yml`
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
+- Fecha: 2026-08-05
+
+## QYR-0020 — El repositorio se extraía con CRLF en Windows
+
+- Plataforma: Windows, CI
+- Severidad: P2
+- Esperado: los archivos rastreados tienen los mismos bytes en las tres
+  plataformas
+- Actual: sin `.gitattributes`, Git aplicaba su conversión por defecto en
+  Windows y tres pruebas fallaban allí y solo allí: las dos que regeneran
+  vectores byte a byte y la que recorre el fuente buscando constructores
+  deterministas
+- Causa: las pruebas comparan bytes, y el checkout los cambiaba. El fallo no
+  tenía nada que ver con el código que señalaba
+- Resolución: `.gitattributes` con `* text=auto eol=lf` y una lista explícita de
+  extensiones binarias, más una prueba nombrada que rechaza un `\r` en los
+  vectores comprometidos
+- Estado: resuelto
+- Evidencia: run 31049534832 (fallo, job `windows-crypto`)
 - Fecha: 2026-08-05

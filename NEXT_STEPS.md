@@ -15,6 +15,13 @@
      número de muestras. Sin afirmar 60 FPS sin medirlo.
 3. Retener artefactos de desarrollo con SHA-256, etiquetados
    DEVELOPMENT / NOT FOR PUBLIC RELEASE.
+   - Estado real: el ZIP portable de Windows **sí** se retiene (14 días,
+     `qyro-windows-x64-portable-debug`). El APK de Android y el `Runner.app` de
+     iOS no. Lo que falta en los tres casos es un checksum distribuido **dentro**
+     del paquete y la etiqueta: el digest que GitHub imprime al subir un artefacto
+     identifica el ZIP que produjo ese run, no el contenido que alguien descarga
+     y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
+     lo que se está afirmando.
 
 ## P1
 
@@ -28,8 +35,13 @@
   contra las primitivas, pero hasta que alguien escriba el lado Swift o Kotlin y
   encuentre las ambigüedades que queden, «formato definido sin ambigüedad» es una
   intención y no un hecho.
-- Ejecutar una campaña real de `cargo-fuzz` y añadir los hallazgos al corpus.
-- Probar en hardware físico: hasta ahora solo emulador, simulador y host.
+- Ampliar la campaña de `cargo-fuzz`. Desde el sprint 4C.1 corre semanalmente,
+  seis targets, dos minutos cada uno, y eso es un suelo, no una revisión: la
+  cobertura sobre entradas imprevistas más allá de ese presupuesto sigue siendo
+  desconocida. Cualquier hallazgo entra al corpus antes de corregirse.
+- Probar en hardware físico: hasta ahora solo emulador, simulador y host. El
+  sprint 4C.1 añadió ejecución de `qyro_crypto` en cuatro entornos y ninguno es
+  un teléfono; Android arm64 e iOS device se compilan y no se ejecutan.
 - SBOM y `cargo-deny` para licencias, fuentes, duplicados y bans.
 - Selección de archivos y construcción del manifest desde el filesystem real.
 
@@ -43,6 +55,24 @@
 
 - RaptorQ/QR adaptativo.
 - Wi-Fi Direct, Multipeer y Bluetooth experimental.
+
+## Completado el 2026-08-05 (sprint 4C.1, endurecimiento del AEAD)
+
+- `qyro_crypto` compilado para Android, iOS y Windows y **ejecutado** en cuatro
+  entornos mediante un harness aislado que no entra en el producto (ADR-0023).
+  Hasta aquí, cuatro workflows en verde no decían nada sobre `qyro_crypto` fuera
+  de x86_64 Linux: todos ejercitaban `qyro_ffi`, que no depende de él.
+- Sin `panic!`, `unreachable!`, `assert!` ni indexado sin comprobar en la ruta
+  AEAD de producción, sostenido por un `deny` de Clippy y por una prueba que lee
+  el fuente. Un sealer que falla queda envenenado, para que un reintento no
+  reutilice una secuencia.
+- Texto claro autenticado y búferes temporales en `Zeroizing`, con las features
+  `zeroize` de `sha2` y `hmac` activadas: estaban apagadas, así que el estado de
+  cada transcript y de cada MAC quedaba en memoria liberada.
+- `rust/fuzz` construible por primera vez, seis targets y una campaña acotada
+  semanal.
+- `.gitattributes` con `eol=lf`: el repositorio se extraía con CRLF en Windows y
+  tres pruebas de comparación byte a byte fallaban por eso y no por el código.
 
 ## Completado el 2026-08-05 (sprint 4B.1, cierre del handshake)
 
