@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-05T02:40:00Z
 - Branch: claude/qyro-crypto-identity-hardening
-- Verified commit: f78522a5eb27ac7dd2819f943e46ffbf4c87f6f3
+- Verified commit: 69e7914651d6364ce04e17e0bccaaa8fa2c7a7d5
 - Milestone: protocolo y manifest endurecidos; criptografía NO iniciada; Hito 1 visual parcial
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
@@ -112,7 +112,10 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 
-Workflows remotos sobre `f78522a`, lanzados con `workflow_dispatch`:
+Workflow sobre `69e7914` (este sprint): **CI run 30968237880, success**, los
+cuatro jobs en verde con `cargo audit` obligatorio.
+
+Workflows previos sobre `f78522a`:
 
 | Workflow | Run | Conclusión |
 |---|---|---|
