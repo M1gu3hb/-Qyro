@@ -22,6 +22,12 @@ pub enum IdentityError {
     },
     /// The bytes were the right length but not a valid Ed25519 point.
     MalformedPublicKey,
+    /// The key is a valid point of low order.
+    ///
+    /// One of the eight small-order points. A signature made under such a key
+    /// verifies for almost any message, so accepting one would let a peer
+    /// present an identity that authenticates nothing.
+    WeakPublicKey,
     /// A signature was not the expected length.
     InvalidSignatureLength {
         /// Length supplied.
@@ -63,6 +69,9 @@ impl fmt::Display for IdentityError {
                 )
             }
             Self::MalformedPublicKey => formatter.write_str("public key is not a valid point"),
+            Self::WeakPublicKey => {
+                formatter.write_str("public key has low order and authenticates nothing")
+            }
             Self::InvalidSignatureLength { found, expected } => {
                 write!(formatter, "signature is {found} bytes, expected {expected}")
             }

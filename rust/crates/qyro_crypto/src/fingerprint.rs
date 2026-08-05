@@ -70,22 +70,54 @@ impl IdentityFingerprint {
             .join("-")
     }
 
-    /// Parses either the plain or the grouped hex form.
+    /// Parses one of the two canonical forms, and nothing else.
+    ///
+    /// Exactly two spellings are accepted:
+    ///
+    /// - 64 lowercase hex characters with no separators, as [`Self::to_hex`]
+    ///   emits;
+    /// - eight groups of eight lowercase hex characters joined by exactly seven
+    ///   `-`, as [`Self::to_grouped_hex`] emits.
+    ///
+    /// Everything else is rejected, including hyphens in other positions,
+    /// doubled hyphens, a leading or trailing hyphen, uppercase, and whitespace.
+    /// The earlier implementation stripped every `-` before looking at the
+    /// input, so `--9fd69388…`, `9f-d6-93-88…` and a trailing `-` all parsed to
+    /// the same value. A fingerprint people read aloud to decide whether to
+    /// trust a device must have one spelling, not a family of them: if two
+    /// strings can name the same identity, comparing strings stops being a
+    /// sound way to compare identities.
     ///
     /// # Errors
     ///
-    /// Returns [`IdentityError::MalformedFingerprint`] for a wrong length, a
-    /// non-hex character, or uppercase input. Accepting uppercase would give one
-    /// fingerprint two spellings, which is exactly the ambiguity the canonical
-    /// form exists to avoid.
+    /// Returns [`IdentityError::MalformedFingerprint`] for anything outside the
+    /// two forms above.
     pub fn parse(text: &str) -> Result<Self, IdentityError> {
-        let compact: String = text.chars().filter(|c| *c != '-').collect();
-        if compact.len() != FINGERPRINT_LEN * 2 {
+        const GROUPS: usize = 8;
+        const GROUP_CHARS: usize = 8;
+        const PLAIN_CHARS: usize = FINGERPRINT_LEN * 2;
+
+        let compact = if text.len() == PLAIN_CHARS {
+            text.to_owned()
+        } else if text.len() == PLAIN_CHARS + GROUPS - 1 {
+            // Position, not just count: split gives exactly eight parts only
+            // when there are exactly seven separators, and each part must be a
+            // full group, which rules out empty parts from doubled or edge
+            // hyphens.
+            let parts: Vec<&str> = text.split('-').collect();
+            if parts.len() != GROUPS || parts.iter().any(|part| part.len() != GROUP_CHARS) {
+                return Err(IdentityError::MalformedFingerprint);
+            }
+            parts.concat()
+        } else {
             return Err(IdentityError::MalformedFingerprint);
-        }
+        };
+
+        // Lowercase hex only. `is_ascii_hexdigit` accepts `A`..`F`, so the
+        // uppercase check has to be explicit.
         if compact
-            .chars()
-            .any(|c| !c.is_ascii_hexdigit() || c.is_ascii_uppercase())
+            .bytes()
+            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
         {
             return Err(IdentityError::MalformedFingerprint);
         }

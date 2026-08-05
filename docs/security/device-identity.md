@@ -18,12 +18,48 @@ distintas y no vinculadas.
 | Elemento | Formato |
 |---|---|
 | Clave pública | 32 bytes, codificación canónica Ed25519 |
+| Identidad pública en el cable | 33 bytes: byte 0 versión, bytes 1..33 clave |
 | Firma | 64 bytes, `R \|\| s` |
 | Fingerprint | `SHA-256("QYRO-DEVICE-IDENTITY-V1" \|\| 0x00 \|\| version \|\| public_key)` |
 | Entrada de firma | `"QYRO-SIGN-V1" \|\| 0x00 \|\| domain \|\| len(msg) u64 BE \|\| msg` |
 
 `IDENTITY_VERSION = 1` entra en el fingerprint, así que cambiar el formato
 cambia todos los fingerprints y no puede pasar inadvertido.
+
+`PublicIdentity::encode`/`decode` fijan la forma de 33 bytes
+(`PUBLIC_IDENTITY_WIRE_LEN`). La versión viaja **con** la clave en lugar de
+acordarse fuera de banda: entregar 32 bytes sueltos obliga al receptor a suponer
+en qué formato están, y una suposición equivocada sobre el formato de una clave
+es una identidad equivocada.
+
+## Claves rechazadas
+
+`PublicIdentity::from_bytes` y `decode` rechazan los ocho puntos de orden bajo
+con `WeakPublicKey`. Los ocho son codificaciones Ed25519 **válidas**, así que no
+hay nada en los bytes que los delate: `[0u8; 32]` es uno de ellos y antes se
+aceptaba como una identidad perfectamente normal. Una firma bajo una de esas
+claves verifica para casi cualquier mensaje, de modo que aceptarlas equivale a
+aceptar una identidad que no autentica nada mientras aparenta lo contrario.
+
+La verificación usa `verify_strict`, no el `verify` permisivo: rechaza valores
+`R` no canónicos y componentes de torsión pequeña. Es defensa en profundidad —
+con las claves débiles ya rechazadas en construcción, no hay entrada alcanzable
+por esta API que distinga ambas funciones, y no se ha demostrado un caso de
+maleabilidad concreto contra ella.
+
+## Formas canónicas del fingerprint
+
+Exactamente dos escrituras se aceptan al parsear: 64 caracteres hex minúsculos
+sin separadores, u ocho grupos de ocho unidos por exactamente siete `-`.
+Cualquier otra cosa se rechaza, incluidos guiones en otras posiciones, guiones
+dobles, guion inicial o final, mayúsculas y espacios.
+
+La implementación anterior eliminaba todos los `-` antes de mirar la entrada, de
+modo que `-9fd69388…`, `9f-d6-93-88…` y un guion final nombraban la misma
+identidad. Un fingerprint que la gente lee en voz alta para decidir si confía en
+un dispositivo debe tener una escritura, no una familia: si dos cadenas distintas
+nombran la misma identidad, comparar cadenas deja de ser una forma sólida de
+comparar identidades.
 
 ## Separación de dominios
 
@@ -54,8 +90,14 @@ nada ha validado.
 - La entropía de producción viene de `getrandom` y de ningún otro sitio. Si el
   sistema no puede darla, la generación falla con `EntropyUnavailable`; no hay
   fallback más débil.
-- El constructor de semilla fija vive tras la feature `test-vectors`, que no está
-  en `default`, y los targets que la usan la declaran en `required-features`.
+- El constructor de semilla fija es `cfg(test)` y privado del crate: no existe
+  fuera del build de pruebas. Vivía tras la feature `test-vectors`, que seguía
+  siendo API pública: las features son aditivas, así que cualquier crate del
+  grafo podía activarla para todos los demás y ningún build de release podía
+  demostrar que estaba apagada.
+- Firmar es solo falible (`try_sign`). Había también un `sign` infalible que
+  hacía `expect` sobre el anterior; convertir un dominio disponible en reservado
+  habría transformado en pánico cada llamada, en silencio.
 
 ## Fallo de verificación
 

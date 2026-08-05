@@ -33,18 +33,44 @@ Construcciones que fija el archivo:
 El separador `0x00` y la longitud explícita impiden que dos pares
 (dominio, mensaje) distintos produzcan los mismos bytes firmados.
 
+## `rfc8032-ed25519.json`
+
+Las cinco pruebas de la **sección 7.1 del RFC 8032** (TEST 1, TEST 2, TEST 3,
+TEST 1024 y TEST SHA(abc)), extraídas del texto del RFC en
+`https://www.rfc-editor.org/rfc/rfc8032.txt`.
+
+Estas firman el mensaje **directamente**, sin separación de dominios de Qyro:
+comprueban que la implementación de Ed25519 de la que depende Qyro cumple el
+estándar. La construcción propia de Qyro la cubre `identity-v1.json`.
+
+Cada entrada conserva `message_len` tal como lo declara el RFC, y el test
+comprueba que coincide con los bytes del propio archivo. Es lo que hace visible
+un recorte del mensaje de 1023 bytes en lugar de dejarlo pasar.
+
+La semilla de TEST 1 es la misma que usa `identity-v1.json`, y su clave pública
+coincide byte a byte en ambos archivos.
+
 ## Regenerar
 
-    cargo run -p qyro_crypto --features test-vectors --example emit_vectors
+No hay ejecutable de regeneración, y es deliberado: exigiría un constructor
+determinista en la API pública de `qyro_crypto`, que es exactamente lo que la
+biblioteca no debe exportar. El constructor de semilla fija es `cfg(test)` y
+privado del crate.
 
-La feature `test-vectors` no está en `default`, así que un build de release no
-puede alcanzar el constructor de semilla fija.
+Para cambiar un valor a propósito, edita el JSON y ejecuta las pruebas: fallarán
+señalando cada discrepancia con la implementación.
 
 ## Verificar
 
-`rust/crates/qyro_crypto/tests/identity_vectors.rs` carga este JSON y comprueba
-cada valor. No duplica los vectores en código: si el archivo y el código
-discrepan, el test falla.
+`rust/crates/qyro_crypto/src/vectors.rs` carga ambos JSON y comprueba cada valor.
+Vive dentro del crate porque un test de integración es otro crate y solo podría
+alcanzar el constructor de semilla fija a través de API pública. No duplica los
+vectores en código: si un archivo y el código discrepan, el test falla.
+
+Los archivos se parsean como JSON, no raspando subcadenas `"clave": "valor"`. La
+búsqueda de texto anterior leía el primer campo que apareciera, así que renombrar
+o reordenar una clave habría cambiado en silencio qué valor se comprobaba
+mientras el test seguía pasando.
 
 ## Todavía no existe
 

@@ -21,10 +21,13 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # Covers the wire contracts, the manifest contracts, the property tests
       # and the fuzz corpus smoke tests.
+      # Covers the identity vectors and the RFC 8032 known-answer test too: both
+      # moved inside qyro_crypto when the fixed-seed constructor became
+      # `cfg(test)` and crate-private, so they no longer need a feature flag and
+      # can no longer be skipped by running the default set.
       - run: cargo test --workspace
-      # --all-features turns on qyro_crypto's `test-vectors`, which gates the
-      # fixed-seed constructor. It is not in `default`, so a release build
-      # cannot reach it, but the vectors must still be verified here.
+      # No crate declares a feature today. Kept so that adding one cannot ship
+      # untested: the day a feature exists, this line already covers it.
       - run: cargo test --workspace --all-features
       - run: cargo test --doc --workspace
       - name: Install cargo-audit

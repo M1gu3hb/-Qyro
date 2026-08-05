@@ -27,13 +27,20 @@
 //! let identity = DeviceIdentity::generate()?;
 //! let public = identity.public_identity();
 //!
-//! let signature = identity.sign(SignatureDomain::DeviceClaim, b"this device");
+//! let signature = identity.try_sign(SignatureDomain::DeviceClaim, b"this device")?;
 //! assert!(public.verify(SignatureDomain::DeviceClaim, b"this device", &signature).is_ok());
 //!
 //! // A signature never verifies under a different domain.
 //! assert!(public.verify(SignatureDomain::TestVector, b"this device", &signature).is_err());
 //! # Ok::<(), qyro_crypto::IdentityError>(())
 //! ```
+//!
+//! # What this crate will not hand you
+//!
+//! There is no deterministic constructor in the public API, under any feature
+//! flag. Signing is fallible only. A public key that is a low-order point is
+//! refused rather than wrapped. Each of those was true in a weaker form before
+//! and is now enforced by the type system or by a check, not by a convention.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -43,7 +50,12 @@ mod fingerprint;
 mod identity;
 mod signature;
 
+#[cfg(test)]
+mod vectors;
+
 pub use error::IdentityError;
 pub use fingerprint::{FINGERPRINT_LEN, IdentityFingerprint};
-pub use identity::{DeviceIdentity, IDENTITY_VERSION, PUBLIC_KEY_LEN, PublicIdentity};
+pub use identity::{
+    DeviceIdentity, IDENTITY_VERSION, PUBLIC_IDENTITY_WIRE_LEN, PUBLIC_KEY_LEN, PublicIdentity,
+};
 pub use signature::{IdentitySignature, SIGNATURE_LEN, SignatureDomain};

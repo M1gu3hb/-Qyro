@@ -105,8 +105,28 @@ a mano que eliminaba diacríticos y provocaba colisiones falsas.
 `ed25519-dalek` con `default-features = false` y solo `rand_core` y `zeroize`;
 sin `serde`, `pkcs8`, `pem`, `batch` ni `hazmat`.
 
-Total del workspace: 35 crates. **Ninguna licencia GPL, AGPL ni LGPL.** Todas
-son permisivas (BSD-3-Clause, MIT, Apache-2.0, Zlib, BSD-1-Clause).
+### Solo desarrollo (`dev-dependencies` de `qyro_crypto`)
 
-`cargo audit --deny warnings` pasa sobre los 35 crates. `cargo-deny` sigue
+No se enlazan en la biblioteca ni en ningún artefacto distribuible: solo
+compilan al ejecutar las pruebas.
+
+| Crate | Versión | Licencia | Fuente |
+|---|---|---|---|
+| serde_json | 1.0.151 | MIT OR Apache-2.0 | serde-rs |
+| serde_core | 1.0.229 | MIT OR Apache-2.0 | serde-rs |
+| itoa | 1.0.18 | MIT OR Apache-2.0 | dtolnay |
+| memchr | 2.8.3 | Unlicense OR MIT | BurntSushi |
+| zmij | 1.0.23 | MIT | dtolnay |
+
+Necesarias porque los archivos de vectores pasaron a leerse como JSON en vez de
+rasparse buscando subcadenas `"clave": "valor"`. `Cargo.lock` también registra
+`serde` y `serde_derive`, pero `cargo tree -e normal,dev` confirma que no entran
+en el grafo de compilación: `serde_json` depende de `serde_core`, y las entradas
+de `serde` quedan solo como resolución de features opcionales.
+
+Total del workspace: 43 crates en `Cargo.lock`, 5 de ellos exclusivos de
+pruebas. **Ninguna licencia GPL, AGPL ni LGPL.** Todas son permisivas
+(BSD-3-Clause, MIT, Apache-2.0, Zlib, BSD-1-Clause, Unlicense).
+
+`cargo audit --deny warnings` pasa sobre los 43 crates. `cargo-deny` sigue
 pendiente.

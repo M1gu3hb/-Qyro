@@ -2,7 +2,7 @@
 
 use core::fmt;
 
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use zeroize::Zeroizing;
 
 use crate::error::IdentityError;
@@ -14,6 +14,13 @@ pub const IDENTITY_VERSION: u8 = 1;
 
 /// Bytes in an Ed25519 public key.
 pub const PUBLIC_KEY_LEN: usize = 32;
+
+/// Bytes in the wire encoding of a [`PublicIdentity`]: version plus key.
+///
+/// Byte 0 is the identity version, bytes 1..33 are the Ed25519 public key. The
+/// version travels with the key rather than being agreed out of band, so a peer
+/// can never be handed 32 bytes and left to assume which format they are in.
+pub const PUBLIC_IDENTITY_WIRE_LEN: usize = 1 + PUBLIC_KEY_LEN;
 
 /// Bytes in the seed a signing key is derived from.
 const SEED_LEN: usize = 32;
@@ -48,12 +55,15 @@ impl DeviceIdentity {
 
     /// Builds an identity from a fixed seed. **Test vectors only.**
     ///
-    /// Behind the non-default `test-vectors` feature so a release build cannot
-    /// reach it by accident. Production entropy comes from
+    /// Crate-private and `cfg(test)`, so it does not exist in any build that is
+    /// not the test build. It used to be `pub` behind a non-default
+    /// `test-vectors` feature, which still put a deterministic constructor in
+    /// the public API: features are additive, so any crate anywhere in a
+    /// dependency graph could switch it on for everybody and no release build
+    /// could prove it was off. Production entropy comes from
     /// [`DeviceIdentity::generate`] and nowhere else.
-    #[cfg(any(test, feature = "test-vectors"))]
-    #[must_use]
-    pub fn from_test_seed(seed: &[u8; SEED_LEN]) -> Self {
+    #[cfg(test)]
+    pub(crate) fn from_test_seed(seed: &[u8; SEED_LEN]) -> Self {
         Self::from_seed(seed)
     }
 
@@ -82,6 +92,14 @@ impl DeviceIdentity {
     ///
     /// The message is never signed bare; see [`SignatureDomain`].
     ///
+    /// This is the only way to sign. There was also an infallible `sign` that
+    /// unwrapped this one, on the reasoning that a caller passing a literal
+    /// domain knows it is available. That reasoning does not survive contact
+    /// with a later version: making an available domain reserved, or adding a
+    /// reserved one, silently turns every such call site into a panic. A
+    /// library on a security path should not offer the caller a way to crash
+    /// instead of deciding.
+    ///
     /// # Errors
     ///
     /// Returns [`IdentityError::DomainNotAvailable`] for a domain reserved for a
@@ -95,18 +113,6 @@ impl DeviceIdentity {
         let input = domain.signing_input(message);
         let signature = self.signing_key.sign(&input);
         Ok(IdentitySignature::from_bytes(signature.to_bytes()))
-    }
-
-    /// Signs in an available domain.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `domain` is reserved. Use [`DeviceIdentity::try_sign`] when the
-    /// domain is not a compile-time constant.
-    #[must_use]
-    pub fn sign(&self, domain: SignatureDomain, message: &[u8]) -> IdentitySignature {
-        self.try_sign(domain, message)
-            .expect("the domain must be available in this version")
     }
 }
 
@@ -139,13 +145,21 @@ impl PublicIdentity {
         }
     }
 
-    /// Parses a public identity from its canonical 32-byte encoding.
+    /// Parses a public identity from its canonical 32-byte key encoding.
+    ///
+    /// Low-order keys are refused. All eight small-order points are valid
+    /// Ed25519 encodings, so nothing about the byte pattern gives them away —
+    /// `[0u8; 32]` is one of them and was accepted before this check. A
+    /// signature under such a key verifies for almost any message, so a peer
+    /// presenting one would hold an identity that authenticates nothing while
+    /// looking exactly like an identity that does.
     ///
     /// # Errors
     ///
-    /// Returns [`IdentityError::InvalidPublicKeyLength`] for a wrong length, or
+    /// Returns [`IdentityError::InvalidPublicKeyLength`] for a wrong length,
     /// [`IdentityError::MalformedPublicKey`] when the bytes are not a valid
-    /// Ed25519 point.
+    /// Ed25519 point, or [`IdentityError::WeakPublicKey`] when the point has
+    /// low order.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, IdentityError> {
         let array: [u8; PUBLIC_KEY_LEN] =
             bytes
@@ -156,7 +170,36 @@ impl PublicIdentity {
                 })?;
         let verifying_key =
             VerifyingKey::from_bytes(&array).map_err(|_| IdentityError::MalformedPublicKey)?;
+        if verifying_key.is_weak() {
+            return Err(IdentityError::WeakPublicKey);
+        }
         Ok(Self::from_verifying_key(verifying_key))
+    }
+
+    /// Serializes to the canonical 33-byte wire form: version then key.
+    #[must_use]
+    pub fn encode(&self) -> [u8; PUBLIC_IDENTITY_WIRE_LEN] {
+        let mut out = [0u8; PUBLIC_IDENTITY_WIRE_LEN];
+        out[0] = self.version;
+        out[1..].copy_from_slice(self.verifying_key.as_bytes());
+        out
+    }
+
+    /// Parses the canonical 33-byte wire form.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdentityError::InvalidPublicKeyLength`] when `bytes` is not
+    /// exactly [`PUBLIC_IDENTITY_WIRE_LEN`] long, plus the errors of
+    /// [`PublicIdentity::from_versioned_bytes`].
+    pub fn decode(bytes: &[u8]) -> Result<Self, IdentityError> {
+        if bytes.len() != PUBLIC_IDENTITY_WIRE_LEN {
+            return Err(IdentityError::InvalidPublicKeyLength {
+                found: bytes.len(),
+                expected: PUBLIC_IDENTITY_WIRE_LEN,
+            });
+        }
+        Self::from_versioned_bytes(bytes[0], &bytes[1..])
     }
 
     /// Parses a versioned public identity.
@@ -195,6 +238,14 @@ impl PublicIdentity {
 
     /// Verifies a signature made in `domain` over `message`.
     ///
+    /// Uses `verify_strict`, not the permissive `verify`. Strict verification
+    /// rejects non-canonical `R` values and signatures with a small torsion
+    /// component, which the looser check accepts. That difference matters
+    /// wherever a signature is treated as an identifier rather than as a
+    /// yes-or-no answer: two distinct signatures that both verify over the same
+    /// message let a peer present "the same" statement twice in forms that
+    /// compare unequal.
+    ///
     /// # Errors
     ///
     /// Returns [`IdentityError::DomainNotAvailable`] for a reserved domain, or
@@ -212,7 +263,7 @@ impl PublicIdentity {
         let input = domain.signing_input(message);
         let parsed = Signature::from_bytes(signature.as_bytes());
         self.verifying_key
-            .verify(&input, &parsed)
+            .verify_strict(&input, &parsed)
             .map_err(|_| IdentityError::SignatureVerificationFailed)
     }
 }

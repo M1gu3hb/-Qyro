@@ -9,11 +9,11 @@ description = "Qyro device identity: Ed25519 keys, domain-separated signatures a
 [lib]
 path = "src/lib.rs"
 
-[features]
-default = []
-# Deterministic identities from a fixed seed, for test vectors only. Never in
-# `default`, so it cannot be switched on by accident in a release build.
-test-vectors = []
+# No features. The deterministic seed constructor used to sit behind a
+# `test-vectors` feature, but features are additive: any crate in a dependency
+# graph could switch it on for every other crate, and no release build could
+# prove it was off. It is now `cfg(test)` and crate-private, so it does not
+# exist outside the test build at all.
 
 [dependencies]
 # Ed25519 (RFC 8032) from dalek-cryptography. BSD-3-Clause. See ADR-0020 and
@@ -27,15 +27,7 @@ zeroize = { version = "1.9.0", default-features = false, features = ["zeroize_de
 # else; there is deliberately no weaker fallback.
 getrandom = "0.4.3"
 
-# Both targets exercise the fixed-seed constructor, so they require the
-# `test-vectors` feature. CI runs `cargo test --workspace --all-features`, which
-# turns it on; a default build cannot reach the constructor at all.
-[[test]]
-name = "identity_vectors"
-path = "tests/identity_vectors.rs"
-required-features = ["test-vectors"]
-
-[[example]]
-name = "emit_vectors"
-path = "examples/emit_vectors.rs"
-required-features = ["test-vectors"]
+[dev-dependencies]
+# The committed vector files are parsed as JSON rather than scraped with string
+# searches. MIT/Apache-2.0, dev-only: it is not linked into the library.
+serde_json = "1.0.145"

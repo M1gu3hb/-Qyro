@@ -35,7 +35,8 @@ No se implementa criptografía propia. No se usa OpenSSL.
 
 CSPRNG del sistema vía `getrandom`. Los errores se propagan como
 `IdentityError::EntropyUnavailable`; no hay fallback más débil. Una semilla fija
-solo existe bajo la feature `test-vectors`, que no está en `default`.
+solo existe bajo `cfg(test)` y es privada del crate (véase la enmienda del
+sprint 4B al final).
 
 ### Separación de dominios
 
@@ -94,3 +95,32 @@ no puede pasar inadvertido.
   `curve25519-dalek`.
 - Los vectores en `docs/security/test-vectors/identity-v1.json` fijan el formato
   para futuras implementaciones en Swift, Kotlin o Dart.
+
+## Enmienda (sprint 4B)
+
+Cuatro decisiones de este ADR se endurecieron sin cambiar ningún formato
+congelado. El wire de la clave pública se fija además explícitamente.
+
+1. **El constructor determinista deja de ser público.** Estaba tras la feature
+   `test-vectors`, fuera de `default`. Las features son aditivas: cualquier
+   crate del grafo puede activarla para todos los demás, así que un build de
+   release no podía demostrar que estaba apagada. Ahora es `cfg(test)` y
+   privado del crate, y no existe fuera del build de pruebas. Los vectores se
+   verifican dentro del crate, no desde `tests/`, porque un test de integración
+   es otro crate y solo podría alcanzarlo mediante API pública.
+2. **Firmar es solo falible.** Se elimina el `sign` infalible que hacía `expect`
+   sobre `try_sign`. Su justificación era que quien pasa un dominio literal sabe
+   que está disponible; eso no sobrevive a una versión posterior que reserve un
+   dominio antes disponible, porque convertiría cada llamada en un pánico.
+3. **Las claves de orden bajo se rechazan** con `WeakPublicKey`, y la
+   verificación usa `verify_strict`.
+4. **El fingerprint tiene exactamente dos escrituras canónicas.** El parser
+   anterior eliminaba todos los `-` antes de mirar, dando a cada fingerprint una
+   familia de escrituras equivalentes.
+5. **`PUBLIC_IDENTITY_WIRE_LEN = 33`**: byte 0 la versión, bytes 1..33 la clave.
+   La versión viaja con la clave en lugar de acordarse fuera de banda.
+
+Los formatos de fingerprint y de entrada de firma **no** cambian, así que
+`identity-v1.json` sigue siendo válido byte a byte. Se añade
+`docs/security/test-vectors/rfc8032-ed25519.json` con las cinco pruebas de la
+sección 7.1 del RFC 8032, tomadas del texto del RFC.
