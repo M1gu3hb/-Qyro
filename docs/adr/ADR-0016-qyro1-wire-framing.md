@@ -48,8 +48,10 @@ frente al I/O.
 
 Se eligió longitud fija con campo `header_len` explícito en lugar de TLV. Una
 cabecera fija se valida en una sola comprobación de longitud y no admite
-cabeceras degeneradas ni bucles de parsing; `header_len` deja la puerta abierta a
-crecer sin romper a los peers antiguos, que saltan los bytes que no entienden.
+cabeceras degeneradas ni bucles de parsing.
+
+`header_len` deja la puerta abierta a crecer, pero **no saltando bytes**: ver la
+enmienda al final de este documento. QYRO/1.0 acepta exactamente 48.
 
 Ningún campo del wire usa `usize`: su tamaño depende de la plataforma y
 convertiría el formato en dependiente del host.
@@ -65,24 +67,21 @@ realista.
 
 ### Trailer de autenticación
 
-`trailer_len` reserva el espacio del tag AEAD que introducirá el hito de
-seguridad. En QYRO/1.0 **debe ser 0** y el decoder rechaza cualquier otro valor
-con `AuthenticationTrailerInvalid`, porque aceptar un trailer que todavía nadie
-verifica sería aceptar bytes sin autenticar. El campo existe ya para que añadirlo
-sea un cambio de versión menor y no un cambio de layout.
+`trailer_len` lleva el tag AEAD. La regla original —«en QYRO/1.0 **debe ser 0**»—
+era correcta mientras nadie calculaba tags y dejó de serlo con ADR-0022; ver la
+enmienda al final.
 
 El límite es 64 bytes, suficiente para los tags de las primitivas candidatas de
-`SECURITY.md` (Poly1305 y GCM producen 16).
+`SECURITY.md`. ChaCha20-Poly1305, que es la que se eligió, produce 16.
 
 ### Versionado
 
 - `version_major != 1` → `UnsupportedMajorVersion`. Un major distinto puede
   cambiar el layout, así que no se intenta interpretar nada más.
-- `version_minor` mayor que el soportado **se acepta**. Una versión menor solo
-  puede añadir campos al final de la cabecera o tipos de mensaje nuevos; los
-  bytes extra indicados por `header_len` se saltan sin interpretarse.
-- `header_len` menor que 48 → `InvalidHeaderLength`. Mayor se acepta hasta
-  `MAX_HEADER_LEN`.
+- `version_minor` mayor que el soportado **se acepta**. Una versión menor puede
+  añadir tipos de mensaje; **no** puede extender la cabecera. Ver la enmienda.
+- `header_len` distinto de 48 se rechaza. `InvalidHeaderLength` fuera del rango
+  `[48, MAX_HEADER_LEN]`, `UnsupportedHeaderExtension` dentro de él.
 
 ### Mensajes desconocidos
 
@@ -159,3 +158,41 @@ de compilación, no por lo que ese peer declare.
 - `MAX_PAYLOAD_LEN` de 1 MiB fija el techo del chunk. Si el hito de transporte
   demuestra que conviene otro tamaño, cambiarlo es una constante y un ajuste de
   vectores, no un cambio de formato.
+
+## Enmienda (ADR-0018, sprint 2; registrada aquí en el sprint 4C.1)
+
+Dos reglas de arriba dejaron de ser ciertas y este documento siguió afirmándolas
+durante cuatro sprints. Una especificación canónica que contradice al código no
+es una especificación: es una segunda fuente de verdad, y la peor de las dos.
+
+### `header_len` distinto de 48 se rechaza
+
+La versión original decía que un peer antiguo «salta los bytes que no entiende»
+y que `header_len` mayor que 48 «se acepta hasta `MAX_HEADER_LEN`».
+
+No puede hacerse. Saltar bytes que no se conservan rompe la reserialización
+byte-exacta, y la reserialización byte-exacta es la precondición de usar la
+cabecera completa como datos asociados del AEAD (ADR-0022): un byte de cabecera
+que no sobrevive al round trip es un byte sobre el que el tag no dice nada.
+
+QYRO/1.0 acepta exactamente 48 bytes de cabecera y responde
+`UnsupportedHeaderExtension` a cualquier otro valor dentro del rango. Las
+extensiones llegarán en una versión que sepa preservarlas, serializarlas y
+meterlas en los datos asociados.
+
+### `trailer_len` de 16 es válido, y solo con `ENCRYPTED`
+
+La versión original exigía trailer cero en QYRO/1.0, con un argumento correcto en
+su momento: aceptar un trailer que nadie verifica es aceptar bytes sin
+autenticar. Desde ADR-0022 alguien lo verifica.
+
+La regla vigente:
+
+- sin `ENCRYPTED`, `trailer_len` debe ser 0;
+- con `ENCRYPTED`, debe ser distinto de 0 y no mayor que `MAX_TRAILER_LEN`, y el
+  AEAD rechaza cualquier valor que no sea exactamente 16 con `InvalidTagLength`;
+- `ENCRYPTED` sin trailer es `EncryptedWithoutTrailer`, porque es un frame que
+  afirma una protección que no lleva.
+
+Nada de esto cambia el layout. La cabecera de 48 bytes de la tabla de arriba es
+la misma que se congeló en el sprint 2.

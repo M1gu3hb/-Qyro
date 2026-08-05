@@ -42,10 +42,19 @@ que vigilar en esa ruta.
 
 ## Estado del fuzzing
 
-Existen tres targets `cargo-fuzz` en `rust/fuzz/fuzz_targets`:
+Existen seis targets `cargo-fuzz` en `rust/fuzz/fuzz_targets`:
 
 - `frame_decoder`: bytes arbitrarios, con el primer byte eligiendo el tamaño de
   fragmento, de modo que la partición también se fuzzea.
+- `encrypted_envelope`: lo que salga como sobre cifrado debe volver a codificarse
+  en los bytes de los que se decodificó, porque la cabecera completa son los
+  datos asociados y una cabecera que no sobrevive al round trip autentica algo
+  distinto de lo que viajó.
+- `frame_opener`: muta un frame sellado real bajo una sesión fija y comprueba que
+  solo sale texto claro de frames que autentican, y que un fallo de autenticación
+  no mueve la ventana de replay.
+- `replay_window`: recorre transiciones arbitrarias y sostiene los dos
+  invariantes: `check` no muta, y una secuencia aceptada no vuelve a aceptarse.
 - `manifest_decoder`: cualquier manifest aceptado debe llevar solo rutas seguras
   y volver a codificarse en los mismos bytes.
 - `relative_path`: el parser no puede entrar en pánico ni reescribir su entrada.
@@ -53,11 +62,36 @@ Existen tres targets `cargo-fuzz` en `rust/fuzz/fuzz_targets`:
 `rust/fuzz` es un workspace aparte porque `libfuzzer-sys` exige nightly, mientras
 el proyecto compila en stable 1.88.0.
 
-**No se ha ejecutado una campaña de fuzzing.** Lo que CI ejecuta es un *corpus
-smoke*: los 94 archivos de `rust/fuzz/corpus` se reproducen contra las mismas
-aserciones que hacen los targets, en el caso del framing a cuatro tamaños de
-fragmento distintos. Eso es una defensa contra regresiones sobre entradas ya
-conocidas; no dice nada sobre entradas que nadie ha imaginado todavía.
+### Los targets no compilaban
+
+Hasta el sprint 4C.1, **ninguno de los tres targets originales podía construirse**
+y el recetario de esta sección no podía funcionar. Dos causas encadenadas:
+
+1. `rust/fuzz/Cargo.toml` decía «excluded from the main workspace» y nada lo
+   excluía: el manifest raíz ni lo listaba ni lo excluía, y el paquete no
+   declaraba `[workspace]` propio. Cargo respondía «current package believes it's
+   in a workspace when it's not» y no llegaba a compilar nada.
+2. Detrás de eso, `frame_decoder` seguía usando `frame.header().payload_len` como
+   campo público y una `next_frame()` que devolvía un frame en lugar de un
+   `DecodedFrame`. La API cambió en el sprint 2 y el target se quedó atrás.
+
+Nada lo detectó porque lo único que CI ejecutaba sobre estos archivos era
+`rustfmt --check`, que no necesita tipos para pasar. La frase «el corpus smoke
+reproduce las mismas aserciones que hacen los targets» era cierta solo porque los
+smoke tests las reimplementaban.
+
+La sesión determinista que `frame_opener` necesita vive en
+`qyro_crypto::fuzzing`, que existe **solo bajo `--cfg fuzzing`**. No es una
+feature: las features de Cargo son aditivas y cualquier crate del grafo puede
+encenderlas para todos, así que una feature pública `test-vectors` estaría a una
+línea de meter un constructor determinista en un build de release. `--cfg
+fuzzing` lo pone cargo-fuzz en la línea de órdenes para una compilación.
+
+CI sigue ejecutando además un *corpus smoke* en cada run: los 94 archivos de
+`rust/fuzz/corpus` se reproducen contra las mismas aserciones, en el caso del
+framing a cuatro tamaños de fragmento distintos. Es una defensa contra
+regresiones sobre entradas ya conocidas, y es lo que corre en stable en cada
+commit; la campaña de fuzzing corre aparte y semanalmente.
 
 Desde el sprint 4C el corpus de `frame_decoder` incluye trece semillas selladas:
 cuatro frames genuinos tomados de `aead-v1.json` y nueve mutaciones —cabecera
@@ -69,19 +103,30 @@ crate porque necesita los constructores deterministas) comprueba la capa de
 arriba: que ninguna mutación pasa el AEAD, que las genuinas sí abren, y que nada
 sale de `open` que un sealer no haya sellado.
 
-No hay un target `cargo-fuzz` para el opener. Uno tendría que fabricar una sesión
-antes de recibir el primer byte, y con una sesión aleatoria casi toda entrada
-moriría en `WrongSession` antes de llegar al AEAD: el corpus smoke con una sesión
-fija cubre más camino real que ese target cubriría.
+Ya existe un target `cargo-fuzz` para el opener, que en el sprint 4C no existía
+por una razón que resultó tener solución: una sesión aleatoria haría que casi toda
+entrada muriese en `WrongSession` antes de llegar al AEAD. La sesión fija de
+`qyro_crypto::fuzzing` resuelve eso sin poner un constructor determinista en la
+API pública.
 
-Para ejecutar una campaña real:
+Para ejecutar una campaña real, **desde la raíz del repositorio**:
 
     rustup toolchain install nightly
-    cargo install cargo-fuzz
-    cd rust/fuzz
-    cargo +nightly fuzz run frame_decoder -- -max_total_time=300
-    cargo +nightly fuzz run manifest_decoder -- -max_total_time=300
-    cargo +nightly fuzz run relative_path -- -max_total_time=300
+    cargo install cargo-fuzz --locked --version 0.13.1
+    cargo +nightly fuzz run --fuzz-dir rust/fuzz frame_decoder \
+        -- -max_total_time=300 -print_final_stats=1
+
+`--fuzz-dir` no es opcional. Sin él, cargo-fuzz busca `<raíz>/fuzz`, encuentra el
+manifest del workspace y responde «could not read the manifest file:
+.../fuzz/Cargo.toml», que no dice nada sobre el problema real —que este proyecto
+guarda su crate de fuzzing bajo `rust/`—. El recetario anterior de esta sección
+omitía la opción, y como tampoco se podía construir nada, nadie lo notó.
+
+`.github/workflows/crypto-fuzz.yml` ejecuta los seis targets semanalmente y bajo
+demanda, con un job por target y sin `fail-fast`, para que un crash en uno no
+oculte si los demás también fallan. Imprime las estadísticas finales de libFuzzer
+en el log, de modo que «se fuzzeó» sea un número de ejecuciones y no una
+afirmación.
 
 Cualquier hallazgo debe añadirse al corpus antes de corregirse, para que el smoke
 lo cubra a partir de entonces.

@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Qyro device identity: Ed25519 keys, domain-separated signatures and fingerprints."
+description = "Qyro cryptographic core: Ed25519 device identity with domain-separated signatures, the four-message authenticated handshake, the HKDF-SHA256 key schedule, ChaCha20-Poly1305 frame AEAD and the fixed replay window."
 
 [lib]
 path = "src/lib.rs"

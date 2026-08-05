@@ -64,45 +64,47 @@ jobs:
           rustup component add --toolchain nightly rust-src
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked --version 0.13.1
+      # Run from the repository root with an explicit `--fuzz-dir`. cargo-fuzz
+      # otherwise looks for `<project root>/fuzz`, finds the workspace manifest
+      # at the repository root, and reports "could not read the manifest file:
+      # .../fuzz/Cargo.toml" — which says nothing about the real problem, that
+      # this project keeps its fuzz crate under `rust/`.
       - name: Run a bounded campaign
-        working-directory: rust/fuzz
         shell: bash
         run: |
           set -euo pipefail
           seconds="${{ inputs.seconds_per_target || '120' }}"
-          mkdir -p "$GITHUB_WORKSPACE/fuzz-reports"
+          mkdir -p fuzz-reports
           # `-max_total_time` bounds the run; `-print_final_stats` is what makes
           # the log say how many executions actually happened, so "we fuzzed it"
           # is a number rather than a claim.
-          cargo +nightly fuzz run "${{ matrix.target }}" \
+          cargo +nightly fuzz run --fuzz-dir rust/fuzz "${{ matrix.target }}" \
             -- -max_total_time="$seconds" -print_final_stats=1 \
-            2>&1 | tee "$GITHUB_WORKSPACE/fuzz-reports/${{ matrix.target }}.log"
+            2>&1 | tee "fuzz-reports/${{ matrix.target }}.log"
       - name: Summarize what the campaign actually did
         if: always()
-        working-directory: rust/fuzz
         shell: bash
         run: |
           set -euo pipefail
-          report="$GITHUB_WORKSPACE/fuzz-reports/${{ matrix.target }}.log"
+          report="fuzz-reports/${{ matrix.target }}.log"
           test -f "$report"
           {
             echo "target=${{ matrix.target }}"
             echo "commit=${GITHUB_SHA}"
             echo "seconds=${{ inputs.seconds_per_target || '120' }}"
             grep -E '^stat::' "$report" || echo "stat::none (the run ended early)"
-            echo "corpus_entries=$(find corpus/${{ matrix.target }} -type f 2>/dev/null | wc -l)"
-            echo "crashes=$(find artifacts/${{ matrix.target }} -type f 2>/dev/null | wc -l)"
-          } > "$GITHUB_WORKSPACE/fuzz-reports/${{ matrix.target }}.summary.txt"
-          cat "$GITHUB_WORKSPACE/fuzz-reports/${{ matrix.target }}.summary.txt"
+            echo "corpus_entries=$(find rust/fuzz/corpus/${{ matrix.target }} -type f 2>/dev/null | wc -l)"
+            echo "crashes=$(find rust/fuzz/artifacts/${{ matrix.target }} -type f 2>/dev/null | wc -l)"
+          } > "fuzz-reports/${{ matrix.target }}.summary.txt"
+          cat "fuzz-reports/${{ matrix.target }}.summary.txt"
       - name: Fail if the campaign produced a crash artifact
         if: always()
-        working-directory: rust/fuzz
         shell: bash
         run: |
           set -euo pipefail
-          if find artifacts/${{ matrix.target }} -type f 2>/dev/null | grep -q .; then
+          if find rust/fuzz/artifacts/${{ matrix.target }} -type f 2>/dev/null | grep -q .; then
             echo "[FAIL] ${{ matrix.target }} produced crash artifacts" >&2
-            find artifacts/${{ matrix.target }} -type f >&2
+            find rust/fuzz/artifacts/${{ matrix.target }} -type f >&2
             exit 1
           fi
           echo "[PASS] ${{ matrix.target }} produced no crash artifacts"
