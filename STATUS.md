@@ -16,7 +16,8 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 
 - Flutter runners Android, iOS y Windows: IMPLEMENTED
 - Rust qyro_core y qyro_ffi QYRO/1 mínima: IMPLEMENTED
-- Native bridge Dart→Rust con fallos tipados: IMPLEMENTED, EJECUTADO en Linux/Windows
+- Native bridge Dart→Rust con fallos tipados: IMPLEMENTED, EJECUTADO en Linux
+  (esta sesión) y en Windows solo hasta `e9ed7f3`
 - Android arm64-v8a/x86_64 native library packaging: IMPLEMENTED
 - Windows portable layout con qyro_ffi.dll junto a qyro.exe: IMPLEMENTED
 - doctor, bootstrap y test_all en Bash/PowerShell: IMPLEMENTED
@@ -90,7 +91,9 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 ## Platforms executed
 
 - Linux host Dart→Rust ABI test: YES (esta sesión, `flutter test`)
-- Windows host Dart→DLL ABI test: YES (CI previo)
+- Windows host Dart→DLL ABI test: **STALE**. Última ejecución sobre `e9ed7f3`;
+  no se ha vuelto a ejecutar en ninguna rama posterior, así que no dice nada
+  sobre el código actual.
 - Android emulator: **YES** en `ff933d9`. Run 30963016390, paso «Execute native
   ABI smoke test in an Android emulator»: success. Emulador API 35 `google_apis`
   x86_64 con KVM ejecutando `integration_test/native_abi_smoke_test.dart`.
@@ -132,8 +135,12 @@ Workflows sobre `abe6601` (este sprint), lanzados con `workflow_dispatch`:
 | Android runtime ABI | 30970738398 | **success** |
 | iOS runtime ABI | 30970744000 | **success** |
 
-Las tres ABI nativas siguen intactas tras añadir la pila Ed25519 y
-`unicode-normalization` al workspace.
+Esos tres runs cubren **Linux, Android e iOS**, no las tres ABI de plataforma
+del producto. **Windows no se ha revalidado**: su última evidencia es CI sobre
+`e9ed7f3`, muy por detrás de este commit, y ningún workflow de Windows se ha
+ejecutado desde entonces. Decir «las tres ABI nativas siguen intactas» —como
+decía antes esta línea— hace pasar la ABI que sí se comprobó (Linux, dentro del
+job de CI) por la que no.
 
 Workflows previos sobre `f78522a`:
 
@@ -143,8 +150,9 @@ Workflows previos sobre `f78522a`:
 | Android runtime ABI | 30966196087 | **success** |
 | iOS runtime ABI | 30966197144 | **success** |
 
-El job `rust` incluye `cargo audit` como paso obligatorio y pasó. Las tres ABI
-siguen intactas tras añadir `qyro_protocol` y `qyro_manifest`.
+El job `rust` incluye `cargo audit` como paso obligatorio y pasó. Linux, Android
+e iOS siguieron intactas tras añadir `qyro_protocol` y `qyro_manifest`; Windows
+tampoco se revalidó aquí.
 
 Evidencia previa sobre `ff933d9` (rama de recuperación):
 
