@@ -28,7 +28,7 @@ impl Frame {
         }
         let payload_len = u32::try_from(payload.len()).expect("payload fits in u32 after check");
         Ok(Self {
-            header: FrameHeader::new(message_type, payload_len),
+            header: FrameHeader::new(message_type, payload_len)?,
             payload,
         })
     }

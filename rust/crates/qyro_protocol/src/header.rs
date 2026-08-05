@@ -35,8 +35,24 @@ pub struct FrameHeader {
 
 impl FrameHeader {
     /// Builds a plain QYRO/1.0 header: no flags, no trailer.
-    #[must_use]
-    pub const fn new(message_type: MessageType, payload_len: u32) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FrameError::PayloadTooLarge`] when `payload_len` exceeds
+    /// [`MAX_PAYLOAD_LEN`]. No public constructor may produce a header whose
+    /// bytes this crate's own decoder would reject.
+    pub const fn new(message_type: MessageType, payload_len: u32) -> Result<Self, FrameError> {
+        if payload_len as usize > MAX_PAYLOAD_LEN {
+            return Err(FrameError::PayloadTooLarge {
+                declared: payload_len,
+                limit: MAX_PAYLOAD_LEN as u32,
+            });
+        }
+        Ok(Self::within_limits(message_type, payload_len))
+    }
+
+    /// Builds a header from a length the caller already proved is in range.
+    const fn within_limits(message_type: MessageType, payload_len: u32) -> Self {
         Self {
             version_minor: VERSION_MINOR,
             message_type,
@@ -48,6 +64,27 @@ impl FrameHeader {
             stream_id: 0,
             item_id: 0,
             sequence: 0,
+        }
+    }
+
+    /// Copies every authenticated metadata field for an encrypted envelope.
+    ///
+    /// Preserves message type, minor version, transport flags and all
+    /// identifiers; only the payload length is replaced, because the ciphertext
+    /// has its own. The `ENCRYPTED` flag and trailer come from
+    /// [`FrameHeader::encrypted`].
+    pub(crate) const fn clone_for_envelope(&self, payload_len: u32) -> Self {
+        Self {
+            version_minor: self.version_minor,
+            message_type: self.message_type,
+            flags: self.flags,
+            trailer_len: self.trailer_len,
+            payload_len,
+            session_id: self.session_id,
+            transfer_id: self.transfer_id,
+            stream_id: self.stream_id,
+            item_id: self.item_id,
+            sequence: self.sequence,
         }
     }
 
@@ -180,19 +217,20 @@ impl FrameHeader {
         Ok(self)
     }
 
-    /// Marks the header as sealed, with the exact tag length.
+    /// Adds the `ENCRYPTED` flag and trailer length to an existing header.
     ///
-    /// Crate-internal on purpose: `qyro_crypto` reaches it through the sealing
-    /// entry point, which encrypts the payload and computes the tag in the same
-    /// operation. There is no way to set `ENCRYPTED` without producing a tag.
-    pub(crate) const fn sealed(mut self, tag_len: u8) -> Result<Self, FrameError> {
+    /// Crate-internal: only [`crate::EncryptedEnvelope`] reaches it, and only
+    /// while a trailer is being attached, so the flag and the trailer length can
+    /// never disagree. Existing transport flags are **kept**, not replaced: they
+    /// are part of what a future AEAD authenticates.
+    pub(crate) const fn encrypted(mut self, tag_len: u8) -> Result<Self, FrameError> {
         if tag_len == 0 || tag_len as usize > MAX_TRAILER_LEN {
             return Err(FrameError::AuthenticationTrailerInvalid {
                 declared: tag_len,
                 expected: 0,
             });
         }
-        self.flags = Flags::ENCRYPTED;
+        self.flags = self.flags.union(Flags::ENCRYPTED);
         self.trailer_len = tag_len;
         Ok(self)
     }
@@ -243,14 +281,19 @@ impl FrameHeader {
     ///
     /// Returns the [`FrameError`] describing the first violated rule.
     pub fn decode(bytes: &[u8]) -> Result<Self, FrameError> {
-        Self::decode_parts(bytes).map(|(header, _)| header)
+        match Self::parse(bytes)? {
+            ParsedHeader::Known(header) => Ok(header),
+            ParsedHeader::Unknown(unknown) => Err(FrameError::UnknownMessageType {
+                value: unknown.raw_message_type,
+            }),
+        }
     }
 
-    /// Parses a header, returning the raw message-type byte alongside it.
+    /// Parses a header into an explicitly Known or Unknown result.
     ///
-    /// The decoder needs the raw value so an unknown type can be surfaced as a
-    /// delimited event instead of a framing failure.
-    pub(crate) fn decode_parts(bytes: &[u8]) -> Result<(Self, u8), FrameError> {
+    /// The decoder needs the Unknown case so a type it does not implement can be
+    /// surfaced as a delimited event instead of a framing failure.
+    pub(crate) fn parse(bytes: &[u8]) -> Result<ParsedHeader, FrameError> {
         if bytes.len() < HEADER_LEN {
             return Err(FrameError::TruncatedHeader {
                 available: bytes.len(),
@@ -340,8 +383,28 @@ impl FrameHeader {
 
         // Resolved last: everything above delimits the frame, so an unknown type
         // is recoverable rather than fatal.
+        //
+        // A header is only built once the type is known. Substituting a real
+        // variant for an unknown byte - as this did with MessageType::Hello -
+        // creates a value the wire never carried, and a parser that invents a
+        // known type is one refactor away from leaking it.
         let raw_message_type = bytes[6];
-        let message_type = MessageType::from_wire(raw_message_type).unwrap_or(MessageType::Hello);
+        let Ok(message_type) = MessageType::from_wire(raw_message_type) else {
+            return Ok(ParsedHeader::Unknown(UnknownHeader {
+                raw_message_type,
+                payload_len,
+                trailer_len,
+                session_id: u64::from_be_bytes(
+                    bytes[16..24].try_into().expect("slice is eight bytes"),
+                ),
+                transfer_id: u64::from_be_bytes(
+                    bytes[24..32].try_into().expect("slice is eight bytes"),
+                ),
+                sequence: u64::from_be_bytes(
+                    bytes[40..48].try_into().expect("slice is eight bytes"),
+                ),
+            }));
+        };
 
         let header = Self {
             version_minor,
@@ -367,6 +430,53 @@ impl FrameHeader {
             });
         }
 
-        Ok((header, raw_message_type))
+        Ok(ParsedHeader::Known(header))
+    }
+}
+
+/// What parsing a well-formed header produced.
+///
+/// Deliberately not `FrameHeader` plus a raw byte: a [`FrameHeader`] must only
+/// ever hold a message type the wire actually carried.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ParsedHeader {
+    /// The type is one this version implements.
+    Known(FrameHeader),
+    /// The framing is valid but the type is not implemented here.
+    Unknown(UnknownHeader),
+}
+
+/// The delimiting fields of a frame whose type this version does not implement.
+///
+/// Enough to consume the frame and answer `Error`; no invented message type.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct UnknownHeader {
+    pub(crate) raw_message_type: u8,
+    pub(crate) payload_len: u32,
+    pub(crate) trailer_len: u8,
+    pub(crate) session_id: u64,
+    pub(crate) transfer_id: u64,
+    pub(crate) sequence: u64,
+}
+
+impl ParsedHeader {
+    /// Parses the fixed header from the front of `bytes`.
+    pub(crate) fn parse_from(bytes: &[u8]) -> Result<Self, FrameError> {
+        FrameHeader::parse(bytes)
+    }
+
+    /// Total frame size implied by whichever variant was parsed.
+    pub(crate) const fn total_len(&self) -> u64 {
+        match self {
+            Self::Known(header) => header.total_len(),
+            Self::Unknown(unknown) => unknown.total_len(),
+        }
+    }
+}
+
+impl UnknownHeader {
+    /// Total frame size implied by the header.
+    pub(crate) const fn total_len(&self) -> u64 {
+        HEADER_LEN as u64 + self.payload_len as u64 + self.trailer_len as u64
     }
 }
