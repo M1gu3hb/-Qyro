@@ -20,4 +20,13 @@ No publicar vulnerabilidades con datos sensibles en issues. Hasta definir SECURI
 
 ## Estado de auditoría
 
-No se han ejecutado cargo audit, fuzzing, KAT de criptografía, prueba de tráfico ni revisión externa porque las dependencias/funciones aún no existen. Deben añadirse antes de afirmar seguridad de transferencia.
+`cargo audit` es obligatorio en CI desde el sprint 2 y pasa: el workspace no
+tiene dependencias externas, así que la ruta de parsing no expone código de
+terceros. Las amenazas sobre los parsers y su cobertura están en
+`docs/security/parser-threats.md`.
+
+No se ha ejecutado una campaña de fuzzing: existen targets `cargo-fuzz` y un
+corpus de 65 entradas que CI reproduce como smoke, lo que protege contra
+regresiones conocidas pero no explora entradas nuevas. Tampoco hay KAT de
+criptografía, prueba de tráfico ni revisión externa, porque esas funciones aún
+no existen. Deben añadirse antes de afirmar seguridad de transferencia.

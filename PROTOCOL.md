@@ -1,10 +1,18 @@
 # QYRO/1
 
-Estado: contrato de versión implementado; framing no implementado.
+Estado: framing binario implementado y probado; transporte, cifrado y modo
+óptico no implementados.
+
+El encoder y el decoder incremental viven en `rust/crates/qyro_protocol` y el
+manifest en `rust/crates/qyro_manifest`. La especificación completa está en
+`docs/protocols/qyro1-wire-format.md` y `docs/protocols/manifest-format.md`;
+las decisiones, en ADR-0016 y ADR-0017.
 
 ## Objetivos
 
-Binario, versionado, streaming, límites explícitos, compatibilidad futura y rechazo limpio. CBOR canónico se evaluará; no está elegido definitivamente.
+Binario, versionado, streaming, límites explícitos, compatibilidad futura y
+rechazo limpio. CBOR canónico se evaluó y se descartó frente a un formato propio
+canónico y acotado; el razonamiento está en ADR-0017.
 
 ## Mensajes
 
@@ -12,7 +20,10 @@ Discovery, Pairing, Capabilities, Offer, Accept, Reject, Manifest, DataChunk, Ch
 
 ## Cabecera conceptual
 
-Magic, versión, tipo, flags, session ID, transfer ID, stream ID, item ID, secuencia/chunk, longitud y autenticación. Todo entero debe fijar endianess y tamaño antes de congelar vectores.
+Cabecera fija de 48 bytes, big-endian, con magic, versión mayor/menor, tipo,
+flags, longitud de cabecera, longitud de trailer, longitud de payload, session,
+transfer, stream e item ID y secuencia. Endianness y tamaños están congelados
+con tests de bytes; ver la especificación.
 
 ## Manifest
 
@@ -28,4 +39,6 @@ Frames separados con session/transfer/epoch/symbol, parámetros FEC, payload, ch
 
 ## Límites pendientes
 
-Antes del primer decoder deben definirse tamaño máximo de frame, manifest, item count, ruta, ventanas, tiempo y memoria; cada límite requiere tests y corpus de fuzzing.
+Los límites de frame, manifest, item count y ruta están definidos y probados.
+Quedan pendientes los de ventana, tiempo y memoria de transferencia, que
+dependen del transporte todavía no implementado.

@@ -9,6 +9,10 @@
 | apps/qyro/windows | runner y distribución DLL | Windows | Win32/WinRT, contratos | dominio concreto |
 | rust/crates/qyro_core | dominio compartido | Núcleo | std | Flutter, plataforma |
 | rust/crates/qyro_ffi | ABI estrecha | Integración | qyro_core | UI, reglas de negocio |
+| rust/crates/qyro_protocol | framing binario QYRO/1 | Protocolo | std | Flutter, plataforma, red |
+| rust/crates/qyro_manifest | manifest y rutas seguras | Protocolo | std | filesystem real, red |
+| rust/fuzz | targets y corpus cargo-fuzz | Seguridad/QA | crates de protocolo | workspace principal |
+| docs/protocols | especificación de wire y manifest | Protocolo | ADR | código ejecutable |
 | scripts | diagnóstico/bootstrap/pruebas | DevEx/QA | toolchains declaradas | secretos |
 | native | módulos nativos futuros | Plataforma | APIs oficiales | dominio concreto |
 | config | branding/features ejemplo | Producto | nada | secretos |

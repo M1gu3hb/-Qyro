@@ -4,6 +4,26 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 2)
+
+- `qyro_protocol`: framing binario QYRO/1 con cabecera fija de 48 bytes
+  big-endian, 17 tipos de mensaje congelados, flags, errores tipados y decoder
+  incremental. Las longitudes declaradas se validan contra constantes de
+  compilación antes de reservar memoria (ADR-0016).
+- `qyro_manifest`: manifest canónico y `RelativePath`, que rechaza travesía,
+  rutas absolutas, prefijos de unidad, UNC, barras invertidas, NUL, nombres
+  reservados de Windows y punto o espacio final, con reglas Unix y Windows
+  aplicadas en todas las plataformas (ADR-0017).
+- Property tests con generador sembrado (~30 000 casos por ejecución), targets
+  `cargo-fuzz` y un corpus de 65 entradas reproducido como smoke en CI.
+- `cargo audit` obligatorio en CI. Pasa con 0 vulnerabilidades: el workspace no
+  tiene dependencias externas.
+- Intro: QYRO se revela mediante scramble en vez de aparecer estático, más una
+  línea secundaria localizada y una firma configurable que nunca inventa un
+  nombre.
+- Especificaciones `docs/protocols/qyro1-wire-format.md` y
+  `docs/protocols/manifest-format.md`, y `docs/security/parser-threats.md`.
+
 ### Fixed
 
 - iOS vuelve a compilar: se restauró un LaunchScreen.storyboard que Interface

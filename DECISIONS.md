@@ -14,6 +14,8 @@
 - ADR-0013: StartupCoordinator y tareas obligatorias de arranque.
 - ADR-0014: ruta canónica del logo de Qyro.
 - ADR-0015: reconciliación de ramas divergentes.
+- ADR-0016: framing binario de QYRO/1.
+- ADR-0017: codificación canónica del manifest.
 
 No existe ADR-0011.
 

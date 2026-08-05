@@ -19,7 +19,20 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Covers the wire contracts, the manifest contracts, the property tests
+      # and the fuzz corpus smoke tests.
       - run: cargo test --workspace
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+      # Mandatory from sprint 2 on. The workspace has no external dependencies,
+      # so an advisory here means one was introduced and needs review before it
+      # reaches the parsing paths.
+      - name: Audit dependencies for security advisories
+        run: cargo audit --deny warnings
+      # rust/fuzz is a separate workspace (libfuzzer-sys needs nightly), so it is
+      # not covered by cargo fmt --all above.
+      - name: Check fuzz target formatting
+        run: rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
 
   flutter:
     runs-on: ubuntu-latest

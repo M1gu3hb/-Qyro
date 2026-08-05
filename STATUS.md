@@ -3,10 +3,10 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T00:40:00Z
-- Branch: claude/qyro-recovery-continuation-j53jgx
+- Updated UTC: 2026-08-05T01:35:00Z
+- Branch: claude/qyro-protocol-manifest
 - Verified commit: ff933d97beae7a98745fcfda9423f65135af94b8
-- Milestone: Hito 0 verificado; Hito A (recuperación) cerrado; Hito 1 en hardening
+- Milestone: Hito A cerrado; Hito C (protocolo y manifest) implementado; Hito 1 visual parcial
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
 con los dos commits del propietario en `main` (`e0041de`). Ninguna rama fue
@@ -28,14 +28,22 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - Launch surfaces oscuras en Android, iOS y Windows: IMPLEMENTED
 - Logo canónico fijado por checksum (ADR-0014): IMPLEMENTED
 - Regla anti-deriva de STATUS.md en el job documental: IMPLEMENTED
+- Framing binario QYRO/1 con decoder incremental acotado (ADR-0016): IMPLEMENTED
+- Manifest canónico con validación estricta de rutas (ADR-0017): IMPLEMENTED
+- Property tests y corpus smoke de fuzzing: IMPLEMENTED
+- cargo audit obligatorio en CI: IMPLEMENTED
+- Wordmark, tagline y firma configurable mediante scramble: IMPLEMENTED
 
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO (run 30963011815)
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO (run 30963016390)
 
 ## Not implemented
 
-- Golden tests de arranque y benchmark documentado: NOT_IMPLEMENTED
+- Golden tests de arranque: NOT_IMPLEMENTED
+- Benchmark de arranque documentado: NOT_IMPLEMENTED
 - Retained development artifacts and checksums: NOT_IMPLEMENTED
+- Campaña real de fuzzing (solo hay corpus smoke): NOT_IMPLEMENTED
+- Transporte, sockets y TLS: NOT_IMPLEMENTED
 - File transfer: NOT_IMPLEMENTED
 - File selection and manifest: NOT_IMPLEMENTED
 - LAN/discovery/manual IP: NOT_IMPLEMENTED
@@ -45,7 +53,7 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - Optical QR/RaptorQ: NOT_IMPLEMENTED
 - Wi-Fi Direct/Multipeer/Bluetooth transports: NOT_IMPLEMENTED
 - Share Target Android, Share Extension iOS, drag and drop Windows: NOT_IMPLEMENTED
-- cargo audit obligatorio, SBOM y fuzzing: NOT_IMPLEMENTED
+- SBOM y cargo-deny: NOT_IMPLEMENTED
 
 ## Platforms compiled
 
@@ -71,18 +79,21 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 
 ## Real tests
 
-Ejecutado en esta sesión sobre `5825b50`, host Linux, Flutter 3.44.8 (la versión
-que fija CI) y PowerShell 7.4.6:
+Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
+7.4.6:
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, 4 tests
+- `cargo test --workspace`: PASS, **87 tests** (29 contratos de wire, 40 de
+  manifest, 9 property, 3 corpus smoke, 4 previos, 2 doctests)
+- `cargo audit`: PASS, 0 vulnerabilidades sobre 4 crates; el workspace no tiene
+  dependencias externas
 - `flutter pub get --enforce-lockfile`: PASS
 - `dart tools/branding_generator/bin/generate.dart --check`: PASS
-- `dart format --output=none --set-exit-if-changed .`: PASS, 27 archivos, 0 cambiados
+- `dart format --output=none --set-exit-if-changed .`: PASS
 - `flutter analyze`: PASS, «No issues found!»
-- `flutter test`: PASS, **51 tests**, ~5 s, incluye lectura real de `QYRO/1`
-  desde `libqyro_ffi.so` por FFI
+- `flutter test`: PASS, **58 tests**, incluye lectura real de `QYRO/1` desde
+  `libqyro_ffi.so` por FFI
 - 5 contratos Bash y 6 PowerShell: PASS
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
@@ -102,8 +113,9 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 - Android runtime ABI run 30961153377: `in_progress` con `total_ms: 0`; nunca
   obtuvo runner y no es evidencia
 
-`ci.yml` todavía no se ha ejecutado en esta rama: se dispara por push a `main` o
-por pull request. Su contenido sí se reprodujo íntegro en el host Linux (arriba).
+`ci.yml` sí acepta `workflow_dispatch`. Ejecutado sobre `c7410cb` al abrir la
+rama: **run 30964542743, success**, los cuatro jobs (rust, flutter, scripts,
+documentation) en verde. Ese fue el baseline recuperado antes de tocar nada.
 
 ## Artifacts
 
@@ -113,22 +125,28 @@ por pull request. Su contenido sí se reprodujo íntegro en el host Linux (arrib
 
 ## Blockers
 
-- `ci.yml` no se ha ejecutado en esta rama (requiere pull request); el baseline
-  equivalente sí se reprodujo localmente.
+- Golden tests de arranque y benchmark documentado siguen ausentes. Este sprint
+  los pedía y no se entregaron; ver «Next task».
+- No se retienen artefactos de desarrollo con checksums.
+- No se ha ejecutado una campaña de fuzzing: solo el corpus smoke.
 - Ninguna de las tres plataformas se ha probado en hardware físico, solo en
   emulador, simulador y host.
-- Golden tests, benchmark de arranque y artefactos retenidos siguen ausentes.
-- `cargo audit` no es obligatorio; no hay SBOM ni lockfile de licencias auditado.
+- No hay SBOM ni `cargo-deny`.
 - Autoría y licencia del logo siguen sin registrar.
 - No existe ninguna función de transferencia: el producto no es usable todavía.
+  El protocolo y el manifest existen y están probados, pero nada los usa aún:
+  no hay sockets, transporte ni escritura en disco.
 
 ## Next task
 
-Crear el crate `qyro_protocol` mediante TDD con el marco binario versionado de
-QYRO/1: magic, versión, tipo, flags, session/transfer/stream/item ID, secuencia,
-longitud y autenticación, rechazando longitudes fuera de límite **antes** de
-reservar memoria. Aceptación: round-trip, truncamiento, corrupción de bytes y
-límites comprobados con `cargo test --workspace` en verde.
+Implementar los golden tests de la secuencia de arranque a 0/20/50/80/100 % con
+seeds deterministas, dimensiones fijas y assets locales, más el benchmark
+documentado del arranque. Aceptación: `flutter test` en verde con los archivos
+golden versionados, y `docs/benchmarks/boot-baseline.md` con máquina, SO, versión
+de Flutter, modo, resolución y número de muestras declarados.
+
+Es la deuda que este sprint dejó abierta y debe cerrarse antes de continuar con
+identidad y cifrado.
 
 ## Provisional values
 

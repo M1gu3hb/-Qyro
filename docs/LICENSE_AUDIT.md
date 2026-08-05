@@ -47,3 +47,24 @@ Las versiones y licencias se verificaron contra los tags y archivos LICENSE publ
 ## Política y pendiente
 
 Permitidas tras revisión: Apache-2.0, MIT, BSD-2/3, ISC, Zlib y OFL. GPL/AGPL/LGPL, MPL y desconocidas requieren autorización. Falta automatizar verificación y revisar licencias de actions/checkout, flutter-action y rust-toolchain (CI, no distribuidas).
+
+## Sprint 2 — 2026-08-05
+
+`qyro_protocol` y `qyro_manifest` se añadieron **sin dependencias externas**. El
+workspace sigue con cero paquetes de terceros, así que no hay licencias nuevas
+que registrar.
+
+`cargo audit 0.22.2` es obligatorio en CI desde este sprint y pasa con 0
+vulnerabilidades sobre 4 crates, todas propias. No hay excepciones ni advisories
+diferidas.
+
+`proptest` se evaluó para las pruebas basadas en propiedades. Licencia
+MIT/Apache-2.0, aceptable, pero **no se añadió**: arrastra 39 paquetes
+transitivos por una herramienta que solo se usa en desarrollo. El razonamiento
+está en `TESTING.md`.
+
+`libfuzzer-sys` aparece únicamente en `rust/fuzz/Cargo.toml`, un workspace
+separado que no forma parte de la compilación ni del `Cargo.lock` del producto, y
+que exige nightly. No entra en ningún artefacto distribuible.
+
+Pendiente: SBOM y `cargo-deny` para bans, fuentes y duplicados.
