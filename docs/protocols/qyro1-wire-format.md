@@ -150,3 +150,9 @@ Para todo frame aceptado, `decode → encode` produce exactamente los mismos
 bytes. Es precondición de usar la cabecera completa como datos asociados del
 AEAD: si un byte de cabecera no se conservara, el tag se calcularía sobre algo
 distinto de lo que viajó.
+
+Desde el sprint 4C esa precondición está en uso. El AEAD es
+ChaCha20-Poly1305 y vive en `rust/crates/qyro_crypto/src/aead`; el formato lo
+congela ADR-0022 y lo explica `docs/security/frame-encryption.md`. La prueba que
+lo cubre no enumera campos: recorre los 48 bytes, voltea un bit en cada uno y
+exige que ninguno produzca un frame autenticado.

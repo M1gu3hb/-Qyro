@@ -6,7 +6,7 @@ Leer [STATUS.md](STATUS.md) antes de trabajar. STATUS.md es la única fuente de 
 
 ## Objetivo
 
-Construir Qyro como transferencia privada entre Android, iOS y Windows con monorepo Flutter/Rust. El alcance del sprint actual termina en el baseline; no incluye transferencia, LAN, cifrado, base de datos ni modo óptico.
+Construir Qyro como transferencia privada entre Android, iOS y Windows con monorepo Flutter/Rust. El alcance actual llega hasta la criptografía en memoria —identidad, handshake autenticado y AEAD de frames— y **no** incluye transferencia, transporte, LAN, base de datos, almacenamiento seguro ni modo óptico. Cifrar un frame en memoria no acerca ninguno de ellos por sí solo: Qyro sigue sin transferir archivos.
 
 ## Reglas no negociables
 
