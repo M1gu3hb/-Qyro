@@ -4,7 +4,32 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- iOS vuelve a compilar: se restauró un LaunchScreen.storyboard que Interface
+  Builder puede abrir. Desde 67fa795 faltaban `toolsVersion`/`systemVersion` y
+  todas las builds de iOS fallaban con `com.apple.InterfaceBuilder error -1`.
+- El merge de `main` dejó silenciosamente el logo real dentro del archivo que el
+  propietario marcó como inutilizable; se restauró byte a byte.
+
 ### Added
+
+- Ruta canónica del logo `design/brand/source/logo.png`, fijada por SHA-256 y
+  cubierta por cinco pruebas que impiden que el marcador rechazado vuelva a los
+  activos empaquetados (ADR-0014).
+- Regla anti-deriva en el job documental: STATUS.md falla si su `Verified commit`
+  no es alcanzable desde HEAD o queda más de 10 commits por detrás.
+- Validación estructural del storyboard de iOS en los contratos Bash y
+  PowerShell, ejecutable sin host macOS.
+- `docs/audits/CLAUDE_RECOVERY_AUDIT.md` con la recuperación completa del estado
+  real, y ADR-0015 sobre la reconciliación de ramas.
+
+### Changed
+
+- STATUS.md reescrito con evidencia real: 51 tests de Flutter y 4 de Rust, iOS
+  sin verificar y Android runtime sin ejecución válida en HEAD. Antes declaraba
+  como no implementadas seis funciones que sí existían y fijaba un commit 58
+  revisiones atrás.
 
 - Workspace Rust 1.88.0.
 - Readiness, contrato QYRO/1 y ABI C mínima.

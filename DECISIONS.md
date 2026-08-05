@@ -10,5 +10,11 @@
 - ADR-0008: launch estático y boot Flutter.
 - ADR-0009: Bluetooth limitado a control/experimental.
 - ADR-0010: paquetes por plataforma y releases reproducibles.
+- ADR-0012: branding generado en tiempo de build.
+- ADR-0013: StartupCoordinator y tareas obligatorias de arranque.
+- ADR-0014: ruta canónica del logo de Qyro.
+- ADR-0015: reconciliación de ramas divergentes.
+
+No existe ADR-0011.
 
 Consulta docs/adr/.
