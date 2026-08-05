@@ -99,7 +99,45 @@ Regenerar:
 
     cargo test -p qyro_crypto generate_handshake_vector -- --ignored --nocapture
 
+## `rfc8439-chacha20poly1305.json`
+
+Los dos vectores del **RFC 8439** para `AEAD_CHACHA20_POLY1305`: el cifrado de la
+sección 2.8.2 y el descifrado del apéndice A.5, transcritos del texto del RFC en
+`https://www.rfc-editor.org/rfc/rfc8439.txt`.
+
+Fijan el primitivo y nada más: aquí no aparece ningún framing, key schedule ni
+ventana de replay de Qyro. Cada caso se ejecuta en las dos direcciones —el vector
+de cifrado se descifra y el de descifrado se vuelve a cifrar—, y además se
+comprueba que alterar un byte del AAD invalida el tag.
+
+## `aead-v1.json` y `aead-v1.schema.json`
+
+El sellado completo de Qyro sobre frames QYRO/1: la sesión, ambos secretos de
+tráfico, cada `info` de HKDF con su etiqueta literal, ambas claves AEAD, ambos
+prefijos de nonce, y cinco frames sellados —tres del iniciador y dos del
+respondedor— con nonce, cabecera de 48 bytes usada como AAD, ciphertext, tag y
+los bytes completos del frame.
+
+**Encadenado con `handshake-v1.json`.** Se genera con las mismas semillas y la
+misma entropía, así que el `session_id`, el `auth_transcript` y los dos secretos
+de tráfico de este archivo son exactamente los que registra aquel. Una prueba lo
+comprueba campo a campo en lugar de afirmarlo en prosa: quien implemente el
+handshake puede continuar directamente con el frame layer.
+
+Los frames se verifican de dos maneras independientes. Una reconstruye cada valor
+desde HKDF-SHA256 y ChaCha20-Poly1305 sin pasar por `FrameSealer`; la otra mete
+los bytes del archivo por el decoder ordinario y por `FrameOpener`, y comprueba
+además que abrir el mismo frame por segunda vez falla.
+
+El schema es estricto por las mismas razones que el del handshake, con `items` y
+`minItems` añadidos al validador: una lista de frames vacía cumpliría todas las
+demás reglas y no probaría nada.
+
+Regenerar:
+
+    cargo test -p qyro_crypto generate_aead_vector -- --ignored --nocapture
+
 ## Todavía no existe
 
-AEAD, sellado de frames, replay protection y almacenamiento seguro. Cuando
-existan tendrán sus propios archivos de vectores.
+Almacenamiento seguro de identidad, transporte y transferencia de archivos.
+Cuando existan tendrán sus propios archivos de vectores.

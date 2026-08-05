@@ -902,6 +902,16 @@ macro_rules! established_accessors {
             pub(crate) const fn receiving_key_bytes(&self) -> &[u8; 32] {
                 self.session.receiving.as_bytes()
             }
+
+            /// The authenticated transcript this session was derived under.
+            ///
+            /// `cfg(test)`: the committed AEAD vectors record it, because it is
+            /// in every `info` the frame key schedule builds. Not a secret —
+            /// both peers compute it from messages that crossed the wire.
+            #[cfg(test)]
+            pub(crate) const fn auth_transcript_for_test(&self) -> [u8; TRANSCRIPT_LEN] {
+                self.session.auth_transcript
+            }
         }
 
         impl core::fmt::Debug for $type {

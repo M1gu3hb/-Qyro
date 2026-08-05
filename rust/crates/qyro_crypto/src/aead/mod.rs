@@ -39,6 +39,8 @@ mod replay;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod vectors;
 
 use chacha20poly1305::{AeadInOut, ChaCha20Poly1305, KeyInit};
 use hkdf::Hkdf;

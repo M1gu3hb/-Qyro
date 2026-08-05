@@ -31,6 +31,7 @@ use super::{
     RESPONDER_FINISH_LEN, RESPONDER_HELLO_LEN, ResponderStart,
 };
 use crate::identity::DeviceIdentity;
+use crate::schema::validate;
 use crate::signature::{IdentitySignature, SignatureDomain};
 
 /// The committed vectors.
@@ -361,131 +362,6 @@ fn the_committed_vector_is_exactly_what_regeneration_produces() {
 }
 
 // ------------------------------------------------------------------- the schema
-
-/// Validates `value` against the subset of JSON Schema the vector schema uses.
-///
-/// Deliberately not a general validator. It understands `type`, `properties`,
-/// `required`, `additionalProperties: false`, `const` and `pattern` restricted
-/// to `^[0-9a-f]{N}$`, and it **fails on any keyword it does not understand**.
-/// A validator that silently ignores unfamiliar keywords is worse than none: it
-/// reports success for constraints it never checked, so the schema would appear
-/// to be enforced while quietly doing nothing.
-fn validate(value: &Value, schema: &Value, path: &str) -> Result<(), String> {
-    let object = schema.as_object().ok_or("schema node is not an object")?;
-
-    for keyword in object.keys() {
-        match keyword.as_str() {
-            "type"
-            | "properties"
-            | "required"
-            | "additionalProperties"
-            | "const"
-            | "pattern"
-            | "description"
-            | "$schema"
-            | "title" => {}
-            other => return Err(format!("{path}: unsupported schema keyword {other:?}")),
-        }
-    }
-
-    match object.get("type").and_then(Value::as_str) {
-        Some("object") => {
-            let map = value
-                .as_object()
-                .ok_or_else(|| format!("{path}: expected an object"))?;
-
-            let properties = object
-                .get("properties")
-                .and_then(Value::as_object)
-                .ok_or_else(|| format!("{path}: object schema without properties"))?;
-
-            if object.get("additionalProperties") != Some(&Value::Bool(false)) {
-                return Err(format!("{path}: additionalProperties must be false"));
-            }
-            for key in map.keys() {
-                if !properties.contains_key(key) {
-                    return Err(format!("{path}: unknown property {key:?}"));
-                }
-            }
-
-            let required = object
-                .get("required")
-                .and_then(Value::as_array)
-                .ok_or_else(|| format!("{path}: object schema without required"))?;
-            for name in required {
-                let name = name.as_str().ok_or("required entries are strings")?;
-                if !map.contains_key(name) {
-                    return Err(format!("{path}: missing required property {name:?}"));
-                }
-            }
-            // Every property is required: a partially specified vector is not a
-            // vector anyone can interoperate against.
-            for key in properties.keys() {
-                if !required.iter().any(|name| name.as_str() == Some(key)) {
-                    return Err(format!("{path}: property {key:?} is not required"));
-                }
-            }
-
-            for (key, child) in properties {
-                validate(&map[key], child, &format!("{path}/{key}"))?;
-            }
-        }
-        Some("string") => {
-            let text = value
-                .as_str()
-                .ok_or_else(|| format!("{path}: expected a string"))?;
-            if let Some(expected) = object.get("const") {
-                if value != expected {
-                    return Err(format!("{path}: expected const {expected}"));
-                }
-            }
-            if let Some(pattern) = object.get("pattern").and_then(Value::as_str) {
-                check_hex_pattern(text, pattern, path)?;
-            }
-        }
-        Some("integer") => {
-            let number = value
-                .as_u64()
-                .ok_or_else(|| format!("{path}: expected an integer"))?;
-            if let Some(expected) = object.get("const").and_then(Value::as_u64) {
-                if number != expected {
-                    return Err(format!("{path}: expected const {expected}, got {number}"));
-                }
-            }
-        }
-        other => return Err(format!("{path}: unsupported type {other:?}")),
-    }
-
-    Ok(())
-}
-
-/// Enforces a `^[0-9a-f]{N}$` pattern without pulling in a regex engine.
-///
-/// The schema is checked to use only this shape, so there is no gap between
-/// what the pattern says and what is enforced.
-fn check_hex_pattern(text: &str, pattern: &str, path: &str) -> Result<(), String> {
-    let body = pattern
-        .strip_prefix("^[0-9a-f]{")
-        .and_then(|rest| rest.strip_suffix("}$"))
-        .ok_or_else(|| format!("{path}: unsupported pattern {pattern:?}"))?;
-    let length: usize = body
-        .parse()
-        .map_err(|_| format!("{path}: unsupported pattern length {body:?}"))?;
-
-    if text.len() != length {
-        return Err(format!(
-            "{path}: expected {length} hex characters, got {}",
-            text.len()
-        ));
-    }
-    if !text
-        .bytes()
-        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err(format!("{path}: not lowercase hex"));
-    }
-    Ok(())
-}
 
 #[test]
 fn the_committed_vector_satisfies_the_schema() {

@@ -92,6 +92,15 @@ fn both_sides_agree_on_every_derived_value() {
         done.initiator.receiving_key_bytes(),
         "the responder writes where the initiator reads"
     );
+
+    // The transcript is not a key, but every AEAD key is derived under it, so
+    // two sides that disagreed here would agree on traffic secrets and still be
+    // unable to read each other's frames.
+    assert_eq!(
+        done.initiator.auth_transcript_for_test(),
+        done.responder.auth_transcript_for_test(),
+        "the transcript the frame keys bind to must be one transcript"
+    );
 }
 
 #[test]

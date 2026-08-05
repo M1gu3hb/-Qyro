@@ -58,6 +58,8 @@ mod identity;
 mod signature;
 
 #[cfg(test)]
+mod schema;
+#[cfg(test)]
 mod vectors;
 
 pub use error::IdentityError;
