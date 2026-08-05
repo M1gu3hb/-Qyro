@@ -126,6 +126,14 @@ por elección propia.
 `x25519-dalek` con `default-features = false` y solo `precomputed-tables`,
 `static_secrets` y `zeroize`; sin `serde`, `reusable_secrets` ni `getrandom`.
 
+`sha2` y `hmac` llevan `zeroize` desde el sprint 4C.1. Estaba apagada, que es el
+valor por defecto de ambas, así que el estado de compresión de SHA-256 y el
+estado con clave de HMAC quedaban en memoria liberada. La feature reenvía a
+`digest/zeroize`, que a su vez enciende `block-buffer/zeroize`; no entra ninguna
+dependencia nueva. `hkdf` no tiene feature equivalente y no la necesita:
+`Hkdf<Sha256>` guarda un `Hmac<Sha256>`, comprobado leyendo hkdf 0.13. Ver
+`docs/security/secret-lifecycle-audit.md`.
+
 `static_secrets` se activa porque es el único constructor que acepta bytes
 directamente, y construir el secreto desde bytes ya obtenidos es lo que permite
 que esta ruta falle cerrada: `EphemeralSecret::random_from_rng` exige un

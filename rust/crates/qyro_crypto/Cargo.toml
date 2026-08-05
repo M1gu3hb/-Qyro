@@ -19,8 +19,12 @@ path = "src/lib.rs"
 # Ed25519 (RFC 8032) from dalek-cryptography. BSD-3-Clause. See ADR-0020 and
 # docs/LICENSE_AUDIT.md for the full evaluation.
 ed25519-dalek = { version = "3.0.0", default-features = false, features = ["rand_core", "zeroize"] }
-# SHA-256 for the fingerprint. RustCrypto, MIT/Apache-2.0.
-sha2 = { version = "0.11.0", default-features = false }
+# SHA-256 for the fingerprint and the transcripts. RustCrypto, MIT/Apache-2.0.
+# `zeroize` wipes the compression state on drop. It is off by default, which
+# means the SHA-256 block state behind every transcript and every HKDF expansion
+# was left in freed memory until sprint 4C.1 looked. See
+# docs/security/secret-lifecycle-audit.md.
+sha2 = { version = "0.11.0", default-features = false, features = ["zeroize"] }
 # Wipes secret material on drop. MIT/Apache-2.0.
 # `alloc` is on for `Zeroizing<Vec<u8>>`, which is where verified plaintext and
 # the sealer's temporary live. zeroize's own documentation states the limit:
@@ -42,8 +46,17 @@ qyro_protocol = { path = "../qyro_protocol" }
 x25519-dalek = { version = "3.0.0", default-features = false, features = ["precomputed-tables", "static_secrets", "zeroize"] }
 # HKDF-SHA256 (RFC 5869) and HMAC-SHA256 (RFC 2104). RustCrypto, MIT/Apache-2.0,
 # both on digest 0.11 like sha2.
+# HKDF-SHA256 for the key schedule. RustCrypto, MIT/Apache-2.0.
+#
+# `hkdf` has no zeroize feature of its own. It does not need one: `Hkdf<Sha256>`
+# stores an `Hmac<Sha256>`, so the pseudorandom key — a traffic secret — is wiped
+# by that value's own drop once `hmac/zeroize` is on. Verified by reading
+# hkdf 0.13's `GenericHkdf`, not assumed from the name.
 hkdf = { version = "0.13.0", default-features = false }
-hmac = { version = "0.13.0", default-features = false }
+# HMAC-SHA256 for the confirmation MACs. RustCrypto, MIT/Apache-2.0.
+# `zeroize` wipes the keyed state, which is where a finished key and an HKDF
+# PRK live while they are in use.
+hmac = { version = "0.13.0", default-features = false, features = ["zeroize"] }
 # Constant-time comparison for the confirmation MACs. Already in the tree via
 # ed25519-dalek; named directly because this crate compares secrets itself.
 subtle = { version = "2.6.1", default-features = false }
