@@ -68,3 +68,45 @@ separado que no forma parte de la compilación ni del `Cargo.lock` del producto,
 que exige nightly. No entra en ningún artefacto distribuible.
 
 Pendiente: SBOM y `cargo-deny` para bans, fuentes y duplicados.
+
+## Sprint 4A — 2026-08-05
+
+El workspace deja de tener cero dependencias externas. Es un cambio deliberado y
+acotado: implementar Ed25519, SHA-256 o normalización Unicode a mano sería mucho
+peor que auditar implementaciones revisadas.
+
+### Normalización Unicode (`qyro_manifest`)
+
+| Crate | Versión | Licencia | Fuente |
+|---|---|---|---|
+| unicode-normalization | 0.1.25 | MIT OR Apache-2.0 | unicode-rs |
+| tinyvec | 1.12.0 | Zlib OR Apache-2.0 OR MIT | Lokathor |
+| tinyvec_macros | 0.1.1 | MIT OR Apache-2.0 OR Zlib | Soveu |
+
+`default-features = false`, feature `std`. Sustituye una tabla de plegado escrita
+a mano que eliminaba diacríticos y provocaba colisiones falsas.
+
+### Identidad criptográfica (`qyro_crypto`)
+
+| Crate | Versión | Licencia | Fuente |
+|---|---|---|---|
+| ed25519-dalek | 3.0.0 | BSD-3-Clause | dalek-cryptography |
+| curve25519-dalek | 5.0.0 | BSD-3-Clause | dalek-cryptography |
+| ed25519 | 3.0.0 | Apache-2.0 OR MIT | RustCrypto |
+| signature | 3.0.0 | Apache-2.0 OR MIT | RustCrypto |
+| sha2 | 0.11.0 | MIT OR Apache-2.0 | RustCrypto |
+| digest / crypto-common / block-buffer | 0.11.x / 0.2.x / 0.12.x | MIT OR Apache-2.0 | RustCrypto |
+| zeroize | 1.9.0 | Apache-2.0 OR MIT | RustCrypto |
+| subtle | 2.6.1 | BSD-3-Clause | dalek-cryptography |
+| getrandom | 0.4.3 | MIT OR Apache-2.0 | rust-random |
+| rand_core | 0.10.1 | MIT OR Apache-2.0 | rust-random |
+| fiat-crypto | 0.3.0 | MIT OR Apache-2.0 OR BSD-1-Clause | mit-plv |
+
+`ed25519-dalek` con `default-features = false` y solo `rand_core` y `zeroize`;
+sin `serde`, `pkcs8`, `pem`, `batch` ni `hazmat`.
+
+Total del workspace: 35 crates. **Ninguna licencia GPL, AGPL ni LGPL.** Todas
+son permisivas (BSD-3-Clause, MIT, Apache-2.0, Zlib, BSD-1-Clause).
+
+`cargo audit --deny warnings` pasa sobre los 35 crates. `cargo-deny` sigue
+pendiente.

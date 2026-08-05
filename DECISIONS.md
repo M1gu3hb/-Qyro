@@ -18,6 +18,7 @@
 - ADR-0017: codificación canónica del manifest.
 - ADR-0018: errores estructurales frente a eventos semánticos.
 - ADR-0019: nombre visible derivado de la ruta.
+- ADR-0020: fundación de identidad de dispositivo.
 
 No existe ADR-0011.
 

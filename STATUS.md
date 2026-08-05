@@ -3,10 +3,10 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T02:40:00Z
-- Branch: claude/qyro-crypto-identity-hardening
+- Updated UTC: 2026-08-05T03:40:00Z
+- Branch: claude/qyro-crypto-foundation
 - Verified commit: 69e7914651d6364ce04e17e0bccaaa8fa2c7a7d5
-- Milestone: protocolo y manifest endurecidos; criptografía NO iniciada; Hito 1 visual parcial
+- Milestone: invariantes corregidas; identidad Ed25519 lista; handshake y AEAD NO iniciados
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
 con los dos commits del propietario en `main` (`e0041de`). Ninguna rama fue
@@ -35,20 +35,31 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - Wordmark, tagline y firma configurable mediante scramble: IMPLEMENTED
 - Política de errores estructurales/semánticos del decoder (ADR-0018): IMPLEMENTED
 - Cabecera QYRO/1.0 sin extensiones no preservables, campos privados: IMPLEMENTED
-- Flags protegidos fuera de la API pública y `SealedFrame` con tag obligatorio: IMPLEMENTED
+- Flags protegidos fuera de la API pública; envoltura cifrada con tag obligatorio: IMPLEMENTED
 - Nombre visible derivado de la ruta (ADR-0019, manifest v2): IMPLEMENTED
 - Digest final obligatorio para todo archivo: IMPLEMENTED
 - Rechazo de caracteres no portables y de colisiones case/NFC-NFD: IMPLEMENTED
 - Preflight de longitud serializada del manifest: IMPLEMENTED
+- Tipo desconocido representado sin sustitución (ParsedHeader): IMPLEMENTED
+- Construcción de cabecera totalmente acotada: IMPLEMENTED
+- `EncryptedEnvelope` con garantías honestas, sin afirmar autenticación: IMPLEMENTED
+- `DecodedFrame` sin centinelas y sin panic (`plaintext`/`try_encode`): IMPLEMENTED
+- Normalización Unicode canónica real (unicode-normalization): IMPLEMENTED
+- SHA-256 como único digest final de archivo: IMPLEMENTED
+- Identidad Ed25519 con fingerprint versionado y firma con dominios: IMPLEMENTED
+- Vectores interoperables RFC 8032 + Qyro: IMPLEMENTED
 
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO (run 30963011815)
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO (run 30963016390)
 
 ## Not implemented
 
-- **qyro_crypto**: NOT_IMPLEMENTED. Ni suite, ni identidad, ni handshake, ni
-  cifrado de frames, ni vectores. `SealedFrame` define la forma y expone los
-  datos asociados, pero **no existe ninguna criptografía** en el repositorio.
+- **Handshake, X25519, HKDF, AEAD y replay protection**: NOT_IMPLEMENTED.
+  `qyro_crypto` solo hace identidad: firma y verifica. **No puede cifrar nada.**
+  `EncryptedEnvelope` define la forma de un frame cifrado y expone los datos
+  asociados, pero ningún AEAD los consume.
+- **SealedFrame / AuthenticatedFrame**: NOT_IMPLEMENTED. Vivirán en
+  `qyro_crypto` con constructores privados cuando exista el sellado.
 - **qyro_identity y almacenamiento seguro**: NOT_IMPLEMENTED en las tres
   plataformas. No hay Android Keystore, ni iOS Keychain, ni DPAPI/CNG.
 - Golden tests de arranque: NOT_IMPLEMENTED
@@ -97,11 +108,12 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **112 tests** (29 contratos de wire, 11 de
-  compatibilidad futura, 54 de manifest, 9 property, 3 corpus smoke, 4 previos,
-  2 doctests)
-- `cargo audit`: PASS, 0 vulnerabilidades sobre 4 crates; el workspace no tiene
-  dependencias externas
+- `cargo test --workspace`: PASS, **138 tests**
+- `cargo test --workspace --all-features`: PASS, **157 tests** (incluye los 19 de
+  identidad, que exigen la feature `test-vectors`)
+- `cargo test --doc --workspace`: PASS
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **35 crates**.
+  El workspace ya no está libre de dependencias: ver `docs/LICENSE_AUDIT.md`
 - `flutter pub get --enforce-lockfile`: PASS
 - `dart tools/branding_generator/bin/generate.dart --check`: PASS
 - `dart format --output=none --set-exit-if-changed .`: PASS
@@ -151,9 +163,11 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 ## Blockers
 
-- **La criptografía del sprint 3 no se entregó.** No hay identidad, handshake,
-  cifrado de sesión ni almacenamiento seguro de claves. Es la mayor parte del
-  sprint y queda íntegra como trabajo pendiente.
+- **No hay cifrado.** Existe identidad (firmar/verificar) pero ni handshake, ni
+  derivación de claves, ni AEAD. Qyro no puede proteger un payload todavía.
+- **La identidad solo vive en memoria.** No hay Keystore, Keychain ni DPAPI/CNG:
+  generar una identidad y cerrar el proceso la pierde.
+- No hay FFI criptográfico; Dart no ve nada de esto.
 - Golden tests de arranque y benchmark documentado siguen ausentes por segundo
   sprint consecutivo.
 - No se retienen artefactos de desarrollo con checksums.
@@ -171,18 +185,15 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 ## Next task
 
-Crear el crate `qyro_crypto` con la suite decidida en una ADR previa
-(Ed25519 para identidad, X25519 efímero, HKDF-SHA256, ChaCha20-Poly1305,
-zeroize), evaluando y registrando cada dependencia antes de añadirla.
+Implementar el handshake autenticado con X25519 efímero, HKDF-SHA256, transcript
+firmado, claves direccionales y vectores conocidos, **sin** conectar todavía
+sockets ni almacenamiento seguro.
 
-Aceptación de la primera unidad: identidad de dispositivo con fingerprint
-estable, firma y verificación con vectores conocidos, y `cargo audit` en verde
-con las nuevas dependencias documentadas en `docs/LICENSE_AUDIT.md` y
-`THIRD_PARTY_NOTICES.md`. El handshake, el sellado de frames y el almacenamiento
-seguro vienen después, en ese orden.
-
-`SealedFrame` ya define la forma que ese sellado debe producir y expone la
-cabecera completa como datos asociados.
+Aceptación: handshake completo en memoria entre Initiator y Responder; fallo ante
+firma incorrecta, transcript alterado, identidad sustituida, reflexión y roles
+intercambiados; claves distintas por dirección; vectores en
+`docs/security/test-vectors/`; y liberar el dominio `HandshakeTranscript`, hoy
+rechazado a propósito hasta que su formato esté congelado.
 
 ## Provisional values
 
