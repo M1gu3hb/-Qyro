@@ -6,12 +6,21 @@ use qyro_manifest::{
     TransferManifest, codec,
 };
 
+/// Every file needs a final digest, so fixtures carry a deterministic one.
+fn digest_for(item_id: u32) -> HashMetadata {
+    HashMetadata::new(
+        HashAlgorithm::Sha256,
+        vec![u8::try_from(item_id % 251).unwrap_or(0); 32],
+    )
+    .expect("valid fixture digest")
+}
+
 fn file(item_id: u32, path: &str, size: u64) -> ManifestItem {
     ManifestItem::file(
         item_id,
         RelativePath::parse(path).expect("valid fixture path"),
         size,
-        HashMetadata::none(),
+        digest_for(item_id),
     )
     .expect("valid fixture item")
 }
@@ -274,7 +283,6 @@ fn a_directory_may_not_carry_a_size_or_a_hash() {
         ManifestItem::new(
             1,
             path.clone(),
-            "folder".to_owned(),
             ItemKind::Directory,
             512,
             None,
@@ -290,7 +298,6 @@ fn a_directory_may_not_carry_a_size_or_a_hash() {
         ManifestItem::new(
             1,
             path,
-            "folder".to_owned(),
             ItemKind::Directory,
             0,
             None,
@@ -588,4 +595,213 @@ fn arbitrary_bytes_never_panic() {
     let mut prefixed = MANIFEST_MAGIC.to_vec();
     prefixed.extend_from_slice(&[0xFF; 64]);
     let _ = codec::decode(&prefixed);
+}
+
+// ------------------------------------------------- sprint 3 hardening (P0)
+
+#[test]
+fn the_visible_name_always_comes_from_the_path() {
+    // ADR-0019: a separately supplied name could disagree with where the bytes
+    // land. Deriving it removes the whole class of mismatch.
+    let item = file(1, "docs/reports/q3.pdf", 10);
+    assert_eq!(item.display_name(), "q3.pdf");
+    assert_eq!(item.display_name(), item.path().file_name());
+}
+
+#[test]
+fn an_executable_cannot_be_presented_as_a_document() {
+    let item = file(1, "invoice.pdf.exe", 10);
+    assert_eq!(
+        item.display_name(),
+        "invoice.pdf.exe",
+        "the visible name must reveal the real extension"
+    );
+    assert!(item.display_name().ends_with(".exe"));
+}
+
+#[test]
+fn every_public_constructor_derives_the_same_name() {
+    let path = RelativePath::parse("a/b/real.bin").expect("valid");
+    let full = ManifestItem::new(
+        7,
+        path.clone(),
+        ItemKind::File,
+        1,
+        None,
+        None,
+        HashMetadata::new(HashAlgorithm::Sha256, vec![1; 32]).expect("digest"),
+        Compression::None,
+    )
+    .expect("valid item");
+    assert_eq!(full.display_name(), "real.bin");
+    assert_eq!(full.display_name(), path.file_name());
+}
+
+#[test]
+fn every_file_needs_a_final_digest_including_an_empty_one() {
+    let path = RelativePath::parse("empty.bin").expect("valid");
+    assert!(matches!(
+        ManifestItem::file(1, path.clone(), 0, HashMetadata::none()),
+        Err(ManifestError::MissingFileHash { .. })
+    ));
+
+    // A zero-byte file still has a digest: it is what proves the received bytes
+    // are the sent bytes.
+    let hashed = ManifestItem::file(
+        1,
+        path,
+        0,
+        HashMetadata::new(HashAlgorithm::Sha256, vec![0xE3; 32]).expect("digest"),
+    )
+    .expect("empty files are hashed too");
+    assert_eq!(hashed.size(), 0);
+    assert!(hashed.hash().is_present());
+}
+
+#[test]
+fn a_directory_still_may_not_carry_a_digest() {
+    let path = RelativePath::parse("folder").expect("valid");
+    assert!(matches!(
+        ManifestItem::new(
+            1,
+            path,
+            ItemKind::Directory,
+            0,
+            None,
+            None,
+            HashMetadata::new(HashAlgorithm::Sha256, vec![2; 32]).expect("digest"),
+            Compression::None,
+        ),
+        Err(ManifestError::InvalidDirectory { .. })
+    ));
+}
+
+#[test]
+fn windows_illegal_characters_are_rejected_on_every_platform() {
+    for candidate in [
+        "a<b.txt",
+        "a>b.txt",
+        "a:b.txt",
+        "a\"b.txt",
+        "a|b.txt",
+        "a?b.txt",
+        "a*b.txt",
+        "dir/na<me",
+        "col:on",
+    ] {
+        assert!(
+            matches!(
+                RelativePath::parse(candidate),
+                Err(PathError::NonPortableCharacter { .. } | PathError::DrivePrefix)
+            ),
+            "{candidate:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn the_delete_character_is_rejected() {
+    assert_eq!(
+        RelativePath::parse("a\u{7F}b"),
+        Err(PathError::ControlCharacter)
+    );
+}
+
+#[test]
+fn case_only_differences_collide_portably() {
+    let result = TransferManifest::new(1, 0, vec![file(1, "Foto.jpg", 1), file(2, "foto.jpg", 2)]);
+    assert!(
+        matches!(result, Err(ManifestError::PortableCollision { .. })),
+        "Windows and macOS would fold these onto one file, got {result:?}"
+    );
+}
+
+#[test]
+fn case_only_differences_collide_across_segments() {
+    let result = TransferManifest::new(1, 0, vec![file(1, "A/B.txt", 1), file(2, "a/b.TXT", 2)]);
+    assert!(matches!(
+        result,
+        Err(ManifestError::PortableCollision { .. })
+    ));
+}
+
+#[test]
+fn composed_and_decomposed_unicode_collide() {
+    // "mañana" precomposed (U+00F1) versus decomposed (n + U+0303). Distinct
+    // bytes, one file on most filesystems.
+    let composed = "ma\u{00F1}ana.txt";
+    let decomposed = "man\u{0303}ana.txt";
+    assert_ne!(composed, decomposed, "the fixtures must differ in bytes");
+
+    let result = TransferManifest::new(1, 0, vec![file(1, composed, 1), file(2, decomposed, 2)]);
+    assert!(
+        matches!(result, Err(ManifestError::PortableCollision { .. })),
+        "NFC and NFD spellings must not both be accepted, got {result:?}"
+    );
+}
+
+#[test]
+fn a_folder_and_a_file_sharing_a_key_collide() {
+    let folder = ManifestItem::directory(1, RelativePath::parse("Data").expect("valid"))
+        .expect("valid directory");
+    let result = TransferManifest::new(1, 0, vec![folder, file(2, "data", 5)]);
+    assert!(matches!(
+        result,
+        Err(ManifestError::PortableCollision { .. })
+    ));
+}
+
+#[test]
+fn genuinely_different_unicode_stays_distinct() {
+    // Folding must not over-merge: these are different letters, not spellings.
+    let subject = manifest(vec![
+        file(1, "日本.txt", 1),
+        file(2, "中国.txt", 2),
+        file(3, "🎉.txt", 3),
+        file(4, "alpha.txt", 4),
+        file(5, "beta.txt", 5),
+    ]);
+    assert_eq!(subject.item_count(), 5);
+}
+
+#[test]
+fn encoded_len_matches_the_bytes_actually_produced() {
+    let cases = vec![
+        manifest(Vec::new()),
+        manifest(vec![file(1, "a.txt", 1)]),
+        manifest(vec![
+            file(1, "photos/one.jpg", 100),
+            ManifestItem::directory(2, RelativePath::parse("photos").expect("valid"))
+                .expect("valid"),
+            file(3, "año/🎉.bin", 7)
+                .with_mime_type("application/octet-stream")
+                .expect("valid mime")
+                .with_modified_unix_seconds(-12345),
+        ]),
+    ];
+
+    for subject in cases {
+        let predicted = codec::encoded_len(&subject).expect("preflight succeeds");
+        let actual = codec::encode(&subject).expect("encodes").len();
+        assert_eq!(
+            predicted,
+            actual,
+            "preflight must equal the real length for {} items",
+            subject.item_count()
+        );
+    }
+}
+
+#[test]
+fn manifest_version_two_rejects_version_one_bytes() {
+    let subject = manifest(vec![file(1, "a.txt", 1)]);
+    let mut bytes = codec::encode(&subject).expect("encodes");
+    bytes[4..6].copy_from_slice(&1u16.to_be_bytes());
+    assert!(matches!(
+        codec::decode(&bytes),
+        Err(ManifestError::UnsupportedVersion {
+            found: 1,
+            supported: 2
+        })
+    ));
 }

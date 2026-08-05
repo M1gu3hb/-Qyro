@@ -31,7 +31,9 @@ pub const MAX_HASH_LEN: usize = 64;
 pub const MAX_ENCODED_LEN: usize = 8 * 1024 * 1024;
 
 /// Manifest format version written by this crate.
-pub const MANIFEST_VERSION: u16 = 1;
+///
+/// Version 2 removed `display_name` from the wire; see ADR-0019.
+pub const MANIFEST_VERSION: u16 = 2;
 
 /// Magic prefix of a serialized manifest: the ASCII bytes `QYRM`.
 pub const MANIFEST_MAGIC: [u8; 4] = *b"QYRM";

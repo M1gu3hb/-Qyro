@@ -78,11 +78,9 @@ fn arbitrary_manifest(rng: &mut Rng) -> TransferManifest {
         let item = if rng.below(4) == 0 {
             ManifestItem::directory(item_id, path).expect("valid directory")
         } else {
-            let hash = if rng.below(2) == 0 {
-                HashMetadata::new(HashAlgorithm::Sha256, rng.bytes(32)).expect("valid digest")
-            } else {
-                HashMetadata::none()
-            };
+            // Every file needs a final digest now, so there is no hashless branch.
+            let hash =
+                HashMetadata::new(HashAlgorithm::Sha256, rng.bytes(32)).expect("valid digest");
             let size = rng.next_u64() % 1_000_000;
             ManifestItem::file(item_id, path, size, hash).expect("valid file")
         };
@@ -180,7 +178,7 @@ fn arbitrary_bytes_never_panic() {
                     1,
                     RelativePath::parse("seed.bin").expect("valid"),
                     10,
-                    HashMetadata::none(),
+                    HashMetadata::new(HashAlgorithm::Sha256, vec![0x5A; 32]).expect("valid"),
                 )
                 .expect("valid"),
             ],
@@ -211,10 +209,15 @@ fn arbitrary_bytes_never_panic() {
         }
 
         // The only contract is: no panic, and anything accepted is safe.
+        // Traversal is a whole-segment property: "notes..txt" is a legal name,
+        // so a substring check would reject safe paths and hide real ones.
         if let Ok(manifest) = codec::decode(&input) {
             for item in manifest.items() {
-                assert!(!item.path().as_str().contains(".."));
                 assert!(!item.path().as_str().starts_with('/'));
+                for segment in item.path().segments() {
+                    assert_ne!(segment, "..");
+                    assert_ne!(segment, ".");
+                }
             }
         }
     }

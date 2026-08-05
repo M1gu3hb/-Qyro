@@ -20,6 +20,7 @@ fuzz_target!(|data: &[u8]| {
         assert!(!path.starts_with('/'));
         assert!(!path.contains('\\'));
         assert!(!path.contains('\0'));
+        // Traversal is a whole-segment property; "notes..txt" is a legal name.
         for segment in item.path().segments() {
             assert!(!segment.is_empty());
             assert_ne!(segment, "..");

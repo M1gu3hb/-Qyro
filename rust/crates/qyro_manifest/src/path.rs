@@ -15,6 +15,13 @@ use crate::limits::{MAX_PATH_LEN, MAX_PATH_SEGMENTS, MAX_SEGMENT_LEN};
 /// Canonical wire separator. The encoded form never contains a backslash.
 pub const SEPARATOR: char = '/';
 
+/// Characters Windows forbids in a filename.
+///
+/// Rejected on every platform: a manifest must describe a tree that can be
+/// materialised identically everywhere, so a name Linux would accept but Windows
+/// would refuse is a portability failure, not a receiver's problem.
+const WINDOWS_ILLEGAL: [char; 7] = ['<', '>', ':', '"', '|', '?', '*'];
+
 /// Device names Windows resolves before touching the filesystem.
 ///
 /// They are reserved with or without an extension, so `CON.txt` is checked by
@@ -157,6 +164,12 @@ fn validate_segment(segment: &str) -> Result<(), PathError> {
     if segment == "." {
         return Err(PathError::CurrentSegment);
     }
+    if let Some(found) = segment.chars().find(|c| WINDOWS_ILLEGAL.contains(c)) {
+        return Err(PathError::NonPortableCharacter { found });
+    }
+    if segment.chars().any(|c| c == '\u{7F}') {
+        return Err(PathError::ControlCharacter);
+    }
     if segment.len() > MAX_SEGMENT_LEN {
         return Err(PathError::SegmentTooLong {
             length: segment.len(),
@@ -184,4 +197,72 @@ fn is_windows_reserved(segment: &str) -> bool {
 fn has_drive_prefix(candidate: &str) -> bool {
     let bytes = candidate.as_bytes();
     bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
+}
+
+/// A key two paths share when a real filesystem would treat them as one file.
+///
+/// Linux keeps `Foto.jpg` and `foto.jpg` apart; Windows and macOS do not. Unicode
+/// adds a second axis: `ñ` composed (NFC) and decomposed (NFD) are different byte
+/// sequences that most filesystems consider the same name.
+///
+/// A manifest that carries both would overwrite one item with the other on the
+/// receiver, silently, after the transfer was accepted. The key is used to reject
+/// that pair; the original spelling of each path is never altered.
+///
+/// # Normalization
+///
+/// Full Unicode NFC/NFD normalization needs large tables. Rather than add a
+/// dependency for it, this applies ASCII case folding plus decomposed-combining-
+/// mark folding for the Latin-1 range, which covers the collisions reachable with
+/// the characters a filesystem actually accepts. `docs/security/parser-threats.md`
+/// records the residual gap: two paths differing only by a combining mark outside
+/// that range are treated as distinct.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PortableCollisionKey(String);
+
+impl PortableCollisionKey {
+    /// Derives the key for a validated path.
+    #[must_use]
+    pub fn of(path: &RelativePath) -> Self {
+        let folded: Vec<String> = path.segments().map(fold_segment).collect();
+        Self(folded.join("\u{0}"))
+    }
+
+    /// Returns the folded representation.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Folds one segment: ASCII case, then combining marks onto their base letter.
+fn fold_segment(segment: &str) -> String {
+    let mut out = String::with_capacity(segment.len());
+    for character in segment.chars() {
+        // Skip combining diacritics so a decomposed "n" + U+0303 folds onto the
+        // same key as a precomposed "ñ".
+        if matches!(character, '\u{0300}'..='\u{036F}') {
+            continue;
+        }
+        for lowered in precompose_fold(character) {
+            out.push(lowered);
+        }
+    }
+    out
+}
+
+/// Maps a precomposed Latin-1 letter onto its base, then lowercases.
+fn precompose_fold(character: char) -> impl Iterator<Item = char> {
+    let base = match character {
+        'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' | 'Á' | 'À' | 'Â' | 'Ä' | 'Ã' | 'Å' => 'a',
+        'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
+        'í' | 'ì' | 'î' | 'ï' | 'Í' | 'Ì' | 'Î' | 'Ï' => 'i',
+        'ó' | 'ò' | 'ô' | 'ö' | 'õ' | 'Ó' | 'Ò' | 'Ô' | 'Ö' | 'Õ' => 'o',
+        'ú' | 'ù' | 'û' | 'ü' | 'Ú' | 'Ù' | 'Û' | 'Ü' => 'u',
+        'ñ' | 'Ñ' => 'n',
+        'ç' | 'Ç' => 'c',
+        'ý' | 'ÿ' | 'Ý' => 'y',
+        other => other,
+    };
+    base.to_lowercase()
 }

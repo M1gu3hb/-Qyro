@@ -6,22 +6,103 @@
 
 use crate::error::{ManifestError, ManifestField};
 use crate::limits::{
-    MANIFEST_MAGIC, MANIFEST_VERSION, MAX_ENCODED_LEN, MAX_ITEMS, MAX_MIME_LEN, MAX_NAME_LEN,
-    MAX_PATH_LEN, MAX_TOTAL_BYTES,
+    MANIFEST_MAGIC, MANIFEST_VERSION, MAX_ENCODED_LEN, MAX_ITEMS, MAX_MIME_LEN, MAX_PATH_LEN,
+    MAX_TOTAL_BYTES,
 };
 use crate::model::{
     Compression, HashAlgorithm, HashMetadata, ItemKind, ManifestItem, TransferManifest,
 };
 use crate::path::RelativePath;
 
+/// Computes the exact encoded length without building anything.
+///
+/// Checked arithmetic throughout, so a manifest engineered to overflow `usize`
+/// is an error rather than a small, believable total. Callers can therefore
+/// enforce [`MAX_ENCODED_LEN`] *before* a single byte is reserved, instead of
+/// discovering it partway through a buffer that already exceeded the limit.
+///
+/// The result equals `encode(manifest)?.len()` exactly; a test pins that.
+///
+/// # Errors
+///
+/// Returns [`ManifestError::EncodedTooLarge`] when the total would exceed
+/// [`MAX_ENCODED_LEN`] or overflow.
+pub fn encoded_len(manifest: &TransferManifest) -> Result<usize, ManifestError> {
+    const HEADER_LEN: usize = 4 + 2 + 8 + 8 + 8 + 4;
+
+    let mut total = HEADER_LEN;
+    for item in manifest.items() {
+        // item_id + kind + path(len prefix + bytes) + size
+        let mut item_len = 4usize
+            .checked_add(1)
+            .and_then(|n| n.checked_add(4))
+            .and_then(|n| n.checked_add(item.path().byte_len()))
+            .and_then(|n| n.checked_add(8))
+            .ok_or(ManifestError::EncodedTooLarge {
+                length: usize::MAX,
+                limit: MAX_ENCODED_LEN,
+            })?;
+
+        item_len = match item.mime_type() {
+            Some(mime) => item_len
+                .checked_add(1 + 4)
+                .and_then(|n| n.checked_add(mime.len())),
+            None => item_len.checked_add(1),
+        }
+        .ok_or(ManifestError::EncodedTooLarge {
+            length: usize::MAX,
+            limit: MAX_ENCODED_LEN,
+        })?;
+
+        item_len = match item.modified_unix_seconds() {
+            Some(_) => item_len.checked_add(1 + 8),
+            None => item_len.checked_add(1),
+        }
+        .ok_or(ManifestError::EncodedTooLarge {
+            length: usize::MAX,
+            limit: MAX_ENCODED_LEN,
+        })?;
+
+        // hash algorithm + digest + compression
+        item_len = item_len
+            .checked_add(1)
+            .and_then(|n| n.checked_add(item.hash().digest().len()))
+            .and_then(|n| n.checked_add(1))
+            .ok_or(ManifestError::EncodedTooLarge {
+                length: usize::MAX,
+                limit: MAX_ENCODED_LEN,
+            })?;
+
+        total = total
+            .checked_add(item_len)
+            .ok_or(ManifestError::EncodedTooLarge {
+                length: usize::MAX,
+                limit: MAX_ENCODED_LEN,
+            })?;
+
+        if total > MAX_ENCODED_LEN {
+            return Err(ManifestError::EncodedTooLarge {
+                length: total,
+                limit: MAX_ENCODED_LEN,
+            });
+        }
+    }
+
+    Ok(total)
+}
+
 /// Serializes a manifest into its canonical byte form.
+///
+/// The size is settled by [`encoded_len`] first, so the buffer is reserved once
+/// at exactly the right capacity and never grows past the limit mid-encode.
 ///
 /// # Errors
 ///
 /// Returns [`ManifestError::EncodedTooLarge`] when the result would exceed
 /// [`MAX_ENCODED_LEN`].
 pub fn encode(manifest: &TransferManifest) -> Result<Vec<u8>, ManifestError> {
-    let mut out = Vec::new();
+    let expected = encoded_len(manifest)?;
+    let mut out = Vec::with_capacity(expected);
     out.extend_from_slice(&MANIFEST_MAGIC);
     out.extend_from_slice(&MANIFEST_VERSION.to_be_bytes());
     out.extend_from_slice(&manifest.transfer_id().to_be_bytes());
@@ -36,14 +117,13 @@ pub fn encode(manifest: &TransferManifest) -> Result<Vec<u8>, ManifestError> {
 
     for item in manifest.items() {
         encode_item(item, &mut out);
-        if out.len() > MAX_ENCODED_LEN {
-            return Err(ManifestError::EncodedTooLarge {
-                length: out.len(),
-                limit: MAX_ENCODED_LEN,
-            });
-        }
     }
 
+    debug_assert_eq!(
+        out.len(),
+        expected,
+        "encoded_len must match the bytes actually produced"
+    );
     Ok(out)
 }
 
@@ -51,7 +131,6 @@ fn encode_item(item: &ManifestItem, out: &mut Vec<u8>) {
     out.extend_from_slice(&item.item_id().to_be_bytes());
     out.push(item.kind().to_wire());
     encode_string(item.path().as_str(), out);
-    encode_string(item.display_name(), out);
     out.extend_from_slice(&item.size().to_be_bytes());
     encode_optional_string(item.mime_type(), out);
     match item.modified_unix_seconds() {
@@ -135,7 +214,7 @@ pub fn decode(bytes: &[u8]) -> Result<TransferManifest, ManifestError> {
     // Even within MAX_ITEMS, an item cannot be shorter than its fixed fields, so
     // refuse a count the remaining bytes cannot possibly satisfy before
     // reserving capacity for it.
-    const MIN_ITEM_LEN: usize = 4 + 1 + 4 + 4 + 8 + 1 + 1 + 1 + 1;
+    const MIN_ITEM_LEN: usize = 4 + 1 + 4 + 8 + 1 + 1 + 1 + 1;
     let remaining = reader.remaining();
     if declared_items.saturating_mul(MIN_ITEM_LEN) > remaining {
         return Err(ManifestError::Truncated {
@@ -173,7 +252,6 @@ fn decode_item(reader: &mut Reader<'_>, index: usize) -> Result<ManifestItem, Ma
     let path = RelativePath::parse_bytes(path_bytes)
         .map_err(|source| ManifestError::InvalidPath { index, source })?;
 
-    let display_name = reader.take_string(MAX_NAME_LEN, ManifestField::DisplayName)?;
     let size = u64::from_be_bytes(reader.take_array::<8>()?);
 
     let mime_type = match reader.take_option_tag()? {
@@ -194,7 +272,6 @@ fn decode_item(reader: &mut Reader<'_>, index: usize) -> Result<ManifestItem, Ma
     ManifestItem::new(
         item_id,
         path,
-        display_name,
         kind,
         size,
         mime_type,
@@ -204,6 +281,7 @@ fn decode_item(reader: &mut Reader<'_>, index: usize) -> Result<ManifestItem, Ma
     )
     .map_err(|error| match error {
         ManifestError::InvalidDirectory { .. } => ManifestError::InvalidDirectory { index },
+        ManifestError::MissingFileHash { .. } => ManifestError::MissingFileHash { index },
         other => other,
     })
 }

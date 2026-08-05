@@ -16,6 +16,9 @@
 //!   they can drive an allocation.
 //! - Sizes are summed with checked arithmetic, so a set of items engineered to
 //!   wrap `u64` is an error rather than a small, believable total.
+//! - The visible name is derived from the path, never sent separately, so
+//!   `invoice.pdf.exe` cannot be presented as `invoice.pdf` (ADR-0019).
+//! - Two paths that a real filesystem would fold onto one file are rejected.
 //!
 //! # Example
 //!
@@ -23,7 +26,9 @@
 //! use qyro_manifest::{HashMetadata, ManifestItem, RelativePath, TransferManifest, codec};
 //!
 //! let path = RelativePath::parse("photos/summer/beach.jpg")?;
-//! let item = ManifestItem::file(1, path, 2048, HashMetadata::none())?;
+//! // Every file needs a final digest, including an empty one.
+//! let hash = HashMetadata::new(qyro_manifest::HashAlgorithm::Sha256, vec![0x11; 32])?;
+//! let item = ManifestItem::file(1, path, 2048, hash)?;
 //! let manifest = TransferManifest::new(7, 1_760_000_000, vec![item])?;
 //!
 //! let bytes = codec::encode(&manifest)?;
@@ -51,4 +56,4 @@ pub use limits::{
 pub use model::{
     Compression, HashAlgorithm, HashMetadata, ItemKind, ManifestItem, TransferManifest,
 };
-pub use path::{RelativePath, SEPARATOR};
+pub use path::{PortableCollisionKey, RelativePath, SEPARATOR};

@@ -1,8 +1,8 @@
 //! Manifest data model.
 
 use crate::error::{ManifestError, ManifestField};
-use crate::limits::{MAX_HASH_LEN, MAX_ITEMS, MAX_MIME_LEN, MAX_NAME_LEN, MAX_TOTAL_BYTES};
-use crate::path::RelativePath;
+use crate::limits::{MAX_HASH_LEN, MAX_ITEMS, MAX_MIME_LEN, MAX_TOTAL_BYTES};
+use crate::path::{PortableCollisionKey, RelativePath};
 
 /// What a manifest item represents.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -180,7 +180,6 @@ impl HashMetadata {
 pub struct ManifestItem {
     item_id: u32,
     path: RelativePath,
-    display_name: String,
     kind: ItemKind,
     size: u64,
     mime_type: Option<String>,
@@ -192,23 +191,20 @@ pub struct ManifestItem {
 impl ManifestItem {
     /// Builds a file item.
     ///
-    /// The display name defaults to the path's final segment, so a peer cannot
-    /// present a name that disagrees with where the bytes will land.
-    ///
     /// # Errors
     ///
-    /// Returns [`ManifestError`] when a field exceeds its limit.
+    /// Returns [`ManifestError::MissingFileHash`] when `hash` carries no digest.
+    /// Every file needs a final digest, including an empty one: the digest is
+    /// what proves the received bytes are the sent bytes.
     pub fn file(
         item_id: u32,
         path: RelativePath,
         size: u64,
         hash: HashMetadata,
     ) -> Result<Self, ManifestError> {
-        let display_name = path.file_name().to_owned();
         Self::new(
             item_id,
             path,
-            display_name,
             ItemKind::File,
             size,
             None,
@@ -224,11 +220,9 @@ impl ManifestItem {
     ///
     /// Returns [`ManifestError`] when a field exceeds its limit.
     pub fn directory(item_id: u32, path: RelativePath) -> Result<Self, ManifestError> {
-        let display_name = path.file_name().to_owned();
         Self::new(
             item_id,
             path,
-            display_name,
             ItemKind::Directory,
             0,
             None,
@@ -249,7 +243,6 @@ impl ManifestItem {
     pub fn new(
         item_id: u32,
         path: RelativePath,
-        display_name: String,
         kind: ItemKind,
         size: u64,
         mime_type: Option<String>,
@@ -257,13 +250,6 @@ impl ManifestItem {
         hash: HashMetadata,
         compression: Compression,
     ) -> Result<Self, ManifestError> {
-        if display_name.len() > MAX_NAME_LEN {
-            return Err(ManifestError::FieldTooLong {
-                field: ManifestField::DisplayName,
-                length: display_name.len(),
-                limit: MAX_NAME_LEN,
-            });
-        }
         if let Some(mime) = &mime_type
             && mime.len() > MAX_MIME_LEN
         {
@@ -273,14 +259,22 @@ impl ManifestItem {
                 limit: MAX_MIME_LEN,
             });
         }
-        if kind == ItemKind::Directory && (size != 0 || hash.is_present()) {
-            return Err(ManifestError::InvalidDirectory { index: 0 });
+        match kind {
+            ItemKind::Directory => {
+                if size != 0 || hash.is_present() {
+                    return Err(ManifestError::InvalidDirectory { index: 0 });
+                }
+            }
+            ItemKind::File => {
+                if !hash.is_present() {
+                    return Err(ManifestError::MissingFileHash { index: 0 });
+                }
+            }
         }
 
         Ok(Self {
             item_id,
             path,
-            display_name,
             kind,
             size,
             mime_type,
@@ -302,10 +296,14 @@ impl ManifestItem {
         &self.path
     }
 
-    /// Returns the display name.
+    /// Returns the name to show, always the path's final segment.
+    ///
+    /// Derived rather than stored: a separately supplied name could disagree
+    /// with where the bytes land, letting `invoice.pdf.exe` be presented as
+    /// `invoice.pdf`. See ADR-0019.
     #[must_use]
     pub fn display_name(&self) -> &str {
-        &self.display_name
+        self.path.file_name()
     }
 
     /// Returns the item kind.
@@ -509,6 +507,29 @@ fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
             return Err(ManifestError::TotalBytesTooLarge {
                 declared: total,
                 limit: MAX_TOTAL_BYTES,
+            });
+        }
+    }
+
+    // Two paths that a real filesystem would treat as one file must not both be
+    // present: the receiver would silently overwrite one with the other after
+    // accepting the transfer. Sorted keys keep this linearithmic.
+    let mut keys: Vec<(PortableCollisionKey, usize)> = items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| (PortableCollisionKey::of(&item.path), index))
+        .collect();
+    keys.sort_unstable();
+    for window in keys.windows(2) {
+        if window[0].0 == window[1].0 {
+            let (first, second) = if window[0].1 < window[1].1 {
+                (window[0].1, window[1].1)
+            } else {
+                (window[1].1, window[0].1)
+            };
+            return Err(ManifestError::PortableCollision {
+                index: second,
+                collides_with: first,
             });
         }
     }

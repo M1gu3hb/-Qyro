@@ -56,6 +56,11 @@ pub enum PathError {
     ControlCharacter,
     /// The path was not valid UTF-8.
     InvalidUtf8,
+    /// A character no Windows filesystem accepts in a name.
+    NonPortableCharacter {
+        /// The offending character.
+        found: char,
+    },
 }
 
 impl fmt::Display for PathError {
@@ -83,6 +88,12 @@ impl fmt::Display for PathError {
             Self::TrailingDotOrSpace => formatter.write_str("segment ends in a dot or space"),
             Self::ControlCharacter => formatter.write_str("path contains a control character"),
             Self::InvalidUtf8 => formatter.write_str("path is not valid UTF-8"),
+            Self::NonPortableCharacter { found } => {
+                write!(
+                    formatter,
+                    "path contains the non-portable character {found:?}"
+                )
+            }
         }
     }
 }
@@ -160,6 +171,24 @@ pub enum ManifestError {
         /// Index of the offending item.
         index: usize,
     },
+    /// A file carried no final digest.
+    ///
+    /// Every file needs one, including an empty one: the digest is what proves
+    /// the received bytes are the sent bytes.
+    MissingFileHash {
+        /// Index of the offending item.
+        index: usize,
+    },
+    /// Two items would land on the same file on a real filesystem.
+    ///
+    /// Case folding or Unicode composition made distinct-looking paths collide;
+    /// accepting both would silently overwrite one with the other.
+    PortableCollision {
+        /// Index of the second occurrence.
+        index: usize,
+        /// Index of the item it collides with.
+        collides_with: usize,
+    },
     /// A string field exceeded its limit.
     FieldTooLong {
         /// Which field.
@@ -215,8 +244,6 @@ pub enum ManifestError {
 pub enum ManifestField {
     /// Item relative path.
     Path,
-    /// Item display name.
-    DisplayName,
     /// Item MIME type.
     MimeType,
     /// Item hash digest.
@@ -235,7 +262,6 @@ impl fmt::Display for ManifestField {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
             Self::Path => "path",
-            Self::DisplayName => "display_name",
             Self::MimeType => "mime_type",
             Self::Hash => "hash",
             Self::HashAlgorithm => "hash_algorithm",
@@ -287,6 +313,16 @@ impl fmt::Display for ManifestError {
             Self::InvalidDirectory { index } => {
                 write!(formatter, "item {index} is a directory with file metadata")
             }
+            Self::MissingFileHash { index } => {
+                write!(formatter, "item {index} is a file without a final digest")
+            }
+            Self::PortableCollision {
+                index,
+                collides_with,
+            } => write!(
+                formatter,
+                "item {index} collides with item {collides_with} on a case-insensitive or normalizing filesystem"
+            ),
             Self::FieldTooLong {
                 field,
                 length,
