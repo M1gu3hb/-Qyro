@@ -8,7 +8,11 @@ use qyro_protocol::{
     DecodedFrame, EncryptedEnvelope, Flags, Frame, FrameDecoder, MessageType, SessionId,
 };
 
-use super::{AeadError, FrameOpener, FrameSealer, NONCE_LEN, REPLAY_WINDOW, TAG_LEN};
+use super::{
+    AUTH_TRANSCRIPT_LEN, AeadError, Direction, DirectionalKeys, FrameOpener, FrameSealer,
+    NONCE_LEN, PURPOSE_KEY, PURPOSE_NONCE_PREFIX, REPLAY_WINDOW, TAG_LEN, TRAFFIC_SECRET_LEN,
+    info_for,
+};
 use crate::handshake::{InitiatorStart, ResponderStart};
 use crate::identity::DeviceIdentity;
 
@@ -96,7 +100,10 @@ fn what_the_initiator_seals_the_responder_opens() {
 #[test]
 fn what_the_responder_seals_the_initiator_opens() {
     let mut s = session();
-    let sealed = s.responder_sealer.seal(&plain(b"the other way")).expect("seals");
+    let sealed = s
+        .responder_sealer
+        .seal(&plain(b"the other way"))
+        .expect("seals");
     let opened = s.initiator_opener.open(sealed.envelope()).expect("opens");
     assert_eq!(opened.payload(), b"the other way");
 }
@@ -181,7 +188,10 @@ fn a_sealed_frame_survives_the_wire() {
     // a transport will take, and it is the only one that proves the envelope
     // the decoder rebuilds is byte-identical to the one that was sealed.
     let mut s = session();
-    let sealed = s.initiator_sealer.seal(&plain(b"through the wire")).expect("seals");
+    let sealed = s
+        .initiator_sealer
+        .seal(&plain(b"through the wire"))
+        .expect("seals");
     let bytes = sealed.encode();
 
     let mut decoder = FrameDecoder::new();
@@ -209,7 +219,10 @@ fn every_byte_of_the_header_is_authenticated() {
     // any field must break the tag. Testing the fields individually would miss
     // a field nobody thought to name.
     let mut s = session();
-    let sealed = s.initiator_sealer.seal(&plain(b"authenticated")).expect("seals");
+    let sealed = s
+        .initiator_sealer
+        .seal(&plain(b"authenticated"))
+        .expect("seals");
     let bytes = sealed.encode();
 
     for index in 0..48 {
@@ -237,7 +250,10 @@ fn every_byte_of_the_header_is_authenticated() {
 #[test]
 fn tampering_with_ciphertext_or_tag_fails() {
     let mut s = session();
-    let sealed = s.initiator_sealer.seal(&plain(b"0123456789abcdef")).expect("seals");
+    let sealed = s
+        .initiator_sealer
+        .seal(&plain(b"0123456789abcdef"))
+        .expect("seals");
     let bytes = sealed.encode();
 
     // Body is header (48) + ciphertext (16) + tag (16).
@@ -265,7 +281,10 @@ fn a_frame_from_another_session_is_refused() {
     let mut second = session_with(2);
     assert_ne!(first.session_id, second.session_id, "fixtures differ");
 
-    let sealed = first.initiator_sealer.seal(&plain(b"other session")).expect("seals");
+    let sealed = first
+        .initiator_sealer
+        .seal(&plain(b"other session"))
+        .expect("seals");
     assert_eq!(
         second.responder_opener.open(sealed.envelope()).err(),
         Some(AeadError::WrongSession),
@@ -354,7 +373,10 @@ fn an_exhausted_sequence_is_a_terminal_error() {
     let mut s = session();
     s.initiator_sealer.set_sequence_for_test(u64::MAX);
 
-    let last = s.initiator_sealer.seal(&plain(b"final")).expect("the last one seals");
+    let last = s
+        .initiator_sealer
+        .seal(&plain(b"final"))
+        .expect("the last one seals");
     assert_eq!(last.envelope().header().sequence(), u64::MAX);
 
     assert_eq!(
@@ -415,7 +437,8 @@ fn a_frame_older_than_the_window_is_rejected() {
     let first = s.initiator_sealer.seal(&plain(b"old")).expect("seals");
 
     // Move the window well past it.
-    s.initiator_sealer.set_sequence_for_test(REPLAY_WINDOW as u64 + 10);
+    s.initiator_sealer
+        .set_sequence_for_test(REPLAY_WINDOW as u64 + 10);
     let recent = s.initiator_sealer.seal(&plain(b"new")).expect("seals");
     assert!(s.responder_opener.open(recent.envelope()).is_ok());
 
@@ -483,14 +506,20 @@ fn a_frame_from_another_session_does_not_move_the_replay_window() {
     let mut first = session_with(3);
     let mut second = session_with(4);
 
-    let foreign = first.initiator_sealer.seal(&plain(b"foreign")).expect("seals");
+    let foreign = first
+        .initiator_sealer
+        .seal(&plain(b"foreign"))
+        .expect("seals");
     assert_eq!(
         second.responder_opener.open(foreign.envelope()).err(),
         Some(AeadError::WrongSession)
     );
 
     // Sequence 0 of the real session still works.
-    let genuine = second.initiator_sealer.seal(&plain(b"genuine")).expect("seals");
+    let genuine = second
+        .initiator_sealer
+        .seal(&plain(b"genuine"))
+        .expect("seals");
     assert!(second.responder_opener.open(genuine.envelope()).is_ok());
 }
 
@@ -509,6 +538,157 @@ fn replaying_one_direction_does_not_affect_the_other() {
     // The other direction's window is untouched, even though the sequence is
     // also zero.
     assert!(s.initiator_opener.open(inbound.envelope()).is_ok());
+}
+
+// ------------------------------------------------------------- derivation
+
+fn keys_for(
+    secret: &[u8; TRAFFIC_SECRET_LEN],
+    direction: Direction,
+    transcript: &[u8; AUTH_TRANSCRIPT_LEN],
+    session: SessionId,
+) -> DirectionalKeys {
+    DirectionalKeys::derive(secret, &direction, transcript, session).expect("derives")
+}
+
+#[test]
+fn the_direction_is_inside_the_label_not_only_inside_the_secret() {
+    // Deleting `direction.label()` from `info_for` breaks nothing end to end:
+    // the two traffic secrets already differ, because the handshake schedule
+    // derived them under separate labels of its own. Checked by removing it and
+    // watching all thirty-three tests still pass.
+    //
+    // So the property ADR-0022 actually states — the two directions cannot
+    // produce the same key *even from the same secret* — has to be checked here
+    // or not at all, and without it the only thing separating the directions
+    // would be one layer up.
+    let secret = [0x42u8; TRAFFIC_SECRET_LEN];
+    let transcript = [0x17u8; AUTH_TRANSCRIPT_LEN];
+    let session = SessionId::from_u64(0x0102_0304_0506_0708);
+
+    let i2r = keys_for(
+        &secret,
+        Direction::InitiatorToResponder,
+        &transcript,
+        session,
+    );
+    let r2i = keys_for(
+        &secret,
+        Direction::ResponderToInitiator,
+        &transcript,
+        session,
+    );
+
+    assert_ne!(*i2r.key, *r2i.key, "one secret, two directions, two keys");
+    assert_ne!(
+        i2r.nonce_prefix, r2i.nonce_prefix,
+        "and two nonce prefixes, so the shared sequence space is not a shared nonce space"
+    );
+}
+
+#[test]
+fn the_session_and_the_transcript_bind_every_derived_value() {
+    // Both are in every `info` so that two sessions derive different keys even
+    // if some future defect ever repeated a traffic secret. Same reasoning as
+    // above: removing either one from `info_for` passes the end-to-end tests,
+    // because two fixtures differ in everything at once.
+    let secret = [0x42u8; TRAFFIC_SECRET_LEN];
+    let transcript = [0x17u8; AUTH_TRANSCRIPT_LEN];
+    let session = SessionId::from_u64(1);
+
+    let base = keys_for(
+        &secret,
+        Direction::InitiatorToResponder,
+        &transcript,
+        session,
+    );
+    let other_session = keys_for(
+        &secret,
+        Direction::InitiatorToResponder,
+        &transcript,
+        SessionId::from_u64(2),
+    );
+    let other_transcript = keys_for(
+        &secret,
+        Direction::InitiatorToResponder,
+        &[0x18u8; AUTH_TRANSCRIPT_LEN],
+        session,
+    );
+
+    assert_ne!(
+        *base.key, *other_session.key,
+        "the session id binds the key"
+    );
+    assert_ne!(
+        *base.key, *other_transcript.key,
+        "the transcript binds it too"
+    );
+    assert_ne!(base.nonce_prefix, other_session.nonce_prefix);
+    assert_ne!(base.nonce_prefix, other_transcript.nonce_prefix);
+}
+
+#[test]
+fn the_nonce_prefix_is_not_a_slice_of_the_key() {
+    // Separate labels, separate expansions. A prefix cut from the key would leak
+    // four key bytes into every nonce, and a nonce is not a secret.
+    let keys = keys_for(
+        &[0x42u8; TRAFFIC_SECRET_LEN],
+        Direction::InitiatorToResponder,
+        &[0x17u8; AUTH_TRANSCRIPT_LEN],
+        SessionId::from_u64(7),
+    );
+    assert_ne!(keys.nonce_prefix[..], keys.key[..keys.nonce_prefix.len()]);
+    assert_ne!(
+        keys.nonce_prefix[..],
+        keys.key[keys.key.len() - keys.nonce_prefix.len()..]
+    );
+}
+
+#[test]
+fn the_derivation_labels_are_the_ones_the_adr_freezes() {
+    // Pinned against the ADR rather than against the code that produces them: a
+    // silent relabelling is a silent change of every key, and an implementation
+    // in another language reads these strings, not this function.
+    let transcript = [0xABu8; AUTH_TRANSCRIPT_LEN];
+    let session = SessionId::from_u64(0x1122_3344_5566_7788);
+
+    for (direction, purpose, label) in [
+        (
+            Direction::InitiatorToResponder,
+            PURPOSE_KEY,
+            &b"QYRO-AEAD-V1/i2r/key"[..],
+        ),
+        (
+            Direction::InitiatorToResponder,
+            PURPOSE_NONCE_PREFIX,
+            &b"QYRO-AEAD-V1/i2r/nonce-prefix"[..],
+        ),
+        (
+            Direction::ResponderToInitiator,
+            PURPOSE_KEY,
+            &b"QYRO-AEAD-V1/r2i/key"[..],
+        ),
+        (
+            Direction::ResponderToInitiator,
+            PURPOSE_NONCE_PREFIX,
+            &b"QYRO-AEAD-V1/r2i/nonce-prefix"[..],
+        ),
+    ] {
+        let info = info_for(&direction, purpose, &transcript, session);
+        let expected: Vec<u8> = label
+            .iter()
+            .copied()
+            .chain(core::iter::once(0x00))
+            .chain(transcript)
+            .chain(session.to_be_bytes())
+            .collect();
+        assert_eq!(
+            info,
+            expected,
+            "info for {} is label || 0x00 || transcript || session",
+            String::from_utf8_lossy(label)
+        );
+    }
 }
 
 // ---------------------------------------------------------------- secrets
@@ -538,7 +718,12 @@ fn no_key_material_is_reachable_or_printable() {
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n");
-    for forbidden in ["pub fn key(", "pub const fn key(", "derive(Clone", "Serialize"] {
+    for forbidden in [
+        "pub fn key(",
+        "pub const fn key(",
+        "derive(Clone",
+        "Serialize",
+    ] {
         assert!(
             !code.contains(forbidden),
             "the AEAD module must not contain {forbidden}"
