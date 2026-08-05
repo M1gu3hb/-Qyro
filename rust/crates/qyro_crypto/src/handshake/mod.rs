@@ -35,6 +35,8 @@ mod transcript;
 mod closure_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod vectors;
 
 use qyro_protocol::SessionId;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
