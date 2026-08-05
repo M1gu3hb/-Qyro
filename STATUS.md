@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-05T23:30:00Z
 - Branch: claude/qyro-crypto-platform-hardening
-- Verified commit: 358c64f1a54a102606c43ac850606cb3e02a61b2
+- Verified commit: 2c3b3b54aeef5d8d7819332e2e486edab89d0b0b
 - Milestone: AEAD endurecido y ejecutado en las cuatro plataformas donde hay
   entorno; transporte y almacenamiento seguro NO iniciados
 
@@ -161,11 +161,11 @@ el producto dice correr, y cerró lo que esa comprobación destapó.
 
 Aplicación (`qyro_ffi` dentro del bundle):
 
-- Android debug APK: YES en `358c64f` (run 31051827364, job `android`)
-- Windows debug executable: YES en `358c64f` (run 31051827364, job `windows`)
-- iOS Runner.app debug sin firma: YES en `358c64f` (run 31051827364, job `ios`)
+- Android debug APK: YES en `2c3b3b5` (run 31052477356, job `android`)
+- Windows debug executable: YES en `2c3b3b5` (run 31052477356, job `windows`)
+- iOS Runner.app debug sin firma: YES en `2c3b3b5` (run 31052477356, job `ios`)
 
-`qyro_crypto`, por target explícito (run 31051838421):
+`qyro_crypto`, por target explícito (run 31052478940):
 
 | Target | Compila | Ejecuta |
 |---|---|---|
@@ -183,17 +183,17 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
 
 ## Platforms executed
 
-- Linux host Dart→Rust ABI test: YES en `358c64f` (run 31051825788, job `flutter`)
-- Windows host Dart→DLL ABI test: YES en `358c64f` (run 31051827364, paso
+- Linux host Dart→Rust ABI test: YES en `2c3b3b5` (run 31052475631, job `flutter`)
+- Windows host Dart→DLL ABI test: YES en `2c3b3b5` (run 31052477356, paso
   «Verify Dart reads QYRO/1 from the Windows DLL»). El mismo job cubre el bundle
   x64, el smoke-launch de `qyro.exe` y el ZIP portable.
-- Android emulator, ABI de `qyro_ffi`: YES en `358c64f` (run 31051829401).
+- Android emulator, ABI de `qyro_ffi`: YES en `2c3b3b5` (run 31052488810).
   Emulador API 35 `google_apis` x86_64 con KVM ejecutando
   `integration_test/native_abi_smoke_test.dart`.
-- iOS simulator, ABI de `qyro_ffi`: YES en `358c64f` (run 31051836544),
+- iOS simulator, ABI de `qyro_ffi`: YES en `2c3b3b5` (run 31052490644),
   incluidos «Verify native symbols in the unsigned application» y «Execute
   qyro_ffi XCTest through the Runner host».
-- **Criptografía en las cuatro plataformas con entorno**: YES en `358c64f` (run 31051838421).
+- **Criptografía en las cuatro plataformas con entorno**: YES en `2c3b3b5` (run 31052478940).
   Jobs `linux-crypto`, `windows-crypto`, `android-crypto` e `ios-crypto`. El
   harness ejecuta identidad, handshake, derivación, sellado, round trip de cable,
   apertura, replay y manipulación, y devuelve un código de salida estable por
@@ -230,43 +230,45 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 - `flutter analyze`, `flutter test`, `dart format` y el generador de branding:
   ejecutados solo en CI, run 31041949268
 
-Workflows sobre `358c64f` (este sprint), los seis lanzados con
+Workflows sobre `2c3b3b5` (este sprint), los seis lanzados con
 `workflow_dispatch` sobre **el mismo commit**:
 
 | Workflow | Run | Conclusión |
 |---|---|---|
-| CI | 31051825788 | **failure**, job `documentation` |
-| Platform builds | 31051827364 | **success**, 3/3 jobs |
-| Android runtime ABI | 31051829401 | todavía en ejecución al escribir esto |
-| iOS runtime ABI | 31051836544 | **success** |
-| Crypto platform | 31051838421 | **success**, 4/4 jobs |
-| Crypto fuzz | 31051840079 | **success**, 6/6 targets, 0 crashes |
+| CI | 31052475631 | **success**, 4/4 jobs |
+| Platform builds | 31052477356 | **success**, 3/3 jobs: `android`, `ios` y `windows` |
+| Android runtime ABI | 31052488810 | **success**, smoke de ABI en emulador |
+| iOS runtime ABI | 31052490644 | **success**, XCTest en simulador |
+| Crypto platform | 31052478940 | **success**, 4/4 jobs: `linux-crypto`, `windows-crypto`, `android-crypto` e `ios-crypto` |
+| Crypto fuzz | 31052486806 | **success**, 6/6 targets, 0 artefactos de crash |
 
-El fallo de CI **no es una regresión de código**: `check_docs_consistency`
-rechazó este mismo archivo porque, dentro de `358c64f`, todavía apuntaba a
-`bcca339`, el commit del sprint anterior y de otra rama, dieciocho commits por
-detrás. La regla que lo rechaza es la que se añadió en QYR-0007 y está haciendo
-su trabajo.
+Los seis sobre el mismo commit y los seis en success. Ningún run de un commit
+anterior se usa como evidencia final, y ninguno de otra rama como baseline.
 
-Un commit no puede nombrar su propio SHA, así que la corrección va en el commit
-siguiente y la evidencia de los seis workflows sobre un mismo commit se recoge
-allí. Es el patrón N/N+1 que la regla de deriva —hasta diez commits— existe para
-permitir. Esta tabla queda como registro de lo que se ejecutó aquí; la tabla que
-la sustituye está más abajo.
-
-Ningún run de un commit anterior se usa como evidencia final, y ninguno de otra
-rama como baseline.
+Este archivo apunta a `2c3b3b5` y no al commit que lo contiene, porque lo que
+viene después es solo documentación y un commit no puede nombrar su propio SHA.
+Es el patrón que la regla de deriva —hasta diez commits— existe para permitir.
 
 Baseline previo a cualquier cambio de este sprint: CI 31047932017 sobre
 `f7ae943`, **success**, lanzado sobre la rama nueva antes de tocar nada.
 
 Runs intermedios de este sprint que **no** son evidencia, listados porque
-omitirlos daría una impresión más limpia de la real: `crypto-platform.yml` falló
-en `b05c57c` y `09b9e8e` —el segundo por el job `ios-crypto`, que no encontraba
-el módulo Swift porque una cabecera dentro de un XCFramework no es un módulo
-Clang— y `crypto-fuzz.yml` falló entero en `09b9e8e` por el `--fuzz-dir` que
-faltaba. Los runs sobre `805e61e` y `312547e` quedaron **cancelled** al relanzar:
-el grupo de concurrencia cancela el anterior, lo cual no es un fallo.
+omitirlos daría una impresión más limpia que la real:
+
+- `crypto-platform.yml` falló en `b05c57c` y en `09b9e8e`. El segundo por el job
+  `ios-crypto`: una cabecera dentro de un XCFramework no es un módulo Clang, y
+  Swift respondía «no such module», que se lee como si no hubiera encontrado la
+  cabecera cuando la había encontrado y copiado bien.
+- `crypto-fuzz.yml` falló entero en `09b9e8e` por el `--fuzz-dir` que faltaba.
+- **CI falló en `358c64f`** (run 31051825788), y solo en el job `documentation`:
+  `check_docs_consistency` rechazó STATUS.md porque dentro de aquel commit
+  todavía apuntaba a `bcca339`, dieciocho commits por detrás y en otra rama. Es
+  la regla de QYR-0007 haciendo su trabajo, no una regresión de código. Los
+  otros cinco workflows sí pasaron allí.
+- El run de Android runtime sobre `358c64f` (31051829401) quedó **cancelled** al
+  lanzar su reemplazo: el grupo de concurrencia `android-runtime-${{ github.ref }}`
+  cancela el anterior sobre la misma ref. No es un fallo, y no se usa como
+  evidencia.
 
 Workflows previos sobre `bcca339` (sprint 4C):
 
