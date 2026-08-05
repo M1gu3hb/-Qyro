@@ -3,7 +3,7 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T20:30:00Z
+- Updated UTC: 2026-08-05T21:05:00Z
 - Branch: claude/qyro-aead-replay
 - Verified commit: bcca33906d93d500b79bf4ca2e668eaad3e75156
 - Milestone: AEAD de frames implementado, documentado y con vectores;
@@ -135,11 +135,9 @@ rama fue reescrita. Auditoría de este sprint:
   x64, el smoke-launch de `qyro.exe` y el ZIP portable.
 - Android emulator: YES en `bcca339` (run 31041953738). Emulador API 35
   `google_apis` x86_64 con KVM ejecutando `integration_test/native_abi_smoke_test.dart`.
-- iOS simulator: **PENDIENTE en `bcca339`.** El run 31041956058 sigue en
-  ejecución mientras se escribe esto; no se afirma su resultado. La última
-  ejecución verde del XCTest en simulador es la del sprint 4B.1, run 31026229897
-  sobre `c9cc0f3`, y entre ese commit y este no cambia nada de iOS: el diff es
-  Rust, vectores, corpus y documentación.
+- iOS simulator: YES en `bcca339` (run 31041956058), los diez pasos en success,
+  incluidos «Verify native symbols in the unsigned application» y «Execute
+  qyro_ffi XCTest through the Runner host».
 - iOS/Android hardware físico: NO
 - Interactive Windows application smoke: NO
 
@@ -175,10 +173,11 @@ Workflows sobre `bcca339` (este sprint), lanzados con `workflow_dispatch`:
 | CI | 31041949268 | **success**, 4/4 jobs |
 | Platform builds | 31041951667 | **success**, 3/3 jobs: `android`, `ios` y `windows` |
 | Android runtime ABI | 31041953738 | **success**, smoke de ABI en emulador |
-| iOS runtime ABI | 31041956058 | en ejecución al escribir esto; sin afirmar |
+| iOS runtime ABI | 31041956058 | **success**, XCTest en simulador |
 
-Los cuatro sobre el mismo commit. Tres han terminado en success; el cuarto se
-registrará cuando termine, y hasta entonces esta tabla no lo afirma.
+Los cuatro sobre el mismo commit, los cuatro en success. El commit anterior de
+este archivo registraba el run de iOS como todavía en ejecución, porque lo
+estaba; esta es la actualización que lo cierra.
 
 Baseline previo a cualquier cambio funcional: CI 31037909391 sobre `cc4d7d9`,
 **success**, lanzado sobre la rama nueva antes de tocar nada.
