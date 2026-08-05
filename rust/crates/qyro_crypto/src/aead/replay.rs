@@ -66,13 +66,32 @@ impl ReplayWindow {
             });
         }
 
-        // `behind` is under 1024, so both casts are exact.
+        // `behind` is under 1024, so the cast is exact.
         let behind = behind as usize;
-        if self.bitmap[behind / 64] & (1u64 << (behind % 64)) == 0 {
+        if self.slot(behind)? == 0 {
             Ok(())
         } else {
             Err(AeadError::ReplayDetected { sequence })
         }
+    }
+
+    /// Reads the bit `offset` positions behind the highest sequence.
+    ///
+    /// Indexing directly would panic on an out-of-range offset, and the offset
+    /// is derived from a sequence a peer chose. Every caller has already proved
+    /// the offset is inside the window; this returns an error instead of
+    /// trusting that proof, because the cost of being wrong is a remote crash.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AeadError::ReplayStateCorrupt`] when the offset is outside the
+    /// window.
+    fn slot(&self, offset: usize) -> Result<u64, AeadError> {
+        let word = self
+            .bitmap
+            .get(offset / 64)
+            .ok_or(AeadError::ReplayStateCorrupt)?;
+        Ok(word & (1u64 << (offset % 64)))
     }
 
     /// Records `sequence` as accepted.
@@ -91,7 +110,7 @@ impl ReplayWindow {
             None => {
                 self.highest_seen = Some(sequence);
                 self.bitmap = [0; WORDS];
-                self.set(0);
+                self.set(0)?;
             }
             Some(highest) if sequence > highest => {
                 let advance = sequence - highest;
@@ -101,15 +120,15 @@ impl ReplayWindow {
                     // as accepted that never arrived, and then reject them.
                     self.bitmap = [0; WORDS];
                 } else {
-                    self.shift(advance as usize);
+                    self.shift(advance as usize)?;
                 }
                 self.highest_seen = Some(sequence);
-                self.set(0);
+                self.set(0)?;
             }
             Some(highest) => {
                 // Inside the window and not yet seen: fill it in without moving
                 // the top. Networks reorder; that is not an attack.
-                self.set((highest - sequence) as usize);
+                self.set((highest - sequence) as usize)?;
             }
         }
         Ok(())
@@ -122,14 +141,31 @@ impl ReplayWindow {
     }
 
     /// Marks the slot `offset` positions behind the highest sequence.
-    fn set(&mut self, offset: usize) {
-        debug_assert!(offset < REPLAY_WINDOW);
-        self.bitmap[offset / 64] |= 1u64 << (offset % 64);
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AeadError::ReplayStateCorrupt`] when the offset is outside the
+    /// window. A `debug_assert` used to stand here, which is no check at all in
+    /// a release build — and a release build is the only one a user runs.
+    fn set(&mut self, offset: usize) -> Result<(), AeadError> {
+        let word = self
+            .bitmap
+            .get_mut(offset / 64)
+            .ok_or(AeadError::ReplayStateCorrupt)?;
+        *word |= 1u64 << (offset % 64);
+        Ok(())
     }
 
     /// Moves every recorded bit `by` positions further into the past.
-    fn shift(&mut self, by: usize) {
-        debug_assert!(by < REPLAY_WINDOW);
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AeadError::ReplayStateCorrupt`] when `by` is not inside the
+    /// window, which would make the shift meaningless rather than merely wrong.
+    fn shift(&mut self, by: usize) -> Result<(), AeadError> {
+        if by >= REPLAY_WINDOW {
+            return Err(AeadError::ReplayStateCorrupt);
+        }
         let words = by / 64;
         let bits = by % 64;
 
@@ -138,18 +174,38 @@ impl ReplayWindow {
             let Some(source) = index.checked_sub(words) else {
                 continue;
             };
-            let mut value = self.bitmap[source] << bits;
+            let carried = self
+                .bitmap
+                .get(source)
+                .ok_or(AeadError::ReplayStateCorrupt)?;
+            let mut value = carried << bits;
             if bits > 0 && source > 0 {
                 // The bits pushed out of the previous word arrive here.
-                value |= self.bitmap[source - 1] >> (64 - bits);
+                let previous = self
+                    .bitmap
+                    .get(source - 1)
+                    .ok_or(AeadError::ReplayStateCorrupt)?;
+                value |= previous >> (64 - bits);
             }
-            shifted[index] = value;
+            let slot = shifted
+                .get_mut(index)
+                .ok_or(AeadError::ReplayStateCorrupt)?;
+            *slot = value;
         }
         self.bitmap = shifted;
+        Ok(())
     }
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod tests {
     use super::*;
 

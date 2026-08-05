@@ -22,7 +22,12 @@ ed25519-dalek = { version = "3.0.0", default-features = false, features = ["rand
 # SHA-256 for the fingerprint. RustCrypto, MIT/Apache-2.0.
 sha2 = { version = "0.11.0", default-features = false }
 # Wipes secret material on drop. MIT/Apache-2.0.
-zeroize = { version = "1.9.0", default-features = false, features = ["zeroize_derive"] }
+# `alloc` is on for `Zeroizing<Vec<u8>>`, which is where verified plaintext and
+# the sealer's temporary live. zeroize's own documentation states the limit:
+# `Vec::zeroize` wipes the initialized elements and the spare capacity, and
+# "cannot ensure that previous reallocations did not leave values on the heap".
+# See docs/security/secret-lifecycle-audit.md.
+zeroize = { version = "1.9.0", default-features = false, features = ["alloc", "zeroize_derive"] }
 # System CSPRNG. MIT/Apache-2.0. Production entropy comes from here and nowhere
 # else; there is deliberately no weaker fallback.
 getrandom = "0.4.3"

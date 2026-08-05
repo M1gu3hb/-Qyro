@@ -10,6 +10,14 @@
 //! `MAX_PAYLOAD_LEN`, so sealing one cannot overflow a frame; and "the nonce
 //! state is unusable" was `SequenceExhausted` under a second name. An error
 //! nobody can provoke documents a check that is not there.
+//!
+//! The four invariant variants added in sprint 4C.1 are the opposite case. They
+//! replace `unreachable!`, `assert_eq!` and array indexing on the production
+//! path — places where the code was certain of something and ended the process
+//! if it turned out to be wrong. They are reachable only through the crate's own
+//! fault injection, which is `cfg(test)`, and that is the point: an invariant
+//! nobody can violate still must not be enforced with a crash, because `open` is
+//! driven by bytes a peer chose.
 
 use core::fmt;
 
@@ -57,6 +65,33 @@ pub enum AeadError {
     SequenceExhausted,
     /// The key schedule could not produce output.
     KeyDerivationFailed,
+    /// The sealer could not build the plain template it authenticates over.
+    ///
+    /// The framing layer refused a frame this module constructed from a frame
+    /// it had already accepted, which means the two layers disagree about what
+    /// is valid. Nothing is sealed and the sequence is not consumed.
+    FrameTemplateRejected,
+    /// The envelope layer refused the ciphertext and tag.
+    ///
+    /// Reached only after the AEAD has run, so the nonce is spent: the sealer is
+    /// poisoned rather than allowed to try again on the same sequence.
+    EnvelopeConstructionFailed,
+    /// The header that went on the wire is not the header the tag covered.
+    ///
+    /// A tag computed over a header that is not the header a peer receives
+    /// authenticates nothing. Checked rather than assumed, and terminal.
+    AssociatedDataMismatch,
+    /// The replay window was asked about a slot outside itself.
+    ///
+    /// Every caller proves the offset is in range before asking. This exists so
+    /// that a wrong proof is an error rather than an index panic on a path a
+    /// peer's sequence number reaches.
+    ReplayStateCorrupt,
+    /// The sealer stopped after an internal invariant failed.
+    ///
+    /// Terminal and deliberate. Once a nonce may or may not have been used, no
+    /// answer to "may I seal again" is safe except no.
+    SealerPoisoned,
 }
 
 impl fmt::Display for AeadError {
@@ -79,6 +114,21 @@ impl fmt::Display for AeadError {
                 formatter.write_str("every sequence in this direction has been used")
             }
             Self::KeyDerivationFailed => formatter.write_str("key derivation failed"),
+            Self::FrameTemplateRejected => {
+                formatter.write_str("the framing layer refused the sealer's own template")
+            }
+            Self::EnvelopeConstructionFailed => {
+                formatter.write_str("the envelope layer refused the sealed frame")
+            }
+            Self::AssociatedDataMismatch => {
+                formatter.write_str("the sealed header is not the header the tag covered")
+            }
+            Self::ReplayStateCorrupt => {
+                formatter.write_str("the replay window was asked about a slot outside itself")
+            }
+            Self::SealerPoisoned => {
+                formatter.write_str("this sealer stopped after an internal failure")
+            }
         }
     }
 }

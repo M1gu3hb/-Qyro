@@ -10,8 +10,8 @@ use qyro_protocol::{
 
 use super::{
     AUTH_TRANSCRIPT_LEN, AeadError, Direction, DirectionalKeys, FrameOpener, FrameSealer,
-    NONCE_LEN, PURPOSE_KEY, PURPOSE_NONCE_PREFIX, REPLAY_WINDOW, TAG_LEN, TRAFFIC_SECRET_LEN,
-    info_for,
+    NONCE_LEN, PURPOSE_KEY, PURPOSE_NONCE_PREFIX, REPLAY_WINDOW, SealFault, TAG_LEN,
+    TRAFFIC_SECRET_LEN, info_for,
 };
 use crate::handshake::{InitiatorStart, ResponderStart};
 use crate::identity::DeviceIdentity;
@@ -691,6 +691,148 @@ fn the_derivation_labels_are_the_ones_the_adr_freezes() {
     }
 }
 
+// ----------------------------------------------------- invariants and poison
+
+#[test]
+fn an_associated_data_mismatch_is_an_error_and_not_a_crash() {
+    // The check used to be an `assert_eq!`. It is worth keeping — a tag computed
+    // over a header that is not the header on the wire authenticates nothing —
+    // and the crash is not, because this line is reached with a key in scope.
+    let mut s = session();
+    s.initiator_sealer
+        .set_fault_for_test(SealFault::AssociatedData);
+
+    assert_eq!(
+        s.initiator_sealer.seal(&plain(b"mismatched")).err(),
+        Some(AeadError::AssociatedDataMismatch)
+    );
+}
+
+#[test]
+fn a_construction_failure_is_an_error_and_not_a_crash() {
+    for (fault, expected) in [
+        (SealFault::Template, AeadError::FrameTemplateRejected),
+        (SealFault::Envelope, AeadError::EnvelopeConstructionFailed),
+    ] {
+        let mut s = session();
+        s.initiator_sealer.set_fault_for_test(fault);
+        assert_eq!(
+            s.initiator_sealer.seal(&plain(b"refused")).err(),
+            Some(expected),
+            "{fault:?} must return an error"
+        );
+    }
+}
+
+#[test]
+fn an_internal_failure_poisons_the_sealer_for_good() {
+    // Fail closed. The question a caller would have to answer to keep going is
+    // "was that nonce used?", and the sealer has just shown that its reasoning
+    // about its own state can be wrong. There is no safe answer except no.
+    for fault in [
+        SealFault::Template,
+        SealFault::Envelope,
+        SealFault::AssociatedData,
+    ] {
+        let mut s = session();
+        s.initiator_sealer.set_fault_for_test(fault);
+        assert!(s.initiator_sealer.seal(&plain(b"first")).is_err());
+        assert!(
+            s.initiator_sealer.is_poisoned(),
+            "{fault:?} must poison the sealer"
+        );
+
+        // And it stays poisoned, with the reason preserved rather than
+        // collapsing into "exhausted", which means something else.
+        for _ in 0..3 {
+            assert_eq!(
+                s.initiator_sealer.seal(&plain(b"again")).err(),
+                Some(AeadError::SealerPoisoned)
+            );
+        }
+    }
+}
+
+#[test]
+fn a_poisoned_sealer_never_reissues_the_sequence_it_failed_on() {
+    // The property the poison exists for: whatever happened to sequence 1, no
+    // later frame may be sealed under it.
+    let mut s = session();
+    let first = s.initiator_sealer.seal(&plain(b"zero")).expect("seals");
+    assert_eq!(first.envelope().header().sequence(), 0);
+
+    s.initiator_sealer.set_fault_for_test(SealFault::Envelope);
+    assert!(s.initiator_sealer.seal(&plain(b"one")).is_err());
+
+    assert_eq!(
+        s.initiator_sealer.seal(&plain(b"one again")).err(),
+        Some(AeadError::SealerPoisoned),
+        "sequence 1 may have been used; it must never be offered again"
+    );
+}
+
+#[test]
+fn exhaustion_and_poison_are_different_answers() {
+    // Both are terminal and both mean "no more frames", but they mean different
+    // things to whoever reads the log, so they must not collapse into one.
+    let mut exhausted = session();
+    exhausted.initiator_sealer.set_sequence_for_test(u64::MAX);
+    assert!(exhausted.initiator_sealer.seal(&plain(b"last")).is_ok());
+    assert_eq!(
+        exhausted.initiator_sealer.seal(&plain(b"no")).err(),
+        Some(AeadError::SequenceExhausted)
+    );
+    assert!(!exhausted.initiator_sealer.is_poisoned());
+
+    let mut poisoned = session();
+    poisoned
+        .initiator_sealer
+        .set_fault_for_test(SealFault::Envelope);
+    assert!(poisoned.initiator_sealer.seal(&plain(b"boom")).is_err());
+    assert_eq!(
+        poisoned.initiator_sealer.seal(&plain(b"no")).err(),
+        Some(AeadError::SealerPoisoned)
+    );
+}
+
+// ------------------------------------------------------------- zeroization
+
+#[test]
+fn verified_plaintext_is_handed_over_still_protected() {
+    // The type is the guarantee. A test cannot watch a freed allocation get
+    // wiped — reading it is undefined behaviour and the allocator may have
+    // unmapped the page — so what is checked is that ownership never leaves the
+    // zeroizing container.
+    let mut s = session();
+    let sealed = s
+        .initiator_sealer
+        .seal(&plain(b"secret cargo"))
+        .expect("seals");
+    let opened = s.responder_opener.open(sealed.envelope()).expect("opens");
+
+    assert_eq!(opened.payload(), b"secret cargo");
+
+    let owned: zeroize::Zeroizing<Vec<u8>> = opened.into_zeroizing_payload();
+    assert_eq!(&owned[..], b"secret cargo");
+}
+
+#[test]
+fn debug_never_prints_plaintext() {
+    let mut s = session();
+    let sealed = s
+        .initiator_sealer
+        .seal(&plain(b"do-not-print-me"))
+        .expect("seals");
+    let opened = s.responder_opener.open(sealed.envelope()).expect("opens");
+
+    let rendered = format!("{opened:?}");
+    assert!(
+        !rendered.contains("do-not-print-me"),
+        "AuthenticatedFrame Debug must not carry plaintext: {rendered}"
+    );
+    assert!(rendered.contains("payload_len"), "it may carry the length");
+}
+
 // ---------------------------------------------------------------- secrets
 
 #[test]
@@ -718,17 +860,41 @@ fn no_key_material_is_reachable_or_printable() {
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n");
-    for forbidden in [
-        "pub fn key(",
-        "pub const fn key(",
-        "derive(Clone",
-        "Serialize",
-    ] {
+    for forbidden in ["pub fn key(", "pub const fn key(", "Serialize"] {
         assert!(
             !code.contains(forbidden),
             "the AEAD module must not contain {forbidden}"
         );
     }
+
+    // Named types rather than the bare string `derive(Clone`. The blunt version
+    // was here first and it fired on a `cfg(test)` fault selector that holds
+    // nothing — a guard that rejects the harmless case gets relaxed, and a
+    // relaxed guard stops catching the harmful one. What must not be
+    // duplicated is anything that owns a key, a nonce counter, a replay window
+    // or verified plaintext.
+    for state in [
+        "pub struct FrameSealer",
+        "pub struct FrameOpener",
+        "pub struct SealedFrame",
+        "pub struct AuthenticatedFrame",
+        "struct DirectionalKeys",
+    ] {
+        let position = code.find(state).unwrap_or_else(|| panic!("{state} exists"));
+        // The 400 bytes before a declaration hold its attributes and doc.
+        let preamble = &code[position.saturating_sub(400)..position];
+        for forbidden in ["Clone", "Copy", "Serialize"] {
+            assert!(
+                !preamble.contains(&format!("derive({forbidden}"))
+                    && !preamble.contains(&format!(", {forbidden}")),
+                "{state} must not derive {forbidden}"
+            );
+        }
+    }
+    assert!(
+        !code.contains("impl Clone for"),
+        "no manual Clone on a type holding key material or plaintext"
+    );
 }
 
 // --------------------------------------------------------------- robustness

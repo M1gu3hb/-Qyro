@@ -228,9 +228,14 @@ impl DirectionalKeys {
     ///
     /// Rebuilt per frame rather than stored: `ChaCha20Poly1305` is a key in a
     /// wrapper, so this copies 32 bytes and does no key schedule.
+    ///
+    /// Infallible by construction. `new_from_slice` is the fallible form and
+    /// used to be called here, with the length argued to be right in a comment
+    /// and enforced by an `unreachable!`; `KeyInit::new` takes an array of
+    /// exactly the key length, so the compiler makes the same argument and there
+    /// is no failure branch left to get wrong.
     fn cipher(&self) -> ChaCha20Poly1305 {
-        <ChaCha20Poly1305 as KeyInit>::new_from_slice(self.key.as_slice())
-            .unwrap_or_else(|_| unreachable!("the derived key is exactly AEAD_KEY_LEN bytes"))
+        <ChaCha20Poly1305 as KeyInit>::new(&(*self.key).into())
     }
 }
 
@@ -263,11 +268,44 @@ fn nonce_for(prefix: &[u8; NONCE_PREFIX_LEN], sequence: u64) -> [u8; NONCE_LEN] 
 pub struct FrameSealer {
     keys: DirectionalKeys,
     session: SessionId,
-    /// The next sequence to use, or `None` once the space is exhausted.
+    state: SealerState,
+    /// Which internal step to fail on next. `cfg(test)` only.
     ///
-    /// An `Option` rather than a counter plus a flag, so "exhausted" is a state
-    /// the type holds instead of a condition somebody has to remember to check.
-    next_sequence: Option<u64>,
+    /// The four invariant errors are unreachable by design, and an error nobody
+    /// can provoke is an error nobody has tested. This is how the tests provoke
+    /// them: crate-private, `cfg(test)`, never a feature.
+    #[cfg(test)]
+    fault: Option<SealFault>,
+}
+
+/// Where the sealer is in its one-way lifecycle.
+///
+/// An enum rather than an `Option<u64>` plus a flag, so "exhausted" and
+/// "poisoned" are states the type holds rather than conditions somebody has to
+/// remember to check — and so the two cannot be confused, because they mean
+/// different things to whoever reads the error.
+#[derive(Debug)]
+enum SealerState {
+    /// The next sequence to use.
+    Ready(u64),
+    /// Every sequence in this direction has been used.
+    Exhausted,
+    /// An internal invariant failed. Terminal; see [`FrameSealer::seal`].
+    Poisoned,
+}
+
+/// An internal step a test can force to fail.
+///
+/// The type exists in every build so the two `fault_is` shapes match; only the
+/// field that stores one is `cfg(test)`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SealFault {
+    /// Refuse the plain template, before the nonce is used.
+    Template,
+    /// Refuse the envelope, after the nonce is used.
+    Envelope,
+    /// Corrupt the header the tag was computed over.
+    AssociatedData,
 }
 
 impl FrameSealer {
@@ -280,14 +318,53 @@ impl FrameSealer {
     /// Returning a frame consumes the sequence. Dropping the result does not
     /// give it back: a nonce that could be reissued is a nonce that can repeat.
     ///
+    /// # Failing closed
+    ///
+    /// Any internal invariant failure **poisons this sealer permanently**, and
+    /// every later call answers [`AeadError::SealerPoisoned`]. That is stricter
+    /// than it needs to be for the one failure that happens before the AEAD
+    /// runs, and deliberately so: the question a caller would have to answer to
+    /// recover is "was this nonce used?", the sealer has just demonstrated that
+    /// its own reasoning about its state can be wrong, and the cost of guessing
+    /// wrong is two plaintexts XORed together on the wire.
+    ///
     /// # Errors
     ///
     /// Returns [`AeadError::SequenceExhausted`] once every sequence in this
-    /// direction has been used, which is terminal, or
-    /// [`AeadError::AuthenticationFailed`] if the AEAD itself refuses the input.
+    /// direction has been used; [`AeadError::SealerPoisoned`] after any internal
+    /// failure; [`AeadError::FrameTemplateRejected`],
+    /// [`AeadError::EnvelopeConstructionFailed`] or
+    /// [`AeadError::AssociatedDataMismatch`] when the framing layer and this one
+    /// disagree; or [`AeadError::AuthenticationFailed`] if the AEAD refuses the
+    /// input.
     pub fn seal(&mut self, frame: &Frame) -> Result<SealedFrame, AeadError> {
-        let sequence = self.next_sequence.ok_or(AeadError::SequenceExhausted)?;
+        let sequence = match self.state {
+            SealerState::Ready(sequence) => sequence,
+            SealerState::Exhausted => return Err(AeadError::SequenceExhausted),
+            SealerState::Poisoned => return Err(AeadError::SealerPoisoned),
+        };
 
+        match self.seal_at(frame, sequence) {
+            Ok(sealed) => {
+                // Last, and only once a frame exists to hand back.
+                self.state = match sequence.checked_add(1) {
+                    Some(next) => SealerState::Ready(next),
+                    None => SealerState::Exhausted,
+                };
+                Ok(sealed)
+            }
+            Err(error) => {
+                self.state = SealerState::Poisoned;
+                Err(error)
+            }
+        }
+    }
+
+    /// The body of [`FrameSealer::seal`], with the state machine left outside.
+    ///
+    /// Split so that every early return below is caught by one place that
+    /// poisons the sealer, rather than by three that have to remember to.
+    fn seal_at(&self, frame: &Frame, sequence: u64) -> Result<SealedFrame, AeadError> {
         let header = frame.header();
         let template = Frame::new(frame.message_type(), Vec::new())
             .and_then(|template| template.with_flags(header.flags()))
@@ -301,11 +378,8 @@ impl FrameSealer {
                     )
                     .with_sequence(sequence)
             })
-            .unwrap_or_else(|_| {
-                unreachable!("an empty payload is in range and a Frame's flags are transport-only")
-            });
-
-        let mut buffer = frame.payload().to_vec();
+            .map_err(|_| AeadError::FrameTemplateRejected)?;
+        self.check_fault(SealFault::Template)?;
 
         // `EncryptedEnvelope::from_plain_frame` takes `payload_len` from the
         // ciphertext's *length* and nothing from its content, so an envelope over
@@ -313,16 +387,25 @@ impl FrameSealer {
         // will. Predicted here and compared against the real one below, because
         // a tag computed over a header that is not the header on the wire
         // authenticates nothing.
-        let probe = EncryptedEnvelope::from_plain_frame(
+        //
+        // The probe body is zeroed rather than the plaintext: an envelope that
+        // held a copy of the plaintext would be a second place for it to survive,
+        // and this one is dropped without being wiped.
+        let mut associated_data = EncryptedEnvelope::from_plain_frame(
             &template,
-            vec![0u8; buffer.len()],
+            vec![0u8; frame.payload().len()],
             vec![0u8; TAG_LEN],
         )
-        .unwrap_or_else(|_| {
-            unreachable!("a Frame's payload is within MAX_PAYLOAD_LEN and the tag is sixteen bytes")
-        });
-        let associated_data = probe.associated_data();
-        drop(probe);
+        .map_err(|_| AeadError::EnvelopeConstructionFailed)?
+        .associated_data();
+        if self.fault_is(SealFault::AssociatedData) {
+            associated_data = [0u8; qyro_protocol::HEADER_LEN];
+        }
+
+        // Plaintext from here to the encryption below. Zeroizing, so that every
+        // path out of this function — including the `?` on the next statement —
+        // wipes it.
+        let mut buffer = Zeroizing::new(frame.payload().to_vec());
 
         let nonce = nonce_for(&self.keys.nonce_prefix, sequence);
         let tag = self
@@ -335,22 +418,69 @@ impl FrameSealer {
             )
             .map_err(|_| AeadError::AuthenticationFailed)?;
 
-        let envelope = EncryptedEnvelope::from_plain_frame(&template, buffer, tag.to_vec())
-            .unwrap_or_else(|_| {
-                unreachable!(
-                    "the ciphertext is the plaintext's length and the tag is sixteen bytes"
-                )
-            });
-        assert_eq!(
-            envelope.associated_data(),
-            associated_data,
-            "the sealed header must be the one the tag was computed over"
-        );
+        // From here the buffer holds ciphertext, not plaintext, so copying it
+        // out is a deliberate and reviewed change of classification rather than
+        // a leak. The zeroizing original is still wiped when it drops.
+        let ciphertext = buffer.as_slice().to_vec();
+        drop(buffer);
 
-        // Last, and only once a frame exists to hand back.
-        self.next_sequence = sequence.checked_add(1);
+        let envelope = EncryptedEnvelope::from_plain_frame(&template, ciphertext, tag.to_vec())
+            .map_err(|_| AeadError::EnvelopeConstructionFailed)?;
+        self.check_fault(SealFault::Envelope)?;
+
+        if envelope.associated_data() != associated_data {
+            // Used to be an `assert_eq!`. The check is worth keeping and the
+            // crash is not: this is reached with a key in scope.
+            return Err(AeadError::AssociatedDataMismatch);
+        }
 
         Ok(SealedFrame { envelope, nonce })
+    }
+
+    /// Whether a test asked for this step to fail.
+    #[cfg(test)]
+    const fn fault_is(&self, step: SealFault) -> bool {
+        matches!(self.fault, Some(active) if matches!(
+            (active, step),
+            (SealFault::Template, SealFault::Template)
+                | (SealFault::Envelope, SealFault::Envelope)
+                | (SealFault::AssociatedData, SealFault::AssociatedData)
+        ))
+    }
+
+    /// Always false outside tests; the fault field does not exist there.
+    #[cfg(not(test))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the test build reads self; the shapes must match"
+    )]
+    const fn fault_is(&self, _step: SealFault) -> bool {
+        false
+    }
+
+    /// Fails the step a test asked to fail.
+    fn check_fault(&self, step: SealFault) -> Result<(), AeadError> {
+        if self.fault_is(step) {
+            return Err(match step {
+                SealFault::Template => AeadError::FrameTemplateRejected,
+                SealFault::Envelope | SealFault::AssociatedData => {
+                    AeadError::EnvelopeConstructionFailed
+                }
+            });
+        }
+        Ok(())
+    }
+
+    /// Arms the fault injection one step at a time.
+    #[cfg(test)]
+    pub(crate) const fn set_fault_for_test(&mut self, fault: SealFault) {
+        self.fault = Some(fault);
+    }
+
+    /// Whether this sealer has been poisoned by an internal failure.
+    #[cfg(test)]
+    pub(crate) const fn is_poisoned(&self) -> bool {
+        matches!(self.state, SealerState::Poisoned)
     }
 
     /// The nonce prefix for this direction.
@@ -368,7 +498,7 @@ impl FrameSealer {
     /// sealing 2^64 frames.
     #[cfg(test)]
     pub(crate) const fn set_sequence_for_test(&mut self, sequence: u64) {
-        self.next_sequence = Some(sequence);
+        self.state = SealerState::Ready(sequence);
     }
 }
 
@@ -378,7 +508,7 @@ impl core::fmt::Debug for FrameSealer {
         formatter
             .debug_struct("FrameSealer")
             .field("session", &self.session)
-            .field("next_sequence", &self.next_sequence)
+            .field("state", &self.state)
             .field("key", &"<redacted>")
             .finish()
     }
@@ -489,7 +619,12 @@ impl FrameOpener {
 
         let associated_data = envelope.associated_data();
         let nonce = nonce_for(&self.keys.nonce_prefix, sequence);
-        let mut buffer = envelope.ciphertext().to_vec();
+
+        // Ciphertext on the way in, plaintext on the way out, and zeroizing
+        // throughout: the `?` on the next two statements each leave this
+        // function without reaching the return, and the second of them leaves it
+        // holding verified plaintext.
+        let mut buffer = Zeroizing::new(envelope.ciphertext().to_vec());
 
         // Verify-then-decrypt, by the library: `decrypt_inout_detached` compares
         // the Poly1305 tag in constant time and only touches the buffer if it
@@ -505,7 +640,8 @@ impl FrameOpener {
             .map_err(|_| AeadError::AuthenticationFailed)?;
 
         // Only now. Everything above could be driven by anyone; this line is
-        // reached only by someone holding the key.
+        // reached only by someone holding the key. If it fails, the plaintext
+        // above is already decrypted and the `?` wipes it on the way out.
         self.window.record(sequence)?;
 
         Ok(AuthenticatedFrame {
@@ -534,7 +670,15 @@ impl core::fmt::Debug for FrameOpener {
 /// session's peer actually sent, under a header nobody altered.
 pub struct AuthenticatedFrame {
     header: FrameHeader,
-    payload: Vec<u8>,
+    /// Verified plaintext, in a container that wipes itself.
+    ///
+    /// `Zeroizing<Vec<u8>>` rather than `Vec<u8>` because this is the one place
+    /// in the crate that holds a peer's decrypted content, and it lives exactly
+    /// as long as whoever is about to write it somewhere. The wipe covers the
+    /// initialized bytes and the spare capacity; zeroize's own documentation
+    /// states the limit it cannot cover, which is a reallocation that already
+    /// happened. See `docs/security/secret-lifecycle-audit.md`.
+    payload: Zeroizing<Vec<u8>>,
 }
 
 impl AuthenticatedFrame {
@@ -544,9 +688,18 @@ impl AuthenticatedFrame {
         &self.payload
     }
 
-    /// Consumes the frame and returns its verified plaintext.
+    /// Consumes the frame and returns its verified plaintext, still protected.
+    ///
+    /// Replaces an `into_payload` that returned a bare `Vec<u8>`. Taking
+    /// ownership is exactly the moment the guarantee mattered, and that method
+    /// was the one call in the API that silently dropped it.
+    ///
+    /// A transfer engine will take the buffer this way, write it to a
+    /// `.qyro-part` file, and let it drop — the wipe happens without anyone
+    /// remembering to ask for it, which is the only kind of wipe that survives a
+    /// refactor.
     #[must_use]
-    pub fn into_payload(self) -> Vec<u8> {
+    pub fn into_zeroizing_payload(self) -> Zeroizing<Vec<u8>> {
         self.payload
     }
 
@@ -630,7 +783,9 @@ pub(crate) fn frame_crypto(
     let sealer = FrameSealer {
         keys: DirectionalKeys::derive(sending_secret, sending, auth_transcript, session)?,
         session,
-        next_sequence: Some(0),
+        state: SealerState::Ready(0),
+        #[cfg(test)]
+        fault: None,
     };
     let opener = FrameOpener {
         keys: DirectionalKeys::derive(receiving_secret, receiving, auth_transcript, session)?,

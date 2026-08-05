@@ -102,7 +102,10 @@ fn the_stripper_actually_strips() {
         "fn kept() {}\n#[cfg(test)]\nmod tests {\n    fn inner() { assert!(true); }\n}\nfn also_kept() {}\n",
     );
     assert!(stripped.contains("fn kept"), "production code survives");
-    assert!(stripped.contains("fn also_kept"), "and so does what follows");
+    assert!(
+        stripped.contains("fn also_kept"),
+        "and so does what follows"
+    );
     assert!(!stripped.contains("assert!"), "the test body is gone");
 
     let declaration = strip_cfg_test_items("#[cfg(test)]\nmod tests;\nfn kept() {}\n");
