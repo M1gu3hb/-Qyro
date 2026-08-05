@@ -21,7 +21,7 @@ normalización canónica real.
 
 `qyro_crypto` usa la pila Ed25519/X25519 de dalek-cryptography (BSD-3-Clause) y
 RustCrypto (MIT/Apache-2.0): `ed25519-dalek`, `x25519-dalek`, `curve25519-dalek`,
-`sha2`, `hkdf`, `hmac`, `zeroize`, `subtle` y `getrandom`. Solo para
-pruebas añade `serde_json` (MIT/Apache-2.0) y su cierre, que no se enlaza en la
-biblioteca. El detalle por crate, versión y licencia está en
+`sha2`, `hkdf`, `hmac`, `chacha20poly1305`, `zeroize`, `subtle` y `getrandom`.
+Solo para pruebas añade `serde_json` (MIT/Apache-2.0) y su cierre, que no se
+enlaza en la biblioteca. El detalle por crate, versión y licencia está en
 `docs/LICENSE_AUDIT.md`. Ninguna es copyleft.

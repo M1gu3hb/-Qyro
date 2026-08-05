@@ -143,6 +143,43 @@ que se eliminó. Sigue en el árbol como transitiva de la pila dalek.
 `SessionId`. No hay dependencia en sentido contrario: `qyro_protocol` no conoce
 la criptografía.
 
+### AEAD de frames (`qyro_crypto`, sprint 4C)
+
+| Crate | Versión | Licencia | Fuente |
+|---|---|---|---|
+| chacha20poly1305 | 0.11.0 | Apache-2.0 OR MIT | RustCrypto |
+| chacha20 | 0.10.1 | MIT OR Apache-2.0 | RustCrypto (transitiva) |
+| poly1305 | 0.9.1 | Apache-2.0 OR MIT | RustCrypto (transitiva) |
+| aead | 0.6.1 | MIT OR Apache-2.0 | RustCrypto (transitiva) |
+| cipher | 0.5.2 | MIT OR Apache-2.0 | RustCrypto (transitiva) |
+| inout | 0.2.2 | MIT OR Apache-2.0 | RustCrypto (transitiva) |
+| universal-hash | 0.6.1 | MIT OR Apache-2.0 | RustCrypto (transitiva) |
+
+Una sola dependencia directa nueva. Las seis restantes llegan por ella, no por
+elección propia, y todas están bajo la misma doble licencia permisiva.
+
+Toda la pila comparte `crypto-common 0.2.2`, `hybrid-array 0.4.14`, `zeroize
+1.9.0` y `cpufeatures 0.3.0` con lo que ya había: `cargo tree -d` no encuentra
+ninguna versión duplicada de ninguna primitiva. `ctutils` y `cmov`, que ya
+entraban por `digest`, ahora también llegan por `universal-hash`; siguen siendo la
+misma versión.
+
+`chacha20poly1305` con `default-features = false` y solo `zeroize`. Se apagan sus
+dos features por defecto:
+
+- `alloc`: la ruta de sellado usa la API detached in-out, que escribe sobre un
+  búfer que ya existe y no reserva nada. Solo la API `Aead` de conveniencia
+  necesita `alloc`, y esa no se usa.
+- `getrandom`: por el mismo motivo que en `x25519-dalek`. Ninguna dependencia de
+  este crate obtiene entropía por su cuenta; el crate la pide él mismo y reporta
+  el fallo como error en lugar de dejar que otro haga pánico.
+
+`zeroize` se activa para que el cifrador borre su clave al soltarla.
+
+Mantenimiento: RustCrypto/AEADs es el mismo grupo que publica `sha2`, `hkdf`,
+`hmac` y `digest`, ya evaluados arriba. `cargo audit --deny warnings` sobre el
+`Cargo.lock` resultante (55 dependencias) no reporta ningún advisory.
+
 ### Solo desarrollo (`dev-dependencies` de `qyro_crypto`)
 
 No se enlazan en la biblioteca ni en ningún artefacto distribuible: solo
