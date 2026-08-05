@@ -20,6 +20,7 @@
 - ADR-0019: nombre visible derivado de la ruta.
 - ADR-0020: fundación de identidad de dispositivo.
 - ADR-0021: handshake autenticado de cuatro mensajes.
+- ADR-0022: cifrado autenticado de frames QYRO/1.
 
 El sprint 4B.1 cerró el handshake sin cambiar ninguna decisión: unificó el
 `SessionId` en ocho bytes, añadió `ResponderFinishPending`, sacó las claves de

@@ -50,6 +50,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod aead;
 mod error;
 mod fingerprint;
 pub mod handshake;
