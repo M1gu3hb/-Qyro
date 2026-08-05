@@ -1,0 +1,14 @@
+[package]
+name = "qyro_manifest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Bounded, canonical transfer manifests with strict relative-path validation."
+
+[lib]
+path = "src/lib.rs"
+
+# Intentionally dependency-free: the manifest decoder processes peer-supplied
+# paths before anything is written to disk.
+[dependencies]

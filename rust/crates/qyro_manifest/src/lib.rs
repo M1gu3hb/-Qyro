@@ -1,0 +1,54 @@
+//! Transfer manifests and the paths inside them.
+//!
+//! A manifest says what is about to be written to disk, and it arrives from a
+//! peer. This crate is deliberately independent of the real filesystem: it never
+//! opens, stats or creates anything. It turns untrusted bytes into a value whose
+//! existence proves the paths are relative, normalized and free of traversal,
+//! and leaves the actual I/O to a layer that can be given a root directory.
+//!
+//! # Safety posture
+//!
+//! - [`RelativePath`] rejects instead of sanitising. Rewriting a hostile path
+//!   usually just produces a different hostile path.
+//! - Unix and Windows rules are enforced on every platform, so a manifest is
+//!   accepted or refused identically everywhere.
+//! - Counts and lengths are checked against the constants in this crate before
+//!   they can drive an allocation.
+//! - Sizes are summed with checked arithmetic, so a set of items engineered to
+//!   wrap `u64` is an error rather than a small, believable total.
+//!
+//! # Example
+//!
+//! ```
+//! use qyro_manifest::{HashMetadata, ManifestItem, RelativePath, TransferManifest, codec};
+//!
+//! let path = RelativePath::parse("photos/summer/beach.jpg")?;
+//! let item = ManifestItem::file(1, path, 2048, HashMetadata::none())?;
+//! let manifest = TransferManifest::new(7, 1_760_000_000, vec![item])?;
+//!
+//! let bytes = codec::encode(&manifest)?;
+//! assert_eq!(codec::decode(&bytes)?, manifest);
+//!
+//! // Traversal never becomes a path.
+//! assert!(RelativePath::parse("../../etc/passwd").is_err());
+//! # Ok::<(), Box<dyn core::error::Error>>(())
+//! ```
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
+pub mod codec;
+mod error;
+mod limits;
+mod model;
+mod path;
+
+pub use error::{ManifestError, ManifestField, PathError};
+pub use limits::{
+    MANIFEST_MAGIC, MANIFEST_VERSION, MAX_ENCODED_LEN, MAX_HASH_LEN, MAX_ITEMS, MAX_MIME_LEN,
+    MAX_NAME_LEN, MAX_PATH_LEN, MAX_PATH_SEGMENTS, MAX_SEGMENT_LEN, MAX_TOTAL_BYTES,
+};
+pub use model::{
+    Compression, HashAlgorithm, HashMetadata, ItemKind, ManifestItem, TransferManifest,
+};
+pub use path::{RelativePath, SEPARATOR};
