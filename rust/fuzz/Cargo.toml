@@ -1,7 +1,16 @@
-# cargo-fuzz workspace. Excluded from the main workspace because libfuzzer-sys
+# cargo-fuzz workspace. Separate from the main workspace because libfuzzer-sys
 # requires a nightly toolchain, while the project builds and tests on stable
-# 1.88.0. CI runs the corpus smoke test instead; see docs/security/parser-threats.md
-# for how to run a real fuzzing campaign.
+# 1.88.0.
+#
+# The `[workspace]` table below is what makes that true. Without it Cargo
+# refuses to do anything here at all — "current package believes it's in a
+# workspace when it's not" — because the root manifest neither lists this
+# package nor excludes it. That was the state from sprint 2 until sprint 4C.1,
+# so the fuzz targets could not be built, let alone run, and the three that
+# existed had drifted out of date with the API behind a `rustfmt --check` that
+# does not need types to pass.
+[workspace]
+
 [package]
 name = "qyro-fuzz"
 version = "0.0.0"
@@ -16,6 +25,11 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 qyro_protocol = { path = "../crates/qyro_protocol" }
 qyro_manifest = { path = "../crates/qyro_manifest" }
+# Reaches `qyro_crypto::fuzzing`, which exists only under `--cfg fuzzing` — the
+# flag cargo-fuzz sets on the command line. Not a Cargo feature, because a
+# feature is additive and any crate in a dependency graph could switch a
+# deterministic session constructor on for everybody.
+qyro_crypto = { path = "../crates/qyro_crypto" }
 
 [[bin]]
 name = "frame_decoder"
@@ -32,5 +46,23 @@ doc = false
 [[bin]]
 name = "relative_path"
 path = "fuzz_targets/relative_path.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "encrypted_envelope"
+path = "fuzz_targets/encrypted_envelope.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "frame_opener"
+path = "fuzz_targets/frame_opener.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "replay_window"
+path = "fuzz_targets/replay_window.rs"
 test = false
 doc = false

@@ -50,10 +50,18 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+// `fuzzing` is set by cargo-fuzz on the command line for one build, never in
+// Cargo.toml. Declaring it here stops the unexpected-cfg lint from flagging
+// every use of it. See the `fuzzing` module for why it is not a feature.
+#![allow(unexpected_cfgs, reason = "cargo-fuzz sets --cfg fuzzing")]
 
 pub mod aead;
 mod error;
 mod fingerprint;
+/// Deterministic session construction for fuzz targets. Not a feature; see the
+/// module docs for why `--cfg fuzzing` and not `[features]`.
+#[cfg(fuzzing)]
+pub mod fuzzing;
 pub mod handshake;
 mod identity;
 mod signature;

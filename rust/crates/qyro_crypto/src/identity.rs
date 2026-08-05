@@ -62,7 +62,7 @@ impl DeviceIdentity {
     /// dependency graph could switch it on for everybody and no release build
     /// could prove it was off. Production entropy comes from
     /// [`DeviceIdentity::generate`] and nowhere else.
-    #[cfg(test)]
+    #[cfg(any(test, fuzzing))]
     pub(crate) fn from_test_seed(seed: &[u8; SEED_LEN]) -> Self {
         Self::from_seed(seed)
     }

@@ -377,7 +377,7 @@ impl<'identity> InitiatorStart<'identity> {
     /// `DeviceIdentity::from_test_seed` is: a handshake whose entropy a caller
     /// chooses is a handshake with no forward secrecy, and a feature flag would
     /// not keep it out of a release build.
-    #[cfg(test)]
+    #[cfg(any(test, fuzzing))]
     pub(crate) fn send_hello_with_entropy(
         self,
         entropy: [u8; HANDSHAKE_ENTROPY_LEN],
@@ -391,7 +391,7 @@ impl<'identity> InitiatorStart<'identity> {
         self.build_hello(entropy)
     }
 
-    #[cfg(not(test))]
+    #[cfg(not(any(test, fuzzing)))]
     fn send_hello_with_entropy(
         self,
         entropy: [u8; HANDSHAKE_ENTROPY_LEN],
@@ -583,7 +583,7 @@ impl<'identity> ResponderStart<'identity> {
     ///
     /// `pub(crate)` outside tests: production callers use
     /// [`Self::receive_initiator_hello_from_system`], which draws its own.
-    #[cfg(test)]
+    #[cfg(any(test, fuzzing))]
     pub(crate) fn receive_initiator_hello(
         self,
         message: &[u8],
@@ -592,7 +592,7 @@ impl<'identity> ResponderStart<'identity> {
         self.answer_hello(message, entropy)
     }
 
-    #[cfg(not(test))]
+    #[cfg(not(any(test, fuzzing)))]
     fn receive_initiator_hello(
         self,
         message: &[u8],

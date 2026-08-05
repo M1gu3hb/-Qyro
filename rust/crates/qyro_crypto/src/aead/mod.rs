@@ -107,6 +107,14 @@ use zeroize::{Zeroize, Zeroizing};
 pub use error::AeadError;
 pub use replay::REPLAY_WINDOW;
 
+/// The replay window, for the fuzz target that drives its transitions.
+///
+/// `cfg(fuzzing)` and not a feature: see `crate::fuzzing`. The window is
+/// `pub(crate)` and this is the only door out of that, open for one build that
+/// `cargo-fuzz` asks for on the command line.
+#[cfg(fuzzing)]
+pub use replay::ReplayWindow as FuzzReplayWindow;
+
 use replay::ReplayWindow;
 
 /// Bytes in a ChaCha20-Poly1305 key.

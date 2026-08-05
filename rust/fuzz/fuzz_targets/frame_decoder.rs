@@ -5,7 +5,7 @@
 //! bounds, however the input is split.
 
 use libfuzzer_sys::fuzz_target;
-use qyro_protocol::{FrameDecoder, HEADER_LEN, MAX_PAYLOAD_LEN};
+use qyro_protocol::{DecodedFrame, FrameDecoder, HEADER_LEN, MAX_PAYLOAD_LEN};
 
 fuzz_target!(|data: &[u8]| {
     // Use the first byte to choose a chunk size, so splitting is fuzzed too.
@@ -21,12 +21,16 @@ fuzz_target!(|data: &[u8]| {
         }
         loop {
             match decoder.next_frame() {
-                Ok(Some(frame)) => {
+                Ok(Some(DecodedFrame::Message(frame))) => {
                     assert!(frame.payload().len() <= MAX_PAYLOAD_LEN);
-                    assert_eq!(frame.payload().len(), frame.header().payload_len as usize);
-                    assert!(frame.header().header_len as usize >= HEADER_LEN);
-                    assert_eq!(frame.header().trailer_len, 0);
+                    assert_eq!(frame.payload().len(), frame.header().payload_len() as usize);
+                    assert_eq!(frame.header().header_len() as usize, HEADER_LEN);
+                    assert_eq!(frame.header().trailer_len(), 0);
                 }
+                // An unknown type is delimited, so the stream survives it. A
+                // sealed frame keeps its ciphertext; `encrypted_envelope`
+                // covers that shape.
+                Ok(Some(DecodedFrame::Unsupported(_) | DecodedFrame::Encrypted(_))) => {}
                 Ok(None) => break,
                 Err(_) => return,
             }

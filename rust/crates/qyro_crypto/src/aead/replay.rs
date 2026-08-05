@@ -23,8 +23,13 @@ pub const REPLAY_WINDOW: usize = 1024;
 const WORDS: usize = REPLAY_WINDOW / 64;
 
 /// Which sequences have already been accepted in one direction.
+///
+/// `pub` only so that `crate::aead` can re-export it under `--cfg fuzzing`; in
+/// every ordinary build the re-export does not exist and this type is
+/// unreachable from outside the crate. A `pub(crate)` item cannot be
+/// re-exported at all, which is why the visibility sits here rather than there.
 #[derive(Debug)]
-pub(crate) struct ReplayWindow {
+pub struct ReplayWindow {
     /// The largest sequence accepted so far, if any.
     ///
     /// `None` before the first frame: sequence 0 is a legitimate first frame,
@@ -35,7 +40,15 @@ pub(crate) struct ReplayWindow {
 }
 
 impl ReplayWindow {
-    pub(crate) const fn new() -> Self {
+    /// A fresh window.
+    ///
+    /// `pub` under `--cfg fuzzing` only, where `crate::aead` re-exports the type
+    /// so a target can drive `check` and `record` directly.
+    #[cfg_attr(
+        fuzzing,
+        expect(clippy::missing_const_for_fn, reason = "shape is shared")
+    )]
+    pub const fn new() -> Self {
         Self {
             highest_seen: None,
             bitmap: [0; WORDS],
@@ -49,7 +62,7 @@ impl ReplayWindow {
     /// Returns [`AeadError::ReplayDetected`] when the sequence has already been
     /// accepted, or [`AeadError::SequenceTooOld`] when it fell behind the
     /// window and can no longer be told apart from a replay.
-    pub(crate) fn check(&self, sequence: u64) -> Result<(), AeadError> {
+    pub fn check(&self, sequence: u64) -> Result<(), AeadError> {
         let Some(highest) = self.highest_seen else {
             return Ok(());
         };
@@ -103,7 +116,7 @@ impl ReplayWindow {
     /// # Errors
     ///
     /// Returns whatever [`ReplayWindow::check`] would have returned.
-    pub(crate) fn record(&mut self, sequence: u64) -> Result<(), AeadError> {
+    pub fn record(&mut self, sequence: u64) -> Result<(), AeadError> {
         self.check(sequence)?;
 
         match self.highest_seen {
