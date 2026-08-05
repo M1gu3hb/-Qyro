@@ -58,10 +58,10 @@ pub(crate) struct SessionKey([u8; DERIVED_KEY_LEN]);
 impl SessionKey {
     /// Crate-internal raw access.
     ///
-    /// `cfg(test)` because nothing reads these yet: the AEAD that will consume
-    /// them does not exist. Nothing outside this crate, and in particular
+    /// The one reader in production is the AEAD key schedule, which takes a
+    /// traffic secret as an HKDF pseudorandom key and expands it into a frame
+    /// key and a nonce prefix. Nothing outside this crate, and in particular
     /// nothing across the FFI boundary, is ever handed raw key bytes.
-    #[cfg(test)]
     pub(crate) const fn as_bytes(&self) -> &[u8; DERIVED_KEY_LEN] {
         &self.0
     }

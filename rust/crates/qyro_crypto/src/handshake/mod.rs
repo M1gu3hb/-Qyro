@@ -42,6 +42,7 @@ use qyro_protocol::SessionId;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
 use zeroize::{Zeroize, Zeroizing};
 
+use crate::aead::{AeadError, Direction, FrameOpener, FrameSealer};
 use crate::error::IdentityError;
 use crate::identity::{DeviceIdentity, PUBLIC_IDENTITY_WIRE_LEN, PublicIdentity};
 use crate::signature::{IdentitySignature, SIGNATURE_LEN, SignatureDomain};
@@ -92,6 +93,14 @@ const HANDSHAKE_SECRET_LEN: usize = 32;
 
 /// Bytes of entropy one side needs: an ephemeral secret and a nonce.
 const HANDSHAKE_ENTROPY_LEN: usize = HANDSHAKE_SECRET_LEN + NONCE_LEN;
+
+/// The AEAD derives from the same transcript this module computes, so the two
+/// widths are one width. Checked at compile time rather than kept in step by
+/// hand: a mismatch would silently shorten what enters every `info`.
+const _: () = assert!(crate::aead::AUTH_TRANSCRIPT_LEN == TRANSCRIPT_LEN);
+
+/// Likewise for the traffic secrets the AEAD consumes.
+const _: () = assert!(crate::aead::TRAFFIC_SECRET_LEN == schedule::DERIVED_KEY_LEN);
 
 /// Message type codes. Inside the message, therefore inside the transcript.
 const TYPE_INITIATOR_HELLO: u8 = 1;
@@ -531,6 +540,7 @@ impl InitiatorAwaitResponderFinish {
                 session_id: self.derived.session_id,
                 sending: self.derived.initiator_to_responder,
                 receiving: self.derived.responder_to_initiator,
+                auth_transcript: self.auth,
                 peer_identity: self.peer_identity,
             },
         })
@@ -687,6 +697,7 @@ impl ResponderAwaitInitiatorFinish {
                 session_id: derived.session_id,
                 sending: derived.responder_to_initiator,
                 receiving: derived.initiator_to_responder,
+                auth_transcript: auth,
                 peer_identity: self.peer_identity,
             },
         })
@@ -768,25 +779,30 @@ pub enum Role {
 /// What both sides end up holding.
 ///
 /// The traffic secrets stay in this struct and never leave the crate. The AEAD
-/// that will consume them lives here too, so they have no reason to.
+/// that consumes them lives here too, so they have no reason to.
+///
+/// The authenticated transcript is kept alongside them because the AEAD's key
+/// schedule binds every derived key to it. It is not a secret — both peers
+/// compute it from messages that crossed the wire — but it must be the *same*
+/// bytes on both sides, so it travels with the keys rather than being recomputed.
 struct Session {
     session_id: SessionId,
     sending: SessionKey,
     receiving: SessionKey,
+    auth_transcript: [u8; TRANSCRIPT_LEN],
     peer_identity: PublicIdentity,
 }
 
-/// The derived secrets, handed to the AEAD when one exists.
+/// The derived material, on its way to the AEAD.
 ///
-/// Crate-private and deliberately opaque. It is the seam the next milestone
-/// consumes to build a frame sealer and opener; declaring it now keeps the
-/// established states from growing a public key accessor to serve that purpose
-/// later.
+/// Crate-private and deliberately opaque: it exists so
+/// `into_frame_crypto` has something to take the session apart into, without any
+/// established state ever growing a public key accessor.
 pub(crate) struct PendingSessionSecrets {
-    #[allow(dead_code, reason = "consumed by the AEAD milestone, not by this one")]
     pub(crate) sending: SessionKey,
-    #[allow(dead_code, reason = "consumed by the AEAD milestone, not by this one")]
     pub(crate) receiving: SessionKey,
+    pub(crate) session_id: SessionId,
+    pub(crate) auth_transcript: [u8; TRANSCRIPT_LEN],
 }
 
 /// A completed handshake, from the initiator's side.
@@ -800,7 +816,7 @@ pub struct EstablishedResponder {
 }
 
 macro_rules! established_accessors {
-    ($type:ty, $name:literal, $role:expr) => {
+    ($type:ty, $name:literal, $role:expr, $sending:expr, $receiving:expr) => {
         impl $type {
             const ROLE: Role = $role;
 
@@ -839,13 +855,37 @@ macro_rules! established_accessors {
             /// Hands the traffic secrets to the AEAD. Crate-internal.
             ///
             /// The one way out of this type, and it stays inside the crate.
-            /// There is no AEAD yet, so nothing calls it.
-            #[allow(dead_code, reason = "the AEAD milestone consumes this")]
             pub(crate) fn into_secrets(self) -> PendingSessionSecrets {
                 PendingSessionSecrets {
                     sending: self.session.sending,
                     receiving: self.session.receiving,
+                    session_id: self.session.session_id,
+                    auth_transcript: self.session.auth_transcript,
                 }
+            }
+
+            /// Consumes the session and derives the frame AEAD for it.
+            ///
+            /// Takes `self` by value on purpose. Two sealers for one direction
+            /// would each start at sequence zero and reissue every nonce, and a
+            /// repeated nonce on a stream cipher reveals the XOR of the two
+            /// plaintexts — so the established state stops existing at the
+            /// moment the sealer starts.
+            ///
+            /// # Errors
+            ///
+            /// Returns [`AeadError::KeyDerivationFailed`] if HKDF refuses an
+            /// output length, which cannot happen at the lengths ADR-0022 fixes.
+            pub fn into_frame_crypto(self) -> Result<(FrameSealer, FrameOpener), AeadError> {
+                let secrets = self.into_secrets();
+                crate::aead::frame_crypto(
+                    secrets.sending.as_bytes(),
+                    secrets.receiving.as_bytes(),
+                    &$sending,
+                    &$receiving,
+                    &secrets.auth_transcript,
+                    secrets.session_id,
+                )
             }
 
             /// Raw key inspection for the crate's own tests.
@@ -880,10 +920,14 @@ macro_rules! established_accessors {
 established_accessors!(
     EstablishedInitiator,
     "EstablishedInitiator",
-    Role::Initiator
+    Role::Initiator,
+    Direction::InitiatorToResponder,
+    Direction::ResponderToInitiator
 );
 established_accessors!(
     EstablishedResponder,
     "EstablishedResponder",
-    Role::Responder
+    Role::Responder,
+    Direction::ResponderToInitiator,
+    Direction::InitiatorToResponder
 );

@@ -157,12 +157,31 @@ su documentación lo dice desde que se llamaba `SealedFrame` y no debía.
 ## Errores
 
 `WrongSession`, `ReplayDetected`, `SequenceTooOld`, `AuthenticationFailed`,
-`InvalidTagLength`, `SequenceExhausted`, `InvalidNonceState`,
-`NotEncrypted`, `PayloadTooLarge`, `KeyDerivationFailed`.
+`InvalidTagLength`, `SequenceExhausted`, `KeyDerivationFailed`.
 
 `AuthenticationFailed` es una sola variante a propósito: distinguir «tag
 incorrecto» de «cabecera alterada» le diría a un atacante qué mitad seguir
 cambiando.
+
+### Enmienda: tres variantes que no existen
+
+La primera versión de esta lista incluía también `InvalidNonceState`,
+`NotEncrypted` y `PayloadTooLarge`. Al implementarla resultó que **nada puede
+provocarlas**, así que no están:
+
+- `NotEncrypted`: un `EncryptedEnvelope` no puede existir sin el flag
+  `ENCRYPTED`. Sus dos constructores lo garantizan —uno lo pone, el otro lo
+  exige—, así que el paso 3 del orden de apertura lo cumple el tipo, no una
+  comprobación en tiempo de ejecución.
+- `PayloadTooLarge`: `seal` recibe un `&Frame`, y un `Frame` no puede llevar más
+  de `MAX_PAYLOAD_LEN`. Sellar uno no puede desbordar un frame.
+- `InvalidNonceState`: era `SequenceExhausted` con otro nombre. El contador es un
+  `Option<u64>`, así que «agotado» es un estado del tipo y no una condición que
+  alguien tenga que acordarse de comprobar.
+
+Un error que nadie puede provocar documenta una comprobación que no está. Es la
+misma corrección que ADR-0018 registró para `TrailingBytes`, y se hizo por el
+mismo método: borrar la comprobación y ver si algún test falla.
 
 ## Ciclo de vida
 
