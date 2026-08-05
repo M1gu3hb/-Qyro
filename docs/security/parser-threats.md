@@ -54,10 +54,25 @@ Existen tres targets `cargo-fuzz` en `rust/fuzz/fuzz_targets`:
 el proyecto compila en stable 1.88.0.
 
 **No se ha ejecutado una campaña de fuzzing.** Lo que CI ejecuta es un *corpus
-smoke*: los 65 archivos de `rust/fuzz/corpus` se reproducen contra las mismas
+smoke*: los 94 archivos de `rust/fuzz/corpus` se reproducen contra las mismas
 aserciones que hacen los targets, en el caso del framing a cuatro tamaños de
 fragmento distintos. Eso es una defensa contra regresiones sobre entradas ya
 conocidas; no dice nada sobre entradas que nadie ha imaginado todavía.
+
+Desde el sprint 4C el corpus de `frame_decoder` incluye trece semillas selladas:
+cuatro frames genuinos tomados de `aead-v1.json` y nueve mutaciones —cabecera
+truncada, tag ausente, tag truncado, tag alterado, secuencia alterada, sesión
+ajena, `ENCRYPTED` sin trailer declarado, trailer sobredimensionado y dos frames
+concatenados—. Se reproducen dos veces: el smoke de `qyro_protocol` comprueba que
+ninguna rompe el framing, y el de `qyro_crypto` (`src/aead/corpus.rs`, dentro del
+crate porque necesita los constructores deterministas) comprueba la capa de
+arriba: que ninguna mutación pasa el AEAD, que las genuinas sí abren, y que nada
+sale de `open` que un sealer no haya sellado.
+
+No hay un target `cargo-fuzz` para el opener. Uno tendría que fabricar una sesión
+antes de recibir el primer byte, y con una sesión aleatoria casi toda entrada
+moriría en `WrongSession` antes de llegar al AEAD: el corpus smoke con una sesión
+fija cubre más camino real que ese target cubriría.
 
 Para ejecutar una campaña real:
 

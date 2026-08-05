@@ -38,6 +38,8 @@ mod error;
 mod replay;
 
 #[cfg(test)]
+mod corpus;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod vectors;

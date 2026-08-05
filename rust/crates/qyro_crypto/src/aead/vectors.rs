@@ -32,7 +32,8 @@ use crate::identity::DeviceIdentity;
 use crate::schema::validate;
 
 /// The committed vectors.
-const COMMITTED: &str = include_str!("../../../../../docs/security/test-vectors/aead-v1.json");
+pub(super) const COMMITTED: &str =
+    include_str!("../../../../../docs/security/test-vectors/aead-v1.json");
 
 /// The schema the committed vectors must satisfy.
 const SCHEMA: &str = include_str!("../../../../../docs/security/test-vectors/aead-v1.schema.json");
@@ -58,11 +59,11 @@ fn entropy(tag: u8) -> [u8; 64] {
     out
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(super) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn unhex(text: &str) -> Vec<u8> {
+pub(super) fn unhex(text: &str) -> Vec<u8> {
     assert!(text.len().is_multiple_of(2), "hex must be byte-aligned");
     assert!(
         text.bytes()
@@ -161,19 +162,19 @@ impl Plan {
 }
 
 /// Everything one run produces.
-struct Recorded {
+pub(super) struct Recorded {
     session_id: SessionId,
     auth_transcript: [u8; 32],
     initiator_to_responder_secret: [u8; 32],
     responder_to_initiator_secret: [u8; 32],
     initiator_sealer: FrameSealer,
-    initiator_opener: FrameOpener,
+    pub(super) initiator_opener: FrameOpener,
     responder_sealer: FrameSealer,
-    responder_opener: FrameOpener,
+    pub(super) responder_opener: FrameOpener,
 }
 
 /// Runs the handshake the ordinary way and derives the frame crypto from it.
-fn run() -> Recorded {
+pub(super) fn run() -> Recorded {
     let initiator = DeviceIdentity::from_test_seed(&INITIATOR_SEED);
     let responder = DeviceIdentity::from_test_seed(&RESPONDER_SEED);
 
@@ -456,7 +457,7 @@ fn the_schema_rejects_what_it_says_it_rejects() {
 // -------------------------------------------------- independent verification
 
 /// Reads a nested string field out of a document.
-fn field(document: &Value, path: &[&str]) -> String {
+pub(super) fn field(document: &Value, path: &[&str]) -> String {
     let mut node = document;
     for key in path {
         node = &node[*key];
