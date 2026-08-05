@@ -34,14 +34,68 @@
 //! sequence could repeat a nonce, and a repeated nonce on a stream cipher
 //! reveals the XOR of the two plaintexts.
 
+// Nothing on the sealing or opening path may end the process. A peer controls
+// the bytes that reach `open`, and a caller controls the frame that reaches
+// `seal`; a panic in either is a remote or local denial of service, and in a
+// module that holds keys it is also an abort in the middle of code that was
+// about to zeroize something.
+//
+// The compiler enforces this rather than a regular expression, because a
+// regular expression cannot tell a `panic!` in a doc comment from one in a
+// match arm. The `cfg(test)` children below opt out: a test that cannot
+// `expect` is a test that reports failures worse.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+
 mod error;
 mod replay;
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod corpus;
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
+mod guards;
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod tests;
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod vectors;
 
 use chacha20poly1305::{AeadInOut, ChaCha20Poly1305, KeyInit};
