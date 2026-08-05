@@ -207,7 +207,18 @@ fn check_prefix(
     expected_type: u8,
     expected_len: usize,
 ) -> Result<(), HandshakeError> {
-    if message.len() != expected_len {
+    // Longer and shorter are different failures and are reported differently.
+    // `TrailingBytes` existed in the error enum from the start and nothing ever
+    // constructed it, because a single length comparison collapses both cases
+    // into one — so a caller could match a variant that never fired. Splitting
+    // the comparison gives it the meaning the name always implied and tells a
+    // peer which way it got the framing wrong.
+    if message.len() > expected_len {
+        return Err(HandshakeError::TrailingBytes {
+            extra: message.len() - expected_len,
+        });
+    }
+    if message.len() < expected_len {
         return Err(HandshakeError::InvalidMessageLength {
             found: message.len(),
             expected: expected_len,

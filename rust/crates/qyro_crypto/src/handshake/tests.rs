@@ -233,7 +233,7 @@ fn a_message_of_the_wrong_length_is_refused() {
         .send_hello_with_entropy(entropy(1))
         .expect("opens");
 
-    for length in [0usize, 1, INITIATOR_HELLO_LEN - 1, INITIATOR_HELLO_LEN + 1] {
+    for length in [0usize, 1, INITIATOR_HELLO_LEN - 1] {
         let mut truncated = hello.to_vec();
         truncated.resize(length, 0);
         assert_eq!(
@@ -245,6 +245,21 @@ fn a_message_of_the_wrong_length_is_refused() {
                 expected: INITIATOR_HELLO_LEN
             }),
             "{length} bytes is not an InitiatorHello"
+        );
+    }
+
+    // Too long is a different failure from too short, and says so. A single
+    // length comparison reported both as InvalidMessageLength and left
+    // TrailingBytes as a variant nothing could ever produce.
+    for extra in [1usize, 7, 64] {
+        let mut padded = hello.to_vec();
+        padded.resize(INITIATOR_HELLO_LEN + extra, 0);
+        assert_eq!(
+            ResponderStart::new(&bob)
+                .receive_initiator_hello(&padded, entropy(2))
+                .err(),
+            Some(HandshakeError::TrailingBytes { extra }),
+            "{extra} bytes past an InitiatorHello must be named as trailing"
         );
     }
 }
