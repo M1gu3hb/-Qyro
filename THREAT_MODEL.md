@@ -20,6 +20,11 @@ Contenido, nombres/rutas, claves, identidad local, confianza, historial, tempora
 |---|---|
 | MITM/replay | TLS 1.3, huella/SAS, sesión, nonce, expiración |
 | Manifest/path traversal | rutas relativas normalizadas, límites, rechazo de symlink/junction |
+| Nombre visible engañoso | el nombre se deriva de la ruta, no viaja aparte (ADR-0019) |
+| Colisión al materializar | `PortableCollisionKey` rechaza pares que el FS plegaría |
+| Nombre no portable | caracteres ilegales en Windows rechazados en todas las plataformas |
+| Frame que miente sobre su protección | `ENCRYPTED` solo lo activa el sellado, con tag |
+| Desincronización por mensaje nuevo | tipo desconocido se consume delimitado, no envenena |
 | Corrupción | AEAD por chunk y SHA-256 final |
 | Memoria/disco agotados | límites previos, streaming, cuota y preflight |
 | Decompression bomb | ratio/tamaño máximo y streaming |

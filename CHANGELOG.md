@@ -4,6 +4,23 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed (sprint 3)
+
+- El decoder ya no envenena el stream ante un tipo de mensaje desconocido: lo
+  consume delimitado y lo reporta, así que un peer con una versión menor más
+  nueva recibe respuesta en vez de perder la conexión (ADR-0018).
+- QYRO/1.0 rechaza extensiones de cabecera que no puede preservar, en lugar de
+  saltarlas y romper la reserialización byte-exacta.
+- `ENCRYPTED` y `COMPRESSED` salen de la API pública. Un frame no puede declarar
+  protección que no tiene; `SealedFrame` no existe sin tag.
+- El manifest ya no lleva `display_name`: `factura.pdf.exe` no puede presentarse
+  como `factura.pdf` (ADR-0019, `MANIFEST_VERSION` 2).
+- Todo archivo exige digest final, incluidos los de cero bytes.
+- Se rechazan caracteres ilegales en Windows y colisiones por mayúsculas o por
+  composición Unicode.
+- `codec::encoded_len` valida el tamaño antes de reservar.
+- Corregida una aserción de travesía por subcadena heredada del sprint 2.
+
 ### Added (sprint 2)
 
 - `qyro_protocol`: framing binario QYRO/1 con cabecera fija de 48 bytes

@@ -31,6 +31,14 @@ que vigilar en esa ruta.
 | Interpretación divergente | Flags reservados y bytes de presencia no canónicos se rechazan | `unknown_flag_bits_are_rejected_rather_than_ignored`, `a_non_canonical_option_tag_is_rejected` |
 | Contrabando de datos | Bytes sobrantes son error | `trailing_bytes_are_rejected` |
 | Pánico por entrada arbitraria | Property tests y corpus | `arbitrary_bytes_never_panic*` |
+| Nombre visible engañoso | el nombre se deriva de la ruta; no viaja aparte | `an_executable_cannot_be_presented_as_a_document` |
+| Archivo sin integridad final | digest obligatorio en el constructor | `every_file_needs_a_final_digest_including_an_empty_one` |
+| Nombre irrealizable en Windows | caracteres ilegales rechazados en todas las plataformas | `windows_illegal_characters_are_rejected_on_every_platform` |
+| Sobrescritura por plegado del FS | `PortableCollisionKey` | `case_only_differences_collide_portably`, `composed_and_decomposed_unicode_collide` |
+| Reserva antes de validar el tamaño | `encoded_len` con aritmética checked | `encoded_len_matches_the_bytes_actually_produced` |
+| Desincronización por mensaje nuevo | evento delimitado en vez de veneno | `an_unknown_message_type_does_not_desynchronise_the_stream` |
+| Frame que miente sobre su protección | `ENCRYPTED` solo por sellado, con tag | `a_plain_frame_cannot_claim_to_be_encrypted` |
+| Extensión de cabecera no autenticable | rechazo explícito en 1.0 | `qyro1_rejects_a_header_extension_it_cannot_preserve` |
 
 ## Estado del fuzzing
 
@@ -63,6 +71,20 @@ Para ejecutar una campaña real:
 Cualquier hallazgo debe añadirse al corpus antes de corregirse, para que el smoke
 lo cubra a partir de entonces.
 
+## Límite conocido del plegado de colisiones
+
+`PortableCollisionKey` pliega mayúsculas ASCII y marcas combinantes en el rango
+Latin-1. Cubre las colisiones alcanzables con los caracteres que un sistema de
+archivos acepta en la práctica, pero **no** es normalización Unicode completa:
+dos rutas que difieran solo por una marca combinante fuera de ese rango se
+consideran distintas y ambas se aceptarían.
+
+Se decidió no añadir `unicode-normalization` todavía: introduce tablas grandes y
+una dependencia en la ruta que procesa datos hostiles, y el hueco restante exige
+que el emisor construya deliberadamente nombres con marcas exóticas. Debe
+revisarse antes de que exista escritura real en disco, porque a partir de ahí la
+colisión deja de ser teórica.
+
 ## Riesgo residual
 
 - Sin campaña de fuzzing, la cobertura sobre entradas imprevistas es desconocida.
@@ -72,3 +94,6 @@ lo cubra a partir de entonces.
   pero la firma llega en el hito de identidad y cifrado.
 - Nada de esto protege contra un peer legítimo que envíe contenido malicioso;
   eso corresponde a la confirmación del receptor y a la integridad final.
+- **No existe criptografía todavía.** `SealedFrame` define la forma de un frame
+  cifrado y expone la cabecera completa como datos asociados, pero ningún AEAD
+  la consume: no hay identidad, handshake, claves ni tags reales.

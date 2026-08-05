@@ -104,3 +104,52 @@
 - Estado: cerrado por obsolescencia; el run atascado sigue en la otra rama
 - Dueño: CI/Android
 - Fecha: 2026-08-05
+
+## QYR-0009 — ADR-0016 prometía compatibilidad que el código no tenía
+
+- Plataforma: protocolo
+- Severidad: P0
+- Esperado: un tipo de mensaje desconocido es recuperable
+- Actual: `FrameDecoder` envenenaba el stream ante cualquier error de cabecera,
+  así que un peer con una versión menor más nueva mataba la conexión
+- Impacto adicional: `header_len > 48` se aceptaba y los bytes de extensión se
+  descartaban, rompiendo la reserialización byte-exacta; `ENCRYPTED` y
+  `COMPRESSED` eran ajustables públicamente
+- Estado: resuelto
+- Resolución: ADR-0018 y commits 30fe57e (contratos) y cc38554 (implementación)
+- Fecha: 2026-08-05
+
+## QYR-0010 — El manifest permitía un nombre visible engañoso
+
+- Plataforma: manifest
+- Severidad: P0
+- Esperado: el nombre mostrado corresponde al archivo que se escribirá
+- Actual: `display_name` viajaba aparte de la ruta, así que `factura.pdf.exe`
+  podía presentarse como `factura.pdf` con un manifest técnicamente válido
+- Estado: resuelto
+- Resolución: ADR-0019, campo eliminado del wire, `MANIFEST_VERSION` a 2
+- Fecha: 2026-08-05
+
+## QYR-0011 — Archivos sin digest y colisiones portables aceptadas
+
+- Plataforma: manifest
+- Severidad: P0
+- Esperado: todo archivo tiene digest final; dos items no pueden ser el mismo
+  archivo en el receptor
+- Actual: `HashMetadata::none()` era válido para archivos, y `Foto.jpg` junto a
+  `foto.jpg` se aceptaban, sobrescribiéndose en Windows o macOS
+- Estado: resuelto
+- Resolución: digest obligatorio en el constructor y `PortableCollisionKey`
+- Fecha: 2026-08-05
+
+## QYR-0012 — Aserción de travesía incorrecta desde el sprint 2
+
+- Plataforma: pruebas
+- Severidad: P2
+- Esperado: la travesía se comprueba por segmento
+- Actual: property tests y targets de fuzzing comprobaban `".."` como subcadena,
+  lo que rechaza el nombre legítimo `notes..txt` y no dice nada útil sobre
+  travesía real
+- Estado: resuelto
+- Resolución: aserciones por segmento en property tests y targets
+- Fecha: 2026-08-05

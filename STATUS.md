@@ -3,10 +3,10 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T01:45:00Z
-- Branch: claude/qyro-protocol-manifest
+- Updated UTC: 2026-08-05T02:40:00Z
+- Branch: claude/qyro-crypto-identity-hardening
 - Verified commit: f78522a5eb27ac7dd2819f943e46ffbf4c87f6f3
-- Milestone: Hito A cerrado; Hito C (protocolo y manifest) implementado; Hito 1 visual parcial
+- Milestone: protocolo y manifest endurecidos; criptografía NO iniciada; Hito 1 visual parcial
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
 con los dos commits del propietario en `main` (`e0041de`). Ninguna rama fue
@@ -33,16 +33,29 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - Property tests y corpus smoke de fuzzing: IMPLEMENTED
 - cargo audit obligatorio en CI: IMPLEMENTED
 - Wordmark, tagline y firma configurable mediante scramble: IMPLEMENTED
+- Política de errores estructurales/semánticos del decoder (ADR-0018): IMPLEMENTED
+- Cabecera QYRO/1.0 sin extensiones no preservables, campos privados: IMPLEMENTED
+- Flags protegidos fuera de la API pública y `SealedFrame` con tag obligatorio: IMPLEMENTED
+- Nombre visible derivado de la ruta (ADR-0019, manifest v2): IMPLEMENTED
+- Digest final obligatorio para todo archivo: IMPLEMENTED
+- Rechazo de caracteres no portables y de colisiones case/NFC-NFD: IMPLEMENTED
+- Preflight de longitud serializada del manifest: IMPLEMENTED
 
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO (run 30963011815)
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO (run 30963016390)
 
 ## Not implemented
 
+- **qyro_crypto**: NOT_IMPLEMENTED. Ni suite, ni identidad, ni handshake, ni
+  cifrado de frames, ni vectores. `SealedFrame` define la forma y expone los
+  datos asociados, pero **no existe ninguna criptografía** en el repositorio.
+- **qyro_identity y almacenamiento seguro**: NOT_IMPLEMENTED en las tres
+  plataformas. No hay Android Keystore, ni iOS Keychain, ni DPAPI/CNG.
 - Golden tests de arranque: NOT_IMPLEMENTED
 - Benchmark de arranque documentado: NOT_IMPLEMENTED
 - Retained development artifacts and checksums: NOT_IMPLEMENTED
 - Campaña real de fuzzing (solo hay corpus smoke): NOT_IMPLEMENTED
+- Workflow `fuzz.yml` programado: NOT_IMPLEMENTED
 - Transporte, sockets y TLS: NOT_IMPLEMENTED
 - File transfer: NOT_IMPLEMENTED
 - File selection and manifest: NOT_IMPLEMENTED
@@ -84,8 +97,9 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **87 tests** (29 contratos de wire, 40 de
-  manifest, 9 property, 3 corpus smoke, 4 previos, 2 doctests)
+- `cargo test --workspace`: PASS, **112 tests** (29 contratos de wire, 11 de
+  compatibilidad futura, 54 de manifest, 9 property, 3 corpus smoke, 4 previos,
+  2 doctests)
 - `cargo audit`: PASS, 0 vulnerabilidades sobre 4 crates; el workspace no tiene
   dependencias externas
 - `flutter pub get --enforce-lockfile`: PASS
@@ -93,7 +107,7 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `dart format --output=none --set-exit-if-changed .`: PASS
 - `flutter analyze`: PASS, «No issues found!»
 - `flutter test`: PASS, **58 tests**, incluye lectura real de `QYRO/1` desde
-  `libqyro_ffi.so` por FFI
+  `libqyro_ffi.so` por FFI (sin cambios en este sprint)
 - 5 contratos Bash y 6 PowerShell: PASS
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
@@ -134,10 +148,16 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 ## Blockers
 
-- Golden tests de arranque y benchmark documentado siguen ausentes. Este sprint
-  los pedía y no se entregaron; ver «Next task».
+- **La criptografía del sprint 3 no se entregó.** No hay identidad, handshake,
+  cifrado de sesión ni almacenamiento seguro de claves. Es la mayor parte del
+  sprint y queda íntegra como trabajo pendiente.
+- Golden tests de arranque y benchmark documentado siguen ausentes por segundo
+  sprint consecutivo.
 - No se retienen artefactos de desarrollo con checksums.
 - No se ha ejecutado una campaña de fuzzing: solo el corpus smoke.
+- El plegado de colisiones cubre ASCII y marcas combinantes sobre Latin-1; dos
+  rutas que difieran solo por una marca fuera de ese rango se consideran
+  distintas. Registrado en `docs/security/parser-threats.md`.
 - Ninguna de las tres plataformas se ha probado en hardware físico, solo en
   emulador, simulador y host.
 - No hay SBOM ni `cargo-deny`.
@@ -148,14 +168,18 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 ## Next task
 
-Implementar los golden tests de la secuencia de arranque a 0/20/50/80/100 % con
-seeds deterministas, dimensiones fijas y assets locales, más el benchmark
-documentado del arranque. Aceptación: `flutter test` en verde con los archivos
-golden versionados, y `docs/benchmarks/boot-baseline.md` con máquina, SO, versión
-de Flutter, modo, resolución y número de muestras declarados.
+Crear el crate `qyro_crypto` con la suite decidida en una ADR previa
+(Ed25519 para identidad, X25519 efímero, HKDF-SHA256, ChaCha20-Poly1305,
+zeroize), evaluando y registrando cada dependencia antes de añadirla.
 
-Es la deuda que este sprint dejó abierta y debe cerrarse antes de continuar con
-identidad y cifrado.
+Aceptación de la primera unidad: identidad de dispositivo con fingerprint
+estable, firma y verificación con vectores conocidos, y `cargo audit` en verde
+con las nuevas dependencias documentadas en `docs/LICENSE_AUDIT.md` y
+`THIRD_PARTY_NOTICES.md`. El handshake, el sellado de frames y el almacenamiento
+seguro vienen después, en ese orden.
+
+`SealedFrame` ya define la forma que ese sellado debe producir y expone la
+cabecera completa como datos asociados.
 
 ## Provisional values
 

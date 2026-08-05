@@ -10,6 +10,11 @@ Estado: diseño inicial; no hay transferencia real.
 - Claves privadas en Keystore, Keychain o DPAPI/CNG.
 - Metadata, manifest, nombres y rutas cifrados.
 - Longitudes y conteos se validan antes de reservar memoria.
+- Un frame no puede declarar `ENCRYPTED` sin llevar tag: solo el sellado activa
+  ese flag, y produce el tag en la misma operación.
+- El nombre visible se deriva de la ruta; el peer no envía uno aparte.
+- Todo archivo lleva digest final, incluidos los de cero bytes.
+- Se rechazan rutas que un sistema de archivos real plegaría en una sola.
 - Temporales .qyro-part y rename solo tras autenticidad, tamaño, flush e integridad.
 - Sin autoaceptación de peers desconocidos.
 - Logs locales, rotativos y redactados; sin contenido, claves o rutas completas.

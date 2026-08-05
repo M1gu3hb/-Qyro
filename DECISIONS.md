@@ -16,6 +16,8 @@
 - ADR-0015: reconciliación de ramas divergentes.
 - ADR-0016: framing binario de QYRO/1.
 - ADR-0017: codificación canónica del manifest.
+- ADR-0018: errores estructurales frente a eventos semánticos.
+- ADR-0019: nombre visible derivado de la ruta.
 
 No existe ADR-0011.
 

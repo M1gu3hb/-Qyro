@@ -12,7 +12,7 @@ Codificación binaria propia, canónica y acotada. Todos los enteros son
 | Offset | Bytes | Campo | Tipo |
 |---|---|---|---|
 | 0 | 4 | `magic` = `QYRM` | `[u8;4]` |
-| 4 | 2 | `version` = 1 | `u16` |
+| 4 | 2 | `version` = 2 | `u16` |
 | 6 | 8 | `transfer_id` | `u64` |
 | 14 | 8 | `created_unix_seconds` | `i64` |
 | 22 | 8 | `total_bytes` | `u64` |
@@ -27,13 +27,21 @@ En orden fijo, sin claves ni etiquetas:
 1. `item_id` (`u32`)
 2. `kind` (`u8`): 1 = File, 2 = Directory
 3. `path`: `u32` de longitud + bytes UTF-8
-4. `display_name`: `u32` de longitud + bytes UTF-8
-5. `size` (`u64`)
-6. `mime_type`: byte de presencia (0/1); si 1, `u32` + bytes
-7. `modified_unix_seconds`: byte de presencia (0/1); si 1, `i64`
-8. `hash_algorithm` (`u8`): 0 = None, 1 = SHA-256, 2 = BLAKE3
-9. `digest`: exactamente los bytes que exige el algoritmo (0 o 32)
-10. `compression` (`u8`): 0 = None
+4. `size` (`u64`)
+5. `mime_type`: byte de presencia (0/1); si 1, `u32` + bytes
+6. `modified_unix_seconds`: byte de presencia (0/1); si 1, `i64`
+7. `hash_algorithm` (`u8`): 0 = None, 1 = SHA-256, 2 = BLAKE3
+8. `digest`: exactamente los bytes que exige el algoritmo (0 o 32)
+9. `compression` (`u8`): 0 = None
+
+El nombre visible **no viaja**. Se deriva de la ruta (ADR-0019), así que no puede
+discrepar de dónde caerán los bytes: `factura.pdf.exe` no puede presentarse como
+`factura.pdf`.
+
+Invariantes por tipo:
+
+- **File**: digest obligatorio, incluso para 0 bytes. `MissingFileHash` si falta.
+- **Directory**: `size = 0`, algoritmo `None`, digest vacío.
 
 ## Reglas de canonicidad
 
@@ -73,6 +81,22 @@ Se rechaza:
 | Longitud excesiva | >1024 total, >255 por segmento | |
 | Anidamiento excesivo | >64 segmentos | |
 | UTF-8 inválido | | |
+| Carácter ilegal en Windows | `a<b`, `a:b`, `a?b` | `< > : " \| ? *` no son válidos en NTFS |
+| DEL | `a\u{7F}b` | carácter de control |
+
+## Colisiones portables
+
+Dos rutas distintas en Linux pueden ser el mismo archivo en Windows o macOS.
+`PortableCollisionKey` las detecta y el manifest **rechaza** el par en lugar de
+aceptar ambos y sobrescribir uno en silencio tras aceptar la transferencia.
+
+Se pliegan: mayúsculas/minúsculas ASCII y marcas combinantes sobre Latin-1, de
+modo que `Foto.jpg`/`foto.jpg`, `A/B.txt`/`a/b.TXT` y las grafías NFC/NFD de
+`mañana.txt` colisionan. La escritura original nunca se altera.
+
+Límite conocido: dos rutas que difieran solo por una marca combinante fuera del
+rango Latin-1 se consideran distintas. Se documenta en
+`docs/security/parser-threats.md` en lugar de ocultarse.
 
 Se acepta Unicode, emoji, espacios internos y nombres que solo *parecen*
 reservados (`CONsole.txt`, `COM10.txt`).
@@ -90,6 +114,10 @@ reservados (`CONsole.txt`, `COM10.txt`).
 | `MAX_MIME_LEN` | 128 |
 | `MAX_HASH_LEN` | 64 |
 | `MAX_ENCODED_LEN` | 8 MiB |
+
+`codec::encoded_len` calcula el tamaño exacto con aritmética `checked` **antes**
+de reservar nada, así que el límite se aplica por adelantado y no a mitad de un
+buffer que ya lo superó. Una prueba fija que coincide con `encode().len()`.
 
 El conteo de items se valida contra `MAX_ITEMS` antes de reservar el vector, y
 después contra los bytes que quedan: un conteo que los bytes restantes no podrían

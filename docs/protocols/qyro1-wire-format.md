@@ -20,8 +20,8 @@ Todos los enteros son **big-endian**. Ningún campo del wire usa `usize`.
 | 5 | 1 | `version_minor` | `u8` | 0. Mayor se acepta |
 | 6 | 1 | `message_type` | `u8` | ver tabla; 0 reservado |
 | 7 | 1 | `flags` | `u8` | bits 4–7 deben ser 0 |
-| 8 | 2 | `header_len` | `u16` | ≥48, ≤1024 |
-| 10 | 1 | `trailer_len` | `u8` | debe ser 0 en 1.0 |
+| 8 | 2 | `header_len` | `u16` | **debe ser exactamente 48** |
+| 10 | 1 | `trailer_len` | `u8` | 0 sin `ENCRYPTED`; el tamaño exacto del tag con él |
 | 11 | 1 | `reserved` | `u8` | debe ser 0 |
 | 12 | 4 | `payload_len` | `u32` | ≤ 1 MiB |
 | 16 | 8 | `session_id` | `u64` | opaco |
@@ -60,6 +60,14 @@ mensaje legítimo.
 
 Los bits 4–7 están reservados y deben ser 0. Un flag desconocido se **rechaza**,
 no se ignora: puede cambiar cómo debe leerse el payload.
+
+Los flags se dividen en dos grupos (ADR-0018):
+
+- **De transporte** (bits 0–1): ajustables desde la API pública.
+- **Protegidos** (bits 2–3): no ajustables. `COMPRESSED` se rechaza con
+  `UnsupportedFlag` hasta que exista compresión. `ENCRYPTED` solo lo activa el
+  sellado, que produce el tag en la misma operación; declararlo sin trailer da
+  `EncryptedWithoutTrailer`.
 
 ## Límites
 
@@ -102,11 +110,36 @@ Tras un error de framing el decoder queda **envenenado**: el stream perdió la
 sincronización y no hay forma de distinguir cabecera de payload, así que devuelve
 el mismo error tipado hasta `reset()` en lugar de adivinar.
 
+## Errores estructurales frente a eventos semánticos
+
+ADR-0018 separa dos categorías, y el decoder las trata distinto.
+
+**Estructurales** — envenenan el stream, solo `reset()` explícito recupera:
+`InvalidMagic`, `UnsupportedMajorVersion`, `InvalidHeaderLength`,
+`UnsupportedHeaderExtension`, `PayloadTooLarge`, `FrameTooLarge`,
+`InvalidFlags`, `UnsupportedFlag`, `EncryptedWithoutTrailer`,
+`AuthenticationTrailerInvalid`, `BufferLimitExceeded`.
+
+**Semánticos delimitados** — mantienen la sincronización: un `message_type`
+desconocido consume su frame completo y se devuelve como
+`DecodedFrame::Unsupported`, con el valor del tipo, la longitud del payload y el
+tamaño total. **No expone el payload**: bytes cuyo significado se desconoce no se
+convierten en algo procesable.
+
 ## Compatibilidad futura
 
-- Una versión menor puede añadir campos al final de la cabecera (`header_len`
-  crece; los bytes extra se saltan sin interpretarse) o añadir tipos de mensaje.
-- Un tipo desconocido produce `UnknownMessageType(valor)`. Como las longitudes ya
-  están validadas, el receptor conoce el tamaño exacto del frame y puede
-  descartarlo o responder `Error`.
-- El trailer de autenticación se habilitará con un incremento de versión menor.
+- Una versión menor puede añadir tipos de mensaje. **No** puede extender la
+  cabecera: QYRO/1.0 rechaza `header_len != 48` con
+  `UnsupportedHeaderExtension`, porque saltar bytes que no conserva rompería la
+  reserialización byte-exacta y dejaría al AEAD sin poder autenticarlos.
+- Las extensiones llegarán en una versión que las preserve, las serialice y las
+  incluya en los datos asociados.
+- El trailer de autenticación se habilita con `SealedFrame`, que no puede
+  construirse sin aportar un tag.
+
+## Reserialización byte-exacta
+
+Para todo frame aceptado, `decode → encode` produce exactamente los mismos
+bytes. Es precondición de usar la cabecera completa como datos asociados del
+AEAD: si un byte de cabecera no se conservara, el tag se calcularía sobre algo
+distinto de lo que viajó.

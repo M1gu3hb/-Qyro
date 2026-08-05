@@ -6,7 +6,8 @@ Estado: framing binario implementado y probado; transporte, cifrado y modo
 El encoder y el decoder incremental viven en `rust/crates/qyro_protocol` y el
 manifest en `rust/crates/qyro_manifest`. La especificación completa está en
 `docs/protocols/qyro1-wire-format.md` y `docs/protocols/manifest-format.md`;
-las decisiones, en ADR-0016 y ADR-0017.
+las decisiones, en ADR-0016, ADR-0017, ADR-0018 (política de errores y estados
+imposibles) y ADR-0019 (nombre visible derivado).
 
 ## Objetivos
 
