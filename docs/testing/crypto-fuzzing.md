@@ -68,32 +68,38 @@ Corpus y crash inputs son cadenas de bytes que eligió el fuzzer. No llevan
 material de clave: la única sesión en juego es la fija, cuyas semillas están
 publicadas en este repositorio y comprometidas por definición.
 
-## La primera campaña
+## Las dos primeras campañas
 
-Run 31051840079 sobre `358c64f`, 120 segundos por target, los seis en success y
-sin artefactos de crash:
+120 segundos por target, los seis en success y sin artefactos de crash en ambas.
+Ejecuciones y tamaño final del corpus:
 
-| Target | Ejecuciones | Corpus final |
+| Target | Run 31051840079 (`358c64f`) | Run 31052486806 (`2c3b3b5`) |
 |---|---|---|
-| `frame_decoder` | 7 096 629 | 243 |
-| `encrypted_envelope` | 11 689 945 | 207 |
-| `frame_opener` | **63 381** | 62 |
-| `replay_window` | 17 214 634 | 112 |
-| `manifest_decoder` | 17 522 591 | 349 |
-| `relative_path` | 20 574 340 | 201 |
+| `frame_decoder` | 7 096 629 / 243 | 15 026 991 / 239 |
+| `encrypted_envelope` | 11 689 945 / 207 | 8 836 525 / 209 |
+| `frame_opener` | **63 381** / 62 | **77 956** / 67 |
+| `replay_window` | 17 214 634 / 112 | 16 803 668 / 149 |
+| `manifest_decoder` | 17 522 591 / 349 | 14 043 820 / 391 |
+| `relative_path` | 20 574 340 / 201 | 17 748 248 / 201 |
 
-`frame_opener` va **dos órdenes de magnitud más lento** que el resto, y eso es lo
-esperado: cada iteración deriva una sesión, sella un frame real y lo abre, así
-que ejecuta ChaCha20-Poly1305 dos veces por caso mientras los demás solo parsean.
-Se anota aquí porque una tabla con un número pequeño en una fila invita a pensar
-que algo falló, y lo que dice en realidad es que en el mismo presupuesto ese
-target explora mucho menos. Su cobertura es la más baja de las seis.
+`frame_opener` va **dos órdenes de magnitud más lento** que el resto, y se
+reproduce en las dos campañas. Es lo esperado: cada iteración deriva una sesión,
+sella un frame real y lo abre, así que ejecuta ChaCha20-Poly1305 dos veces por
+caso mientras los demás solo parsean. Se anota porque un número pequeño en una
+fila invita a pensar que algo falló, y lo que dice en realidad es que en el mismo
+presupuesto ese target explora mucho menos. **Su cobertura es la más baja de las
+seis, y es el que cubre el AEAD.**
 
-Cero crashes en una primera campaña no es una buena noticia por sí sola: con este
-presupuesto es también el resultado que daría un target que no ejercita nada. Lo
-que sostiene que sí ejercitan algo es el crecimiento del corpus —libFuzzer solo
-guarda una entrada cuando abre cobertura nueva— y las aserciones de cada target,
-no el hecho de que no se cayeran.
+La variación entre campañas —`frame_decoder` dobla, `manifest_decoder` baja un
+20 %— es ruido de una máquina compartida, no una señal. Con este presupuesto los
+números sirven para decir «esto se ejecutó tantas veces», no para comparar
+versiones.
+
+Cero crashes no es una buena noticia por sí sola: con este presupuesto es también
+el resultado que daría un target que no ejercita nada. Lo que sostiene que sí
+ejercitan algo es el crecimiento del corpus —libFuzzer solo guarda una entrada
+cuando abre cobertura nueva— y las aserciones de cada target, no el hecho de que
+no se cayeran.
 
 ## Qué hacer con un hallazgo
 
