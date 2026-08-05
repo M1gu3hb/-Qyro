@@ -90,13 +90,18 @@ Dos rutas distintas en Linux pueden ser el mismo archivo en Windows o macOS.
 `PortableCollisionKey` las detecta y el manifest **rechaza** el par en lugar de
 aceptar ambos y sobrescribir uno en silencio tras aceptar la transferencia.
 
-Se pliegan: mayúsculas/minúsculas ASCII y marcas combinantes sobre Latin-1, de
-modo que `Foto.jpg`/`foto.jpg`, `A/B.txt`/`a/b.TXT` y las grafías NFC/NFD de
-`mañana.txt` colisionan. La escritura original nunca se altera.
+El plegado es Unicode completo, no ASCII ni Latin-1: normalización NFC real
+(`unicode-normalization`) seguida de `str::to_lowercase`, aplicado por segmento.
+Colisionan `Foto.jpg`/`foto.jpg`, `A/B.txt`/`a/b.TXT`, las grafías NFC/NFD de
+`mañana.txt`, y también los casos fuera de Latin-1: `ḍ.txt` con `d` + U+0323,
+U+2126 OHM SIGN con U+03A9, y el plegado de mayúsculas en griego y cirílico. La
+escritura original nunca se altera.
 
-Límite conocido: dos rutas que difieran solo por una marca combinante fuera del
-rango Latin-1 se consideran distintas. Se documenta en
-`docs/security/parser-threats.md` en lugar de ocultarse.
+Este documento afirmaba antes «mayúsculas/minúsculas ASCII y marcas combinantes
+sobre Latin-1», y declaraba como límite conocido que las marcas fuera de Latin-1
+no plegaban. Describía la tabla escrita a mano que el sprint 4A eliminó; era
+falso desde entonces. Lo cubre
+`rust/crates/qyro_manifest/tests/portable_collision_contract.rs`.
 
 Se acepta Unicode, emoji, espacios internos y nombres que solo *parecen*
 reservados (`CONsole.txt`, `COM10.txt`).

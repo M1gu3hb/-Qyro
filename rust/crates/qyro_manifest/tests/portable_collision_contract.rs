@@ -126,6 +126,31 @@ fn composed_and_decomposed_collide_outside_latin1() {
 }
 
 #[test]
+fn folding_is_not_limited_to_latin_scripts() {
+    // The manifest specification described folding as covering "ASCII case and
+    // combining marks over Latin-1", which was true of the hand-written table
+    // sprint 4A deleted and has been false since. `unicode-normalization` plus
+    // `str::to_lowercase` fold the whole repertoire, and a specification that
+    // understates its own guarantee invites someone to re-add the missing case
+    // later. These are the cases the prose used to disclaim.
+
+    // U+1E0D, outside Latin-1, versus d + U+0323.
+    must_collide("\u{1E0D}.txt", "d\u{0323}.txt");
+    // U+2126 OHM SIGN normalizes to U+03A9 GREEK CAPITAL LETTER OMEGA.
+    must_collide("\u{2126}.txt", "\u{03A9}.txt");
+    // Greek case folding, including the accented iota.
+    must_collide(
+        "\u{03A3}\u{038A}\u{03A3}.txt",
+        "\u{03C3}\u{03AF}\u{03C3}.txt",
+    );
+    // Cyrillic case folding.
+    must_collide(
+        "\u{0416}\u{0423}\u{041A}.txt",
+        "\u{0436}\u{0443}\u{043A}.txt",
+    );
+}
+
+#[test]
 fn case_and_normalization_combine() {
     must_collide("Ma\u{00F1}ana.txt", "man\u{0303}ana.txt");
 }

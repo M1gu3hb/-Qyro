@@ -71,19 +71,26 @@ Para ejecutar una campaña real:
 Cualquier hallazgo debe añadirse al corpus antes de corregirse, para que el smoke
 lo cubra a partir de entonces.
 
-## Límite conocido del plegado de colisiones
+## Plegado de colisiones
 
-`PortableCollisionKey` pliega mayúsculas ASCII y marcas combinantes en el rango
-Latin-1. Cubre las colisiones alcanzables con los caracteres que un sistema de
-archivos acepta en la práctica, pero **no** es normalización Unicode completa:
-dos rutas que difieran solo por una marca combinante fuera de ese rango se
-consideran distintas y ambas se aceptarían.
+`PortableCollisionKey` aplica normalización NFC real
+(`unicode-normalization`) y después `str::to_lowercase`, por segmento. No está
+limitado a ASCII ni a Latin-1: pliega marcas combinantes fuera de ese rango
+(`ḍ` frente a `d` + U+0323), singletons como U+2126 OHM SIGN, y el plegado de
+mayúsculas de griego y cirílico.
 
-Se decidió no añadir `unicode-normalization` todavía: introduce tablas grandes y
-una dependencia en la ruta que procesa datos hostiles, y el hueco restante exige
-que el emisor construya deliberadamente nombres con marcas exóticas. Debe
-revisarse antes de que exista escritura real en disco, porque a partir de ahí la
-colisión deja de ser teórica.
+Este apartado se titulaba «Límite conocido» y describía una tabla escrita a mano
+que plegaba solo ASCII y Latin-1, junto con la decisión de no añadir
+`unicode-normalization` todavía. Esa decisión se revirtió en el sprint 4A —la
+tabla además sobre-plegaba, tratando `ano.txt` y `año.txt` como el mismo
+archivo— pero el texto se quedó atrás y siguió declarando un hueco que ya no
+existía.
+
+Riesgo que sí permanece: el plegado responde a la pregunta «¿pueden estas dos
+rutas ser el mismo archivo en Windows o macOS?», no a «¿se parecen?». Dos nombres
+visualmente confundibles con puntos de código distintos (homoglifos) son
+deliberadamente rutas distintas, y la confirmación del receptor es lo que
+protege ahí, no el manifest.
 
 ## Riesgo residual
 
