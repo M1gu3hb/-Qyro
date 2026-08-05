@@ -9,6 +9,14 @@
     "description": "Single accessible label for the ASCII logo."
   },
   "bootProvisionalBranding": "PROVISIONAL BRAND DATA",
+  "bootTagline": "PRIVATE TRANSFER SYSTEM",
+  "@bootTagline": {
+    "description": "Secondary line under the Qyro wordmark during boot."
+  },
+  "bootSignatureUnset": "SIGNATURE NOT CONFIGURED",
+  "@bootSignatureUnset": {
+    "description": "Development-only marker shown when branding carries no configured signature. Never a real name."
+  },
   "@bootProvisionalBranding": {
     "description": "Banner shown while creator and studio fields are provisional."
   },

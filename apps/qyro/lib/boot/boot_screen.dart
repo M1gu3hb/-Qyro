@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -13,6 +14,7 @@ import 'boot_sequence_controller.dart';
 import 'boot_status_model.dart';
 import 'cipher_rain_painter.dart';
 import 'scramble_decode_engine.dart';
+import 'scrambled_line.dart';
 
 class BootScreen extends StatefulWidget {
   const BootScreen({
@@ -33,6 +35,9 @@ class BootScreen extends StatefulWidget {
 class _BootScreenState extends State<BootScreen>
     with SingleTickerProviderStateMixin {
   static const _logoSeed = 0x5159524F;
+  static const _wordmarkSeed = 0x5159524D;
+  static const _taglineSeed = 0x51595441;
+  static const _signatureSeed = 0x51595347;
 
   late final AnimationController _animation;
   late final BootSequenceController _sequence;
@@ -223,8 +228,34 @@ class _BootScreenState extends State<BootScreen>
       0,
       0.78,
     );
+    // The wordmark, tagline and signature resolve in sequence so they do not
+    // compete with the logo or with each other.
+    final wordmarkProgress = BootSequenceController.phaseProgress(
+      progress,
+      0.30,
+      0.72,
+    );
+    final taglineProgress = BootSequenceController.phaseProgress(
+      progress,
+      0.52,
+      0.88,
+    );
+    final signatureProgress = BootSequenceController.phaseProgress(
+      progress,
+      0.66,
+      0.95,
+    );
+    // Advances the noise without advancing the reveal, so unresolved cells keep
+    // churning instead of freezing between reveal steps.
+    final noiseFrame = (progress * 330).floor();
     final isProvisional =
         snapshot.branding?.isProvisional ?? GeneratedBranding.isProvisional;
+    // When startup has failed, the diagnostic and the retry control matter more
+    // than the decorative lines. Dropping them also keeps retry reachable on a
+    // short viewport instead of pushing it below the fold.
+    final hasFailed = status.isTerminalFailure || _assetLoadFailed;
+    final signature =
+        hasFailed ? null : _signatureFor(strings, isProvisional: isProvisional);
 
     return Focus(
       autofocus: true,
@@ -273,8 +304,13 @@ class _BootScreenState extends State<BootScreen>
                                   strings.bootLogoSemantics,
                                 ),
                                 const SizedBox(height: 22),
-                                Text(
-                                  GeneratedBranding.appName.toUpperCase(),
+                                ScrambledLine(
+                                  key: const Key('boot-wordmark'),
+                                  text: GeneratedBranding.appName.toUpperCase(),
+                                  progress: wordmarkProgress,
+                                  frameIndex: noiseFrame,
+                                  seed: _wordmarkSeed,
+                                  reducedMotion: _sequence.reducedMotion,
                                   style: const TextStyle(
                                     color: Color(
                                       GeneratedBranding.secondaryColorValue,
@@ -285,6 +321,40 @@ class _BootScreenState extends State<BootScreen>
                                     letterSpacing: 10,
                                   ),
                                 ),
+                                if (!hasFailed) ...[
+                                  const SizedBox(height: 8),
+                                  ScrambledLine(
+                                    key: const Key('boot-tagline'),
+                                    text: strings.bootTagline,
+                                    progress: taglineProgress,
+                                    frameIndex: noiseFrame,
+                                    seed: _taglineSeed,
+                                    reducedMotion: _sequence.reducedMotion,
+                                    style: const TextStyle(
+                                      color: Color(0xFF7FA8C8),
+                                      fontFamily: 'monospace',
+                                      fontSize: 11,
+                                      letterSpacing: 3,
+                                    ),
+                                  ),
+                                ],
+                                if (signature != null) ...[
+                                  const SizedBox(height: 10),
+                                  ScrambledLine(
+                                    key: const Key('boot-signature'),
+                                    text: signature,
+                                    progress: signatureProgress,
+                                    frameIndex: noiseFrame,
+                                    seed: _signatureSeed,
+                                    reducedMotion: _sequence.reducedMotion,
+                                    style: const TextStyle(
+                                      color: Color(0xFF5F7F9B),
+                                      fontFamily: 'monospace',
+                                      fontSize: 10,
+                                      letterSpacing: 2,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 12),
                                 _BootStatus(
                                   status: status,
@@ -315,6 +385,26 @@ class _BootScreenState extends State<BootScreen>
         ),
       ),
     );
+  }
+
+  /// Resolves the signature line, or null when nothing may be shown.
+  ///
+  /// A configured, non-provisional signature is displayed as authored. When
+  /// branding is still provisional the creator's name is unknown, so nothing is
+  /// invented: debug builds show a clearly marked "not configured" notice to
+  /// make the gap visible, and release builds show no line at all.
+  static String? _signatureFor(
+    AppLocalizations strings, {
+    required bool isProvisional,
+  }) {
+    final configured = GeneratedBranding.signatureText.trim();
+    if (configured.isNotEmpty && !isProvisional) {
+      return configured;
+    }
+    if (kDebugMode) {
+      return strings.bootSignatureUnset;
+    }
+    return null;
   }
 
   Widget _buildLogo(double progress, String semanticLabel) {

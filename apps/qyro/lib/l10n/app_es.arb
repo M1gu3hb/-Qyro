@@ -3,6 +3,8 @@
   "appTitle": "Qyro",
   "bootLogoSemantics": "Logo de Qyro",
   "bootProvisionalBranding": "DATOS DE MARCA PROVISIONALES",
+  "bootTagline": "SISTEMA PRIVADO DE TRANSFERENCIA",
+  "bootSignatureUnset": "FIRMA SIN CONFIGURAR",
   "bootSkip": "OMITIR",
   "bootRetry": "REINTENTAR",
   "bootStatusIdle": "ARRANQUE EN ESPERA",
