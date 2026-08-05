@@ -256,7 +256,9 @@ compilador los rechaza.
 - El dominio `HandshakeTranscript` deja de estar reservado.
 - El handshake **no** se ejecuta sobre ningún transporte. No hay sockets, no hay
   descubrimiento, y los botones Enviar/Recibir siguen deshabilitados.
-- Las claves derivadas no cifran nada todavía: no hay AEAD.
+- Las claves derivadas no cifraban nada al aceptarse esta decisión. Desde
+  ADR-0022 las consume el AEAD de frames, que no cambia nada de lo anterior: el
+  handshake sigue sin correr sobre ningún transporte.
 
 ## Enmienda (sprint 4B.1)
 

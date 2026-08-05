@@ -178,3 +178,39 @@
 - Estado: resuelto
 - Evidencia: run 30976026135 (fallo, job `windows`), contrato en rojo y verde
 - Fecha: 2026-08-05
+
+## QYR-0014 — Cuatro afirmaciones de ADR-0022 no las cubría ninguna prueba
+
+- Plataforma: pruebas, criptografía
+- Severidad: P2
+- Esperado: la derivación del AEAD liga la clave a la dirección, al
+  `auth_transcript` y al `SessionId`, y el prefijo de nonce se expande aparte
+- Actual: borrar `direction.label()` de `info_for` —de modo que las dos
+  direcciones derivaran bajo la misma etiqueta— dejaba pasar las treinta y tres
+  pruebas. Quitar el transcript o el `SessionId` de cada `info`, también
+- Causa: las pruebas extremo a extremo no pueden ejercitar el caso que la
+  afirmación cubre. Los dos secretos de tráfico ya difieren, porque el schedule
+  del handshake los deriva bajo etiquetas propias, y dos sesiones de prueba
+  difieren en todo a la vez. La propiedad estaba sostenida una capa más arriba
+- Resolución: cuatro pruebas unitarias sobre la derivación misma, más las
+  etiquetas fijadas contra ADR-0022 y no contra la función que las produce
+- Prevención: cada mutación se volvió a aplicar después; las cuatro fallan
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C_AEAD_AUDIT.md`, hallazgo H-1
+- Fecha: 2026-08-05
+
+## QYR-0015 — Tres variantes de error inalcanzables en ADR-0022
+
+- Plataforma: criptografía
+- Severidad: P3
+- Esperado: cada variante de `AeadError` la produce alguna ruta
+- Actual: `NotEncrypted`, `PayloadTooLarge` e `InvalidNonceState` no las puede
+  provocar nada. Un `EncryptedEnvelope` no existe sin el flag `ENCRYPTED`, un
+  `Frame` no excede `MAX_PAYLOAD_LEN`, e «estado de nonce inválido» era
+  `SequenceExhausted` con otro nombre
+- Causa: la lista se congeló en la ADR antes de que existiera el código, que es
+  deliberado y correcto; lo que faltaba era revisarla al implementarla
+- Resolución: eliminadas del enum, con enmienda registrada en ADR-0022
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C_AEAD_AUDIT.md`, hallazgo H-2
+- Fecha: 2026-08-05

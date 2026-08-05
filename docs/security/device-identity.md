@@ -118,8 +118,12 @@ atada al transcript, no la que se esperaba. Tenerla **no es confiar en ella**.
 
 ## Todavía no existe
 
-AEAD, replay protection, rotación, revocación, dispositivos de confianza,
-almacenamiento seguro (Keystore, Keychain, DPAPI/CNG), FFI criptográfico e
-interfaz. Tampoco hay transporte: el handshake no corre sobre ningún socket, y
-las claves que deriva no cifran nada. La identidad vive **solo en memoria**:
-generar una y perderla al cerrar el proceso es el comportamiento actual.
+Rotación, revocación, dispositivos de confianza, almacenamiento seguro
+(Keystore, Keychain, DPAPI/CNG), FFI criptográfico e interfaz. Tampoco hay
+transporte: el handshake no corre sobre ningún socket. La identidad vive **solo
+en memoria**: generar una y perderla al cerrar el proceso es el comportamiento
+actual.
+
+AEAD y ventana de replay sí existen desde el sprint 4C, en
+`qyro_crypto::aead`, y no acercan nada de lo anterior por sí solos: cifran
+frames que nadie mueve.

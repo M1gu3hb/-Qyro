@@ -78,8 +78,11 @@ usan los dos lados.
 ## Claves de sesión
 
 `SessionKey` es **privado del crate**. No se exporta, no hay accesores públicos
-de clave, y la única salida es `into_secrets`, que es `pub(crate)` y que
-consumirá el AEAD cuando exista.
+de clave, y la única salida es `into_secrets`, que es `pub(crate)` y que consume
+el AEAD de frames desde el sprint 4C, a través de `into_frame_crypto`. Ese método
+toma `self` por valor: el estado establecido deja de existir en el momento en que
+se derivan el sealer y el opener, así que no hay forma de arrancar dos contadores
+de nonce desde cero. Ver `docs/security/frame-encryption.md`.
 
 Lo que sí expone un estado establecido: `session_id`, `role`, `peer_identity` y
 `peer_fingerprint`. Nada más.
