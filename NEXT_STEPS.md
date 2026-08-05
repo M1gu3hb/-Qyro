@@ -18,8 +18,18 @@
 
 ## P1
 
-- Identidad criptográfica, cifrado de sesión y almacenamiento local seguro
-  mediante TDD, sin iniciar LAN hasta cerrar los vectores criptográficos.
+- **AEAD de sesión (ChaCha20-Poly1305) y protección de replay.** El handshake ya
+  deriva claves direccionales y un identificador de sesión; nada las usa. Es el
+  paso que convierte `EncryptedEnvelope` en algo con un tag real, y el que
+  permite que `SealedFrame` y `AuthenticatedFrame` existan con constructores
+  privados.
+- **Vectores interoperables del handshake.** Hoy el transcript está fijado por
+  ADR-0021 y por tests de Rust; un test en Rust prueba que Rust es consistente
+  consigo mismo, no que el formato esté definido sin ambigüedad. Debe existir un
+  `handshake-v1.json` con una ejecución completa antes de que haya una segunda
+  implementación.
+- Almacenamiento local seguro de la identidad, sin iniciar LAN hasta cerrar los
+  vectores criptográficos.
 - Ejecutar una campaña real de `cargo-fuzz` y añadir los hallazgos al corpus.
 - Probar en hardware físico: hasta ahora solo emulador, simulador y host.
 - SBOM y `cargo-deny` para licencias, fuentes, duplicados y bans.
@@ -35,6 +45,20 @@
 
 - RaptorQ/QR adaptativo.
 - Wi-Fi Direct, Multipeer y Bluetooth experimental.
+
+## Completado el 2026-08-05 (sprint 4B, handshake autenticado)
+
+- Handshake autenticado de cuatro mensajes en memoria: X25519, Ed25519 en el
+  dominio `HandshakeTranscript`, HKDF-SHA256 y HMAC-SHA256, con máquina de
+  estados de estados consumidos (ADR-0021).
+- Cerradas las invariantes que quedaban: cabecera protegida fuera de `Frame`,
+  plantilla de sobre probada por tipo, claves Ed25519 de orden bajo rechazadas,
+  `verify_strict`, firma solo falible, fingerprint con dos escrituras canónicas,
+  identidad pública de 33 bytes y constructor determinista fuera de la API.
+- KAT completos: RFC 8032 §7.1 (5 vectores) y RFC 4231 (7 vectores), extraídos
+  del texto de los RFC.
+- Corregidas afirmaciones obsoletas sobre el plegado Unicode y sobre qué ABI
+  nativas estaban verificadas.
 
 ## Completado el 2026-08-05 (sprint 2, protocolo y manifest)
 

@@ -3,10 +3,10 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T03:40:00Z
-- Branch: claude/qyro-crypto-foundation
-- Verified commit: abe66012f2527e4276809c5850f52638f3d86135
-- Milestone: invariantes corregidas; identidad Ed25519 lista; handshake y AEAD NO iniciados
+- Updated UTC: 2026-08-05T04:45:00Z
+- Branch: claude/qyro-authenticated-handshake
+- Verified commit: 779fb168c5595fb16f888f08766c60dd9be9938c
+- Milestone: handshake autenticado en memoria; AEAD y transporte NO iniciados
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
 con los dos commits del propietario en `main` (`e0041de`). Ninguna rama fue
@@ -49,16 +49,33 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - SHA-256 como único digest final de archivo: IMPLEMENTED
 - Identidad Ed25519 con fingerprint versionado y firma con dominios: IMPLEMENTED
 - Vectores interoperables RFC 8032 + Qyro: IMPLEMENTED
+- Rechazo de claves Ed25519 de orden bajo y `verify_strict`: IMPLEMENTED
+- Fingerprint con exactamente dos escrituras canónicas: IMPLEMENTED
+- Identidad pública en el cable, 33 bytes con versión: IMPLEMENTED
+- Constructor determinista fuera de la API pública (`cfg(test)`): IMPLEMENTED
+- Cabecera protegida fuera de `Frame` (`ProtectedHeaderNotPlain`): IMPLEMENTED
+- Plantilla de sobre probada por tipo (`from_plain_frame`): IMPLEMENTED
+- **Handshake autenticado de cuatro mensajes (ADR-0021)**: IMPLEMENTED, en
+  memoria. X25519 + Ed25519 + HKDF-SHA256 + HMAC-SHA256, máquina de estados
+  con estados consumidos. **No corre sobre ningún transporte y no cifra nada.**
+- KAT RFC 8032 (5 vectores) y RFC 4231 (7 vectores): IMPLEMENTED
 
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO (run 30963011815)
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO (run 30963016390)
 
 ## Not implemented
 
-- **Handshake, X25519, HKDF, AEAD y replay protection**: NOT_IMPLEMENTED.
-  `qyro_crypto` solo hace identidad: firma y verifica. **No puede cifrar nada.**
+- **AEAD y replay protection**: NOT_IMPLEMENTED. El handshake deriva claves de
+  sesión, pero **nada las usa**: no hay ChaCha20-Poly1305 ni ningún otro cifrado.
   `EncryptedEnvelope` define la forma de un frame cifrado y expone los datos
-  asociados, pero ningún AEAD los consume.
+  asociados, pero ningún AEAD los consume. `qyro_crypto` **todavía no puede
+  cifrar nada.**
+- **Handshake sobre transporte**: NOT_IMPLEMENTED. El handshake existe y está
+  probado, pero se ejecuta entre dos valores en un proceso. No hay sockets, ni
+  descubrimiento, ni integración con el framing de `qyro_protocol`.
+- **Vectores del handshake**: NOT_IMPLEMENTED. `identity-v1.json` fija la
+  identidad; el transcript del handshake solo está fijado por ADR-0021 y por los
+  tests de Rust, que prueban que Rust es consistente consigo mismo.
 - **SealedFrame / AuthenticatedFrame**: NOT_IMPLEMENTED. Vivirán en
   `qyro_crypto` con constructores privados cuando exista el sellado.
 - **qyro_identity y almacenamiento seguro**: NOT_IMPLEMENTED en las tres
@@ -111,11 +128,12 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **138 tests**
-- `cargo test --workspace --all-features`: PASS, **157 tests** (incluye los 19 de
-  identidad, que exigen la feature `test-vectors`)
+- `cargo test --workspace`: PASS, **191 tests**
+- `cargo test --workspace --all-features`: PASS, **191 tests**. Ya no difieren:
+  ningún crate declara features, así que los vectores de identidad y los KAT ya
+  no pueden saltarse ejecutando solo el conjunto por defecto
 - `cargo test --doc --workspace`: PASS
-- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **35 crates**.
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **48 crates**.
   El workspace ya no está libre de dependencias: ver `docs/LICENSE_AUDIT.md`
 - `flutter pub get --enforce-lockfile`: PASS
 - `dart tools/branding_generator/bin/generate.dart --check`: PASS
