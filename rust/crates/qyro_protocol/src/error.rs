@@ -112,6 +112,19 @@ pub enum FrameError {
         /// Trailer length this version accepts.
         expected: u8,
     },
+    /// A header describing a protected frame was used to build a plain one.
+    ///
+    /// A [`crate::Frame`] holds a payload and nothing else, so it cannot honour
+    /// a header that sets `ENCRYPTED` or declares a trailer. Encoding such a
+    /// frame emits fewer bytes than its own header promises, which does not
+    /// merely fail to decode: it leaves a peer's decoder waiting for a trailer
+    /// that will never arrive.
+    ProtectedHeaderNotPlain {
+        /// Flag bits the header carried.
+        flags: u8,
+        /// Trailer length the header declared.
+        trailer_len: u8,
+    },
     /// Buffering more bytes would exceed the decoder's ceiling.
     BufferLimitExceeded {
         /// Buffer size the push would have produced.
@@ -215,6 +228,10 @@ impl fmt::Display for FrameError {
             Self::AuthenticationTrailerInvalid { declared, expected } => write!(
                 formatter,
                 "authentication trailer length {declared}, expected {expected}"
+            ),
+            Self::ProtectedHeaderNotPlain { flags, trailer_len } => write!(
+                formatter,
+                "header with flags {flags:#010b} and trailer length {trailer_len} describes a protected frame, not a plain one"
             ),
             Self::BufferLimitExceeded { attempted, limit } => {
                 write!(

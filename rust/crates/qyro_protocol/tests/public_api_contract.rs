@@ -166,8 +166,8 @@ fn an_envelope_preserves_every_authenticated_metadata_field() {
 
     let ciphertext = vec![0xCC; 9];
     let tag = vec![0x77; 16];
-    let envelope = qyro_protocol::EncryptedEnvelope::from_plain(
-        template.header(),
+    let envelope = qyro_protocol::EncryptedEnvelope::from_plain_frame(
+        &template,
         ciphertext.clone(),
         tag.clone(),
     )
@@ -198,8 +198,8 @@ fn an_envelope_survives_the_wire_byte_exactly() {
         .with_flags(Flags::END_OF_ITEM)
         .expect("transport flags");
 
-    let envelope = qyro_protocol::EncryptedEnvelope::from_plain(
-        template.header(),
+    let envelope = qyro_protocol::EncryptedEnvelope::from_plain_frame(
+        &template,
         vec![0xAB; 32],
         vec![0x01; 16],
     )
@@ -224,7 +224,7 @@ fn empty_plaintext_and_ciphertext_and_unknown_are_distinct_states() {
 
     let template = Frame::new(MessageType::DataChunk, b"".to_vec()).expect("valid");
     let envelope =
-        qyro_protocol::EncryptedEnvelope::from_plain(template.header(), Vec::new(), vec![9; 16])
+        qyro_protocol::EncryptedEnvelope::from_plain_frame(&template, Vec::new(), vec![9; 16])
             .expect("valid envelope");
     let encrypted = decode_one(&envelope.encode());
 
@@ -255,7 +255,7 @@ fn no_variant_the_decoder_can_produce_panics_on_the_normal_api() {
 
     let template = Frame::new(MessageType::DataChunk, b"x".to_vec()).expect("valid");
     let envelope =
-        qyro_protocol::EncryptedEnvelope::from_plain(template.header(), vec![1; 4], vec![2; 16])
+        qyro_protocol::EncryptedEnvelope::from_plain_frame(&template, vec![1; 4], vec![2; 16])
             .expect("valid envelope");
 
     let variants = vec![

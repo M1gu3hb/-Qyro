@@ -21,6 +21,7 @@
 //! may claim authentication.
 
 use crate::error::FrameError;
+use crate::frame::Frame;
 use crate::header::FrameHeader;
 use crate::limits::{HEADER_LEN, MAX_PAYLOAD_LEN, MAX_TRAILER_LEN};
 use crate::message::{Flags, MessageType};
@@ -41,7 +42,7 @@ pub struct EncryptedEnvelope {
 }
 
 impl EncryptedEnvelope {
-    /// Wraps ciphertext and a trailer, carrying over the plain header's metadata.
+    /// Wraps ciphertext and a trailer, carrying over the plain frame's metadata.
     ///
     /// Every routing and transport field of `template` is preserved so it stays
     /// inside the associated data a future AEAD will authenticate: message type,
@@ -51,6 +52,15 @@ impl EncryptedEnvelope {
     /// Only three fields are derived rather than carried: `payload_len` from the
     /// ciphertext, `trailer_len` from the trailer, and the `ENCRYPTED` flag.
     ///
+    /// The template is a [`Frame`], not a [`FrameHeader`], and that is the whole
+    /// point of the parameter type. The earlier signature took a header, and an
+    /// envelope hands its own header out, so an envelope could be wrapped a
+    /// second time using itself as the template: the resulting `ENCRYPTED` flag
+    /// and trailer length described the second wrap while the ciphertext was
+    /// still the first. A `Frame` cannot be built around a protected header —
+    /// [`Frame::from_parts`] rejects that — so a `&Frame` *is* the proof that
+    /// the template is plain.
+    ///
     /// This performs no encryption and verifies nothing. See the module docs.
     ///
     /// # Errors
@@ -58,11 +68,12 @@ impl EncryptedEnvelope {
     /// Returns [`FrameError::PayloadTooLarge`] when the ciphertext exceeds
     /// [`MAX_PAYLOAD_LEN`], or [`FrameError::AuthenticationTrailerInvalid`] when
     /// the trailer is empty or longer than [`MAX_TRAILER_LEN`].
-    pub fn from_plain(
-        template: &FrameHeader,
+    pub fn from_plain_frame(
+        template: &Frame,
         ciphertext: Vec<u8>,
         tag: Vec<u8>,
     ) -> Result<Self, FrameError> {
+        let template = template.header();
         if ciphertext.len() > MAX_PAYLOAD_LEN {
             return Err(FrameError::PayloadTooLarge {
                 declared: u32::try_from(ciphertext.len()).unwrap_or(u32::MAX),

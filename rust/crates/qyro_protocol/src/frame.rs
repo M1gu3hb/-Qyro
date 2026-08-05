@@ -35,11 +35,29 @@ impl Frame {
 
     /// Builds a frame from an already validated header and its payload.
     ///
+    /// The header must describe a *plain* frame. A `Frame` stores a payload and
+    /// nothing else, so a header that sets a protected flag or declares a
+    /// trailer describes a frame this type cannot represent — and encoding it
+    /// would emit fewer bytes than the header promises, leaving a peer's decoder
+    /// waiting for a trailer that is never written.
+    ///
+    /// This matters because [`FrameHeader`] is `Copy` and
+    /// [`crate::EncryptedEnvelope`] hands one out: without this check a caller
+    /// could take the header off an envelope, staple the ciphertext to it, and
+    /// hold a `Frame` whose [`Frame::payload`] answers ciphertext as plaintext.
+    ///
     /// # Errors
     ///
-    /// Returns [`FrameError::TruncatedPayload`] when the payload length does not
-    /// match what the header declares.
+    /// Returns [`FrameError::ProtectedHeaderNotPlain`] when the header describes
+    /// a protected frame, or [`FrameError::TruncatedPayload`] when the payload
+    /// length does not match what the header declares.
     pub fn from_parts(header: FrameHeader, payload: Vec<u8>) -> Result<Self, FrameError> {
+        if header.flags().protected_bits() != 0 || header.trailer_len() != 0 {
+            return Err(FrameError::ProtectedHeaderNotPlain {
+                flags: header.flags().bits(),
+                trailer_len: header.trailer_len(),
+            });
+        }
         if payload.len() != header.payload_len() as usize {
             return Err(FrameError::TruncatedPayload {
                 available: payload.len(),

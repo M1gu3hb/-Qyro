@@ -134,8 +134,15 @@ convierten en algo procesable.
   reserialización byte-exacta y dejaría al AEAD sin poder autenticarlos.
 - Las extensiones llegarán en una versión que las preserve, las serialice y las
   incluya en los datos asociados.
-- El trailer de autenticación se habilita con `SealedFrame`, que no puede
-  construirse sin aportar un tag.
+- El trailer de autenticación se habilita con `EncryptedEnvelope`, que no puede
+  construirse sin aportar un tag. Su plantilla es un `&Frame`, no un
+  `&FrameHeader`: un `Frame` no puede construirse alrededor de una cabecera
+  protegida, así que el tipo del parámetro *es* la prueba de que la plantilla
+  está en claro. Sin eso, un sobre podía envolverse a sí mismo por segunda vez.
+- `Frame::from_parts` rechaza con `ProtectedHeaderNotPlain` cualquier cabecera
+  con un flag protegido o un trailer declarado. Un `Frame` solo guarda payload:
+  codificar esa cabecera emitiría menos bytes de los que ella misma promete y
+  dejaría al decodificador del par esperando un trailer que nunca llega.
 
 ## Reserialización byte-exacta
 

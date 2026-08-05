@@ -94,6 +94,8 @@ colisión deja de ser teórica.
   pero la firma llega en el hito de identidad y cifrado.
 - Nada de esto protege contra un peer legítimo que envíe contenido malicioso;
   eso corresponde a la confirmación del receptor y a la integridad final.
-- **No existe criptografía todavía.** `SealedFrame` define la forma de un frame
-  cifrado y expone la cabecera completa como datos asociados, pero ningún AEAD
-  la consume: no hay identidad, handshake, claves ni tags reales.
+- **`qyro_protocol` no hace criptografía.** `EncryptedEnvelope` define la forma
+  de un frame cifrado y expone la cabecera completa como datos asociados, pero
+  ningún AEAD la consume: los bytes que llama «tag» no los verifica nadie. La
+  identidad Ed25519 vive en `qyro_crypto` desde el sprint 4A; el AEAD sigue sin
+  existir.
