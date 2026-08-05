@@ -14,9 +14,11 @@ Todo comportamiento comprobable sigue rojo → verde → refactor. El test debe 
 - Scripts: contratos Bash y PowerShell.
 - Documentación: consistencia con STATUS.md.
 - Seguridad/licencias: checks ejecutables, no afirmaciones Markdown.
-- Criptografía: KAT contra los RFC (7748, 8032, 4231) y vectores propios con
-  schema estricto, regeneración byte a byte y verificación independiente desde
-  las primitivas.
+- Criptografía: KAT contra los RFC (7748, 8032, 4231, 8439) y vectores propios
+  con schema estricto, regeneración byte a byte y verificación independiente
+  desde las primitivas. Los vectores del AEAD están encadenados a los del
+  handshake, y una prueba comprueba el encadenamiento campo a campo en lugar de
+  afirmarlo en prosa.
 - Intro: unit/widget/golden según corresponda.
 
 ## Cómo se comprueba una invariante
@@ -27,8 +29,11 @@ sea el argumento a favor.
 
 Ese método encontró que el enlace de la firma del iniciador sobre la del
 respondedor no aportaba nada con Ed25519 determinista, que cinco de doce
-codificaciones «de orden bajo» de X25519 no lo son, y que dos reglas nuevas del
-verificador documental no comprobaban lo que decían comprobar.
+codificaciones «de orden bajo» de X25519 no lo son, que dos reglas nuevas del
+verificador documental no comprobaban lo que decían comprobar, y —en el sprint
+4C— que quitar la dirección de la etiqueta de derivación del AEAD no rompía
+ninguna de las treinta y tres pruebas, porque la propiedad estaba apoyada una
+capa más arriba.
 
 Un verificador que ignora lo que no entiende es peor que ninguno: informa de
 éxito sobre restricciones que nunca comprobó. El validador de schema de los

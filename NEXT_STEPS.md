@@ -18,18 +18,16 @@
 
 ## P1
 
-- **AEAD de sesión (ChaCha20-Poly1305) y protección de replay.** El handshake ya
-  deriva claves direccionales y un identificador de sesión; nada las usa.
-  Consumirá `PendingSessionSecrets`, que existe justamente como esa costura. Es
-  el paso que convierte `EncryptedEnvelope` en algo con un tag real, y el que
-  permite que `SealedFrame` y `AuthenticatedFrame` existan con constructores
-  privados.
-- **Una segunda implementación contra los vectores.** `handshake-v1.json` existe
-  y está verificado de forma independiente contra las primitivas, pero hasta que
-  alguien escriba el lado Swift o Kotlin y encuentre las ambigüedades que
-  queden, «formato definido sin ambigüedad» es una intención y no un hecho.
-- Almacenamiento local seguro de la identidad, sin iniciar LAN hasta cerrar los
-  vectores criptográficos.
+- **Persistencia segura de `DeviceIdentity`.** Android Keystore, iOS Keychain y
+  DPAPI/CNG en Windows, con rotación, borrado y pruebas en runtime. Hoy generar
+  una identidad y cerrar el proceso la pierde, así que ninguna decisión de
+  confianza puede sobrevivir a un reinicio. Sin conectar sockets ni transferencia
+  todavía.
+- **Una segunda implementación contra los vectores.** `handshake-v1.json` y
+  `aead-v1.json` existen, están encadenados y verificados de forma independiente
+  contra las primitivas, pero hasta que alguien escriba el lado Swift o Kotlin y
+  encuentre las ambigüedades que queden, «formato definido sin ambigüedad» es una
+  intención y no un hecho.
 - Ejecutar una campaña real de `cargo-fuzz` y añadir los hallazgos al corpus.
 - Probar en hardware físico: hasta ahora solo emulador, simulador y host.
 - SBOM y `cargo-deny` para licencias, fuentes, duplicados y bans.

@@ -5,13 +5,15 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-handshake-closure`, que continúa
-   `claude/qyro-authenticated-handshake` y cierra el handshake.
+2. Confirmar la rama `claude/qyro-aead-replay`, que continúa
+   `claude/qyro-handshake-closure` y añade el AEAD de frames.
 3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
    más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
-   (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B) y ADR-0021
-   (handshake). Las especificaciones están en `docs/protocols/` y
-   `docs/security/`.
+   (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
+   (handshake) y ADR-0022 (AEAD de frames, con su enmienda del sprint 4C). Las
+   especificaciones están en `docs/protocols/` y `docs/security/`; las auditorías
+   de los dos últimos sprints, en `docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md` y
+   `docs/audits/SPRINT4C_AEAD_AUDIT.md`.
 4. Leer NEXT_STEPS.md y ADR relacionadas.
 5. Ejecutar doctor y tests relevantes.
 6. Continuar con la única “Next task” de STATUS.md.
@@ -47,20 +49,23 @@ actualizarse dentro del mismo tramo de trabajo, no al final.
 ## Estado del protocolo y la criptografía
 
 `qyro_protocol`, `qyro_manifest` y `qyro_crypto` están implementados y probados,
-pero **nada los usa todavía**: no hay sockets, transporte, cifrado real ni
-escritura en disco. Que el framing y el handshake existan no significa que Qyro
+pero **nada los usa todavía**: no hay sockets, transporte ni escritura en disco.
+Cifrado sí hay, desde el sprint 4C, y no mueve un solo byte a ninguna parte. Que el framing y el handshake existan no significa que Qyro
 transfiera archivos. Los botones Enviar y Recibir siguen deshabilitados a
 propósito, y el README sigue diciendo que Qyro todavía no transfiere archivos.
 
-Concretamente, después del sprint 4B:
+Concretamente, después del sprint 4C:
 
 - El handshake **corre entre dos valores en un proceso**. No hay socket, ni
   descubrimiento, ni integración con el framing. El `SessionId` que deriva sí es
   ya el tipo que lleva la cabecera QYRO/1, así que conectarlo no exigirá
   inventar ninguna conversión.
-- Las claves de sesión que deriva **no cifran nada**: no existe AEAD.
-- `EncryptedEnvelope` sigue siendo una forma de cable sin nadie que calcule el
-  tag. Su nombre lo dice a propósito.
+- Sus claves de sesión **sí** cifran desde el sprint 4C: `qyro_crypto::aead` sella
+  y abre frames QYRO/1 con ChaCha20-Poly1305, con nonces monotónicos y una
+  ventana de replay de 1024. Sigue sin haber transporte que los mueva.
+- `EncryptedEnvelope` sigue siendo una forma de cable que no afirma nada, y eso
+  es deliberado: los tipos que afirman son `SealedFrame` y `AuthenticatedFrame`,
+  en `qyro_crypto`, con constructores privados.
 - La identidad y las claves viven **solo en memoria**. No hay almacenamiento
   seguro en ninguna plataforma.
 

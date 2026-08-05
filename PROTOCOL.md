@@ -1,15 +1,16 @@
 # QYRO/1
 
-Estado: framing binario implementado y probado; handshake autenticado
-implementado en memoria en `qyro_crypto`. Transporte, cifrado de frames y modo
-óptico no implementados: nada pone todavía un frame en un socket ni calcula un
-tag.
+Estado: framing binario implementado y probado; handshake autenticado y cifrado
+autenticado de frames implementados en memoria en `qyro_crypto`. Transporte y
+modo óptico no implementados: el tag ya se calcula, pero nada pone todavía un
+frame en un socket.
 
-El encoder y el decoder incremental viven en `rust/crates/qyro_protocol` y el
-manifest en `rust/crates/qyro_manifest`. La especificación completa está en
+El encoder y el decoder incremental viven en `rust/crates/qyro_protocol`, el
+manifest en `rust/crates/qyro_manifest` y el sellado en
+`rust/crates/qyro_crypto/src/aead`. La especificación completa está en
 `docs/protocols/qyro1-wire-format.md` y `docs/protocols/manifest-format.md`;
 las decisiones, en ADR-0016, ADR-0017, ADR-0018 (política de errores y estados
-imposibles) y ADR-0019 (nombre visible derivado).
+imposibles), ADR-0019 (nombre visible derivado) y ADR-0022 (AEAD de frames).
 
 ## Objetivos
 

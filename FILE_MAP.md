@@ -11,7 +11,7 @@
 | rust/crates/qyro_ffi | ABI estrecha | Integración | qyro_core | UI, reglas de negocio |
 | rust/crates/qyro_protocol | framing binario QYRO/1 | Protocolo | std | Flutter, plataforma, red |
 | rust/crates/qyro_manifest | manifest y rutas seguras | Protocolo | std, unicode-normalization | filesystem real, red |
-| rust/crates/qyro_crypto | identidad Ed25519, firmas y handshake autenticado | Seguridad | qyro_protocol, ed25519-dalek, x25519-dalek, sha2, hkdf, hmac, zeroize | red, filesystem, UI |
+| rust/crates/qyro_crypto | identidad Ed25519, firmas, handshake autenticado y AEAD de frames | Seguridad | qyro_protocol, ed25519-dalek, x25519-dalek, sha2, hkdf, hmac, chacha20poly1305, zeroize | red, filesystem, UI |
 | docs/security/test-vectors | vectores interoperables y sus schemas | Seguridad | ninguna | secretos reales |
 | rust/fuzz | targets y corpus cargo-fuzz | Seguridad/QA | crates de protocolo | workspace principal |
 | docs/protocols | especificación de wire y manifest | Protocolo | ADR | código ejecutable |

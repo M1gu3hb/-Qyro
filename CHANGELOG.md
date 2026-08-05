@@ -4,6 +4,44 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 4C)
+
+- Cifrado autenticado de frames QYRO/1 con ChaCha20-Poly1305 (ADR-0022):
+  `FrameSealer`, `FrameOpener`, `SealedFrame` y `AuthenticatedFrame`, los dos
+  últimos con constructor privado.
+- Claves y prefijos de nonce derivados por dirección con HKDF-SHA256 sobre los
+  secretos de tráfico del handshake, con la dirección dentro de la etiqueta y el
+  transcript y el `SessionId` dentro de cada `info`.
+- Nonce monotónico `prefijo || secuencia`, asignado por el sealer, sin
+  envolvimiento: agotar la secuencia es un error terminal.
+- Ventana de replay fija de 1024, consultada antes del AEAD y actualizada solo
+  después de que el tag verifique.
+- `EstablishedInitiator::into_frame_crypto` y su equivalente en el respondedor,
+  que consumen la sesión establecida.
+- KAT de ChaCha20-Poly1305 (RFC 8439 §2.8.2 y apéndice A.5) y vectores propios
+  del sellado, encadenados a los del handshake.
+- Trece semillas selladas en el corpus de fuzzing y un smoke del opener.
+- `docs/security/frame-encryption.md`, `docs/security/nonce-lifecycle.md`,
+  `docs/security/replay-window.md` y
+  `docs/audits/SPRINT4C_AEAD_AUDIT.md`.
+
+### Fixed (sprint 4C)
+
+- Cuatro afirmaciones de ADR-0022 sobre lo que la derivación liga no las cubría
+  ninguna prueba: quitar la dirección de la etiqueta, o el transcript, o el
+  `SessionId`, no rompía nada, porque los secretos de tráfico ya difieren una
+  capa más arriba.
+- La documentación del código dejaba de ser cierta al implementar el AEAD:
+  `lib.rs` decía «There is still no AEAD», el módulo del handshake decía que sus
+  claves no cifran nada, y `envelope.rs` describía `SealedFrame` y
+  `AuthenticatedFrame` como tipos futuros.
+
+### Removed (sprint 4C)
+
+- `AeadError::NotEncrypted`, `AeadError::PayloadTooLarge` y
+  `AeadError::InvalidNonceState`: ADR-0022 los congeló antes del código y
+  ninguno resultó alcanzable. Registrado como enmienda en la propia ADR.
+
 ### Added (sprint 4B.1)
 
 - Handshake autenticado de cuatro mensajes cerrado y documentado: X25519,
