@@ -1,0 +1,118 @@
+#!/usr/bin/env pwsh
+# Keeps the crypto smoke harness out of the product.
+#
+# The harness exists so Android, iOS and Windows have real evidence about
+# `qyro_crypto`. It links the crate that holds keys, and it exports a symbol
+# whose whole job is to run a handshake. Shipping it would mean buying a test
+# with an attack surface, which is a bad trade at any price.
+#
+# Two halves. This script checks what can be checked from the source tree, on
+# every platform, in CI and locally. The artifacts themselves — the APK, the
+# Runner.app and the Windows ZIP — are searched for the exported symbol inside
+# `platform-builds.yml`, where they exist. Neither half is sufficient: a source
+# tree can be clean while a build script copies the library in, and an artifact
+# check only runs where that artifact is produced.
+#
+# See docs/adr/ADR-0023-crypto-platform-test-harness.md.
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
+
+$script:status = 0
+$symbol = 'qyro_crypto_smoke_run'
+$harness = 'qyro_crypto_smoke'
+
+function Write-Failure([string] $Message) {
+    Write-Error -Message "[FAIL] $Message" -ErrorAction Continue
+    $script:status = 1
+}
+
+# --- nothing the product builds may name the harness -------------------------
+
+foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'qyro_manifest')) {
+    $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
+    if ((Get-Content -LiteralPath $manifest -Raw) -match [regex]::Escape($harness)) {
+        Write-Failure "$manifest depends on the test harness"
+    }
+}
+
+# The FFI boundary itself, checked here too so this script alone answers "can
+# Dart reach a key?" without anyone having to also run the Rust test suite.
+foreach ($crate in @('qyro_ffi', 'qyro_core')) {
+    $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
+    if ((Get-Content -LiteralPath $manifest -Raw) -match 'qyro_crypto') {
+        Write-Failure "$manifest reaches qyro_crypto; the library Dart loads must not"
+    }
+}
+
+# --- no application source may reference it ----------------------------------
+
+$appRoot = Join-Path 'apps' 'qyro'
+if (Test-Path -LiteralPath $appRoot) {
+    $offenders = Get-ChildItem -LiteralPath $appRoot -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '[\\/](build|\.dart_tool)[\\/]' } |
+        Where-Object {
+            $text = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
+            $text -and ($text -match [regex]::Escape($symbol) -or $text -match [regex]::Escape($harness))
+        }
+    if ($offenders) {
+        Write-Failure 'the Flutter application references the test harness'
+    }
+}
+
+# --- no staged native library may be the harness -----------------------------
+#
+# These directories are what the platform build copies into the APK and the iOS
+# bundle. A file here goes into the product whatever any manifest says.
+
+foreach ($staged in @(
+        (Join-Path 'apps' 'qyro' 'android' 'app' 'src' 'main' 'jniLibs'),
+        (Join-Path 'apps' 'qyro' 'ios' 'Native'))) {
+    if (-not (Test-Path -LiteralPath $staged)) { continue }
+    foreach ($library in Get-ChildItem -LiteralPath $staged -Recurse -File) {
+        if ($library.Name -match [regex]::Escape($harness)) {
+            Write-Failure "$($library.FullName) stages the test harness into a product bundle"
+            continue
+        }
+        $bytes = [System.IO.File]::ReadAllBytes($library.FullName)
+        $text = [System.Text.Encoding]::ASCII.GetString($bytes)
+        if ($text.Contains($symbol)) {
+            Write-Failure "$($library.FullName) contains $symbol"
+        }
+    }
+}
+
+# --- the harness must declare itself unshippable -----------------------------
+
+$harnessManifest = Join-Path 'rust' 'tools' $harness 'Cargo.toml'
+if (-not (Test-Path -LiteralPath $harnessManifest)) {
+    Write-Failure 'the harness manifest is missing'
+}
+elseif ((Get-Content -LiteralPath $harnessManifest -Raw) -notmatch '(?m)^publish = false') {
+    Write-Failure "$harnessManifest must set publish = false"
+}
+
+# --- and it must never be built in release for distribution ------------------
+#
+# Not a rule about the `--release` flag: a release *build* of the harness is
+# fine on a runner. What must not exist is a workflow step that puts it into
+# something a user downloads.
+
+foreach ($workflow in Get-ChildItem -LiteralPath (Join-Path '.github' 'workflows') -Filter '*.yml') {
+    $text = Get-Content -LiteralPath $workflow.FullName -Raw
+    if ($text -match [regex]::Escape($harness) -and $text -match 'upload-artifact') {
+        if ($workflow.Name -ne 'crypto-platform.yml') {
+            Write-Failure "$($workflow.Name) both builds the harness and uploads an artifact"
+        }
+    }
+}
+
+if ($script:status -ne 0) {
+    Write-Error -Message '[FAIL] Harness isolation: the crypto smoke harness can reach the product' -ErrorAction Continue
+    exit 1
+}
+
+Write-Host '[OK] Harness isolation: the crypto smoke harness cannot reach the product'

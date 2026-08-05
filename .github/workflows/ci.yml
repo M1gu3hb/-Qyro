@@ -103,6 +103,8 @@ jobs:
           pwsh -NoProfile -File scripts/tests/launch_surface_contract_test.ps1 || status=1
           bash scripts/tests/repo_portability_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/repo_portability_contract_test.ps1 || status=1
+          bash scripts/tests/crypto_platform_evidence_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/crypto_platform_evidence_contract_test.ps1 || status=1
           python3 -m unittest tools/logo_ascii_generator/test_logo_ascii_generator.py || status=1
           exit "$status"
 
@@ -121,3 +123,13 @@ jobs:
       # `actions/checkout`. See scripts/check_repo_portability.sh.
       - run: bash scripts/check_repo_portability.sh
       - run: pwsh -NoProfile -File scripts/check_repo_portability.ps1
+      # Building qyro_ffi for a target is not building qyro_crypto for it. This
+      # refuses that substitution, which is what let four green workflows mean
+      # less than they looked like they meant.
+      - run: bash scripts/check_crypto_platform_evidence.sh
+      - run: pwsh -NoProfile -File scripts/check_crypto_platform_evidence.ps1
+      # The source half of keeping the test harness out of the product. The
+      # artifact half lives in platform-builds.yml, where the APK, the
+      # Runner.app and the Windows ZIP exist.
+      - run: bash scripts/check_harness_isolation.sh
+      - run: pwsh -NoProfile -File scripts/check_harness_isolation.ps1

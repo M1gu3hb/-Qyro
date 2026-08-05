@@ -59,6 +59,29 @@ jobs:
         run: |
           unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep -q 'lib/arm64-v8a/libqyro_ffi.so'
           unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep -q 'lib/x86_64/libqyro_ffi.so'
+      # The test harness links qyro_crypto and exports a function whose job is to
+      # run a handshake. It is built on every platform and must reach none of
+      # them. Searched in the artifact rather than in the source tree, because a
+      # clean tree with a build script that copies a library in looks identical
+      # until you open the APK.
+      - name: Verify the crypto smoke harness is not in the APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          if unzip -l "$apk" | grep -qi 'qyro_crypto_smoke'; then
+            echo "[FAIL] the APK contains the crypto smoke harness" >&2
+            unzip -l "$apk" | grep -i 'qyro_crypto_smoke' >&2
+            exit 1
+          fi
+          workdir="$(mktemp -d)"
+          unzip -q -o "$apk" 'lib/*' -d "$workdir"
+          if grep -ral 'qyro_crypto_smoke_run' "$workdir" | grep -q .; then
+            echo "[FAIL] a native library in the APK exports the smoke symbol" >&2
+            exit 1
+          fi
+          rm -rf "$workdir"
+          echo '[PASS] the APK carries qyro_ffi and not the crypto smoke harness'
 
   windows:
     runs-on: windows-latest
@@ -129,6 +152,73 @@ jobs:
           finally {
               $archive.Dispose()
           }
+      - name: Verify the crypto smoke harness is not in the portable ZIP
+        shell: pwsh
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'artifacts\qyro-windows-x64-portable-debug.zip'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+              foreach ($entry in $archive.Entries) {
+                  if ($entry.FullName -match 'qyro_crypto_smoke') {
+                      throw "The portable ZIP contains the crypto smoke harness: $($entry.FullName)"
+                  }
+              }
+          }
+          finally {
+              $archive.Dispose()
+          }
+          # And no binary inside it may export the symbol, whatever it is called.
+          $extracted = Join-Path $env:RUNNER_TEMP 'zip-scan'
+          Remove-Item -LiteralPath $extracted -Recurse -Force -ErrorAction SilentlyContinue
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $extracted)
+          foreach ($file in Get-ChildItem -LiteralPath $extracted -Recurse -File) {
+              $text = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($file.FullName))
+              if ($text.Contains('qyro_crypto_smoke_run')) {
+                  throw "$($file.Name) inside the portable ZIP exports the smoke symbol"
+              }
+          }
+          Write-Host '[PASS] the portable ZIP carries qyro_ffi and not the crypto smoke harness'
+      - name: Record what the portable ZIP is and is not
+        shell: pwsh
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Debug'
+          $artifactDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          # SHA256SUMS inside the package, not only the digest GitHub attaches to
+          # the artifact: a checksum a user cannot see after downloading is a
+          # checksum that verifies the transfer and nothing else.
+          $sums = Join-Path $artifactDirectory 'SHA256SUMS.txt'
+          Get-ChildItem -LiteralPath $bundle -Recurse -File | ForEach-Object {
+              $relative = $_.FullName.Substring($bundle.Length + 1)
+              "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $relative"
+          } | Out-File -FilePath $sums -Encoding utf8
+          $info = Join-Path $artifactDirectory 'BUILD-INFO.txt'
+          @(
+              'Qyro Windows x64 portable — DEVELOPMENT BUILD, NOT FOR PUBLIC RELEASE.'
+              ''
+              'Debug configuration, unsigned. Qyro does not transfer files: Send and'
+              'Receive are disabled, and there is no transport, no discovery and no'
+              'secure storage. This package exists to prove the Windows build and'
+              'the Dart-to-DLL boundary work, and for nothing else.'
+              ''
+              "commit=$env:GITHUB_SHA"
+              "workflow_run=$env:GITHUB_RUN_ID"
+              "built_utc=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+              "runner=$env:RUNNER_OS-$env:RUNNER_ARCH"
+              "rustc=$(rustc --version)"
+              "flutter=$(flutter --version --machine | ConvertFrom-Json | Select-Object -ExpandProperty frameworkVersion)"
+              ''
+              'Checksums of every file in this package are in SHA256SUMS.txt.'
+          ) | Out-File -FilePath $info -Encoding utf8
+          Copy-Item -LiteralPath $sums -Destination (Join-Path $bundle 'SHA256SUMS.txt')
+          Copy-Item -LiteralPath $info -Destination (Join-Path $bundle 'BUILD-INFO.txt')
+          $zip = Join-Path $artifactDirectory 'qyro-windows-x64-portable-debug.zip'
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip -Force
+          Get-Content -LiteralPath $info
       - name: Upload portable Windows ZIP
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -173,3 +263,21 @@ jobs:
           done
           grep ' _qyro_protocol_version_ptr$' /tmp/qyro-ios-app-symbols.txt
           grep ' _qyro_protocol_version_len$' /tmp/qyro-ios-app-symbols.txt
+      # The harness is built for iOS in crypto-platform.yml and must not be in
+      # the application. Checked on the bundle rather than the project file: a
+      # project can be clean while a copy phase puts a library in.
+      - name: Verify the crypto smoke harness is not in Runner.app
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=build/ios/iphoneos/Runner.app
+          if grep -rl 'qyro_crypto_smoke_run' "$app" 2>/dev/null | grep -q .; then
+            echo "[FAIL] Runner.app contains the crypto smoke harness" >&2
+            grep -rl 'qyro_crypto_smoke_run' "$app" >&2
+            exit 1
+          fi
+          if find "$app" -iname '*qyro_crypto_smoke*' | grep -q .; then
+            echo "[FAIL] Runner.app carries a harness file" >&2
+            exit 1
+          fi
+          echo '[PASS] Runner.app carries qyro_ffi and not the crypto smoke harness'
