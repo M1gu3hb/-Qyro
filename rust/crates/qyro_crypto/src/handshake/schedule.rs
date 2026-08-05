@@ -2,6 +2,7 @@
 
 use hkdf::Hkdf;
 use hmac::{KeyInit, Mac, SimpleHmac};
+use qyro_protocol::{SESSION_ID_LEN, SessionId};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, Zeroizing};
@@ -40,20 +41,26 @@ impl Label {
     }
 }
 
-/// A 32-byte secret produced by the key schedule.
+/// A 32-byte traffic secret produced by the key schedule.
+///
+/// **Crate-private.** It used to be exported from the crate root, and both
+/// established states handed out `&SessionKey`. Nothing outside this crate has
+/// a use for a raw traffic secret, and every additional holder of one is
+/// another place that has to get zeroization, logging and serialization right.
+/// The AEAD that will consume these lives here too, so the type never needs to
+/// cross the boundary.
 ///
 /// Not `Clone` and not serializable, for the same reason [`crate::DeviceIdentity`]
 /// is not: a secret that copies freely ends up somewhere nobody audited. Its
 /// `Debug` prints a fixed marker, and it zeroizes on drop.
-pub struct SessionKey([u8; DERIVED_KEY_LEN]);
+pub(crate) struct SessionKey([u8; DERIVED_KEY_LEN]);
 
 impl SessionKey {
     /// Crate-internal raw access.
     ///
     /// `cfg(test)` because nothing reads these yet: the AEAD that will consume
-    /// them does not exist. It stays crate-private when it does — nothing
-    /// outside this crate, and in particular nothing across the FFI boundary,
-    /// is ever handed raw key bytes.
+    /// them does not exist. Nothing outside this crate, and in particular
+    /// nothing across the FFI boundary, is ever handed raw key bytes.
     #[cfg(test)]
     pub(crate) const fn as_bytes(&self) -> &[u8; DERIVED_KEY_LEN] {
         &self.0
@@ -78,7 +85,7 @@ pub(crate) struct Schedule {
     pub(crate) responder_finished: Zeroizing<[u8; DERIVED_KEY_LEN]>,
     pub(crate) initiator_to_responder: SessionKey,
     pub(crate) responder_to_initiator: SessionKey,
-    pub(crate) session_id: [u8; DERIVED_KEY_LEN],
+    pub(crate) session_id: SessionId,
 }
 
 impl Schedule {
@@ -102,18 +109,7 @@ impl Schedule {
         let hkdf = Hkdf::<Sha256>::new(Some(salt), shared_secret);
 
         let expand = |label: Label| -> Result<[u8; DERIVED_KEY_LEN], HandshakeError> {
-            let mut info = Vec::with_capacity(
-                LABEL_PREFIX.len() + label.as_bytes().len() + 1 + TRANSCRIPT_LEN,
-            );
-            info.extend_from_slice(LABEL_PREFIX);
-            info.extend_from_slice(label.as_bytes());
-            info.push(0x00);
-            info.extend_from_slice(auth_transcript);
-
-            let mut out = [0u8; DERIVED_KEY_LEN];
-            hkdf.expand(&info, &mut out)
-                .map_err(|_| HandshakeError::KeyDerivationFailed)?;
-            Ok(out)
+            expand_exact::<DERIVED_KEY_LEN>(&hkdf, label, auth_transcript)
         };
 
         Ok(Self {
@@ -121,9 +117,42 @@ impl Schedule {
             responder_finished: Zeroizing::new(expand(Label::ResponderFinished)?),
             initiator_to_responder: SessionKey(expand(Label::InitiatorToResponder)?),
             responder_to_initiator: SessionKey(expand(Label::ResponderToInitiator)?),
-            session_id: expand(Label::SessionId)?,
+            // Derived at exactly the width the wire carries. Expanding 32
+            // bytes and truncating would put the choice of *which* eight in
+            // whoever wrote the truncation, and HKDF-Expand is already defined
+            // for any length: asking it for eight is the whole answer.
+            session_id: SessionId::from_be_bytes(expand_exact::<SESSION_ID_LEN>(
+                &hkdf,
+                Label::SessionId,
+                auth_transcript,
+            )?),
         })
     }
+}
+
+/// Expands one label to exactly `N` bytes.
+///
+/// The width is a type parameter rather than a constant so the session
+/// identifier and the traffic secrets go through the same code at their own
+/// lengths. HKDF-Expand is defined for any output length up to 255 hashes, so
+/// asking for eight bytes is not a shortened 32-byte key: it is a different,
+/// fully specified derivation.
+fn expand_exact<const N: usize>(
+    hkdf: &Hkdf<Sha256>,
+    label: Label,
+    auth_transcript: &[u8; TRANSCRIPT_LEN],
+) -> Result<[u8; N], HandshakeError> {
+    let mut info =
+        Vec::with_capacity(LABEL_PREFIX.len() + label.as_bytes().len() + 1 + TRANSCRIPT_LEN);
+    info.extend_from_slice(LABEL_PREFIX);
+    info.extend_from_slice(label.as_bytes());
+    info.push(0x00);
+    info.extend_from_slice(auth_transcript);
+
+    let mut out = [0u8; N];
+    hkdf.expand(&info, &mut out)
+        .map_err(|_| HandshakeError::KeyDerivationFailed)?;
+    Ok(out)
 }
 
 /// Computes HMAC-SHA-256 over `message`.

@@ -6,7 +6,7 @@
 use qyro_protocol::{
     DecodedFrame, Flags, Frame, FrameDecoder, FrameError, FrameHeader, HEADER_LEN, MAGIC,
     MAX_BUFFER_LEN, MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MessageType,
-    SUPPORTED_TRAILER_LEN, VERSION_MAJOR, VERSION_MINOR,
+    SUPPORTED_TRAILER_LEN, SessionId, VERSION_MAJOR, VERSION_MINOR,
 };
 
 fn encoded(message_type: MessageType, payload: Vec<u8>) -> Vec<u8> {
@@ -91,7 +91,7 @@ fn header_layout_is_frozen() {
         .with_transport_flags(Flags::END_OF_ITEM)
         .expect("transport flag")
         .with_identifiers(
-            0x0102_0304_0506_0708,
+            SessionId::from_u64(0x0102_0304_0506_0708),
             0x1112_1314_1516_1718,
             0x2122_2324,
             0x3132_3334,
@@ -135,14 +135,14 @@ fn round_trip_preserves_every_message_type() {
 fn round_trip_preserves_identifiers_flags_and_sequence() {
     let frame = Frame::new(MessageType::ItemStart, b"payload".to_vec())
         .expect("within limits")
-        .with_identifiers(u64::MAX, 7, u32::MAX, 9)
+        .with_identifiers(SessionId::from_u64(u64::MAX), 7, u32::MAX, 9)
         .with_sequence(u64::MAX)
         .with_flags(Flags::END_OF_TRANSFER)
         .expect("transport flag");
 
     let decoded = decode_message(&frame.encode());
     assert_eq!(decoded, frame);
-    assert_eq!(decoded.header().session_id(), u64::MAX);
+    assert_eq!(decoded.header().session_id(), SessionId::from_u64(u64::MAX));
     assert_eq!(decoded.header().sequence(), u64::MAX);
     assert!(decoded.header().flags().contains(Flags::END_OF_TRANSFER));
 }

@@ -46,6 +46,7 @@ mod frame;
 mod header;
 mod limits;
 mod message;
+mod session;
 mod version;
 
 pub use decoder::{DecodedFrame, FrameDecoder, UnsupportedFrame};
@@ -58,5 +59,6 @@ pub use limits::{
     SUPPORTED_TRAILER_LEN,
 };
 pub use message::{Flags, MessageType};
+pub use session::{SESSION_ID_LEN, SessionId};
 
 pub use version::{MAGIC, PROTOCOL_VERSION, VERSION_MAJOR, VERSION_MINOR};

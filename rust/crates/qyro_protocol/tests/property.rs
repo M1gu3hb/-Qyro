@@ -9,6 +9,7 @@
 
 use qyro_protocol::{
     DecodedFrame, Flags, Frame, FrameDecoder, FrameError, HEADER_LEN, MAX_PAYLOAD_LEN, MessageType,
+    SessionId,
 };
 
 /// xorshift64*, deterministic and dependency-free.
@@ -56,7 +57,7 @@ fn arbitrary_frame(rng: &mut Rng) -> Frame {
     };
     Frame::new(message_type, payload)
         .expect("generated payload stays within limits")
-        .with_identifiers(rng.next_u64(), rng.next_u64(), 0, 0)
+        .with_identifiers(SessionId::from_u64(rng.next_u64()), rng.next_u64(), 0, 0)
         .with_sequence(rng.next_u64())
         .with_flags(flags)
         .expect("transport flags only")

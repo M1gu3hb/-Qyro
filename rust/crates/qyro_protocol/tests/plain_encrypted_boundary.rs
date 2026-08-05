@@ -11,13 +11,13 @@
 //! states outright: no public API may produce a header the decoder would refuse.
 
 use qyro_protocol::{
-    DecodedFrame, EncryptedEnvelope, Flags, Frame, FrameDecoder, FrameError, MessageType,
+    DecodedFrame, EncryptedEnvelope, Flags, Frame, FrameDecoder, FrameError, MessageType, SessionId,
 };
 
 fn plain_frame() -> Frame {
     Frame::new(MessageType::DataChunk, b"plaintext".to_vec())
         .expect("payload within limits")
-        .with_identifiers(11, 22, 33, 44)
+        .with_identifiers(SessionId::from_u64(11), 22, 33, 44)
         .with_sequence(55)
         .with_flags(Flags::END_OF_ITEM)
         .expect("transport flags are settable")
@@ -123,7 +123,7 @@ fn a_template_keeps_its_transport_flags_and_identifiers() {
 
     let header = sealed.header();
     assert_eq!(header.message_type(), MessageType::DataChunk);
-    assert_eq!(header.session_id(), 11);
+    assert_eq!(header.session_id(), SessionId::from_u64(11));
     assert_eq!(header.transfer_id(), 22);
     assert_eq!(header.stream_id(), 33);
     assert_eq!(header.item_id(), 44);

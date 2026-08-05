@@ -32,20 +32,22 @@ mod schedule;
 mod transcript;
 
 #[cfg(test)]
+mod closure_tests;
+#[cfg(test)]
 mod tests;
 
-use rand_core::{TryCryptoRng, TryRng};
-use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
-use zeroize::Zeroizing;
+use qyro_protocol::SessionId;
+use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::error::IdentityError;
 use crate::identity::{DeviceIdentity, PUBLIC_IDENTITY_WIRE_LEN, PublicIdentity};
 use crate::signature::{IdentitySignature, SIGNATURE_LEN, SignatureDomain};
 
 pub use error::HandshakeError;
-pub use schedule::{FINISHED_MAC_LEN, SessionKey};
+pub use schedule::FINISHED_MAC_LEN;
 
-use schedule::{DERIVED_KEY_LEN, Schedule, finished_mac, verify_finished_mac};
+use schedule::{Schedule, SessionKey, finished_mac, verify_finished_mac};
 use transcript::{
     TRANSCRIPT_LEN, auth_transcript, base_transcript, initiator_signing_message,
     responder_signing_message,
@@ -83,8 +85,11 @@ pub const INITIATOR_FINISH_LEN: usize = PREFIX_LEN + SIGNATURE_LEN + FINISHED_MA
 /// Bytes in a `ResponderFinish`.
 pub const RESPONDER_FINISH_LEN: usize = PREFIX_LEN + FINISHED_MAC_LEN;
 
+/// Bytes of the ephemeral X25519 secret drawn per handshake.
+const HANDSHAKE_SECRET_LEN: usize = 32;
+
 /// Bytes of entropy one side needs: an ephemeral secret and a nonce.
-const HANDSHAKE_ENTROPY_LEN: usize = 32 + NONCE_LEN;
+const HANDSHAKE_ENTROPY_LEN: usize = HANDSHAKE_SECRET_LEN + NONCE_LEN;
 
 /// Message type codes. Inside the message, therefore inside the transcript.
 const TYPE_INITIATOR_HELLO: u8 = 1;
@@ -97,51 +102,77 @@ const OFFSET_EPHEMERAL: usize = PREFIX_LEN;
 const OFFSET_NONCE: usize = OFFSET_EPHEMERAL + X25519_PUBLIC_LEN;
 const OFFSET_IDENTITY: usize = OFFSET_NONCE + NONCE_LEN;
 
-/// Replays a fixed buffer as a CSPRNG.
+/// An X25519 secret that exists for exactly one exchange.
 ///
-/// `EphemeralSecret::random()` calls `getrandom` and panics if it fails, which
-/// is not acceptable on this path: [`HandshakeError::EntropyUnavailable`] exists
-/// precisely so entropy failure is a decision the caller makes rather than a
-/// crash. Drawing the bytes here first and replaying them keeps the failure
-/// fallible, and lets the tests drive a handshake deterministically through the
-/// same code path production uses.
-struct FixedRng {
-    bytes: Zeroizing<[u8; 32]>,
-    used: bool,
+/// Wraps `StaticSecret`, which is the only x25519-dalek type constructible
+/// directly from bytes, and restores the property its name gives up:
+/// [`Self::diffie_hellman`] takes `self`, so the compiler rejects a second use.
+///
+/// Constructing from bytes rather than through `EphemeralSecret::random_from_rng`
+/// is deliberate, and it is what makes this path fail closed. That constructor
+/// requires a `CryptoRng`, whose `fill_bytes` is *infallible* — an adapter
+/// feeding it drawn bytes has no way to report exhaustion, so the first version
+/// of this code answered a read past its buffer by zeroing the destination and
+/// returning success. That is not a visibly dead key: an all-zero X25519 secret
+/// clamps to a valid scalar and completes a working handshake containing no
+/// entropy, which is exactly the outcome [`HandshakeError::EntropyUnavailable`]
+/// exists to prevent. Removing the adapter removes the failure mode rather than
+/// handling it — there is no longer any code that can substitute bytes.
+///
+/// Clamping and the scalar arithmetic stay inside the library
+/// (`mul_clamped` / `mul_base_clamped`); nothing here reimplements the curve.
+/// `StaticSecret` is `ZeroizeOnDrop`, and this wrapper is deliberately not
+/// `Clone`, so the secret cannot be duplicated into somewhere unaudited.
+pub(crate) struct EphemeralKeyPair {
+    secret: StaticSecret,
+    public: X25519PublicKey,
 }
 
-impl TryRng for FixedRng {
-    type Error = core::convert::Infallible;
-
-    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
-        let mut out = [0u8; 4];
-        self.try_fill_bytes(&mut out)?;
-        Ok(u32::from_le_bytes(out))
+impl EphemeralKeyPair {
+    /// Builds a key pair from freshly drawn entropy.
+    ///
+    /// The caller draws the bytes fallibly; see [`system_entropy`].
+    pub(crate) fn from_secret_bytes(mut bytes: [u8; HANDSHAKE_SECRET_LEN]) -> Self {
+        let secret = StaticSecret::from(bytes);
+        bytes.zeroize();
+        let public = X25519PublicKey::from(&secret);
+        Self { secret, public }
     }
 
-    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
-        let mut out = [0u8; 8];
-        self.try_fill_bytes(&mut out)?;
-        Ok(u64::from_le_bytes(out))
+    /// The public key to put in a hello.
+    pub(crate) const fn public(&self) -> &X25519PublicKey {
+        &self.public
     }
 
-    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
-        // The buffer serves exactly one 32-byte draw, which is what
-        // `EphemeralSecret::random_from_rng` performs. Anything beyond that
-        // would silently reuse the same bytes, so it is zeroed instead: a
-        // handshake that quietly reused entropy would be far worse than one
-        // that produces an obviously dead key.
-        if self.used || dst.len() > self.bytes.len() {
-            dst.fill(0);
-            return Ok(());
+    /// Performs the exchange and consumes the secret.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HandshakeError::NonContributorySharedSecret`] when the peer
+    /// sent a low-order point.
+    pub(crate) fn diffie_hellman(
+        self,
+        peer: &X25519PublicKey,
+    ) -> Result<Zeroizing<[u8; 32]>, HandshakeError> {
+        let shared = self.secret.diffie_hellman(peer);
+        if !shared.was_contributory() {
+            // The peer sent a low-order point: the shared secret is all zeros
+            // and both sides would "agree" without either having contributed
+            // anything.
+            return Err(HandshakeError::NonContributorySharedSecret);
         }
-        dst.copy_from_slice(&self.bytes[..dst.len()]);
-        self.used = true;
-        Ok(())
+        Ok(Zeroizing::new(shared.to_bytes()))
     }
 }
 
-impl TryCryptoRng for FixedRng {}
+impl core::fmt::Debug for EphemeralKeyPair {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("EphemeralKeyPair")
+            .field("secret", &"<redacted>")
+            .finish()
+    }
+}
 
 /// Draws handshake entropy, or reports that the system could not supply it.
 fn system_entropy() -> Result<[u8; HANDSHAKE_ENTROPY_LEN], HandshakeError> {
@@ -150,18 +181,22 @@ fn system_entropy() -> Result<[u8; HANDSHAKE_ENTROPY_LEN], HandshakeError> {
     Ok(out)
 }
 
-/// Splits entropy into an ephemeral X25519 secret and a nonce.
-fn split_entropy(entropy: [u8; HANDSHAKE_ENTROPY_LEN]) -> (EphemeralSecret, [u8; NONCE_LEN]) {
-    let mut secret_bytes = Zeroizing::new([0u8; 32]);
-    secret_bytes.copy_from_slice(&entropy[..32]);
+/// Splits drawn entropy into an ephemeral key pair and a nonce.
+///
+/// Total, with no error path, because there is nothing left that can fail: the
+/// bytes were drawn fallibly by [`system_entropy`], and everything after that
+/// is a copy. The only failure the previous design could have had was one it
+/// invented for itself by feeding an infallible RNG trait.
+fn split_entropy(mut entropy: [u8; HANDSHAKE_ENTROPY_LEN]) -> (EphemeralKeyPair, [u8; NONCE_LEN]) {
+    let mut secret_bytes = [0u8; HANDSHAKE_SECRET_LEN];
+    secret_bytes.copy_from_slice(&entropy[..HANDSHAKE_SECRET_LEN]);
     let mut nonce = [0u8; NONCE_LEN];
-    nonce.copy_from_slice(&entropy[32..]);
+    nonce.copy_from_slice(&entropy[HANDSHAKE_SECRET_LEN..]);
+    entropy.zeroize();
 
-    let mut rng = FixedRng {
-        bytes: secret_bytes,
-        used: false,
-    };
-    (EphemeralSecret::random_from_rng(&mut rng), nonce)
+    // Infallible by construction: the bytes are already in hand, and the split
+    // is a copy. Every way this could have failed was a way of inventing bytes.
+    (EphemeralKeyPair::from_secret_bytes(secret_bytes), nonce)
 }
 
 /// Checks the fixed prefix of any handshake message.
@@ -237,20 +272,6 @@ fn write_hello_unsigned(
     out[OFFSET_IDENTITY..OFFSET_IDENTITY + PUBLIC_IDENTITY_WIRE_LEN]
         .copy_from_slice(&identity.encode());
     out
-}
-
-/// Performs the X25519 exchange, refusing a non-contributory result.
-fn exchange(
-    secret: EphemeralSecret,
-    peer: &X25519PublicKey,
-) -> Result<Zeroizing<[u8; 32]>, HandshakeError> {
-    let shared = secret.diffie_hellman(peer);
-    if !shared.was_contributory() {
-        // The peer sent a low-order point: the shared secret is all zeros and
-        // both sides would "agree" without either having contributed anything.
-        return Err(HandshakeError::NonContributorySharedSecret);
-    }
-    Ok(Zeroizing::new(shared.to_bytes()))
 }
 
 fn signature_at(message: &[u8], offset: usize) -> IdentitySignature {
@@ -372,7 +393,7 @@ impl<'identity> InitiatorStart<'identity> {
         let (secret, nonce) = split_entropy(entropy);
         let hello = write_hello_unsigned(
             TYPE_INITIATOR_HELLO,
-            &X25519PublicKey::from(&secret),
+            secret.public(),
             &nonce,
             self.identity.public_identity(),
         );
@@ -391,7 +412,7 @@ impl<'identity> InitiatorStart<'identity> {
 /// The initiator, waiting for the responder's hello.
 pub struct InitiatorAwaitResponder<'identity> {
     identity: &'identity DeviceIdentity,
-    secret: EphemeralSecret,
+    secret: EphemeralKeyPair,
     hello: [u8; INITIATOR_HELLO_LEN],
 }
 
@@ -424,7 +445,7 @@ impl InitiatorAwaitResponder<'_> {
         // before verification would produce a secret derived from an
         // unauthenticated key, and something would eventually be tempted to use
         // it.
-        let shared = exchange(self.secret, &peer_ephemeral)?;
+        let shared = self.secret.diffie_hellman(&peer_ephemeral)?;
 
         let initiator_signature = sign_transcript(
             self.identity,
@@ -565,12 +586,12 @@ impl<'identity> ResponderStart<'identity> {
         let (secret, nonce) = split_entropy(entropy);
         let unsigned = write_hello_unsigned(
             TYPE_RESPONDER_HELLO,
-            &X25519PublicKey::from(&secret),
+            secret.public(),
             &nonce,
             self.identity.public_identity(),
         );
 
-        let shared = exchange(secret, &peer_ephemeral)?;
+        let shared = secret.diffie_hellman(&peer_ephemeral)?;
 
         let base = base_transcript(message, &unsigned);
         let responder_signature =
@@ -601,7 +622,14 @@ pub struct ResponderAwaitInitiatorFinish {
 }
 
 impl ResponderAwaitInitiatorFinish {
-    /// Verifies the `InitiatorFinish` and produces the `ResponderFinish`.
+    /// Verifies the `InitiatorFinish` and produces the pending `ResponderFinish`.
+    ///
+    /// Returns [`ResponderFinishPending`], **not** an established session. It
+    /// used to return both the bytes and an `EstablishedResponder`, which said
+    /// the session was usable while the message that completes the handshake
+    /// was still sitting in the caller's hand — and might never reach the peer.
+    /// A responder that starts using session keys at that point is talking to
+    /// someone who does not yet believe the handshake finished.
     ///
     /// # Errors
     ///
@@ -612,7 +640,7 @@ impl ResponderAwaitInitiatorFinish {
     pub fn receive_initiator_finish(
         self,
         message: &[u8],
-    ) -> Result<([u8; RESPONDER_FINISH_LEN], EstablishedResponder), HandshakeError> {
+    ) -> Result<ResponderFinishPending, HandshakeError> {
         check_prefix(message, TYPE_INITIATOR_FINISH, INITIATOR_FINISH_LEN)?;
 
         let initiator_signature = signature_at(message, PREFIX_LEN);
@@ -640,28 +668,112 @@ impl ResponderAwaitInitiatorFinish {
         finish[2] = TYPE_RESPONDER_FINISH;
         finish[PREFIX_LEN..].copy_from_slice(&responder_mac);
 
-        Ok((
+        Ok(ResponderFinishPending {
             finish,
-            EstablishedResponder {
-                session: Session {
-                    session_id: derived.session_id,
-                    sending: derived.responder_to_initiator,
-                    receiving: derived.initiator_to_responder,
-                    peer_identity: self.peer_identity,
-                },
+            session: Session {
+                session_id: derived.session_id,
+                sending: derived.responder_to_initiator,
+                receiving: derived.initiator_to_responder,
+                peer_identity: self.peer_identity,
             },
-        ))
+        })
+    }
+}
+
+/// The responder, holding a verified session it may not use yet.
+///
+/// It has authenticated the initiator and derived every key, but the peer has
+/// not seen the `ResponderFinish`. Until it has, the two sides do not agree
+/// that a session exists.
+///
+/// The only thing this state offers is the bytes to send. Nothing here reaches
+/// a key, by design: the point of the state is that the secrets exist and are
+/// still out of reach.
+///
+/// Dropping it without confirming destroys the secrets, which is the correct
+/// outcome for a handshake whose last message was never delivered.
+pub struct ResponderFinishPending {
+    finish: [u8; RESPONDER_FINISH_LEN],
+    session: Session,
+}
+
+impl ResponderFinishPending {
+    /// The `ResponderFinish` bytes to put on the wire.
+    #[must_use]
+    pub const fn encoded_finish(&self) -> &[u8; RESPONDER_FINISH_LEN] {
+        &self.finish
+    }
+
+    /// The identity that signed the transcript.
+    ///
+    /// Available here because the peer is already authenticated. Holding an
+    /// identity is not trusting it.
+    #[must_use]
+    pub const fn peer_identity(&self) -> &PublicIdentity {
+        &self.session.peer_identity
+    }
+
+    /// Records that the transport delivered [`Self::encoded_finish`], and
+    /// establishes the session.
+    ///
+    /// Call this **only** once the transport reports the bytes were actually
+    /// handed over. There is no transport yet, so nothing can call it for real;
+    /// the tests confirm delivery by hand, and that is exactly the seam a
+    /// transport will occupy.
+    ///
+    /// Consumes `self`: a session is established once, and a second
+    /// confirmation cannot be written.
+    #[must_use]
+    pub fn confirm_sent(self) -> EstablishedResponder {
+        EstablishedResponder {
+            session: self.session,
+        }
+    }
+}
+
+impl core::fmt::Debug for ResponderFinishPending {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("ResponderFinishPending")
+            .field("peer", self.session.peer_identity.fingerprint())
+            .field("keys", &"<redacted>")
+            .finish()
     }
 }
 
 // --------------------------------------------------------------- established
 
+/// Which end of the handshake a state belongs to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Role {
+    /// Sent the first hello.
+    Initiator,
+    /// Answered it.
+    Responder,
+}
+
 /// What both sides end up holding.
+///
+/// The traffic secrets stay in this struct and never leave the crate. The AEAD
+/// that will consume them lives here too, so they have no reason to.
 struct Session {
-    session_id: [u8; DERIVED_KEY_LEN],
+    session_id: SessionId,
     sending: SessionKey,
     receiving: SessionKey,
     peer_identity: PublicIdentity,
+}
+
+/// The derived secrets, handed to the AEAD when one exists.
+///
+/// Crate-private and deliberately opaque. It is the seam the next milestone
+/// consumes to build a frame sealer and opener; declaring it now keeps the
+/// established states from growing a public key accessor to serve that purpose
+/// later.
+pub(crate) struct PendingSessionSecrets {
+    #[allow(dead_code, reason = "consumed by the AEAD milestone, not by this one")]
+    pub(crate) sending: SessionKey,
+    #[allow(dead_code, reason = "consumed by the AEAD milestone, not by this one")]
+    pub(crate) receiving: SessionKey,
 }
 
 /// A completed handshake, from the initiator's side.
@@ -675,27 +787,25 @@ pub struct EstablishedResponder {
 }
 
 macro_rules! established_accessors {
-    ($type:ty, $name:literal) => {
+    ($type:ty, $name:literal, $role:expr) => {
         impl $type {
+            const ROLE: Role = $role;
+
             /// The session identifier both sides derived.
             ///
-            /// Derived by the same schedule as the keys but from its own label,
-            /// so it reveals nothing about them. Safe to display or log.
+            /// The same eight-byte type the QYRO/1 header carries, so it goes
+            /// on the wire with no conversion. Derived by the same schedule as
+            /// the keys but under its own label, so it reveals nothing about
+            /// them: safe to display or log.
             #[must_use]
-            pub const fn session_id(&self) -> &[u8; DERIVED_KEY_LEN] {
-                &self.session.session_id
+            pub const fn session_id(&self) -> SessionId {
+                self.session.session_id
             }
 
-            /// The key this side writes with.
+            /// Which end of the handshake this is.
             #[must_use]
-            pub const fn sending_key(&self) -> &SessionKey {
-                &self.session.sending
-            }
-
-            /// The key this side reads with.
-            #[must_use]
-            pub const fn receiving_key(&self) -> &SessionKey {
-                &self.session.receiving
+            pub const fn role(&self) -> Role {
+                Self::ROLE
             }
 
             /// The identity that actually signed the transcript.
@@ -707,15 +817,36 @@ macro_rules! established_accessors {
                 &self.session.peer_identity
             }
 
-            /// Crate-internal raw key access, for the AEAD that will consume it.
+            /// The peer's fingerprint, for display and comparison.
+            #[must_use]
+            pub const fn peer_fingerprint(&self) -> &crate::IdentityFingerprint {
+                self.session.peer_identity.fingerprint()
+            }
+
+            /// Hands the traffic secrets to the AEAD. Crate-internal.
+            ///
+            /// The one way out of this type, and it stays inside the crate.
+            /// There is no AEAD yet, so nothing calls it.
+            #[allow(dead_code, reason = "the AEAD milestone consumes this")]
+            pub(crate) fn into_secrets(self) -> PendingSessionSecrets {
+                PendingSessionSecrets {
+                    sending: self.session.sending,
+                    receiving: self.session.receiving,
+                }
+            }
+
+            /// Raw key inspection for the crate's own tests.
+            ///
+            /// `cfg(test)`, never a feature: a feature is additive and any
+            /// crate in a dependency graph could switch it on for everybody.
             #[cfg(test)]
-            pub(crate) const fn sending_key_bytes(&self) -> &[u8; DERIVED_KEY_LEN] {
+            pub(crate) const fn sending_key_bytes(&self) -> &[u8; 32] {
                 self.session.sending.as_bytes()
             }
 
-            /// Crate-internal raw key access, for the AEAD that will consume it.
+            /// Raw key inspection for the crate's own tests.
             #[cfg(test)]
-            pub(crate) const fn receiving_key_bytes(&self) -> &[u8; DERIVED_KEY_LEN] {
+            pub(crate) const fn receiving_key_bytes(&self) -> &[u8; 32] {
                 self.session.receiving.as_bytes()
             }
         }
@@ -733,5 +864,13 @@ macro_rules! established_accessors {
     };
 }
 
-established_accessors!(EstablishedInitiator, "EstablishedInitiator");
-established_accessors!(EstablishedResponder, "EstablishedResponder");
+established_accessors!(
+    EstablishedInitiator,
+    "EstablishedInitiator",
+    Role::Initiator
+);
+established_accessors!(
+    EstablishedResponder,
+    "EstablishedResponder",
+    Role::Responder
+);

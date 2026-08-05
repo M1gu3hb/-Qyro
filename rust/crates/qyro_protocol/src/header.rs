@@ -13,6 +13,7 @@ use crate::limits::{
     SUPPORTED_TRAILER_LEN,
 };
 use crate::message::{Flags, MessageType};
+use crate::session::SessionId;
 use crate::version::{MAGIC, VERSION_MAJOR, VERSION_MINOR};
 
 /// A validated frame header.
@@ -26,7 +27,7 @@ pub struct FrameHeader {
     flags: Flags,
     trailer_len: u8,
     payload_len: u32,
-    session_id: u64,
+    session_id: SessionId,
     transfer_id: u64,
     stream_id: u32,
     item_id: u32,
@@ -59,7 +60,7 @@ impl FrameHeader {
             flags: Flags::NONE,
             trailer_len: SUPPORTED_TRAILER_LEN as u8,
             payload_len,
-            session_id: 0,
+            session_id: SessionId::ZERO,
             transfer_id: 0,
             stream_id: 0,
             item_id: 0,
@@ -128,8 +129,12 @@ impl FrameHeader {
     }
 
     /// Opaque session identifier.
+    ///
+    /// The same eight-byte type the handshake key schedule derives, so no
+    /// conversion or truncation happens between establishing a session and
+    /// naming it on the wire.
     #[must_use]
-    pub const fn session_id(&self) -> u64 {
+    pub const fn session_id(&self) -> SessionId {
         self.session_id
     }
 
@@ -180,7 +185,7 @@ impl FrameHeader {
     #[must_use]
     pub const fn with_identifiers(
         mut self,
-        session_id: u64,
+        session_id: SessionId,
         transfer_id: u64,
         stream_id: u32,
         item_id: u32,
@@ -412,7 +417,9 @@ impl FrameHeader {
             flags,
             trailer_len,
             payload_len,
-            session_id: u64::from_be_bytes(bytes[16..24].try_into().expect("slice is eight bytes")),
+            session_id: SessionId::from_be_bytes(
+                bytes[16..24].try_into().expect("slice is eight bytes"),
+            ),
             transfer_id: u64::from_be_bytes(
                 bytes[24..32].try_into().expect("slice is eight bytes"),
             ),

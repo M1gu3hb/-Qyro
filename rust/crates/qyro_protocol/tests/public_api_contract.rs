@@ -5,7 +5,7 @@
 //! it had no basis for.
 
 use qyro_protocol::{
-    DecodedFrame, Flags, Frame, FrameDecoder, FrameError, MAX_PAYLOAD_LEN, MessageType,
+    DecodedFrame, Flags, Frame, FrameDecoder, FrameError, MAX_PAYLOAD_LEN, MessageType, SessionId,
 };
 
 fn encoded(message_type: MessageType, payload: &[u8]) -> Vec<u8> {
@@ -97,7 +97,7 @@ fn every_frame_a_public_api_can_build_survives_its_own_decoder() {
         ] {
             let frame = Frame::new(message_type, b"body".to_vec())
                 .expect("valid")
-                .with_identifiers(u64::MAX, 3, u32::MAX, 5)
+                .with_identifiers(SessionId::from_u64(u64::MAX), 3, u32::MAX, 5)
                 .with_sequence(u64::MAX)
                 .with_flags(flags)
                 .expect("transport flags only");
@@ -155,7 +155,7 @@ fn an_envelope_preserves_every_authenticated_metadata_field() {
     let template = Frame::new(MessageType::DataChunk, b"plaintext".to_vec())
         .expect("valid")
         .with_identifiers(
-            0x0102_0304_0506_0708,
+            SessionId::from_u64(0x0102_0304_0506_0708),
             0x1112_1314_1516_1718,
             0x2122_2324,
             0x3132_3334,
@@ -175,7 +175,10 @@ fn an_envelope_preserves_every_authenticated_metadata_field() {
 
     let header = envelope.header();
     assert_eq!(header.message_type(), MessageType::DataChunk);
-    assert_eq!(header.session_id(), 0x0102_0304_0506_0708);
+    assert_eq!(
+        header.session_id(),
+        SessionId::from_u64(0x0102_0304_0506_0708)
+    );
     assert_eq!(header.transfer_id(), 0x1112_1314_1516_1718);
     assert_eq!(header.stream_id(), 0x2122_2324);
     assert_eq!(header.item_id(), 0x3132_3334);
@@ -193,7 +196,7 @@ fn an_envelope_preserves_every_authenticated_metadata_field() {
 fn an_envelope_survives_the_wire_byte_exactly() {
     let template = Frame::new(MessageType::ItemStart, b"x".to_vec())
         .expect("valid")
-        .with_identifiers(9, 8, 7, 6)
+        .with_identifiers(SessionId::from_u64(9), 8, 7, 6)
         .with_sequence(5)
         .with_flags(Flags::END_OF_ITEM)
         .expect("transport flags");

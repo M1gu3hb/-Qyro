@@ -6,6 +6,7 @@
 
 use qyro_protocol::{
     Flags, Frame, FrameDecoder, FrameError, FrameHeader, HEADER_LEN, MAX_HEADER_LEN, MessageType,
+    SessionId,
 };
 
 fn encoded(message_type: MessageType, payload: &[u8]) -> Vec<u8> {
@@ -195,7 +196,7 @@ fn decode_then_encode_is_byte_exact_for_every_accepted_frame() {
         encoded(MessageType::Heartbeat, b"x"),
         Frame::new(MessageType::ItemStart, b"payload".to_vec())
             .expect("valid")
-            .with_identifiers(u64::MAX, 7, u32::MAX, 9)
+            .with_identifiers(SessionId::from_u64(u64::MAX), 7, u32::MAX, 9)
             .with_sequence(u64::MAX)
             .encode(),
     ];

@@ -4,6 +4,7 @@ use crate::error::FrameError;
 use crate::header::FrameHeader;
 use crate::limits::MAX_PAYLOAD_LEN;
 use crate::message::{Flags, MessageType};
+use crate::session::SessionId;
 
 /// An owned QYRO/1 frame.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -95,7 +96,7 @@ impl Frame {
     #[must_use]
     pub const fn with_identifiers(
         mut self,
-        session_id: u64,
+        session_id: SessionId,
         transfer_id: u64,
         stream_id: u32,
         item_id: u32,

@@ -52,9 +52,12 @@ fn run() -> Completed {
         .receive_responder_hello(&responder_hello)
         .expect("the responder hello verifies");
 
-    let (responder_finish, responder) = awaiting_initiator_finish
+    let pending = awaiting_initiator_finish
         .receive_initiator_finish(&initiator_finish)
         .expect("the initiator finish verifies");
+    let responder_finish = *pending.encoded_finish();
+    // No transport exists; the tests stand in for one by confirming delivery.
+    let responder = pending.confirm_sent();
 
     let initiator = awaiting_responder_finish
         .receive_responder_finish(&responder_finish)
@@ -100,9 +103,9 @@ fn the_two_directions_never_share_a_key() {
         "one key in both directions lets a peer's own messages be reflected at it"
     );
     assert_ne!(
-        done.initiator.sending_key_bytes(),
-        done.initiator.session_id(),
-        "the session identifier is not a key"
+        &done.initiator.sending_key_bytes()[..8],
+        &done.initiator.session_id().to_be_bytes()[..],
+        "the session identifier is not a prefix of a key"
     );
 }
 
@@ -140,9 +143,11 @@ fn a_different_run_produces_different_keys() {
         let (finish, awaiting_responder_finish) = awaiting
             .receive_responder_hello(&responder_hello)
             .expect("verifies");
-        let (responder_finish, _responder) = awaiting_finish
+        let pending = awaiting_finish
             .receive_initiator_finish(&finish)
             .expect("verifies");
+        let responder_finish = *pending.encoded_finish();
+        let _responder = pending.confirm_sent();
         let initiator = awaiting_responder_finish
             .receive_responder_finish(&responder_finish)
             .expect("verifies");
@@ -181,9 +186,10 @@ fn every_message_has_the_length_the_adr_freezes() {
         .expect("verifies");
     assert_eq!(finish.len(), INITIATOR_FINISH_LEN);
 
-    let (responder_finish, _) = awaiting_finish
+    let responder_finish = *awaiting_finish
         .receive_initiator_finish(&finish)
-        .expect("verifies");
+        .expect("verifies")
+        .encoded_finish();
     assert_eq!(responder_finish.len(), RESPONDER_FINISH_LEN);
     assert_eq!(RESPONDER_FINISH_LEN, 3 + FINISHED_MAC_LEN);
 }
@@ -200,9 +206,10 @@ fn every_message_declares_its_version_suite_and_type() {
     let (finish, _) = awaiting
         .receive_responder_hello(&responder_hello)
         .expect("verifies");
-    let (responder_finish, _) = awaiting_finish
+    let responder_finish = *awaiting_finish
         .receive_initiator_finish(&finish)
-        .expect("verifies");
+        .expect("verifies")
+        .encoded_finish();
 
     for (expected_type, message) in [
         (1u8, &hello[..]),
@@ -356,9 +363,10 @@ fn a_tampered_responder_finish_is_refused() {
     let (finish, awaiting_responder_finish) = awaiting
         .receive_responder_hello(&responder_hello)
         .expect("verifies");
-    let (mut responder_finish, _) = awaiting_finish
+    let mut responder_finish = *awaiting_finish
         .receive_initiator_finish(&finish)
-        .expect("verifies");
+        .expect("verifies")
+        .encoded_finish();
 
     responder_finish[RESPONDER_FINISH_LEN - 1] ^= 0x01;
     assert_eq!(

@@ -56,7 +56,7 @@ mod vectors;
 
 pub use error::IdentityError;
 pub use fingerprint::{FINGERPRINT_LEN, IdentityFingerprint};
-pub use handshake::{HandshakeError, SessionKey};
+pub use handshake::HandshakeError;
 pub use identity::{
     DeviceIdentity, IDENTITY_VERSION, PUBLIC_IDENTITY_WIRE_LEN, PUBLIC_KEY_LEN, PublicIdentity,
 };
