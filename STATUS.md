@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T16:40:00Z
+- Updated UTC: 2026-08-05T16:55:00Z
 - Branch: claude/qyro-handshake-closure
-- Verified commit: 9f006b01d2b65806995bfa40a0f7bd0ac0308f0a
+- Verified commit: c9cc0f3c6eed2471fb57aae8b87126db053ca01b
 - Milestone: handshake cerrado, documentado y con vectores; AEAD y transporte NO iniciados
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
@@ -163,7 +163,26 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 
-Workflows sobre `779fb16` (este sprint), lanzados con `workflow_dispatch`:
+Workflows sobre `c9cc0f3` (este sprint), lanzados con `workflow_dispatch`:
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 31026203456 | **success**, 4/4 jobs |
+| Platform builds | 31026211681 | **success**, 3/3 jobs: `android`, `ios` y `windows` |
+| Android runtime ABI | 31026220463 | **success**, smoke de ABI en emulador |
+| iOS runtime ABI | 31026229897 | **success**, XCTest en simulador |
+
+Los cuatro sobre el mismo commit. El job `windows` recorre los trece pasos,
+incluidos la lectura Dart→DLL, el bundle x64 y el smoke-launch de `qyro.exe`.
+
+Baseline previo a cualquier cambio funcional: CI 31023707679 sobre `436bdc4`,
+**success**, lanzado sobre la rama nueva antes de tocar nada.
+
+Runs intermedios sobre `253ef18` y `a698412` quedaron **cancelled** para los dos
+workflows de runtime: al relanzar sobre el commit final, el grupo de concurrencia
+canceló los anteriores. No es un fallo, y ninguno se usa como evidencia.
+
+Workflows previos sobre `779fb16` (sprint 4B):
 
 | Workflow | Run | Conclusión |
 |---|---|---|
