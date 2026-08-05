@@ -154,15 +154,18 @@ protege ahí, no el manifest.
 
 ## Riesgo residual
 
-- Sin campaña de fuzzing, la cobertura sobre entradas imprevistas es desconocida.
+- La campaña de fuzzing es acotada: dos minutos por target, semanal. La cobertura
+  sobre entradas imprevistas sigue siendo desconocida más allá de eso.
 - Los límites son constantes de compilación elegidas por criterio, no medidas.
   `MAX_PAYLOAD_LEN` de 1 MiB deberá revisarse cuando exista transporte real.
 - El manifest todavía no se autentica: la canonicidad está lista para firmar,
   pero la firma llega en el hito de identidad y cifrado.
 - Nada de esto protege contra un peer legítimo que envíe contenido malicioso;
   eso corresponde a la confirmación del receptor y a la integridad final.
-- **`qyro_protocol` no hace criptografía.** `EncryptedEnvelope` define la forma
-  de un frame cifrado y expone la cabecera completa como datos asociados, pero
-  ningún AEAD la consume: los bytes que llama «tag» no los verifica nadie. La
-  identidad Ed25519 vive en `qyro_crypto` desde el sprint 4A; el AEAD sigue sin
-  existir.
+- **`qyro_protocol` sigue sin hacer criptografía**, y eso es deliberado.
+  `EncryptedEnvelope` define la forma de un frame cifrado y expone la cabecera
+  completa como datos asociados; quien verifica el tag es `qyro_crypto::aead`
+  desde el sprint 4C. Un `EncryptedEnvelope` decodificado por sí solo no
+  demuestra nada: los bytes que llama «tag» no los ha comprobado nadie hasta
+  que un `FrameOpener` con la clave de sesión los consume. Esta frase decía
+  antes que «el AEAD sigue sin existir», lo cual dejó de ser cierto en 4C.

@@ -19,6 +19,13 @@ Todo comportamiento comprobable sigue rojo → verde → refactor. El test debe 
   desde las primitivas. Los vectores del AEAD están encadenados a los del
   handshake, y una prueba comprueba el encadenamiento campo a campo en lugar de
   afirmarlo en prosa.
+- Criptografía por plataforma: `qyro_crypto` se compila para Android x86_64 y
+  arm64, iOS device y simulator, Windows x64 y Linux, y el harness de
+  `rust/tools/qyro_crypto_smoke` lo **ejecuta** en cuatro de esas seis. Ver
+  `docs/testing/crypto-platform-matrix.md`, que distingue compilar de ejecutar
+  fila por fila porque no son lo mismo.
+- Fuzzing acotado: seis targets, semanal y bajo demanda. Ver
+  `docs/testing/crypto-fuzzing.md`, que empieza por lo que **no** demuestra.
 - Intro: unit/widget/golden según corresponda.
 
 ## Cómo se comprueba una invariante
@@ -34,6 +41,21 @@ verificador documental no comprobaban lo que decían comprobar, y —en el sprin
 4C— que quitar la dirección de la etiqueta de derivación del AEAD no rompía
 ninguna de las treinta y tres pruebas, porque la propiedad estaba apoyada una
 capa más arriba.
+
+## Ejecutar no es compilar
+
+El sprint 4C.1 existe porque cuatro workflows en verde no decían nada sobre
+`qyro_crypto` fuera de x86_64 Linux. Todos compilaban y ejecutaban `qyro_ffi`,
+que deliberadamente no puede alcanzar `qyro_crypto`.
+
+La regla que queda: **el nombre del paquete y el target se comprueban juntos.**
+`--package qyro_ffi --target aarch64-linux-android` no es evidencia sobre
+`qyro_crypto`, y `scripts/check_crypto_platform_evidence.{sh,ps1}` rechaza esa
+sustitución con un contrato que la hace a propósito para ver si el checker la
+detecta.
+
+La segunda regla: **un emulador y un simulador no son hardware.** Se declaran
+como lo que son.
 
 Un verificador que ignora lo que no entiende es peor que ninguno: informa de
 éxito sobre restricciones que nunca comprobó. El validador de schema de los
@@ -72,9 +94,15 @@ Propiedades cubiertas (~30 000 casos generados por ejecución):
 - un manifest válido nunca produce una ruta absoluta ni con travesía;
 - el parser de rutas nunca reescribe su entrada.
 
-El fuzzing real **no se ha ejecutado**. Hay targets `cargo-fuzz` y un corpus de
-65 entradas que CI reproduce como smoke test. Detalles y comandos en
-`docs/security/parser-threats.md`.
+Hasta el sprint 4C.1 esta sección decía «el fuzzing real **no se ha
+ejecutado**», y era peor que eso: los targets ni siquiera compilaban, porque
+`rust/fuzz` no declaraba `[workspace]` y CI solo les pasaba `rustfmt --check`.
+Ahora los seis targets se construyen y `.github/workflows/crypto-fuzz.yml` los
+ejecuta, con un presupuesto acotado y sus estadísticas finales en el log. El
+corpus de 94 entradas se sigue reproduciendo como smoke test en cada commit,
+que es lo que corre en stable. Detalles, comandos y —sobre todo— lo que la
+campaña **no** demuestra, en `docs/security/parser-threats.md` y
+`docs/testing/crypto-fuzzing.md`.
 
 ## Golden tests
 

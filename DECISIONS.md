@@ -21,11 +21,17 @@
 - ADR-0020: fundación de identidad de dispositivo.
 - ADR-0021: handshake autenticado de cuatro mensajes.
 - ADR-0022: cifrado autenticado de frames QYRO/1.
+- ADR-0023: harness aislado de pruebas criptográficas por plataforma.
 
 El sprint 4B.1 cerró el handshake sin cambiar ninguna decisión: unificó el
 `SessionId` en ocho bytes, añadió `ResponderFinishPending`, sacó las claves de
 la API pública y comprometió vectores. Está registrado como enmienda dentro de
 ADR-0021.
+
+El sprint 4C.1 no cambió ningún formato. Añadió ADR-0023 —evidencia real de que
+`qyro_crypto` funciona en Android, iOS y Windows, que hasta entonces solo se
+había compilado y ejecutado en x86_64 Linux— y enmendó ADR-0016, que llevaba
+cuatro sprints afirmando dos reglas que ADR-0018 y ADR-0022 ya habían revertido.
 
 No existe ADR-0011.
 

@@ -13,6 +13,8 @@
 | rust/crates/qyro_manifest | manifest y rutas seguras | Protocolo | std, unicode-normalization | filesystem real, red |
 | rust/crates/qyro_crypto | identidad Ed25519, firmas, handshake autenticado y AEAD de frames | Seguridad | qyro_protocol, ed25519-dalek, x25519-dalek, sha2, hkdf, hmac, chacha20poly1305, zeroize | red, filesystem, UI |
 | docs/security/test-vectors | vectores interoperables y sus schemas | Seguridad | ninguna | secretos reales |
+| rust/tools/qyro_crypto_smoke | harness de pruebas criptográficas por plataforma | Seguridad | qyro_crypto, qyro_protocol | el producto: no se enlaza en ningún artefacto |
+| rust/fuzz | targets cargo-fuzz, workspace aparte que exige nightly | Seguridad | qyro_crypto, qyro_protocol, qyro_manifest, libfuzzer-sys | la compilación del producto |
 | rust/fuzz | targets y corpus cargo-fuzz | Seguridad/QA | crates de protocolo | workspace principal |
 | docs/protocols | especificación de wire y manifest | Protocolo | ADR | código ejecutable |
 | scripts | diagnóstico/bootstrap/pruebas | DevEx/QA | toolchains declaradas | secretos |
