@@ -97,9 +97,12 @@ fi
 # something a user downloads.
 
 for workflow in .github/workflows/*.yml; do
-    if grep -q "$harness" "$workflow" && grep -q 'upload-artifact' "$workflow"; then
-        # The crypto workflow uploads reports, not binaries. Anything else
-        # naming the harness next to an upload needs a human to look.
+    # Naming the harness is not the offence — `platform-builds.yml` names it
+    # precisely to search the APK, the ZIP and Runner.app for it, which is the
+    # opposite of shipping it. What matters is *building* it next to an upload.
+    if grep -Eq -- "(--package|-p) $harness" "$workflow"         && grep -q 'upload-artifact' "$workflow"; then
+        # crypto-platform.yml builds it and uploads JSON reports, never a
+        # binary. Anything else needs a human to look.
         if [[ "$(basename "$workflow")" != "crypto-platform.yml" ]]; then
             fail "$workflow both builds the harness and uploads an artifact"
         fi

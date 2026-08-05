@@ -122,6 +122,38 @@ fn the_stripper_actually_strips() {
 }
 
 #[test]
+fn every_committed_vector_arrives_with_the_bytes_that_were_committed() {
+    // Found by running this suite on Windows for the first time. Git's default
+    // there checks text files out with CRLF, so `include_str!` returned
+    // different bytes than the ones that had been committed, and three tests
+    // failed with diffs that looked like a stale vector rather than a
+    // translated file.
+    //
+    // It matters beyond the tests. These files are the interoperability
+    // contract: an implementation in Swift or Kotlin is meant to hash exactly
+    // these bytes, and a file that arrives different on Windows is a different
+    // file. `.gitattributes` pins `eol=lf`; this fails with a sentence that
+    // says so if anyone removes it.
+    for (name, contents) in [
+        ("aead-v1.json", super::vectors::COMMITTED),
+        (
+            "handshake-v1.json",
+            include_str!("../../../../../docs/security/test-vectors/handshake-v1.json"),
+        ),
+        (
+            "rfc8439-chacha20poly1305.json",
+            include_str!("../../../../../docs/security/test-vectors/rfc8439-chacha20poly1305.json"),
+        ),
+    ] {
+        assert!(
+            !contents.contains('\r'),
+            "{name} was checked out with CRLF; the committed vectors are \
+             byte-exact and .gitattributes must pin eol=lf"
+        );
+    }
+}
+
+#[test]
 fn the_production_aead_path_contains_no_assertions() {
     // `assert!` is `panic!` under another name, and Clippy has no lint for it.
     // A frame the peer controls must never be able to end this process.

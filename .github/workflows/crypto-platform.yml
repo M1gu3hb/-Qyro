@@ -197,7 +197,14 @@ jobs:
           for qyro_triple in aarch64-apple-ios aarch64-apple-ios-sim; do
             qyro_library="target/$qyro_triple/debug/libqyro_crypto_smoke.a"
             test -f "$qyro_library"
-            nm -gU "$qyro_library" | grep -q ' _qyro_crypto_smoke_run$'
+            # `nm | grep -q` looks right and fails under `pipefail`: grep exits
+            # at the first match, nm keeps writing into a closed pipe, and the
+            # job dies on "LLVM ERROR: IO failure on output stream: Broken
+            # pipe" rather than on anything about the symbol. Same pattern
+            # ios-runtime.yml already uses.
+            qyro_symbols="$RUNNER_TEMP/qyro-$qyro_triple.symbols"
+            nm -gU "$qyro_library" > "$qyro_symbols"
+            grep -q ' _qyro_crypto_smoke_run$' "$qyro_symbols"
           done
       - name: Package the simulator library as an XCFramework
         shell: bash

@@ -1,0 +1,40 @@
+# Byte-exact checkouts on every platform.
+#
+# Found by running qyro_crypto's test suite on Windows for the first time, in
+# sprint 4C.1. Three tests failed there and passed everywhere else, and all
+# three failed for the same reason: Git's default on Windows checks text files
+# out with CRLF, so the bytes on disk were not the bytes that were committed.
+#
+# Two things in this repository depend on that not happening.
+#
+# The committed test vectors are the interoperability contract. `aead-v1.json`
+# and `handshake-v1.json` are compared byte for byte against what the code
+# regenerates, and an implementation in Swift or Kotlin is meant to hash exactly
+# these files. A vector file that arrives with different bytes on Windows is a
+# different file, and the whole point of committing it is that it is not.
+#
+# Several tests read this repository's own source to assert a structural
+# property — that an ephemeral secret's exchange consumes `self`, that no
+# `assert!` survives on the AEAD path. They match on strings containing `\n`.
+#
+# `eol=lf` rather than `text=auto` alone: `auto` normalizes what goes *into* the
+# repository and still hands Windows CRLF on the way out, which is exactly the
+# half that broke.
+* text=auto eol=lf
+
+# Binary, so Git never inspects or rewrites a byte. The fuzz corpus especially:
+# its files are chosen byte strings, and a corpus entry Git decided to translate
+# would be a different test than the one that was committed.
+*.bin binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.jar binary
+*.keystore binary

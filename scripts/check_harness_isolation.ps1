@@ -103,7 +103,10 @@ elseif ((Get-Content -LiteralPath $harnessManifest -Raw) -notmatch '(?m)^publish
 
 foreach ($workflow in Get-ChildItem -LiteralPath (Join-Path '.github' 'workflows') -Filter '*.yml') {
     $text = Get-Content -LiteralPath $workflow.FullName -Raw
-    if ($text -match [regex]::Escape($harness) -and $text -match 'upload-artifact') {
+    # Naming the harness is not the offence — `platform-builds.yml` names it
+    # precisely to search the APK, the ZIP and Runner.app for it, which is the
+    # opposite of shipping it. What matters is *building* it next to an upload.
+    if ($text -match "(--package|-p) $([regex]::Escape($harness))" -and $text -match 'upload-artifact') {
         if ($workflow.Name -ne 'crypto-platform.yml') {
             Write-Failure "$($workflow.Name) both builds the harness and uploads an artifact"
         }
