@@ -134,7 +134,20 @@ initiator_signature = Sign(initiator_identity, base_transcript || responder_sign
 ```
 
 El iniciador firma **incluyendo la firma del respondedor**, de modo que su firma
-queda atada a esta respuesta concreta y no puede levantarse hacia otra sesión.
+queda atada a esa respuesta concreta.
+
+Límite honesto de esa afirmación, encontrado borrando el enlace y comprobando
+que **ninguna prueba de extremo a extremo fallaba**: Ed25519 aquí es
+determinista (RFC 8032) y la identidad del respondedor está dentro de
+`base_transcript`, así que `responder_signature` es una función pura de
+`base_transcript` —mismo transcript, misma firma, siempre—. El enlace no aporta
+nada que `base_transcript` no aporte ya, y ningún ataque de extremo a extremo
+distingue las dos construcciones.
+
+Se conserva como defensa en profundidad para un firmante **no** determinista —un
+token hardware, o una variante futura que aleatorice— donde existen varias firmas
+válidas sobre un mismo transcript. Lo que sí se comprueba es la construcción: que
+la firma del respondedor forme realmente parte de lo que firma el iniciador.
 
 Una firma de respondedor no puede presentarse como firma de iniciador: la entrada
 de firma de ADR-0020 incluye `len(message) as u64 BE`, y 32 nunca es 96. La

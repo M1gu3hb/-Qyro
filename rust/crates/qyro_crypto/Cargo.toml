@@ -26,6 +26,20 @@ zeroize = { version = "1.9.0", default-features = false, features = ["zeroize_de
 # System CSPRNG. MIT/Apache-2.0. Production entropy comes from here and nowhere
 # else; there is deliberately no weaker fallback.
 getrandom = "0.4.3"
+# X25519 (RFC 7748) from the same dalek family, sharing curve25519-dalek 5.0
+# with ed25519-dalek so no duplicate copy of the curve enters the build.
+# BSD-3-Clause. See ADR-0021.
+x25519-dalek = { version = "3.0.0", default-features = false, features = ["precomputed-tables", "zeroize"] }
+# HKDF-SHA256 (RFC 5869) and HMAC-SHA256 (RFC 2104). RustCrypto, MIT/Apache-2.0,
+# both on digest 0.11 like sha2.
+hkdf = { version = "0.13.0", default-features = false }
+hmac = { version = "0.13.0", default-features = false }
+# Constant-time comparison for the confirmation MACs. Already in the tree via
+# ed25519-dalek; named directly because this crate compares secrets itself.
+subtle = { version = "2.6.1", default-features = false }
+# The CryptoRng trait the ephemeral-secret constructor requires. Entropy is
+# still drawn through getrandom; see the FixedRng note in handshake/mod.rs.
+rand_core = { version = "0.10.1", default-features = false }
 
 [dev-dependencies]
 # The committed vector files are parsed as JSON rather than scraped with string

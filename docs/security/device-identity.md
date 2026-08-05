@@ -105,9 +105,21 @@ nada ha validado.
 deliberado: distinguir «clave equivocada» de «mensaje alterado» le diría a un
 atacante qué mitad seguir cambiando.
 
+## Handshake
+
+Desde el sprint 4B existe un handshake autenticado de cuatro mensajes, **solo en
+memoria**: `rust/crates/qyro_crypto/src/handshake`, especificado por ADR-0021.
+X25519 para el acuerdo de clave, Ed25519 en el dominio `HandshakeTranscript`
+para autenticar, HKDF-SHA256 para derivar y HMAC-SHA256 para confirmar.
+
+Al terminar, cada lado tiene el mismo identificador de sesión, un par de claves
+direccionales y la `PublicIdentity` del otro. Esa identidad es **la que firmó**,
+atada al transcript, no la que se esperaba. Tenerla **no es confiar en ella**.
+
 ## Todavía no existe
 
-Handshake, X25519, HKDF, AEAD, replay protection, rotación, revocación,
-dispositivos de confianza, almacenamiento seguro (Keystore, Keychain,
-DPAPI/CNG), FFI criptográfico e interfaz. La identidad vive **solo en memoria**:
+AEAD, replay protection, rotación, revocación, dispositivos de confianza,
+almacenamiento seguro (Keystore, Keychain, DPAPI/CNG), FFI criptográfico e
+interfaz. Tampoco hay transporte: el handshake no corre sobre ningún socket, y
+las claves que deriva no cifran nada. La identidad vive **solo en memoria**:
 generar una y perderla al cerrar el proceso es el comportamiento actual.

@@ -19,8 +19,9 @@ Consulta docs/LICENSE_AUDIT.md y docs/RESEARCH_NOTES.md.
 `qyro_manifest` usa `unicode-normalization` (MIT/Apache-2.0, unicode-rs) para
 normalización canónica real.
 
-`qyro_crypto` usa la pila Ed25519 de dalek-cryptography (BSD-3-Clause) y RustCrypto
-(MIT/Apache-2.0): `ed25519-dalek`, `curve25519-dalek`, `sha2`, `zeroize`,
-`subtle`, `getrandom`. Solo para pruebas añade `serde_json` (MIT/Apache-2.0) y su
-cierre, que no se enlaza en la biblioteca. El detalle por crate, versión y
-licencia está en `docs/LICENSE_AUDIT.md`. Ninguna es copyleft.
+`qyro_crypto` usa la pila Ed25519/X25519 de dalek-cryptography (BSD-3-Clause) y
+RustCrypto (MIT/Apache-2.0): `ed25519-dalek`, `x25519-dalek`, `curve25519-dalek`,
+`sha2`, `hkdf`, `hmac`, `zeroize`, `subtle`, `getrandom`, `rand_core`. Solo para
+pruebas añade `serde_json` (MIT/Apache-2.0) y su cierre, que no se enlaza en la
+biblioteca. El detalle por crate, versión y licencia está en
+`docs/LICENSE_AUDIT.md`. Ninguna es copyleft.

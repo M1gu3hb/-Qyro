@@ -432,22 +432,59 @@ fn a_signature_never_verifies_in_another_domain() {
 }
 
 #[test]
-fn the_reserved_handshake_domain_is_refused() {
+fn the_handshake_domain_is_available_now_that_its_transcript_is_frozen() {
+    // ADR-0020 reserved this domain and this test asserted it was refused:
+    // signing in a domain whose meaning nothing has fixed commits to a format
+    // by accident. ADR-0021 freezes the transcript, so the domain opens.
     let identity = test_identity();
-    assert!(!SignatureDomain::HandshakeTranscript.is_available());
-    assert_eq!(
-        identity.try_sign(SignatureDomain::HandshakeTranscript, b"x"),
-        Err(IdentityError::DomainNotAvailable { domain: 3 }),
-        "signing a transcript format nothing has frozen must be refused"
+    assert!(SignatureDomain::HandshakeTranscript.is_available());
+
+    let signature = sign(&identity, SignatureDomain::HandshakeTranscript, b"x");
+    assert!(
+        identity
+            .public_identity()
+            .verify(SignatureDomain::HandshakeTranscript, b"x", &signature)
+            .is_ok()
     );
 
-    let signature = sign(&identity, SignatureDomain::TestVector, b"x");
+    // Still domain-separated from the others.
     assert_eq!(
         identity
             .public_identity()
-            .verify(SignatureDomain::HandshakeTranscript, b"x", &signature),
-        Err(IdentityError::DomainNotAvailable { domain: 3 })
+            .verify(SignatureDomain::DeviceClaim, b"x", &signature),
+        Err(IdentityError::SignatureVerificationFailed)
     );
+}
+
+#[test]
+fn the_vector_file_agrees_with_the_code_about_which_domains_are_available() {
+    // The file records an `available` flag per domain. Nothing checked it, so
+    // when ADR-0021 opened the handshake domain the file would have gone on
+    // claiming it was reserved.
+    let parsed: Value =
+        serde_json::from_str(IDENTITY_VECTORS).expect("the vector file is valid JSON");
+    let recorded = parsed["domains"].as_array().expect("domains is an array");
+
+    let all = [
+        SignatureDomain::TestVector,
+        SignatureDomain::DeviceClaim,
+        SignatureDomain::HandshakeTranscript,
+    ];
+    assert_eq!(recorded.len(), all.len(), "every domain must be recorded");
+
+    for (entry, domain) in recorded.iter().zip(all) {
+        assert_eq!(
+            entry["id"].as_u64(),
+            Some(u64::from(domain.to_wire())),
+            "the file's ids must be the wire values"
+        );
+        assert_eq!(
+            entry["available"].as_bool(),
+            Some(domain.is_available()),
+            "the file disagrees with the code about domain {}",
+            domain.to_wire()
+        );
+    }
 }
 
 // --------------------------------------------------------------------- negative cases

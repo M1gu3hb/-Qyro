@@ -1,5 +1,5 @@
 {
-  "_warning": "TEST ONLY — NEVER PRODUCTION. The seed below is the public RFC 8032 section 7.1 TEST 1 secret key. Any identity derived from it is compromised by definition.",
+  "_warning": "TEST ONLY \u2014 NEVER PRODUCTION. The seed below is the public RFC 8032 section 7.1 TEST 1 secret key. Any identity derived from it is compromised by definition.",
   "format": "qyro-identity-v1",
   "identity_version": 1,
   "algorithm": "Ed25519 (RFC 8032)",
@@ -14,9 +14,22 @@
     "fingerprint_grouped": "9fd69388-e7137a7a-7a63c45e-6dbc12d5-39a3d1fa-d3b42b91-b697e6a0-4074643e"
   },
   "domains": [
-    { "name": "TestVector", "id": 1, "available": true },
-    { "name": "DeviceClaim", "id": 2, "available": true },
-    { "name": "HandshakeTranscript", "id": 3, "available": false, "note": "reserved; signing and verifying are rejected until the handshake format is frozen" }
+    {
+      "name": "TestVector",
+      "id": 1,
+      "available": true
+    },
+    {
+      "name": "DeviceClaim",
+      "id": 2,
+      "available": true
+    },
+    {
+      "name": "HandshakeTranscript",
+      "id": 3,
+      "available": true,
+      "note": "transcript frozen by ADR-0021; the handshake signs in this domain"
+    }
   ],
   "signatures": [
     {

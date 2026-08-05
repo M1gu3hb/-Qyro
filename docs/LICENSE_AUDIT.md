@@ -105,6 +105,29 @@ a mano que eliminaba diacríticos y provocaba colisiones falsas.
 `ed25519-dalek` con `default-features = false` y solo `rand_core` y `zeroize`;
 sin `serde`, `pkcs8`, `pem`, `batch` ni `hazmat`.
 
+### Handshake autenticado (`qyro_crypto`, sprint 4B)
+
+| Crate | Versión | Licencia | Fuente |
+|---|---|---|---|
+| x25519-dalek | 3.0.0 | BSD-3-Clause | dalek-cryptography |
+| hkdf | 0.13.0 | MIT OR Apache-2.0 | RustCrypto |
+| hmac | 0.13.0 | MIT OR Apache-2.0 | RustCrypto |
+| rand_core | 0.10.1 | MIT OR Apache-2.0 | rust-random |
+| cmov | 0.5.4 | Apache-2.0 OR MIT | RustCrypto (transitiva de digest) |
+| ctutils | 0.4.2 | Apache-2.0 OR MIT | RustCrypto (transitiva de digest) |
+
+`x25519-dalek` comparte `curve25519-dalek 5.0` con `ed25519-dalek`, y
+`hkdf`/`hmac` comparten `digest 0.11` con `sha2`: no entra ninguna versión
+duplicada de una primitiva. `subtle` y `rand_core` ya estaban en el árbol como
+transitivas y ahora se declaran directamente, porque este crate compara secretos
+e implementa un `CryptoRng` él mismo. `cmov` y `ctutils` llegan por `digest`, no
+por elección propia.
+
+`x25519-dalek` con `default-features = false` y solo `precomputed-tables` y
+`zeroize`; sin `serde`, `static_secrets`, `reusable_secrets` ni `getrandom` —
+esta última se omite a propósito, porque su `EphemeralSecret::random()` hace
+pánico si el CSPRNG falla y aquí eso debe ser `EntropyUnavailable`.
+
 ### Solo desarrollo (`dev-dependencies` de `qyro_crypto`)
 
 No se enlazan en la biblioteca ni en ningún artefacto distribuible: solo
@@ -124,9 +147,9 @@ rasparse buscando subcadenas `"clave": "valor"`. `Cargo.lock` también registra
 en el grafo de compilación: `serde_json` depende de `serde_core`, y las entradas
 de `serde` quedan solo como resolución de features opcionales.
 
-Total del workspace: 43 crates en `Cargo.lock`, 5 de ellos exclusivos de
+Total del workspace: 48 crates en `Cargo.lock`, 5 de ellos exclusivos de
 pruebas. **Ninguna licencia GPL, AGPL ni LGPL.** Todas son permisivas
 (BSD-3-Clause, MIT, Apache-2.0, Zlib, BSD-1-Clause, Unlicense).
 
-`cargo audit --deny warnings` pasa sobre los 43 crates. `cargo-deny` sigue
+`cargo audit --deny warnings` pasa sobre los 48 crates. `cargo-deny` sigue
 pendiente.

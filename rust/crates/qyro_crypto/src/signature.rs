@@ -29,7 +29,10 @@ pub enum SignatureDomain {
     TestVector = 1,
     /// A device asserting something about itself.
     DeviceClaim = 2,
-    /// Handshake transcript. **Reserved**: rejected until the handshake exists.
+    /// Handshake transcript.
+    ///
+    /// Reserved by ADR-0020 and unreserved by ADR-0021, which freezes the
+    /// transcript this domain signs over.
     HandshakeTranscript = 3,
 }
 
@@ -42,14 +45,16 @@ impl SignatureDomain {
 
     /// Whether this build may sign or verify in this domain.
     ///
-    /// `HandshakeTranscript` is reserved so its transcript format can be frozen
-    /// with the handshake itself. Allowing signatures in it now would mean
-    /// committing to a format nothing has validated.
+    /// All three are available. `HandshakeTranscript` was reserved while its
+    /// transcript format was undefined — signing in a domain whose meaning
+    /// nothing has fixed commits to a format by accident — and ADR-0021 fixed
+    /// it. The predicate stays because a future version will add domains before
+    /// it implements them, and a reserved domain must fail loudly rather than
+    /// produce a signature nobody can interpret.
     #[must_use]
     pub const fn is_available(self) -> bool {
         match self {
-            Self::TestVector | Self::DeviceClaim => true,
-            Self::HandshakeTranscript => false,
+            Self::TestVector | Self::DeviceClaim | Self::HandshakeTranscript => true,
         }
     }
 
