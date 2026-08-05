@@ -372,3 +372,78 @@ fn the_system_entropy_path_still_produces_a_working_handshake() {
     assert_eq!(initiator.session_id(), responder.session_id());
     assert_ne!(initiator.session_id(), SessionId::from_u64(0));
 }
+
+#[test]
+fn the_pending_state_and_the_sessions_redact_their_secrets() {
+    // Every type that holds traffic secrets prints a marker instead. A `Debug`
+    // that leaks a key turns any log line into a key disclosure, and these
+    // types are exactly the ones a caller reaches for when something is wrong.
+    let (_awaiting, pending, _finish) = up_to_pending();
+    let pending_rendered = format!("{pending:?}");
+    let responder = pending.confirm_sent();
+
+    let (initiator, _) = completed();
+    let key_hex: String = initiator
+        .sending_key_bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+
+    for rendered in [
+        pending_rendered,
+        format!("{responder:?}"),
+        format!("{initiator:?}"),
+    ] {
+        assert!(rendered.contains("redacted"), "secrets must be marked");
+        assert!(!rendered.contains(&key_hex), "a whole key was printed");
+        for window in key_hex.as_bytes().chunks(16) {
+            let fragment = String::from_utf8_lossy(window);
+            assert!(
+                !rendered.contains(fragment.as_ref()),
+                "a key fragment was printed"
+            );
+        }
+    }
+}
+
+#[test]
+fn no_state_holding_secrets_can_be_duplicated_or_serialized() {
+    // Not `Clone`, not `Copy`, not serializable. A secret that copies freely
+    // ends up somewhere nobody audited, and a `Serialize` on any of these would
+    // put traffic keys in whatever a caller happened to be writing.
+    //
+    // The compiler already enforces `Clone`: `SessionKey` is not `Clone`, so
+    // `#[derive(Clone)]` on any of these fails to build rather than failing a
+    // test — checked by adding it and watching the crate stop compiling. This
+    // test records the intent and covers `Serialize`, which nothing structural
+    // would prevent someone from adding.
+    let source =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/handshake/mod.rs"))
+            .expect("mod.rs is readable");
+
+    for state in [
+        "pub struct ResponderFinishPending",
+        "pub struct EstablishedInitiator",
+        "pub struct EstablishedResponder",
+        "struct Session",
+        "pub(crate) struct PendingSessionSecrets",
+    ] {
+        let position = source
+            .find(state)
+            .unwrap_or_else(|| panic!("{state} exists"));
+        // The 200 bytes before a declaration hold its attributes.
+        let preamble = &source[position.saturating_sub(200)..position];
+        for forbidden in ["Clone", "Copy", "Serialize"] {
+            assert!(
+                !preamble.contains(&format!("derive({forbidden}"))
+                    && !preamble.contains(&format!(", {forbidden}")),
+                "{state} must not derive {forbidden}"
+            );
+        }
+    }
+
+    assert!(
+        !source.contains("impl Clone for"),
+        "no manual Clone on a state holding secrets"
+    );
+}
