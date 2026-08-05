@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-05T03:40:00Z
 - Branch: claude/qyro-crypto-foundation
-- Verified commit: 69e7914651d6364ce04e17e0bccaaa8fa2c7a7d5
+- Verified commit: abe66012f2527e4276809c5850f52638f3d86135
 - Milestone: invariantes corregidas; identidad Ed25519 lista; handshake y AEAD NO iniciados
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
@@ -124,8 +124,16 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 
-Workflow sobre `69e7914` (este sprint): **CI run 30968237880, success**, los
-cuatro jobs en verde con `cargo audit` obligatorio.
+Workflows sobre `abe6601` (este sprint), lanzados con `workflow_dispatch`:
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 30970737104 | **success**, 4/4 jobs |
+| Android runtime ABI | 30970738398 | **success** |
+| iOS runtime ABI | 30970744000 | **success** |
+
+Las tres ABI nativas siguen intactas tras añadir la pila Ed25519 y
+`unicode-normalization` al workspace.
 
 Workflows previos sobre `f78522a`:
 
