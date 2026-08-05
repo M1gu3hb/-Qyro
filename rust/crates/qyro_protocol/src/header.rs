@@ -227,7 +227,7 @@ impl FrameHeader {
     /// Crate-internal: only [`crate::EncryptedEnvelope`] reaches it, and only
     /// while a trailer is being attached, so the flag and the trailer length can
     /// never disagree. Existing transport flags are **kept**, not replaced: they
-    /// are part of what a future AEAD authenticates.
+    /// are part of what the AEAD authenticates.
     pub(crate) const fn encrypted(mut self, tag_len: u8) -> Result<Self, FrameError> {
         if tag_len == 0 || tag_len as usize > MAX_TRAILER_LEN {
             return Err(FrameError::AuthenticationTrailerInvalid {
@@ -335,7 +335,7 @@ impl FrameHeader {
         }
         if header_len != minimum {
             // Skipping bytes that are neither stored nor re-serialized would
-            // break byte-exact re-encoding and leave a future AEAD unable to
+            // break byte-exact re-encoding and leave the AEAD unable to
             // authenticate them. Refusing is safer than pretending. (ADR-0018)
             return Err(FrameError::UnsupportedHeaderExtension {
                 declared: header_len,

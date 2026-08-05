@@ -230,7 +230,7 @@ fn future_minor_version_is_accepted() {
 #[test]
 fn a_future_minor_header_extension_is_refused_not_skipped() {
     // ADR-0018 reversed this: skipping bytes that are never stored made
-    // decode->encode lossy and would leave a future AEAD unable to authenticate
+    // decode->encode lossy and would leave the AEAD unable to authenticate
     // them. 1.0 now says plainly that it does not support extensions.
     let extension: usize = 8;
     let mut bytes = FrameHeader::new(MessageType::Capabilities, 3)

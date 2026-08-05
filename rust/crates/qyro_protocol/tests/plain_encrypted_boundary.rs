@@ -116,7 +116,7 @@ fn an_envelope_can_never_be_re_wrapped_as_its_own_template() {
 #[test]
 fn a_template_keeps_its_transport_flags_and_identifiers() {
     // Unchanged behaviour, restated against the new signature so the fix cannot
-    // quietly drop the metadata a future AEAD has to authenticate.
+    // quietly drop the metadata the AEAD has to authenticate.
     let template = plain_frame();
     let sealed = EncryptedEnvelope::from_plain_frame(&template, vec![1; 4], vec![2; 16])
         .expect("valid envelope");

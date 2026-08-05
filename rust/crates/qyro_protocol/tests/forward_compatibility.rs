@@ -149,7 +149,7 @@ fn recovery_from_a_structural_failure_requires_an_explicit_reset() {
 #[test]
 fn qyro1_rejects_a_header_extension_it_cannot_preserve() {
     // Accepting extension bytes while dropping them made decode->encode lossy
-    // and would leave a future AEAD unable to authenticate them.
+    // and would leave the AEAD unable to authenticate them.
     let mut bytes = FrameHeader::new(MessageType::Capabilities, 3)
         .expect("within limits")
         .with_header_len(u16::try_from(HEADER_LEN + 8).expect("fits"))

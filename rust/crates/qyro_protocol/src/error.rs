@@ -77,7 +77,7 @@ pub enum FrameError {
     /// The peer declared a header extension QYRO/1.0 cannot preserve.
     ///
     /// Structural: skipping bytes that are neither stored nor re-serialized
-    /// would break byte-exact re-encoding and leave a future AEAD unable to
+    /// would break byte-exact re-encoding and leave the AEAD unable to
     /// authenticate them. See `docs/adr/ADR-0018-protocol-semantic-errors.md`.
     UnsupportedHeaderExtension {
         /// Header length the peer declared.

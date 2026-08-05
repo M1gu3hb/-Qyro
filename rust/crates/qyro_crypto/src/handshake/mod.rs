@@ -15,10 +15,13 @@
 //!
 //! # What this does not do
 //!
-//! No AEAD: the derived keys encrypt nothing yet. No transport of any kind —
-//! there is no socket, no discovery, no framing integration. No replay window,
-//! no rekey, no persistence. The handshake runs entirely between two values in
-//! one process.
+//! No transport of any kind — there is no socket and no discovery. No rekey and
+//! no persistence. The handshake runs entirely between two values in one
+//! process.
+//!
+//! It does not encrypt either, and it never will: the traffic secrets it derives
+//! leave through [`EstablishedInitiator::into_frame_crypto`], which hands them to
+//! [`crate::aead`]. The AEAD, the nonces and the replay window live there.
 //!
 //! # States are consumed
 //!

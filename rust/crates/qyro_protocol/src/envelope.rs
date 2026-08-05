@@ -10,15 +10,16 @@
 //! "tag". Naming and documentation now say only what is true — this is a
 //! classified, well-delimited carrier of ciphertext plus trailer.
 //!
-//! When `qyro_crypto` exists it will own the two types that do make claims:
+//! The two types that do make claims live in `qyro_crypto::aead`, and both have
+//! private constructors:
 //!
-//! - `SealedFrame`, produced only by `seal`, wrapping an envelope whose tag a
-//!   real AEAD computed.
-//! - `AuthenticatedFrame`, produced only by `open`, holding plaintext whose tag
-//!   was verified.
+//! - `SealedFrame`, produced only by `FrameSealer::seal`, wrapping an envelope
+//!   whose tag a real ChaCha20-Poly1305 computed.
+//! - `AuthenticatedFrame`, produced only by `FrameOpener::open`, holding
+//!   plaintext whose tag was verified.
 //!
-//! Both will have private constructors. Until then, nothing in this repository
-//! may claim authentication.
+//! That separation is the reason this type exists at all. An envelope can be
+//! built by anyone out of anything; the other two cannot.
 
 use crate::error::FrameError;
 use crate::frame::Frame;
@@ -45,7 +46,7 @@ impl EncryptedEnvelope {
     /// Wraps ciphertext and a trailer, carrying over the plain frame's metadata.
     ///
     /// Every routing and transport field of `template` is preserved so it stays
-    /// inside the associated data a future AEAD will authenticate: message type,
+    /// inside the associated data the AEAD authenticates: message type,
     /// minor version, `END_OF_ITEM`, `END_OF_TRANSFER`, and all four
     /// identifiers plus the sequence number.
     ///
@@ -111,12 +112,15 @@ impl EncryptedEnvelope {
         self.header.message_type()
     }
 
-    /// The bytes a future AEAD must authenticate alongside the ciphertext.
+    /// The bytes the AEAD authenticates alongside the ciphertext.
     ///
     /// The whole header is the associated data, so any tampering with a length,
     /// a flag, a sequence number or an identifier invalidates the tag. This is
     /// only sound because re-encoding a decoded header is byte-exact — see
     /// `docs/adr/ADR-0018-protocol-semantic-errors.md`.
+    ///
+    /// This crate still computes no tags. It hands out the bytes; `qyro_crypto`
+    /// is what authenticates them.
     #[must_use]
     pub fn associated_data(&self) -> [u8; HEADER_LEN] {
         self.header.encode()
