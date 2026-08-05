@@ -2,27 +2,28 @@
 
 ## P0
 
-1. Crear el crate `qyro_protocol` mediante TDD.
-   - Aceptación: marco binario versionado con magic, versión, tipo, flags,
-     session/transfer/stream/item ID, secuencia, longitud y autenticación;
-     round-trip, truncamiento, corrupción y límites comprobados. Las longitudes
-     se validan antes de reservar memoria.
-2. Crear `qyro_manifest` mediante TDD.
-   - Aceptación: rutas relativas, tamaños, MIME, carpetas y hash; rechaza `..`,
-     rutas absolutas, NUL, nombres reservados y manifests gigantes.
-3. Golden tests de arranque y benchmark documentado.
+1. Golden tests de la secuencia de arranque.
+   - Aceptación: 0/20/50/80/100 %, teléfono, tablet, Windows ancho, reduced
+     motion, branding provisional, branding válido con firma, fallo de
+     biblioteca, fallo de asset, timeout y retry. Seeds deterministas,
+     dimensiones fijas, assets locales y ninguna dependencia de hora o red.
+     Archivos golden versionados y documentado cómo actualizarlos.
+2. Benchmark de arranque documentado.
+   - Aceptación: `docs/benchmarks/boot-baseline.md` con tiempo de preparación
+     del modelo, tiempo de `frameAt`, build y paint por frame, tamaño del asset
+     ASCII, y declaradas máquina, SO, versión de Flutter, modo, resolución y
+     número de muestras. Sin afirmar 60 FPS sin medirlo.
+3. Retener artefactos de desarrollo con SHA-256, etiquetados
+   DEVELOPMENT / NOT FOR PUBLIC RELEASE.
 
 ## P1
 
-- Golden tests boot 0/20/50/80/100, teléfono, tablet, Windows, reduced motion,
-  fallo de FFI y branding provisional.
-- Benchmark de arranque documentado con condiciones explícitas.
-- Ejecutar `ci.yml` en esta rama mediante pull request.
+- Identidad criptográfica, cifrado de sesión y almacenamiento local seguro
+  mediante TDD, sin iniciar LAN hasta cerrar los vectores criptográficos.
+- Ejecutar una campaña real de `cargo-fuzz` y añadir los hallazgos al corpus.
 - Probar en hardware físico: hasta ahora solo emulador, simulador y host.
-- Retener artefactos debug y checksums.
-- Instalar cargo-audit, hacerlo obligatorio y generar SBOM.
-- Crear suites nativas y corpus de vectores de protocolo.
-- Selección de archivos y manifest.
+- SBOM y `cargo-deny` para licencias, fuentes, duplicados y bans.
+- Selección de archivos y construcción del manifest desde el filesystem real.
 
 ## P2
 
@@ -34,6 +35,18 @@
 
 - RaptorQ/QR adaptativo.
 - Wi-Fi Direct, Multipeer y Bluetooth experimental.
+
+## Completado el 2026-08-05 (sprint 2, protocolo y manifest)
+
+- `qyro_protocol`: framing QYRO/1 con decoder incremental acotado; 29 contratos
+  de wire y 4 property tests.
+- `qyro_manifest`: manifest canónico y `RelativePath` estricto; 40 contratos y
+  5 property tests.
+- Targets `cargo-fuzz`, corpus de 65 entradas y smoke en CI.
+- `cargo audit` obligatorio, en verde con cero dependencias externas.
+- Wordmark, tagline y firma configurable mediante scramble, sin inventar nombre.
+- ADR-0016, ADR-0017 y las especificaciones de wire y manifest.
+- CI en verde sobre la rama: run 30964542743.
 
 ## Completado el 2026-08-05 (Hito A, recuperación)
 

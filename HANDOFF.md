@@ -5,10 +5,12 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-recovery-continuation-j53jgx`, que reconcilia
-   `audit/baseline-hardening` con los commits del propietario en `main`.
+2. Confirmar la rama `claude/qyro-protocol-manifest`, que continúa
+   `claude/qyro-recovery-continuation-j53jgx` (recuperación) y añade el protocolo
+   y el manifest.
 3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
-   más ADR-0014 (logo canónico) y ADR-0015 (reconciliación de ramas).
+   más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing) y ADR-0017
+   (manifest). Las especificaciones están en `docs/protocols/`.
 4. Leer NEXT_STEPS.md y ADR relacionadas.
 5. Ejecutar doctor y tests relevantes.
 6. Continuar con la única “Next task” de STATUS.md.
@@ -22,6 +24,8 @@ contratos `.ps1`.
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace
+    cargo audit --deny warnings          # obligatorio desde el sprint 2
+    rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
     cargo build --package qyro_ffi
     cd apps/qyro && flutter pub get --enforce-lockfile
     dart tools/branding_generator/bin/generate.dart --check   # desde la raíz
@@ -36,3 +40,13 @@ Al cerrar una unidad, actualizar STATUS.md con evidencia real y registrar defect
 El job documental ahora falla si `Verified commit` de STATUS.md no es alcanzable
 desde HEAD o queda más de 10 commits por detrás, así que STATUS.md debe
 actualizarse dentro del mismo tramo de trabajo, no al final.
+
+## Estado del protocolo
+
+`qyro_protocol` y `qyro_manifest` están implementados y probados, pero **nada los
+usa todavía**: no hay sockets, transporte, cifrado ni escritura en disco. Que el
+framing exista no significa que Qyro transfiera archivos. Los botones Enviar y
+Recibir siguen deshabilitados a propósito.
+
+`rust/fuzz` es un workspace aparte y exige nightly; no entra en la compilación
+del producto.
