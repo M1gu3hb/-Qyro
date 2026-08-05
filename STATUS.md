@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T01:35:00Z
+- Updated UTC: 2026-08-05T01:45:00Z
 - Branch: claude/qyro-protocol-manifest
-- Verified commit: ff933d97beae7a98745fcfda9423f65135af94b8
+- Verified commit: f78522a5eb27ac7dd2819f943e46ffbf4c87f6f3
 - Milestone: Hito A cerrado; Hito C (protocolo y manifest) implementado; Hito 1 visual parcial
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
@@ -98,13 +98,23 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 
-Workflows remotos en esta rama, sobre `ff933d9`, lanzados con
-`workflow_dispatch`:
+Workflows remotos sobre `f78522a`, lanzados con `workflow_dispatch`:
 
-| Workflow | Run | Conclusión | Duración |
-|---|---|---|---|
-| iOS runtime ABI | 30963011815 | **success** (10/10 pasos) | ~15 min |
-| Android runtime ABI | 30963016390 | **success** (8/8 pasos) | ~7 min |
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 30966182205 | **success**, 4/4 jobs (rust, flutter, scripts, documentation) |
+| Android runtime ABI | 30966196087 | **success** |
+| iOS runtime ABI | 30966197144 | **success** |
+
+El job `rust` incluye `cargo audit` como paso obligatorio y pasó. Las tres ABI
+siguen intactas tras añadir `qyro_protocol` y `qyro_manifest`.
+
+Evidencia previa sobre `ff933d9` (rama de recuperación):
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| iOS runtime ABI | 30963011815 | success, 10/10 pasos |
+| Android runtime ABI | 30963016390 | success, 8/8 pasos |
 
 Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
@@ -113,9 +123,8 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 - Android runtime ABI run 30961153377: `in_progress` con `total_ms: 0`; nunca
   obtuvo runner y no es evidencia
 
-`ci.yml` sí acepta `workflow_dispatch`. Ejecutado sobre `c7410cb` al abrir la
-rama: **run 30964542743, success**, los cuatro jobs (rust, flutter, scripts,
-documentation) en verde. Ese fue el baseline recuperado antes de tocar nada.
+`ci.yml` acepta `workflow_dispatch`. El baseline recuperado se verificó sobre
+`c7410cb` antes de tocar nada: run 30964542743, success.
 
 ## Artifacts
 
