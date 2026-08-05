@@ -190,6 +190,20 @@ está—. Un guard que rechaza el caso inofensivo se acaba relajando, y un guard
 relajado deja de atrapar el dañino. La regla exige ahora `--package`/`-p` junto a
 `upload-artifact`.
 
+### El guard de símbolos no pasa por vacío
+
+Una prueba que busca una cadena en un artefacto pasa igual si esa cadena no
+existe en ningún sitio. Comprobado que sí podría fallar:
+
+    $ grep -a -c qyro_crypto_smoke_run target/debug/libqyro_crypto_smoke.so
+    3
+    $ grep -a -c qyro_crypto_smoke_run target/debug/libqyro_ffi.so
+    0
+
+El patrón aparece tres veces en la biblioteca del harness y ninguna en la que el
+producto distribuye. Es la diferencia entre «el guard dice que no está» y «el
+guard sabría decir que está».
+
 Decisión completa en ADR-0023.
 
 ## Método
