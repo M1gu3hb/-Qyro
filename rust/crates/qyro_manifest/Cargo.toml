@@ -12,3 +12,8 @@ path = "src/lib.rs"
 # Intentionally dependency-free: the manifest decoder processes peer-supplied
 # paths before anything is written to disk.
 [dependencies]
+# Real Unicode canonical normalization. The hand-written folding table this
+# replaces stripped diacritics, so `ano.txt` and `año.txt` collided: distinct
+# files a receiver would have refused. From the unicode-rs org, MIT/Apache-2.0,
+# and it pulls only tinyvec. See docs/LICENSE_AUDIT.md.
+unicode-normalization = { version = "0.1.25", default-features = false, features = ["std"] }

@@ -9,6 +9,8 @@
 //! platform, so a manifest that a Linux receiver accepts is exactly the one a
 //! Windows receiver accepts.
 
+use unicode_normalization::UnicodeNormalization;
+
 use crate::error::PathError;
 use crate::limits::{MAX_PATH_LEN, MAX_PATH_SEGMENTS, MAX_SEGMENT_LEN};
 
@@ -202,21 +204,36 @@ fn has_drive_prefix(candidate: &str) -> bool {
 /// A key two paths share when a real filesystem would treat them as one file.
 ///
 /// Linux keeps `Foto.jpg` and `foto.jpg` apart; Windows and macOS do not. Unicode
-/// adds a second axis: `ñ` composed (NFC) and decomposed (NFD) are different byte
-/// sequences that most filesystems consider the same name.
+/// adds a second axis: `ñ` composed (U+00F1) and decomposed (`n` + U+0303) are
+/// different byte sequences that most filesystems consider the same name.
 ///
-/// A manifest that carries both would overwrite one item with the other on the
-/// receiver, silently, after the transfer was accepted. The key is used to reject
-/// that pair; the original spelling of each path is never altered.
+/// A manifest carrying both would overwrite one item with the other on the
+/// receiver, silently, after the transfer was accepted. The key exists to reject
+/// that pair. The original spelling of each path is never altered.
 ///
-/// # Normalization
+/// # Policy
 ///
-/// Full Unicode NFC/NFD normalization needs large tables. Rather than add a
-/// dependency for it, this applies ASCII case folding plus decomposed-combining-
-/// mark folding for the Latin-1 range, which covers the collisions reachable with
-/// the characters a filesystem actually accepts. `docs/security/parser-threats.md`
-/// records the residual gap: two paths differing only by a combining mark outside
-/// that range are treated as distinct.
+/// Per segment, in order:
+///
+/// 1. **Canonical composition (NFC)** via `unicode-normalization`. This is real
+///    Unicode canonical equivalence, so it folds NFC against NFD for every
+///    script, not just the ones somebody remembered to tabulate.
+/// 2. **Simple lowercase** via `str::to_lowercase`, which is full-Unicode in
+///    std and handles the locale-independent special cases.
+///
+/// Segments are joined with a NUL, which no valid path may contain, so `a/bc`
+/// and `ab/c` cannot fold together.
+///
+/// **Diacritics are preserved.** An earlier hand-written table mapped `ñ` to
+/// `n`, `é` to `e` and dropped combining marks outright, which made `ano.txt`
+/// collide with `año.txt` and `resume.pdf` with `résumé.pdf` — legitimate,
+/// different files that the manifest then refused. Over-folding is as much a
+/// defect as under-folding, and a partial table was wrong in both directions:
+/// it never covered `ř`, `ż` or `ệ` at all.
+///
+/// This is case-insensitive matching, not case-insensitive storage: two names
+/// differing only by case are treated as one file, which is what Windows and
+/// the default macOS filesystem do.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PortableCollisionKey(String);
 
@@ -235,34 +252,7 @@ impl PortableCollisionKey {
     }
 }
 
-/// Folds one segment: ASCII case, then combining marks onto their base letter.
+/// Canonically composes a segment, then lowercases it.
 fn fold_segment(segment: &str) -> String {
-    let mut out = String::with_capacity(segment.len());
-    for character in segment.chars() {
-        // Skip combining diacritics so a decomposed "n" + U+0303 folds onto the
-        // same key as a precomposed "ñ".
-        if matches!(character, '\u{0300}'..='\u{036F}') {
-            continue;
-        }
-        for lowered in precompose_fold(character) {
-            out.push(lowered);
-        }
-    }
-    out
-}
-
-/// Maps a precomposed Latin-1 letter onto its base, then lowercases.
-fn precompose_fold(character: char) -> impl Iterator<Item = char> {
-    let base = match character {
-        'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' | 'Á' | 'À' | 'Â' | 'Ä' | 'Ã' | 'Å' => 'a',
-        'é' | 'è' | 'ê' | 'ë' | 'É' | 'È' | 'Ê' | 'Ë' => 'e',
-        'í' | 'ì' | 'î' | 'ï' | 'Í' | 'Ì' | 'Î' | 'Ï' => 'i',
-        'ó' | 'ò' | 'ô' | 'ö' | 'õ' | 'Ó' | 'Ò' | 'Ô' | 'Ö' | 'Õ' => 'o',
-        'ú' | 'ù' | 'û' | 'ü' | 'Ú' | 'Ù' | 'Û' | 'Ü' => 'u',
-        'ñ' | 'Ñ' => 'n',
-        'ç' | 'Ç' => 'c',
-        'ý' | 'ÿ' | 'Ý' => 'y',
-        other => other,
-    };
-    base.to_lowercase()
+    segment.nfc().collect::<String>().to_lowercase()
 }

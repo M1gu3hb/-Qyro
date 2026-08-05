@@ -39,15 +39,19 @@ impl ItemKind {
 }
 
 /// Digest algorithm used for an item.
+///
+/// Manifest v2 has exactly one final digest: SHA-256. BLAKE3 was accepted as an
+/// alternative, which meant two peers could disagree about what "verified"
+/// means and a file could arrive with no SHA-256 anywhere. A fast digest for
+/// chunk-level checks is useful, but it belongs in a separate optional field
+/// added by a later version, not as a substitute for the final verdict.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
 pub enum HashAlgorithm {
-    /// No digest recorded, only valid for directories.
+    /// No digest recorded. Only valid for directories.
     None = 0,
-    /// SHA-256, 32 bytes.
+    /// SHA-256, 32 bytes. The only final digest for a file.
     Sha256 = 1,
-    /// BLAKE3, 32 bytes.
-    Blake3 = 2,
 }
 
 impl HashAlgorithm {
@@ -56,7 +60,7 @@ impl HashAlgorithm {
     pub const fn digest_len(self) -> usize {
         match self {
             Self::None => 0,
-            Self::Sha256 | Self::Blake3 => 32,
+            Self::Sha256 => 32,
         }
     }
 
@@ -75,7 +79,8 @@ impl HashAlgorithm {
         match value {
             0 => Ok(Self::None),
             1 => Ok(Self::Sha256),
-            2 => Ok(Self::Blake3),
+            // Value 2 was BLAKE3 in an unreleased draft. It is rejected rather
+            // than silently accepted as a final digest.
             other => Err(ManifestError::InvalidFieldValue {
                 field: ManifestField::HashAlgorithm,
                 value: other,
@@ -266,7 +271,9 @@ impl ManifestItem {
                 }
             }
             ItemKind::File => {
-                if !hash.is_present() {
+                // SHA-256 exactly: the final verdict must be one algorithm both
+                // peers compute, and a 32-byte digest even for an empty file.
+                if hash.algorithm() != HashAlgorithm::Sha256 {
                     return Err(ManifestError::MissingFileHash { index: 0 });
                 }
             }

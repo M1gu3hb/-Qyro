@@ -315,7 +315,7 @@ fn unicode_and_emoji_metadata_round_trips() {
         1,
         RelativePath::parse("año/mañana-🎉.txt").expect("valid"),
         12,
-        HashMetadata::new(HashAlgorithm::Blake3, vec![3; 32]).expect("valid digest"),
+        HashMetadata::new(HashAlgorithm::Sha256, vec![3; 32]).expect("valid digest"),
     )
     .expect("valid item")
     .with_mime_type("text/plain; charset=utf-8")
