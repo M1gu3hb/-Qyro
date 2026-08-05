@@ -68,6 +68,33 @@ Corpus y crash inputs son cadenas de bytes que eligió el fuzzer. No llevan
 material de clave: la única sesión en juego es la fija, cuyas semillas están
 publicadas en este repositorio y comprometidas por definición.
 
+## La primera campaña
+
+Run 31051840079 sobre `358c64f`, 120 segundos por target, los seis en success y
+sin artefactos de crash:
+
+| Target | Ejecuciones | Corpus final |
+|---|---|---|
+| `frame_decoder` | 7 096 629 | 243 |
+| `encrypted_envelope` | 11 689 945 | 207 |
+| `frame_opener` | **63 381** | 62 |
+| `replay_window` | 17 214 634 | 112 |
+| `manifest_decoder` | 17 522 591 | 349 |
+| `relative_path` | 20 574 340 | 201 |
+
+`frame_opener` va **dos órdenes de magnitud más lento** que el resto, y eso es lo
+esperado: cada iteración deriva una sesión, sella un frame real y lo abre, así
+que ejecuta ChaCha20-Poly1305 dos veces por caso mientras los demás solo parsean.
+Se anota aquí porque una tabla con un número pequeño en una fila invita a pensar
+que algo falló, y lo que dice en realidad es que en el mismo presupuesto ese
+target explora mucho menos. Su cobertura es la más baja de las seis.
+
+Cero crashes en una primera campaña no es una buena noticia por sí sola: con este
+presupuesto es también el resultado que daría un target que no ejercita nada. Lo
+que sostiene que sí ejercitan algo es el crecimiento del corpus —libFuzzer solo
+guarda una entrada cuando abre cobertura nueva— y las aserciones de cada target,
+no el hecho de que no se cayeran.
+
 ## Qué hacer con un hallazgo
 
 1. Añadir la entrada al corpus **antes** de corregir, para que el smoke la cubra
