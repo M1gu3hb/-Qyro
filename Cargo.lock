@@ -12,3 +12,11 @@ version = "0.0.1"
 dependencies = [
  "qyro_core",
 ]
+
+[[package]]
+name = "qyro_manifest"
+version = "0.0.1"
+
+[[package]]
+name = "qyro_protocol"
+version = "0.0.1"
