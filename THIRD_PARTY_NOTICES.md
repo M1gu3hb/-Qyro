@@ -10,6 +10,6 @@ Rust no tiene crates externos. Los textos completos se incorporarán a release/n
 
 ## Activo del propietario
 
-design/brand/source/qyro-logo.png fue suministrado por el propietario. Falta registrar autoría/licencia antes de publicación.
+design/brand/source/logo.png fue suministrado por el propietario y es el único logo autorizado. Falta registrar autoría/licencia antes de publicación. El archivo design/brand/source/"no usar este logo" es el marcador anterior rechazado y no debe distribuirse.
 
 Consulta docs/LICENSE_AUDIT.md y docs/RESEARCH_NOTES.md.

@@ -1101,7 +1101,7 @@
     ]
   ],
   "threshold": 0.18,
-  "source": "design/brand/source/qyro-logo.png",
+  "source": "design/brand/source/logo.png",
   "sourceChecksum": "sha256:e8413410d53958fe399c3e37ed73e85030b41c1dbe456ca3a5bad2491e6d4f39",
   "generatorVersion": "1.0.0",
   "provisional": true

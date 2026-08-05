@@ -295,7 +295,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--source",
         type=Path,
-        default=root / "design/brand/source/qyro-logo.png",
+        default=root / "design/brand/source/logo.png",
     )
     parser.add_argument(
         "--output",
