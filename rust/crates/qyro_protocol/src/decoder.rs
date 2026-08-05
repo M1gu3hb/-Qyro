@@ -13,12 +13,12 @@
 //!   stream synchronised: the frame is consumed whole and reported as
 //!   [`DecodedFrame::Unsupported`].
 
+use crate::envelope::EncryptedEnvelope;
 use crate::error::FrameError;
 use crate::frame::Frame;
-use crate::header::FrameHeader;
+use crate::header::{ParsedHeader, UnknownHeader};
 use crate::limits::{HEADER_LEN, MAX_BUFFER_LEN};
-use crate::message::{Flags, MessageType};
-use crate::sealed::SealedFrame;
+use crate::message::MessageType;
 
 /// A frame the peer sent whose type this version does not implement.
 ///
@@ -36,6 +36,18 @@ pub struct UnsupportedFrame {
 }
 
 impl UnsupportedFrame {
+    /// Builds the event from a parsed unknown header and its consumed size.
+    pub(crate) const fn from(unknown: UnknownHeader, total_len: usize) -> Self {
+        Self {
+            message_type_value: unknown.raw_message_type,
+            payload_len: unknown.payload_len,
+            total_len,
+            session_id: unknown.session_id,
+            transfer_id: unknown.transfer_id,
+            sequence: unknown.sequence,
+        }
+    }
+
     /// The wire value that did not map to a known message.
     #[must_use]
     pub const fn message_type_value(&self) -> u8 {
@@ -78,66 +90,74 @@ impl UnsupportedFrame {
 pub enum DecodedFrame {
     /// A frame this version understands.
     Message(Frame),
-    /// A frame whose payload is ciphertext awaiting authentication.
+    /// A frame whose payload is ciphertext, **not yet verified**.
     ///
-    /// Its plaintext is not available here and must not be: only `qyro_crypto`
-    /// can verify the tag, and nothing may treat unauthenticated bytes as data.
-    Sealed(SealedFrame),
+    /// No plaintext is available here and none may be inferred: this crate
+    /// computes no tags, so the trailer proves nothing until `qyro_crypto`
+    /// checks it.
+    Encrypted(EncryptedEnvelope),
     /// A well-formed frame whose type this version does not implement.
     Unsupported(UnsupportedFrame),
 }
 
 impl DecodedFrame {
-    /// Returns the message type, or `None` for an unsupported frame.
+    /// Returns the message type, or `None` when the type is not implemented.
     #[must_use]
     pub const fn message_type(&self) -> Option<MessageType> {
         match self {
             Self::Message(frame) => Some(frame.message_type()),
-            Self::Sealed(frame) => Some(frame.message_type()),
+            Self::Encrypted(envelope) => Some(envelope.message_type()),
             Self::Unsupported(_) => None,
         }
     }
 
-    /// Returns the payload, or an empty slice for an unsupported frame.
+    /// Returns the plaintext, and only when there genuinely is some.
+    ///
+    /// `None` for an encrypted envelope and for an unsupported frame. An empty
+    /// slice used to stand in for all three, which made "the peer sent an empty
+    /// message", "this is ciphertext" and "this type is unknown" indistinguishable.
     #[must_use]
-    pub fn payload(&self) -> &[u8] {
+    pub fn plaintext(&self) -> Option<&[u8]> {
         match self {
-            Self::Message(frame) => frame.payload(),
-            // Never the ciphertext: unauthenticated bytes are not a payload.
-            Self::Sealed(_) | Self::Unsupported(_) => &[],
+            Self::Message(frame) => Some(frame.payload()),
+            Self::Encrypted(_) | Self::Unsupported(_) => None,
         }
     }
 
-    /// Re-serializes a known message.
+    /// Re-serializes the frame.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics on an unsupported frame, whose bytes were deliberately not kept.
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    /// Returns [`FrameError::UnknownMessageType`] for an unsupported frame,
+    /// whose bytes were deliberately not retained. Reporting it beats panicking:
+    /// the variant came from legitimate peer input, so a caller iterating over
+    /// decoded frames must not be able to crash the process by re-encoding one.
+    pub fn try_encode(&self) -> Result<Vec<u8>, FrameError> {
         match self {
-            Self::Message(frame) => frame.encode(),
-            Self::Sealed(frame) => frame.encode(),
-            Self::Unsupported(_) => {
-                panic!("an unsupported frame is not retained for re-serialization")
-            }
+            Self::Message(frame) => Ok(frame.encode()),
+            Self::Encrypted(envelope) => Ok(envelope.encode()),
+            Self::Unsupported(event) => Err(FrameError::UnknownMessageType {
+                value: event.message_type_value(),
+            }),
         }
     }
 
-    /// Returns the known message, if this is one.
+    /// Returns the plain frame, if this is one.
     #[must_use]
-    pub const fn as_message(&self) -> Option<&Frame> {
+    pub const fn as_plain(&self) -> Option<&Frame> {
         match self {
             Self::Message(frame) => Some(frame),
-            Self::Sealed(_) | Self::Unsupported(_) => None,
+            Self::Encrypted(_) | Self::Unsupported(_) => None,
         }
     }
 
-    /// Returns the sealed frame, if this is one.
+    /// Returns the encrypted envelope, if this is one.
+    ///
+    /// The envelope is unverified; see [`EncryptedEnvelope`].
     #[must_use]
-    pub const fn as_sealed(&self) -> Option<&SealedFrame> {
+    pub const fn as_encrypted(&self) -> Option<&EncryptedEnvelope> {
         match self {
-            Self::Sealed(frame) => Some(frame),
+            Self::Encrypted(envelope) => Some(envelope),
             Self::Message(_) | Self::Unsupported(_) => None,
         }
     }
@@ -261,17 +281,17 @@ impl FrameDecoder {
             return Ok(None);
         }
 
-        let (header, raw_message_type) = match FrameHeader::decode_parts(&self.buffer[..HEADER_LEN])
-        {
-            Ok(parts) => parts,
+        let parsed = match ParsedHeader::parse_from(&self.buffer[..HEADER_LEN]) {
+            Ok(parsed) => parsed,
             Err(error) => return Err(self.poison(error)),
         };
+        let total_declared = parsed.total_len();
 
         // total_len() is u64 and was already bounded by MAX_FRAME_LEN, so this
         // conversion cannot truncate on any supported target.
-        let Ok(total) = usize::try_from(header.total_len()) else {
+        let Ok(total) = usize::try_from(total_declared) else {
             return Err(self.poison(FrameError::FrameTooLarge {
-                declared: header.total_len(),
+                declared: total_declared,
                 limit: self.max_buffer_len as u64,
             }));
         };
@@ -287,27 +307,24 @@ impl FrameDecoder {
             return Ok(None);
         }
 
-        // The frame is fully delimited from here on, so an unknown type can be
-        // consumed cleanly and the stream stays synchronised. (ADR-0018)
-        if MessageType::from_wire(raw_message_type).is_err() {
-            self.buffer.drain(..total);
-            return Ok(Some(DecodedFrame::Unsupported(UnsupportedFrame {
-                message_type_value: raw_message_type,
-                payload_len: header.payload_len(),
-                total_len: total,
-                session_id: header.session_id(),
-                transfer_id: header.transfer_id(),
-                sequence: header.sequence(),
-            })));
-        }
+        // Fully delimited from here on, so an unknown type is consumed cleanly
+        // and the stream stays synchronised. (ADR-0018)
+        let header = match parsed {
+            ParsedHeader::Unknown(unknown) => {
+                self.buffer.drain(..total);
+                return Ok(Some(DecodedFrame::Unsupported(UnsupportedFrame::from(
+                    unknown, total,
+                ))));
+            }
+            ParsedHeader::Known(header) => header,
+        };
 
-        // A sealed frame keeps its ciphertext and tag together and never
-        // becomes a plain payload here.
-        if header.flags().contains(Flags::ENCRYPTED) {
+        // Ciphertext keeps its trailer and never becomes a plain payload.
+        if header.flags().contains(crate::message::Flags::ENCRYPTED) {
             let body = self.buffer[HEADER_LEN..total].to_vec();
             self.buffer.drain(..total);
-            return match SealedFrame::from_parts(header, &body) {
-                Ok(frame) => Ok(Some(DecodedFrame::Sealed(frame))),
+            return match EncryptedEnvelope::from_parts(header, &body) {
+                Ok(envelope) => Ok(Some(DecodedFrame::Encrypted(envelope))),
                 Err(error) => Err(self.poison(error)),
             };
         }

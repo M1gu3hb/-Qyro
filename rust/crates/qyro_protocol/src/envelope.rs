@@ -1,45 +1,65 @@
-//! Sealed frames: the only representation that may carry `ENCRYPTED`.
+//! Encrypted envelopes: the wire shape of a frame whose payload is ciphertext.
 //!
-//! The invariant this module exists to enforce is structural rather than
-//! documented: a [`SealedFrame`] cannot be constructed without supplying an
-//! authentication tag, and the `ENCRYPTED` flag is set by that constructor
-//! alone. There is no path — from the UI, a transport, or a test — that produces
-//! a frame claiming protection it does not have.
+//! **Untrusted until `qyro_crypto` verifies it.** This crate performs no
+//! cryptography, so an envelope proves nothing about authenticity. It carries
+//! bytes a peer called a tag, and holding one is not evidence that anybody
+//! computed or checked it.
 //!
-//! This crate does no cryptography. It defines the shape and hands the caller
-//! the exact bytes that must be authenticated; `qyro_crypto` supplies the AEAD.
+//! The earlier name for this type was `SealedFrame`, which claimed a guarantee
+//! the crate cannot provide: its constructor accepted any byte vector as a
+//! "tag". Naming and documentation now say only what is true — this is a
+//! classified, well-delimited carrier of ciphertext plus trailer.
+//!
+//! When `qyro_crypto` exists it will own the two types that do make claims:
+//!
+//! - `SealedFrame`, produced only by `seal`, wrapping an envelope whose tag a
+//!   real AEAD computed.
+//! - `AuthenticatedFrame`, produced only by `open`, holding plaintext whose tag
+//!   was verified.
+//!
+//! Both will have private constructors. Until then, nothing in this repository
+//! may claim authentication.
 
 use crate::error::FrameError;
 use crate::header::FrameHeader;
 use crate::limits::{HEADER_LEN, MAX_PAYLOAD_LEN, MAX_TRAILER_LEN};
 use crate::message::{Flags, MessageType};
 
-/// A frame whose payload is ciphertext, carrying its authentication tag.
+/// A frame whose payload is ciphertext, carrying a trailer a peer called a tag.
 ///
-/// Constructing one is the proof that a tag exists. Opening it is
-/// `qyro_crypto`'s job; this type never exposes plaintext because it never has
-/// any.
+/// **Untrusted until `qyro_crypto` verifies it.** Constructing one proves only
+/// that ciphertext and trailer bytes were supplied together and that the header
+/// is internally consistent. It does not prove the trailer authenticates
+/// anything, because this crate computes no tags.
+///
+/// The type never exposes plaintext, because it never holds any.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SealedFrame {
+pub struct EncryptedEnvelope {
     header: FrameHeader,
     ciphertext: Vec<u8>,
     tag: Vec<u8>,
 }
 
-impl SealedFrame {
-    /// Builds a sealed frame from ciphertext and its tag.
+impl EncryptedEnvelope {
+    /// Wraps ciphertext and a trailer, carrying over the plain header's metadata.
     ///
-    /// The header is derived from `template`, then marked encrypted with the
-    /// exact tag length. Because ciphertext and tag arrive together, the flag
-    /// and the trailer can never disagree with reality.
+    /// Every routing and transport field of `template` is preserved so it stays
+    /// inside the associated data a future AEAD will authenticate: message type,
+    /// minor version, `END_OF_ITEM`, `END_OF_TRANSFER`, and all four
+    /// identifiers plus the sequence number.
+    ///
+    /// Only three fields are derived rather than carried: `payload_len` from the
+    /// ciphertext, `trailer_len` from the trailer, and the `ENCRYPTED` flag.
+    ///
+    /// This performs no encryption and verifies nothing. See the module docs.
     ///
     /// # Errors
     ///
     /// Returns [`FrameError::PayloadTooLarge`] when the ciphertext exceeds
     /// [`MAX_PAYLOAD_LEN`], or [`FrameError::AuthenticationTrailerInvalid`] when
-    /// the tag is empty or longer than [`MAX_TRAILER_LEN`].
-    pub fn new(
-        template: FrameHeader,
+    /// the trailer is empty or longer than [`MAX_TRAILER_LEN`].
+    pub fn from_plain(
+        template: &FrameHeader,
         ciphertext: Vec<u8>,
         tag: Vec<u8>,
     ) -> Result<Self, FrameError> {
@@ -57,15 +77,9 @@ impl SealedFrame {
 
         let payload_len =
             u32::try_from(ciphertext.len()).expect("ciphertext fits in u32 after the check");
-        let header = FrameHeader::new(template.message_type(), payload_len)
-            .with_identifiers(
-                template.session_id(),
-                template.transfer_id(),
-                template.stream_id(),
-                template.item_id(),
-            )
-            .with_sequence(template.sequence())
-            .sealed(tag_len)?;
+        let header = template
+            .clone_for_envelope(payload_len)
+            .encrypted(tag_len)?;
 
         Ok(Self {
             header,
@@ -86,7 +100,7 @@ impl SealedFrame {
         self.header.message_type()
     }
 
-    /// The bytes that must be authenticated alongside the ciphertext.
+    /// The bytes a future AEAD must authenticate alongside the ciphertext.
     ///
     /// The whole header is the associated data, so any tampering with a length,
     /// a flag, a sequence number or an identifier invalidates the tag. This is
@@ -120,7 +134,7 @@ impl SealedFrame {
         out
     }
 
-    /// Rebuilds a sealed frame from a decoded header and its body.
+    /// Rebuilds an envelope from a decoded header and its body.
     ///
     /// # Errors
     ///

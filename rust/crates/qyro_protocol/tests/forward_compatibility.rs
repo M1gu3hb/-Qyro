@@ -44,7 +44,7 @@ fn an_unknown_message_type_does_not_desynchronise_the_stream() {
         .expect("stream stays usable")
         .expect("the following frame is still there");
     assert_eq!(second.message_type(), Some(MessageType::Heartbeat));
-    assert_eq!(second.payload(), b"still here");
+    assert_eq!(second.plaintext().expect("plain"), b"still here");
     assert!(!decoder.is_poisoned());
 }
 
@@ -140,7 +140,7 @@ fn recovery_from_a_structural_failure_requires_an_explicit_reset() {
         .push(&encoded(MessageType::Hello, b"ok"))
         .expect("usable again");
     let frame = decoder.next_frame().expect("ok").expect("frame");
-    assert_eq!(frame.payload(), b"ok");
+    assert_eq!(frame.plaintext(), Some(&b"ok"[..]));
 }
 
 // ------------------------------------------------------- header extensions
@@ -150,6 +150,7 @@ fn qyro1_rejects_a_header_extension_it_cannot_preserve() {
     // Accepting extension bytes while dropping them made decode->encode lossy
     // and would leave a future AEAD unable to authenticate them.
     let mut bytes = FrameHeader::new(MessageType::Capabilities, 3)
+        .expect("within limits")
         .with_header_len(u16::try_from(HEADER_LEN + 8).expect("fits"))
         .expect_err("1.0 must refuse to build an extended header")
         .to_string()
@@ -158,6 +159,7 @@ fn qyro1_rejects_a_header_extension_it_cannot_preserve() {
 
     // Built by hand, the way a newer peer would send it.
     let mut raw = FrameHeader::new(MessageType::Capabilities, 3)
+        .expect("within limits")
         .encode()
         .to_vec();
     raw[8..10].copy_from_slice(&u16::try_from(HEADER_LEN + 8).expect("fits").to_be_bytes());
@@ -177,7 +179,7 @@ fn qyro1_rejects_a_header_extension_it_cannot_preserve() {
 
 #[test]
 fn header_length_stays_exactly_the_fixed_size() {
-    let header = FrameHeader::new(MessageType::Hello, 0);
+    let header = FrameHeader::new(MessageType::Hello, 0).expect("within limits");
     assert_eq!(header.header_len() as usize, HEADER_LEN);
     // MAX_HEADER_LEN stays as a validation ceiling so an absurd declared length
     // is distinguishable from a merely extended one.
@@ -203,7 +205,7 @@ fn decode_then_encode_is_byte_exact_for_every_accepted_frame() {
         decoder.push(&bytes).expect("within buffer");
         let frame = decoder.next_frame().expect("ok").expect("frame");
         assert_eq!(
-            frame.encode(),
+            frame.try_encode().expect("retained frame"),
             bytes,
             "re-encoding must reproduce the exact bytes"
         );
@@ -269,7 +271,7 @@ fn no_public_api_can_build_a_frame_the_decoder_would_reject() {
                     panic!("{message_type:?} with {flags:?} was rejected: {error}")
                 })
                 .expect("frame");
-            assert_eq!(decoded.encode(), frame.encode());
+            assert_eq!(decoded.try_encode().expect("retained"), frame.encode());
         }
     }
 }

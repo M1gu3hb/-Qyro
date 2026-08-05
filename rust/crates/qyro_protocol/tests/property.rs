@@ -66,7 +66,7 @@ fn arbitrary_frame(rng: &mut Rng) -> Frame {
 fn expect_message(decoded: DecodedFrame) -> Frame {
     match decoded {
         DecodedFrame::Message(frame) => frame,
-        DecodedFrame::Sealed(_) => panic!("generated frames are never sealed"),
+        DecodedFrame::Encrypted(_) => panic!("generated frames are never encrypted"),
         DecodedFrame::Unsupported(event) => {
             panic!(
                 "generated frames use known types, got {}",

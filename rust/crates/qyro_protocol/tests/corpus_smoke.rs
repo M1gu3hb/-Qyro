@@ -63,7 +63,7 @@ fn every_corpus_input_is_handled_without_panicking() {
                         // An unknown type is delimited, so the stream survives.
                         // A sealed frame keeps its ciphertext; no corpus seed is
                         // sealed today, but the arm must exist.
-                        Ok(Some(DecodedFrame::Unsupported(_) | DecodedFrame::Sealed(_))) => {}
+                        Ok(Some(DecodedFrame::Unsupported(_) | DecodedFrame::Encrypted(_))) => {}
                         Ok(None) => drained = false,
                         Err(_) => {
                             drained = false;

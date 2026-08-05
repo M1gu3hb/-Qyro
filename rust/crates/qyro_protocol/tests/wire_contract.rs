@@ -28,7 +28,7 @@ fn decode_message(bytes: &[u8]) -> Frame {
         .expect("one whole frame")
     {
         DecodedFrame::Message(frame) => frame,
-        DecodedFrame::Sealed(_) => panic!("expected a plain message, got a sealed frame"),
+        DecodedFrame::Encrypted(_) => panic!("expected a plain message, got an encrypted envelope"),
         DecodedFrame::Unsupported(event) => {
             panic!(
                 "expected a known message, got type {}",
@@ -87,6 +87,7 @@ fn message_type_zero_is_reserved_so_a_zeroed_buffer_never_decodes() {
 #[test]
 fn header_layout_is_frozen() {
     let header = FrameHeader::new(MessageType::DataChunk, 4)
+        .expect("within limits")
         .with_transport_flags(Flags::END_OF_ITEM)
         .expect("transport flag")
         .with_identifiers(
@@ -233,6 +234,7 @@ fn a_future_minor_header_extension_is_refused_not_skipped() {
     // them. 1.0 now says plainly that it does not support extensions.
     let extension: usize = 8;
     let mut bytes = FrameHeader::new(MessageType::Capabilities, 3)
+        .expect("within limits")
         .encode()
         .to_vec();
     bytes[5] = 4; // newer minor
@@ -357,7 +359,8 @@ fn hostile_payload_length_is_rejected_without_a_proportional_reservation() {
 #[test]
 fn every_declared_length_stays_within_the_frame_limit() {
     assert_eq!(MAX_FRAME_LEN, MAX_HEADER_LEN + MAX_PAYLOAD_LEN + 64);
-    let header = FrameHeader::new(MessageType::DataChunk, MAX_PAYLOAD_LEN as u32);
+    let header =
+        FrameHeader::new(MessageType::DataChunk, MAX_PAYLOAD_LEN as u32).expect("at the limit");
     assert!(header.total_len() <= MAX_FRAME_LEN as u64);
 }
 
@@ -376,9 +379,9 @@ fn several_frames_in_one_buffer_are_yielded_in_order() {
     let third = decoder.next_frame().expect("ok").expect("frame");
 
     assert_eq!(first.message_type(), Some(MessageType::Hello));
-    assert_eq!(first.payload(), b"one");
+    assert_eq!(first.plaintext().expect("plain"), b"one");
     assert_eq!(second.message_type(), Some(MessageType::DataChunk));
-    assert_eq!(second.payload(), b"two");
+    assert_eq!(second.plaintext().expect("plain"), b"two");
     assert_eq!(third.message_type(), Some(MessageType::Complete));
     assert_eq!(decoder.next_frame().expect("ok"), None);
     assert_eq!(decoder.buffered_len(), 0);
@@ -425,7 +428,7 @@ fn trailing_bytes_of_an_incomplete_frame_are_retained() {
 
     decoder.push(&partial[HEADER_LEN + 10..]).expect("rest");
     let frame = decoder.next_frame().expect("ok").expect("now complete");
-    assert_eq!(frame.payload().len(), 64);
+    assert_eq!(frame.plaintext().expect("plain").len(), 64);
     assert_eq!(decoder.buffered_len(), 0);
 }
 
@@ -478,7 +481,7 @@ fn a_framing_error_poisons_the_stream_until_reset() {
         .push(&encoded(MessageType::Hello, b"recovered".to_vec()))
         .expect("usable again");
     let frame = decoder.next_frame().expect("ok").expect("frame");
-    assert_eq!(frame.payload(), b"recovered");
+    assert_eq!(frame.plaintext(), Some(&b"recovered"[..]));
 }
 
 #[test]
