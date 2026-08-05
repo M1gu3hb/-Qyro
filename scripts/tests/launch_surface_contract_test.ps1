@@ -37,6 +37,40 @@ Require-Text $ios 'blue="0.05098039216"'
 Reject-Text $ios 'image="LaunchImage"'
 Reject-Text $ios 'red="1" green="1" blue="1"'
 
+# Interface Builder refuses to open a storyboard whose document element omits
+# toolsVersion, and fails the whole iOS build with "com.apple.InterfaceBuilder
+# error -1" long before any Dart code runs. Assert the loadable structure here so
+# a non-macOS runner catches it too.
+try {
+    $storyboard = [xml](Get-Content -LiteralPath $ios -Raw)
+} catch {
+    throw "[FAIL] $ios is not well-formed XML: $($_.Exception.Message)"
+}
+
+$documentElement = $storyboard.DocumentElement
+if ($documentElement.Name -ne 'document') {
+    throw "[FAIL] $ios root element must be <document>"
+}
+
+foreach ($attribute in @('toolsVersion', 'targetRuntime', 'initialViewController')) {
+    if ([string]::IsNullOrEmpty($documentElement.GetAttribute($attribute))) {
+        throw "[FAIL] $ios <document> must declare $attribute or Interface Builder cannot open it"
+    }
+}
+
+if ($documentElement.GetAttribute('launchScreen') -ne 'YES') {
+    throw "[FAIL] $ios must stay a launch screen"
+}
+
+$toolsVersion = $documentElement.GetAttribute('toolsVersion')
+foreach ($capability in $storyboard.SelectNodes('//capability')) {
+    $minimum = $capability.GetAttribute('minToolsVersion')
+    if (-not [string]::IsNullOrEmpty($minimum) -and
+        [string]::Compare($minimum, $toolsVersion, [System.StringComparison]::Ordinal) -gt 0) {
+        throw "[FAIL] $ios declares capability '$($capability.GetAttribute('name'))' above its toolsVersion"
+    }
+}
+
 $windows = Join-Path $repoRoot 'apps/qyro/windows/runner/win32_window.cpp'
 Require-Text $windows 'RGB(3, 7, 13)'
 Require-Text $windows 'window_class.hbrBackground ='
