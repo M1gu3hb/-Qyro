@@ -19,6 +19,7 @@
 - ADR-0018: errores estructurales frente a eventos semánticos.
 - ADR-0019: nombre visible derivado de la ruta.
 - ADR-0020: fundación de identidad de dispositivo.
+- ADR-0021: handshake autenticado de cuatro mensajes.
 
 No existe ADR-0011.
 
