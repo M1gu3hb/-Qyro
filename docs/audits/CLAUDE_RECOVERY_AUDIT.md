@@ -251,14 +251,41 @@ push a `main` o por pull request. Empujar la rama de trabajo **no dispara nada**
 lo que mantiene el ruido bajo; obtener evidencia de iOS/Android exige
 `workflow_dispatch` explícito o un pull request.
 
+## 7 bis. Confirmación en CI de esta rama
+
+Tras empujar `ff933d9`, se lanzaron ambos workflows de runtime con
+`workflow_dispatch` sobre `claude/qyro-recovery-continuation-j53jgx`:
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| iOS runtime ABI | 30963011815 | **success**, 10/10 pasos |
+| Android runtime ABI | 30963016390 | **success**, 8/8 pasos |
+
+En iOS pasaron por primera vez desde `67fa795` los tres pasos que antes quedaban
+en `skipped`:
+
+- «Build unsigned iOS application with qyro_ffi» — confirma la corrección del
+  storyboard.
+- «Verify native symbols in the unsigned application» — `nm -gU` sobre
+  `Runner` y `Runner.debug.dylib` encuentra `_qyro_protocol_version_ptr` y
+  `_qyro_protocol_version_len`, es decir, el staticlib **sí** queda enlazado.
+- «Execute qyro_ffi XCTest through the Runner host» — XCTest real en simulador.
+
+En Android, el paso «Execute native ABI smoke test in an Android emulator»
+ejecutó `integration_test/native_abi_smoke_test.dart` en un emulador API 35
+`google_apis` x86_64 con KVM, recuperando una verificación que en `e9ed7f3` no
+tenía ninguna ejecución válida.
+
+Esto convierte las dos entradas NOT_VERIFIED de la sección 8 en verificadas.
+
 ## 8. Riesgos abiertos
 
-1. La vinculación de `qyro_ffi` en iOS no está verificada en HEAD. La corrección
-   del storyboard es correcta estructuralmente y está cubierta por contrato, pero
-   solo un runner macOS puede confirmarla.
-2. El runtime ABI de Android tiene un único `success` histórico y ninguno en HEAD.
-3. Este entorno no tiene macOS, SDK de Android ni Windows: las tres plataformas
-   obligatorias solo pueden comprobarse en CI.
+1. Ninguna plataforma se ha probado en **hardware físico**: solo emulador,
+   simulador y host. Un simulador no equivale a un dispositivo.
+2. `ci.yml` no se ha ejecutado en esta rama porque solo se dispara por push a
+   `main` o por pull request. Su contenido se reprodujo íntegro en el host Linux.
+3. Este entorno no tiene macOS, SDK de Android ni Windows: la evidencia de las
+   tres plataformas obligatorias depende de CI.
 4. La marca sigue provisional (`REPLACE_WITH_*`, `com.owner.qyro`), lo que debe
    seguir bloqueando cualquier empaquetado público.
 5. Autoría y licencia del logo siguen sin registrar.
@@ -271,14 +298,15 @@ Hito A (esta sesión) cierra con: ramas reconciliadas, logo canónico, regresió
 iOS corregida y cubierta, brecha de deriva documental cerrada, y STATUS/HANDOFF/
 NEXT_STEPS reescritos con evidencia real.
 
+Además, iOS y Android quedaron confirmados en CI sobre esta rama (sección 7 bis).
+
 Orden siguiente, sin saltarse ninguno:
 
-1. Confirmar en CI la corrección de iOS y recuperar el runtime ABI de Android.
+1. Hito C: `qyro_protocol`, `qyro_manifest` y `qyro_transfer` por TDD, con
+   validación de rutas, límites antes de reservar memoria y corpus de vectores.
 2. Terminar el Hito 1 visual: golden tests (0/20/50/80/100 %, teléfono, tablet,
    Windows, reduced motion, fallo de FFI, branding provisional) y benchmark.
-3. Hito C: `qyro_protocol`, `qyro_manifest` y `qyro_transfer` por TDD, con
-   validación de rutas y corpus de vectores.
-4. Hitos D–L según el prompt maestro.
+3. Hitos D–L según el prompt maestro.
 
 Ninguna función de transferencia debe declararse antes de existir, y los botones
 Enviar/Recibir deben seguir deshabilitados hasta que haya transporte real.

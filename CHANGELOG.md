@@ -9,6 +9,11 @@ Basado en Keep a Changelog y Semantic Versioning.
 - iOS vuelve a compilar: se restauró un LaunchScreen.storyboard que Interface
   Builder puede abrir. Desde 67fa795 faltaban `toolsVersion`/`systemVersion` y
   todas las builds de iOS fallaban con `com.apple.InterfaceBuilder error -1`.
+  Confirmado por el run 30963011815: los diez pasos en verde, incluida la
+  verificación de que `_qyro_protocol_version_ptr` y `_qyro_protocol_version_len`
+  quedan enlazados en el bundle, y el XCTest en simulador.
+- Recuperado el runtime ABI de Android, sin ejecución válida desde c971c9a:
+  run 30963016390 ejecuta el smoke test en un emulador API 35 con KVM.
 - El merge de `main` dejó silenciosamente el logo real dentro del archivo que el
   propietario marcó como inutilizable; se restauró byte a byte.
 

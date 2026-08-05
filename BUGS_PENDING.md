@@ -67,9 +67,11 @@
   sin versión de herramientas contra la que compararse
 - Evidencia: runs 30960631901 (67fa795), 30961031089 (9bfb1cc) y 30961153321
   (e9ed7f3) fallan; 30953803079 (9104421) y 30956527561 (4f7ed01) pasaban
-- Estado: corregido en código, **pendiente de confirmación en runner macOS**
+- Estado: resuelto
 - Resolución: commit 565a78d restaura la estructura del documento que ya
   compilaba y añade validación estructural al contrato de launch surfaces
+- Confirmación: run 30963011815 sobre ff933d9, los diez pasos en success,
+  incluidos la verificación de símbolos con `nm -gU` y el XCTest en simulador
 - Dueño: iOS
 - Fecha: 2026-08-05
 
@@ -97,8 +99,8 @@
   con `total_ms: 0`; nunca obtuvo runner
 - Workaround: no se canceló porque `concurrency: android-runtime-${{ github.ref }}`
   con `cancel-in-progress: true` lo desplaza en el próximo push a esa ref
-- Impacto: no hay evidencia de runtime ABI de Android en HEAD; el único `success`
-  histórico es el run 30957598982 (c971c9a)
-- Estado: abierto
+- Impacto: ninguno ya sobre el estado actual. El runtime ABI de Android quedó
+  confirmado en esta rama por el run 30963016390 sobre ff933d9
+- Estado: cerrado por obsolescencia; el run atascado sigue en la otra rama
 - Dueño: CI/Android
 - Fecha: 2026-08-05

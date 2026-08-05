@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T00:30:00Z
+- Updated UTC: 2026-08-05T00:40:00Z
 - Branch: claude/qyro-recovery-continuation-j53jgx
-- Verified commit: 5825b50b40792a1fb588a969dc7411db6ff04a17
+- Verified commit: ff933d97beae7a98745fcfda9423f65135af94b8
 - Milestone: Hito 0 verificado; Hito A (recuperación) cerrado; Hito 1 en hardening
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
@@ -29,10 +29,11 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - Logo canónico fijado por checksum (ADR-0014): IMPLEMENTED
 - Regla anti-deriva de STATUS.md en el job documental: IMPLEMENTED
 
+- iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO (run 30963011815)
+- Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO (run 30963016390)
+
 ## Not implemented
 
-- iOS staticlib linkage verificado en HEAD: NOT_VERIFIED (ver Blockers)
-- Android runtime ABI verificado en HEAD: NOT_VERIFIED (ver Blockers)
 - Golden tests de arranque y benchmark documentado: NOT_IMPLEMENTED
 - Retained development artifacts and checksums: NOT_IMPLEMENTED
 - File transfer: NOT_IMPLEMENTED
@@ -50,16 +51,22 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 
 - Android debug APK: YES (CI, hasta `e9ed7f3`)
 - Windows debug executable: YES (CI, hasta `e9ed7f3`)
-- iOS Runner.app debug sin firma: NO desde `67fa795`. La corrección está en
-  `565a78d` pero todavía no se ha compilado en un runner macOS.
+- iOS Runner.app debug sin firma: YES en `ff933d9` (run 30963011815, paso
+  «Build unsigned iOS application with qyro_ffi»). Estuvo roto entre `67fa795`
+  y `565a78d`.
 
 ## Platforms executed
 
 - Linux host Dart→Rust ABI test: YES (esta sesión, `flutter test`)
 - Windows host Dart→DLL ABI test: YES (CI previo)
-- Android emulator/device: NO en HEAD. Único `success` histórico: run
-  30957598982 (SHA `c971c9a`).
-- iOS simulator/device: NO. XCTest nunca llegó a ejecutarse en HEAD.
+- Android emulator: **YES** en `ff933d9`. Run 30963016390, paso «Execute native
+  ABI smoke test in an Android emulator»: success. Emulador API 35 `google_apis`
+  x86_64 con KVM ejecutando `integration_test/native_abi_smoke_test.dart`.
+- iOS simulator: **YES** en `ff933d9`. Run 30963011815, los diez pasos en
+  success, incluidos «Verify native symbols in the unsigned application»
+  (`nm -gU` encuentra `_qyro_protocol_version_ptr` y `_qyro_protocol_version_len`
+  en el bundle) y «Execute qyro_ffi XCTest through the Runner host».
+- iOS/Android hardware físico: NO
 - Interactive Windows application smoke: NO
 
 ## Real tests
@@ -80,16 +87,23 @@ que fija CI) y PowerShell 7.4.6:
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 
-Workflows remotos en el último HEAD de `audit/baseline-hardening` (`e9ed7f3`):
+Workflows remotos en esta rama, sobre `ff933d9`, lanzados con
+`workflow_dispatch`:
+
+| Workflow | Run | Conclusión | Duración |
+|---|---|---|---|
+| iOS runtime ABI | 30963011815 | **success** (10/10 pasos) | ~15 min |
+| Android runtime ABI | 30963016390 | **success** (8/8 pasos) | ~7 min |
+
+Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 - CI run 30961157153: success
-- iOS runtime ABI run 30961153321: **failure** (storyboard, corregido en `565a78d`)
-- Android runtime ABI run 30961153377: `in_progress` desde 2026-08-04T23:47Z con
-  `total_ms: 0`; nunca obtuvo runner. No es evidencia.
+- iOS runtime ABI run 30961153321: failure por el storyboard, corregido en `565a78d`
+- Android runtime ABI run 30961153377: `in_progress` con `total_ms: 0`; nunca
+  obtuvo runner y no es evidencia
 
-Esta rama todavía no tiene ejecución de CI: `ci.yml` se dispara por push a `main`
-o por pull request, y los workflows de runtime por push a
-`audit/baseline-hardening` o `workflow_dispatch`.
+`ci.yml` todavía no se ha ejecutado en esta rama: se dispara por push a `main` o
+por pull request. Su contenido sí se reprodujo íntegro en el host Linux (arriba).
 
 ## Artifacts
 
@@ -99,9 +113,10 @@ o por pull request, y los workflows de runtime por push a
 
 ## Blockers
 
-- La corrección del storyboard de iOS (`565a78d`) no está confirmada en un runner
-  macOS. Hasta entonces, la vinculación de `qyro_ffi` en iOS sigue sin probar.
-- El runtime ABI de Android no tiene ejecución válida en HEAD.
+- `ci.yml` no se ha ejecutado en esta rama (requiere pull request); el baseline
+  equivalente sí se reprodujo localmente.
+- Ninguna de las tres plataformas se ha probado en hardware físico, solo en
+  emulador, simulador y host.
 - Golden tests, benchmark de arranque y artefactos retenidos siguen ausentes.
 - `cargo audit` no es obligatorio; no hay SBOM ni lockfile de licencias auditado.
 - Autoría y licencia del logo siguen sin registrar.
@@ -109,10 +124,11 @@ o por pull request, y los workflows de runtime por push a
 
 ## Next task
 
-Disparar `ios-runtime.yml` y `android-runtime.yml` con `workflow_dispatch` sobre
-`claude/qyro-recovery-continuation-j53jgx` y confirmar que el job de iOS supera el
-paso «Build unsigned iOS application with qyro_ffi» y ejecuta el XCTest que lee
-`QYRO/1`. Registrar los IDs de run y su conclusión en este archivo.
+Crear el crate `qyro_protocol` mediante TDD con el marco binario versionado de
+QYRO/1: magic, versión, tipo, flags, session/transfer/stream/item ID, secuencia,
+longitud y autenticación, rechazando longitudes fuera de límite **antes** de
+reservar memoria. Aceptación: round-trip, truncamiento, corrupción de bytes y
+límites comprobados con `cargo test --workspace` en verde.
 
 ## Provisional values
 
