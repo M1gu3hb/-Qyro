@@ -101,6 +101,8 @@ jobs:
           pwsh -NoProfile -File scripts/tests/windows_package_contract_test.ps1 || status=1
           bash scripts/tests/launch_surface_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/launch_surface_contract_test.ps1 || status=1
+          bash scripts/tests/repo_portability_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/repo_portability_contract_test.ps1 || status=1
           python3 -m unittest tools/logo_ascii_generator/test_logo_ascii_generator.py || status=1
           exit "$status"
 
@@ -114,3 +116,8 @@ jobs:
           fetch-depth: 0
       - run: bash scripts/check_docs_consistency.sh
       - run: pwsh -NoProfile -File scripts/check_docs_consistency.ps1
+      # A Linux runner happily creates paths Windows cannot check out, so this
+      # has to be asserted rather than discovered when a Windows job dies at
+      # `actions/checkout`. See scripts/check_repo_portability.sh.
+      - run: bash scripts/check_repo_portability.sh
+      - run: pwsh -NoProfile -File scripts/check_repo_portability.ps1

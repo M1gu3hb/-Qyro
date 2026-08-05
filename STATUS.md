@@ -29,6 +29,7 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - Launch surfaces oscuras en Android, iOS y Windows: IMPLEMENTED
 - Logo canónico fijado por checksum (ADR-0014): IMPLEMENTED
 - Regla anti-deriva de STATUS.md en el job documental: IMPLEMENTED
+- Rechazo de rutas rastreadas que Windows no puede extraer: IMPLEMENTED
 - Framing binario QYRO/1 con decoder incremental acotado (ADR-0016): IMPLEMENTED
 - Manifest canónico con validación estricta de rutas (ADR-0017): IMPLEMENTED
 - Property tests y corpus smoke de fuzzing: IMPLEMENTED
@@ -100,7 +101,8 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 ## Platforms compiled
 
 - Android debug APK: YES (CI, hasta `e9ed7f3`)
-- Windows debug executable: YES (CI, hasta `e9ed7f3`)
+- Windows debug executable: **NO desde el sprint 2**. No es una regresión de
+  compilación: el checkout fallaba antes de compilar. Ver QYR-0013.
 - iOS Runner.app debug sin firma: YES en `ff933d9` (run 30963011815, paso
   «Build unsigned iOS application with qyro_ffi»). Estuvo roto entre `67fa795`
   y `565a78d`.
@@ -108,9 +110,12 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 ## Platforms executed
 
 - Linux host Dart→Rust ABI test: YES (esta sesión, `flutter test`)
-- Windows host Dart→DLL ABI test: **STALE**. Última ejecución sobre `e9ed7f3`;
-  no se ha vuelto a ejecutar en ninguna rama posterior, así que no dice nada
-  sobre el código actual.
+- Windows host Dart→DLL ABI test: **NO**, y ahora se sabe por qué. El job
+  `windows` de `Platform builds` moría en `actions/checkout` desde el sprint 2:
+  `rust/fuzz/corpus/relative_path/nul.txt` usa un nombre de dispositivo
+  reservado y `git` no puede extraerlo en Windows (run 30976026135). Corregido
+  en este sprint (QYR-0013); **queda pendiente volver a ejecutarlo** para tener
+  evidencia real sobre el código actual.
 - Android emulator: **YES** en `ff933d9`. Run 30963016390, paso «Execute native
   ABI smoke test in an Android emulator»: success. Emulador API 35 `google_apis`
   x86_64 con KVM ejecutando `integration_test/native_abi_smoke_test.dart`.
@@ -141,7 +146,8 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `flutter analyze`: PASS, «No issues found!»
 - `flutter test`: PASS, **58 tests**, incluye lectura real de `QYRO/1` desde
   `libqyro_ffi.so` por FFI (sin cambios en este sprint)
-- 5 contratos Bash y 6 PowerShell: PASS
+- 6 contratos Bash y 7 PowerShell: PASS, incluido el nuevo de portabilidad de
+  rutas, verificado en rojo contra el nombre real que rompía Windows
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 

@@ -153,3 +153,28 @@
 - Estado: resuelto
 - Resolución: aserciones por segmento en property tests y targets
 - Fecha: 2026-08-05
+
+## QYR-0013 — El repositorio no podía clonarse en Windows
+
+- Plataforma: Windows
+- Severidad: P0
+- Esperado: `actions/checkout` obtiene el árbol en el runner de Windows
+- Actual: `error: invalid path 'rust/fuzz/corpus/relative_path/nul.txt'`,
+  `git.exe` salía con 128 y el job moría en el paso 2, antes de compilar nada
+- Causa: el caso de corpus del **byte** NUL se nombró por su contenido, y `NUL`
+  es un nombre de dispositivo reservado en Windows. Sus hermanos sí llevaban
+  prefijo (`reserved_con.txt`, `reserved_com1_ext.txt`), así que el riesgo se
+  conocía para CON y COM1 y se pasó por alto para NUL
+- Alcance: desde que se añadió el corpus en el sprint 2. La última evidencia de
+  Windows en STATUS era de `e9ed7f3`, anterior al corpus, así que el fallo
+  quedó fuera de vista durante tres sprints
+- Resolución: renombrado a `nul_byte.txt`; el contenido (`a\0b`) no cambia,
+  porque lo que un corpus de fuzzing aporta son bytes, no nombres
+- Prevención: `scripts/check_repo_portability.{sh,ps1}` rechaza cualquier ruta
+  rastreada que Windows no pueda extraer, con contratos en ambos shells y en
+  CI. Es la misma regla que `qyro_manifest` aplica a una transferencia: un
+  proyecto que rechaza el nombre no portable de un peer y comete uno propio no
+  está aplicando su propio estándar
+- Estado: resuelto
+- Evidencia: run 30976026135 (fallo, job `windows`), contrato en rojo y verde
+- Fecha: 2026-08-05
