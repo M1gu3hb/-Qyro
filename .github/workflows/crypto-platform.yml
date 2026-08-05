@@ -22,7 +22,14 @@ on:
       - "Cargo.lock"
       - ".github/workflows/crypto-platform.yml"
   push:
-    branches: [main]
+    # `main` is where this belongs once merged. The working branch is listed
+    # because a `workflow_dispatch` workflow that has never existed on the
+    # default branch cannot be dispatched at all — GitHub answers 404 — and a
+    # new workflow has to prove itself somewhere before it is merged. Remove the
+    # second entry when this reaches main; `android-runtime.yml` still carries a
+    # branch that stopped existing three sprints ago, which is what happens when
+    # nobody writes that down.
+    branches: [main, claude/qyro-crypto-platform-hardening]
     paths:
       - "rust/crates/qyro_crypto/**"
       - "rust/crates/qyro_protocol/**"
