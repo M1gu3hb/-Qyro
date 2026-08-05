@@ -14,7 +14,7 @@ function New-Fixture {
 # Canonical project status
 - Updated UTC: 2026-08-04T19:55:00Z
 - Branch: audit/baseline-hardening
-- Verified commit: CURRENT_HEAD
+- Verified commit: 7ca3973cd1928ffaa3e7b112d121587d83d5092c
 - Milestone: Hito 0 cerrado; Hito 1 en hardening
 ## Implemented
 - Native bridge: IMPLEMENTED
@@ -41,6 +41,31 @@ function New-Fixture {
     }
     '{"owner":"REPLACE_WITH_OWNER"}' | Set-Content -LiteralPath (Join-Path $root 'config/branding.example.json')
     return $root
+}
+
+# STATUS.md drifted 58 commits behind audit/baseline-hardening without any check
+# noticing, because only the field layout was validated. These fixtures pin the
+# freshness rule: the verified commit must be reachable from HEAD and close to it.
+function New-GitFixture {
+    $root = New-Fixture
+    & git -C $root init --quiet --initial-branch=main
+    & git -C $root config user.email 'contract@qyro.test'
+    & git -C $root config user.name 'Qyro Contract'
+    & git -C $root add -A
+    & git -C $root commit --quiet -m 'chore: fixture baseline'
+    return $root
+}
+
+function Set-VerifiedCommit {
+    param([string] $Root, [string] $Value)
+    $path = Join-Path $Root 'STATUS.md'
+    (Get-Content -LiteralPath $path) -replace '^- Verified commit:.*', "- Verified commit: $Value" |
+        Set-Content -LiteralPath $path
+}
+
+function Get-FixtureHead {
+    param([string] $Root)
+    return (& git -C $Root rev-parse HEAD).Trim()
 }
 
 function Assert-FailsWith {
@@ -70,6 +95,33 @@ try {
     $falseClaim = New-Fixture; $fixtures += $falseClaim
     Add-Content (Join-Path $falseClaim 'README.md') 'File transfer: implemented'
     Assert-FailsWith $falseClaim '[BLOCKER] Pending capability claim'
+
+    # A commit recorded one revision back is normal: STATUS cannot contain the SHA
+    # of the very commit that introduces it.
+    $fresh = New-GitFixture; $fixtures += $fresh
+    Set-VerifiedCommit $fresh (Get-FixtureHead $fresh)
+    Add-Content (Join-Path $fresh 'README.md') 'follow-up'
+    & git -C $fresh commit --quiet -am 'docs: follow-up'
+    $output = & pwsh -NoProfile -File $checker -RepoRoot $fresh 2>&1
+    if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
+        throw "Fresh Git fixture failed: $($output -join [Environment]::NewLine)"
+    }
+
+    $drifted = New-GitFixture; $fixtures += $drifted
+    Set-VerifiedCommit $drifted (Get-FixtureHead $drifted)
+    foreach ($index in 1..12) {
+        Add-Content (Join-Path $drifted 'README.md') "change $index"
+        & git -C $drifted commit --quiet -am "chore: change $index"
+    }
+    Assert-FailsWith $drifted '[BLOCKER] Stale verified commit'
+
+    $unreachable = New-GitFixture; $fixtures += $unreachable
+    Set-VerifiedCommit $unreachable '0123456789abcdef0123456789abcdef01234567'
+    Assert-FailsWith $unreachable '[BLOCKER] Unknown verified commit'
+
+    $malformed = New-GitFixture; $fixtures += $malformed
+    Set-VerifiedCommit $malformed 'not-a-sha'
+    Assert-FailsWith $malformed '[BLOCKER] Malformed verified commit'
 }
 finally {
     foreach ($fixture in $fixtures) {

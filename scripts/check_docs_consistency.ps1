@@ -39,6 +39,51 @@ if ($missing.Count -gt 0) {
     $blockers++
 }
 
+# STATUS.md is the canonical executable state, so a verified commit that no longer
+# tracks HEAD silently invalidates every claim in it. STATUS cannot name the commit
+# that introduces it, so a small lead is expected; a large one means real drift.
+$maxStatusCommitLag = 10
+if ($env:QYRO_MAX_STATUS_COMMIT_LAG) {
+    $maxStatusCommitLag = [int] $env:QYRO_MAX_STATUS_COMMIT_LAG
+}
+
+function Invoke-Git {
+    param([string[]] $Arguments)
+    $output = & git @Arguments 2>$null
+    return [pscustomobject]@{
+        ExitCode = $LASTEXITCODE
+        Output   = ($output | Out-String).Trim()
+    }
+}
+
+$verifiedMatch = [regex]::Match($status, '(?m)^- Verified commit:\s*(\S*)\s*$')
+$verifiedCommit = if ($verifiedMatch.Success) { $verifiedMatch.Groups[1].Value } else { '' }
+
+if ([string]::IsNullOrEmpty($verifiedCommit)) {
+    Write-Status 'BLOCKER' 'Malformed verified commit' 'STATUS.md does not record a verified commit'
+    $blockers++
+} elseif ($verifiedCommit -notmatch '^[0-9a-f]{40}$') {
+    Write-Status 'BLOCKER' 'Malformed verified commit' "$verifiedCommit is not a full 40-character SHA"
+    $blockers++
+} elseif ((Invoke-Git @('-C', $RepoRoot, 'rev-parse', '--is-inside-work-tree')).ExitCode -ne 0) {
+    Write-Status 'SKIP' 'Verified commit freshness' "$RepoRoot is not a Git work tree"
+} elseif ((Invoke-Git @('-C', $RepoRoot, 'rev-parse', '--is-shallow-repository')).Output -eq 'true') {
+    Write-Status 'SKIP' 'Verified commit freshness' 'shallow clone cannot prove reachability'
+} elseif ((Invoke-Git @('-C', $RepoRoot, 'cat-file', '-e', "$verifiedCommit^{commit}")).ExitCode -ne 0) {
+    Write-Status 'BLOCKER' 'Unknown verified commit' "$verifiedCommit is not a commit in this repository"
+    $blockers++
+} elseif ((Invoke-Git @('-C', $RepoRoot, 'merge-base', '--is-ancestor', $verifiedCommit, 'HEAD')).ExitCode -ne 0) {
+    Write-Status 'BLOCKER' 'Unknown verified commit' "$verifiedCommit is not reachable from HEAD"
+    $blockers++
+} else {
+    $lagResult = Invoke-Git @('-C', $RepoRoot, 'rev-list', '--count', "$verifiedCommit..HEAD")
+    $lag = if ($lagResult.ExitCode -eq 0 -and $lagResult.Output) { [int] $lagResult.Output } else { 0 }
+    if ($lag -gt $maxStatusCommitLag) {
+        Write-Status 'BLOCKER' 'Stale verified commit' "HEAD is $lag commits ahead of the verified commit (limit $maxStatusCommitLag)"
+        $blockers++
+    }
+}
+
 $canonicalDocs = @('AGENTS.md', 'PROJECT_CONTEXT.md', 'README.md', 'HANDOFF.md', 'TESTING.md')
 foreach ($doc in $canonicalDocs) {
     $path = Join-Path $RepoRoot $doc

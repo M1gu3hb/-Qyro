@@ -12,7 +12,7 @@ make_fixture() {
 # Canonical project status
 - Updated UTC: 2026-08-04T19:55:00Z
 - Branch: audit/baseline-hardening
-- Verified commit: CURRENT_HEAD
+- Verified commit: 7ca3973cd1928ffaa3e7b112d121587d83d5092c
 - Milestone: Hito 0 cerrado; Hito 1 en hardening
 ## Implemented
 - Native bridge: IMPLEMENTED
@@ -77,3 +77,51 @@ assert_fails_with "$scripts_pending" "[BLOCKER] AGENTS script state"
 make_fixture "$false_claim"
 printf '\nFile transfer: implemented\n' >> "$false_claim/README.md"
 assert_fails_with "$false_claim" "[BLOCKER] Pending capability claim"
+
+# STATUS.md drifted 58 commits behind audit/baseline-hardening without any check
+# noticing, because only the field layout was validated. These fixtures pin the
+# freshness rule: the verified commit must be reachable from HEAD and close to it.
+make_git_fixture() {
+  local root="$1"
+  make_fixture "$root"
+  git -C "$root" init --quiet --initial-branch=main
+  git -C "$root" config user.email "contract@qyro.test"
+  git -C "$root" config user.name "Qyro Contract"
+  git -C "$root" add -A
+  git -C "$root" commit --quiet -m "chore: fixture baseline"
+}
+
+set_verified_commit() {
+  local root="$1" value="$2"
+  local escaped=${value//\//\\/}
+  sed -i "s/^- Verified commit:.*/- Verified commit: $escaped/" "$root/STATUS.md"
+}
+
+fresh="$(mktemp -d)"; drifted="$(mktemp -d)"
+unreachable="$(mktemp -d)"; malformed="$(mktemp -d)"
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$fresh" "$drifted" "$unreachable" "$malformed"' EXIT
+
+# A commit recorded one revision back is normal: STATUS cannot contain the SHA of
+# the very commit that introduces it.
+make_git_fixture "$fresh"
+set_verified_commit "$fresh" "$(git -C "$fresh" rev-parse HEAD)"
+printf '\nfollow-up\n' >> "$fresh/README.md"
+git -C "$fresh" commit --quiet -am "docs: follow-up"
+output="$(bash "$checker" --repo-root "$fresh")"
+[[ "$output" == *"[OK] Documentation consistency"* ]]
+
+make_git_fixture "$drifted"
+set_verified_commit "$drifted" "$(git -C "$drifted" rev-parse HEAD)"
+for index in $(seq 1 12); do
+  printf 'change %s\n' "$index" >> "$drifted/README.md"
+  git -C "$drifted" commit --quiet -am "chore: change $index"
+done
+assert_fails_with "$drifted" "[BLOCKER] Stale verified commit"
+
+make_git_fixture "$unreachable"
+set_verified_commit "$unreachable" "0123456789abcdef0123456789abcdef01234567"
+assert_fails_with "$unreachable" "[BLOCKER] Unknown verified commit"
+
+make_git_fixture "$malformed"
+set_verified_commit "$malformed" "not-a-sha"
+assert_fails_with "$malformed" "[BLOCKER] Malformed verified commit"

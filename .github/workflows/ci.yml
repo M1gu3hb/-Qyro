@@ -86,6 +86,10 @@ jobs:
   documentation:
     runs-on: ubuntu-latest
     steps:
+      # Full history: the checker proves STATUS.md's verified commit is reachable
+      # from HEAD, which a shallow clone cannot answer.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: bash scripts/check_docs_consistency.sh
       - run: pwsh -NoProfile -File scripts/check_docs_consistency.ps1

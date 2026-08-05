@@ -64,6 +64,37 @@ if [[ ${#missing_fields[@]} -gt 0 ]]; then
   blockers=$((blockers + 1))
 fi
 
+# STATUS.md is the canonical executable state, so a verified commit that no longer
+# tracks HEAD silently invalidates every claim in it. STATUS cannot name the commit
+# that introduces it, so a small lead is expected; a large one means real drift.
+max_status_commit_lag="${QYRO_MAX_STATUS_COMMIT_LAG:-10}"
+verified_commit="$(sed -n 's/^- Verified commit:[[:space:]]*//p' "$status_file" | head -n 1 | tr -d '[:space:]')"
+
+if [[ -z "$verified_commit" ]]; then
+  report "BLOCKER" "Malformed verified commit" "STATUS.md does not record a verified commit"
+  blockers=$((blockers + 1))
+elif [[ ! "$verified_commit" =~ ^[0-9a-f]{40}$ ]]; then
+  report "BLOCKER" "Malformed verified commit" "$verified_commit is not a full 40-character SHA"
+  blockers=$((blockers + 1))
+elif ! git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  report "SKIP" "Verified commit freshness" "$repo_root is not a Git work tree"
+elif [[ "$(git -C "$repo_root" rev-parse --is-shallow-repository 2>/dev/null)" == "true" ]]; then
+  report "SKIP" "Verified commit freshness" "shallow clone cannot prove reachability"
+elif ! git -C "$repo_root" cat-file -e "${verified_commit}^{commit}" 2>/dev/null; then
+  report "BLOCKER" "Unknown verified commit" "$verified_commit is not a commit in this repository"
+  blockers=$((blockers + 1))
+elif ! git -C "$repo_root" merge-base --is-ancestor "$verified_commit" HEAD 2>/dev/null; then
+  report "BLOCKER" "Unknown verified commit" "$verified_commit is not reachable from HEAD"
+  blockers=$((blockers + 1))
+else
+  lag="$(git -C "$repo_root" rev-list --count "${verified_commit}..HEAD" 2>/dev/null || echo 0)"
+  if [[ "$lag" -gt "$max_status_commit_lag" ]]; then
+    report "BLOCKER" "Stale verified commit" \
+      "HEAD is $lag commits ahead of the verified commit (limit $max_status_commit_lag)"
+    blockers=$((blockers + 1))
+  fi
+fi
+
 canonical_docs=(AGENTS.md PROJECT_CONTEXT.md README.md HANDOFF.md TESTING.md)
 for doc in "${canonical_docs[@]}"; do
   path="$repo_root/$doc"

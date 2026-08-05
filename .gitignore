@@ -18,6 +18,11 @@ target/
 .flutter-plugins-dependencies
 .packages
 build/
+apps/qyro/lib/l10n/generated/
+
+# Python tooling
+__pycache__/
+*.pyc
 
 # IDE/OS
 .idea/
