@@ -281,6 +281,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "qyro_crypto_smoke"
+version = "0.0.1"
+dependencies = [
+ "qyro_crypto",
+ "qyro_protocol",
+]
+
+[[package]]
 name = "qyro_ffi"
 version = "0.0.1"
 dependencies = [

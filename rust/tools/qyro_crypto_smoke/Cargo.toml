@@ -1,0 +1,32 @@
+# Test harness. Never shipped.
+#
+# Exists so that Android, iOS and Windows have real evidence that qyro_crypto
+# works on them, rather than the argument that Rust is portable. See
+# docs/adr/ADR-0023-crypto-platform-test-harness.md.
+#
+# `publish = false` and nothing in the product declares it as a dependency. A
+# guard in CI searches the APK, Runner.app and the Windows ZIP for its one
+# exported symbol and fails if it appears in any of them.
+[package]
+name = "qyro_crypto_smoke"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "qyro_crypto_smoke"
+# `staticlib` for the iOS XCTest target, `cdylib` for anything that needs to
+# dlopen it, `rlib` so the binary below can use it. None of the three is linked
+# by the application.
+crate-type = ["staticlib", "cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "qyro_crypto_smoke"
+path = "src/main.rs"
+
+[dependencies]
+qyro_crypto = { path = "../../crates/qyro_crypto" }
+qyro_protocol = { path = "../../crates/qyro_protocol" }
