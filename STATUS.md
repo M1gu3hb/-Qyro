@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T04:45:00Z
+- Updated UTC: 2026-08-05T05:00:00Z
 - Branch: claude/qyro-authenticated-handshake
-- Verified commit: 779fb168c5595fb16f888f08766c60dd9be9938c
+- Verified commit: 9f006b01d2b65806995bfa40a0f7bd0ac0308f0a
 - Milestone: handshake autenticado en memoria; AEAD y transporte NO iniciados
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
@@ -100,9 +100,11 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 
 ## Platforms compiled
 
-- Android debug APK: YES (CI, hasta `e9ed7f3`)
-- Windows debug executable: **NO desde el sprint 2**. No es una regresión de
-  compilación: el checkout fallaba antes de compilar. Ver QYR-0013.
+- Android debug APK: YES en `779fb16` (run 30976026135, job `android`)
+- Windows debug executable: YES en `9f006b0` (run 30976488367, paso
+  «Run flutter build windows --debug»). Estuvo sin compilarse desde el sprint 2,
+  no por una regresión de compilación sino porque el checkout fallaba antes.
+  Ver QYR-0013.
 - iOS Runner.app debug sin firma: YES en `ff933d9` (run 30963011815, paso
   «Build unsigned iOS application with qyro_ffi»). Estuvo roto entre `67fa795`
   y `565a78d`.
@@ -110,12 +112,13 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 ## Platforms executed
 
 - Linux host Dart→Rust ABI test: YES (esta sesión, `flutter test`)
-- Windows host Dart→DLL ABI test: **NO**, y ahora se sabe por qué. El job
-  `windows` de `Platform builds` moría en `actions/checkout` desde el sprint 2:
-  `rust/fuzz/corpus/relative_path/nul.txt` usa un nombre de dispositivo
-  reservado y `git` no puede extraerlo en Windows (run 30976026135). Corregido
-  en este sprint (QYR-0013); **queda pendiente volver a ejecutarlo** para tener
-  evidencia real sobre el código actual.
+- Windows host Dart→DLL ABI test: **YES** en `9f006b0`. Run 30976488367, paso
+  «Verify Dart reads QYRO/1 from the Windows DLL»: success. Es la primera
+  evidencia real de Windows desde el sprint 2: el job moría en
+  `actions/checkout` porque `rust/fuzz/corpus/relative_path/nul.txt` usa un
+  nombre de dispositivo reservado que `git` no puede extraer en Windows
+  (run 30976026135, QYR-0013). El mismo run cubre además el bundle x64, el
+  smoke-launch de `qyro.exe` y el ZIP portable.
 - Android emulator: **YES** en `ff933d9`. Run 30963016390, paso «Execute native
   ABI smoke test in an Android emulator»: success. Emulador API 35 `google_apis`
   x86_64 con KVM ejecutando `integration_test/native_abi_smoke_test.dart`.
@@ -151,20 +154,48 @@ Host Linux, Flutter 3.44.8 (la versión que fija CI), Rust 1.88.0 y PowerShell
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 
-Workflows sobre `abe6601` (este sprint), lanzados con `workflow_dispatch`:
+Workflows sobre `779fb16` (este sprint), lanzados con `workflow_dispatch`:
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 30976015355 | **success**, 4/4 jobs |
+| Android runtime ABI | 30976027455 | **success**, smoke en emulador |
+| iOS runtime ABI | 30976031712 | **success**, XCTest en simulador |
+| Platform builds | 30976026135 | **failure**: `android` y `ios` en success, `windows` en **failure** |
+
+El fallo de Windows es el hallazgo del sprint y **no** es una regresión de este
+código: `actions/checkout` moría con `invalid path` sobre un nombre de corpus
+reservado, antes de compilar nada. Ver QYR-0013.
+
+Tras corregirlo, sobre `9f006b0` (el commit al que apunta este archivo):
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 30976489548 | **success**, 4/4 jobs, incluidas las nuevas comprobaciones de portabilidad |
+| Platform builds | 30976488367 | **success**, 3/3 jobs: `android`, `ios` y `windows` |
+
+El job `windows` recorre los trece pasos: checkout, ABI Dart→DLL, build,
+verificación del bundle x64, smoke-launch de `qyro.exe` y ZIP portable.
+
+Con eso, las tres ABI de plataforma —Android, iOS y Windows— **sí** están
+verificadas, y esta vez la frase se corresponde con los runs que la respaldan.
+Los runtime ABI de Android e iOS (emulador y simulador) son de `779fb16`, un
+commit antes; el único cambio entre ambos es el renombrado del corpus, los dos
+scripts nuevos y documentación.
+
+Marcar como obsoleta la evidencia de Windows fue lo que llevó a relanzar el
+workflow que lo destapó. Antes decía «las tres ABI nativas siguen intactas» bajo
+una tabla de CI, Android e iOS, es decir Linux, Android e iOS: hacía pasar la
+ABI comprobada por la que no lo estaba, y así el fallo permaneció invisible
+durante tres sprints.
+
+Workflows previos sobre `abe6601`:
 
 | Workflow | Run | Conclusión |
 |---|---|---|
 | CI | 30970737104 | **success**, 4/4 jobs |
 | Android runtime ABI | 30970738398 | **success** |
 | iOS runtime ABI | 30970744000 | **success** |
-
-Esos tres runs cubren **Linux, Android e iOS**, no las tres ABI de plataforma
-del producto. **Windows no se ha revalidado**: su última evidencia es CI sobre
-`e9ed7f3`, muy por detrás de este commit, y ningún workflow de Windows se ha
-ejecutado desde entonces. Decir «las tres ABI nativas siguen intactas» —como
-decía antes esta línea— hace pasar la ABI que sí se comprobó (Linux, dentro del
-job de CI) por la que no.
 
 Workflows previos sobre `f78522a`:
 
