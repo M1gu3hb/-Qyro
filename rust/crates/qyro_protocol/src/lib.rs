@@ -31,7 +31,7 @@
 //! }
 //!
 //! let decoded = decoder.next_frame()?.expect("one complete frame");
-//! assert_eq!(decoded.message_type(), MessageType::Hello);
+//! assert_eq!(decoded.message_type(), Some(MessageType::Hello));
 //! assert_eq!(decoded.payload(), b"qyro");
 //! # Ok::<(), qyro_protocol::FrameError>(())
 //! ```
@@ -45,9 +45,10 @@ mod frame;
 mod header;
 mod limits;
 mod message;
+mod sealed;
 mod version;
 
-pub use decoder::FrameDecoder;
+pub use decoder::{DecodedFrame, FrameDecoder, UnsupportedFrame};
 pub use error::{FrameError, IdentifierField};
 pub use frame::Frame;
 pub use header::FrameHeader;
@@ -56,4 +57,5 @@ pub use limits::{
     SUPPORTED_TRAILER_LEN,
 };
 pub use message::{Flags, MessageType};
+pub use sealed::SealedFrame;
 pub use version::{MAGIC, PROTOCOL_VERSION, VERSION_MAJOR, VERSION_MINOR};

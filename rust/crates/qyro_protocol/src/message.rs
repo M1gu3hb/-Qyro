@@ -132,6 +132,32 @@ impl Flags {
     /// Bits that must stay zero.
     pub const RESERVED_MASK: u8 = !Self::KNOWN_MASK;
 
+    /// Flags a caller may set freely: they describe transport position only.
+    pub const TRANSPORT_MASK: u8 = 0b0000_0011;
+    /// Flags only the sealing path may set, because they assert something about
+    /// the payload that a caller cannot make true on its own.
+    pub const PROTECTED_MASK: u8 = 0b0000_1100;
+    /// Flags that are defined but whose feature does not exist yet.
+    pub const UNIMPLEMENTED_MASK: u8 = 0b0000_1000;
+
+    /// Returns the protected bits present in this set.
+    #[must_use]
+    pub const fn protected_bits(self) -> u8 {
+        self.0 & Self::PROTECTED_MASK
+    }
+
+    /// Returns the unimplemented bits present in this set.
+    #[must_use]
+    pub const fn unimplemented_bits(self) -> u8 {
+        self.0 & Self::UNIMPLEMENTED_MASK
+    }
+
+    /// Whether every bit is one a caller may set directly.
+    #[must_use]
+    pub const fn is_transport_only(self) -> bool {
+        self.0 & !Self::TRANSPORT_MASK == 0
+    }
+
     /// Returns the raw bits.
     #[must_use]
     pub const fn bits(self) -> u8 {

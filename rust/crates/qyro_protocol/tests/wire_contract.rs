@@ -4,9 +4,9 @@
 //! that breaks one of them is a wire-compatibility break, not a refactor.
 
 use qyro_protocol::{
-    Flags, Frame, FrameDecoder, FrameError, FrameHeader, HEADER_LEN, MAGIC, MAX_BUFFER_LEN,
-    MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MessageType, SUPPORTED_TRAILER_LEN,
-    VERSION_MAJOR, VERSION_MINOR,
+    DecodedFrame, Flags, Frame, FrameDecoder, FrameError, FrameHeader, HEADER_LEN, MAGIC,
+    MAX_BUFFER_LEN, MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MessageType,
+    SUPPORTED_TRAILER_LEN, VERSION_MAJOR, VERSION_MINOR,
 };
 
 fn encoded(message_type: MessageType, payload: Vec<u8>) -> Vec<u8> {
@@ -15,10 +15,27 @@ fn encoded(message_type: MessageType, payload: Vec<u8>) -> Vec<u8> {
         .encode()
 }
 
-fn decode_one(bytes: &[u8]) -> Result<Option<Frame>, FrameError> {
+fn decode_one(bytes: &[u8]) -> Result<Option<DecodedFrame>, FrameError> {
     let mut decoder = FrameDecoder::new();
     decoder.push(bytes)?;
     decoder.next_frame()
+}
+
+/// Decodes and unwraps a known message, failing loudly on anything else.
+fn decode_message(bytes: &[u8]) -> Frame {
+    match decode_one(bytes)
+        .expect("decodes")
+        .expect("one whole frame")
+    {
+        DecodedFrame::Message(frame) => frame,
+        DecodedFrame::Sealed(_) => panic!("expected a plain message, got a sealed frame"),
+        DecodedFrame::Unsupported(event) => {
+            panic!(
+                "expected a known message, got type {}",
+                event.message_type_value()
+            )
+        }
+    }
 }
 
 #[test]
@@ -69,13 +86,16 @@ fn message_type_zero_is_reserved_so_a_zeroed_buffer_never_decodes() {
 
 #[test]
 fn header_layout_is_frozen() {
-    let mut header = FrameHeader::new(MessageType::DataChunk, 4);
-    header.flags = Flags::END_OF_ITEM.union(Flags::ENCRYPTED);
-    header.session_id = 0x0102_0304_0506_0708;
-    header.transfer_id = 0x1112_1314_1516_1718;
-    header.stream_id = 0x2122_2324;
-    header.item_id = 0x3132_3334;
-    header.sequence = 0x4142_4344_4546_4748;
+    let header = FrameHeader::new(MessageType::DataChunk, 4)
+        .with_transport_flags(Flags::END_OF_ITEM)
+        .expect("transport flag")
+        .with_identifiers(
+            0x0102_0304_0506_0708,
+            0x1112_1314_1516_1718,
+            0x2122_2324,
+            0x3132_3334,
+        )
+        .with_sequence(0x4142_4344_4546_4748);
 
     let bytes = header.encode();
     assert_eq!(bytes.len(), 48);
@@ -84,7 +104,7 @@ fn header_layout_is_frozen() {
     assert_eq!(bytes[4], VERSION_MAJOR);
     assert_eq!(bytes[5], VERSION_MINOR);
     assert_eq!(bytes[6], MessageType::DataChunk.to_wire());
-    assert_eq!(bytes[7], 0b0000_0101);
+    assert_eq!(bytes[7], 0b0000_0001);
     // Big-endian everywhere.
     assert_eq!(&bytes[8..10], &[0x00, 0x30]);
     assert_eq!(bytes[10], SUPPORTED_TRAILER_LEN as u8);
@@ -104,9 +124,7 @@ fn round_trip_preserves_every_message_type() {
     for message_type in MessageType::ALL {
         let payload = vec![message_type.to_wire(); 16];
         let bytes = encoded(message_type, payload.clone());
-        let frame = decode_one(&bytes)
-            .expect("decodes")
-            .expect("one whole frame");
+        let frame = decode_message(&bytes);
         assert_eq!(frame.message_type(), message_type);
         assert_eq!(frame.payload(), payload.as_slice());
     }
@@ -118,22 +136,21 @@ fn round_trip_preserves_identifiers_flags_and_sequence() {
         .expect("within limits")
         .with_identifiers(u64::MAX, 7, u32::MAX, 9)
         .with_sequence(u64::MAX)
-        .with_flags(Flags::END_OF_TRANSFER.union(Flags::COMPRESSED));
+        .with_flags(Flags::END_OF_TRANSFER)
+        .expect("transport flag");
 
-    let decoded = decode_one(&frame.encode())
-        .expect("decodes")
-        .expect("one whole frame");
+    let decoded = decode_message(&frame.encode());
     assert_eq!(decoded, frame);
-    assert_eq!(decoded.header().session_id, u64::MAX);
-    assert_eq!(decoded.header().sequence, u64::MAX);
-    assert!(decoded.header().flags.contains(Flags::COMPRESSED));
+    assert_eq!(decoded.header().session_id(), u64::MAX);
+    assert_eq!(decoded.header().sequence(), u64::MAX);
+    assert!(decoded.header().flags().contains(Flags::END_OF_TRANSFER));
 }
 
 #[test]
 fn empty_payload_round_trips() {
     let bytes = encoded(MessageType::Heartbeat, Vec::new());
     assert_eq!(bytes.len(), HEADER_LEN);
-    let frame = decode_one(&bytes).expect("decodes").expect("whole frame");
+    let frame = decode_message(&bytes);
     assert!(frame.payload().is_empty());
 }
 
@@ -141,9 +158,7 @@ fn empty_payload_round_trips() {
 fn maximum_payload_is_accepted_and_one_more_byte_is_rejected() {
     let at_limit = vec![0xA5; MAX_PAYLOAD_LEN];
     let frame = Frame::new(MessageType::DataChunk, at_limit).expect("exactly at the limit");
-    let decoded = decode_one(&frame.encode())
-        .expect("decodes")
-        .expect("whole frame");
+    let decoded = decode_message(&frame.encode());
     assert_eq!(decoded.payload().len(), MAX_PAYLOAD_LEN);
 
     let over_limit = vec![0xA5; MAX_PAYLOAD_LEN + 1];
@@ -206,30 +221,34 @@ fn incompatible_major_version_is_rejected() {
 fn future_minor_version_is_accepted() {
     let mut bytes = encoded(MessageType::Hello, b"forward".to_vec());
     bytes[5] = 9;
-    let frame = decode_one(&bytes)
-        .expect("minor versions stay compatible")
-        .expect("whole frame");
-    assert_eq!(frame.header().version_minor, 9);
+    let frame = decode_message(&bytes);
+    assert_eq!(frame.header().version_minor(), 9);
     assert_eq!(frame.payload(), b"forward");
 }
 
 #[test]
-fn future_minor_version_header_extension_is_skipped_not_interpreted() {
-    // A newer peer appends eight header bytes this build does not know.
+fn a_future_minor_header_extension_is_refused_not_skipped() {
+    // ADR-0018 reversed this: skipping bytes that are never stored made
+    // decode->encode lossy and would leave a future AEAD unable to authenticate
+    // them. 1.0 now says plainly that it does not support extensions.
     let extension: usize = 8;
-    let mut header = FrameHeader::new(MessageType::Capabilities, 3);
-    header.version_minor = 4;
-    header.header_len = u16::try_from(HEADER_LEN + extension).expect("fits");
-
-    let mut bytes = header.encode().to_vec();
-    bytes.extend_from_slice(&[0xDE; 8]); // unknown extension bytes
+    let mut bytes = FrameHeader::new(MessageType::Capabilities, 3)
+        .encode()
+        .to_vec();
+    bytes[5] = 4; // newer minor
+    bytes[8..10].copy_from_slice(
+        &u16::try_from(HEADER_LEN + extension)
+            .expect("fits")
+            .to_be_bytes(),
+    );
+    bytes.extend_from_slice(&[0xDE; 8]);
     bytes.extend_from_slice(b"abc");
 
-    let frame = decode_one(&bytes)
-        .expect("extension is skipped")
-        .expect("whole frame");
-    assert_eq!(frame.payload(), b"abc");
-    assert_eq!(frame.header().header_len as usize, HEADER_LEN + extension);
+    assert!(matches!(
+        decode_one(&bytes),
+        Err(FrameError::UnsupportedHeaderExtension { declared, supported })
+            if declared as usize == HEADER_LEN + extension && supported as usize == HEADER_LEN
+    ));
 }
 
 #[test]
@@ -277,13 +296,22 @@ fn non_zero_reserved_byte_is_rejected() {
 }
 
 #[test]
-fn unknown_message_type_is_reported_with_its_value() {
+fn unknown_message_type_is_a_delimited_event_not_a_framing_failure() {
+    // ADR-0018: the frame is fully delimited before the type is resolved, so it
+    // is consumed whole and reported instead of killing the stream.
     let mut bytes = encoded(MessageType::Hello, Vec::new());
     bytes[6] = 200;
+    let decoded = decode_one(&bytes).expect("not a framing failure");
     assert!(matches!(
-        decode_one(&bytes),
-        Err(FrameError::UnknownMessageType { value: 200 })
+        decoded,
+        Some(DecodedFrame::Unsupported(event)) if event.message_type_value() == 200
     ));
+
+    // The type itself is still unknown at the MessageType level.
+    assert_eq!(
+        MessageType::from_wire(200),
+        Err(FrameError::UnknownMessageType { value: 200 })
+    );
 }
 
 #[test]
@@ -347,11 +375,11 @@ fn several_frames_in_one_buffer_are_yielded_in_order() {
     let second = decoder.next_frame().expect("ok").expect("frame");
     let third = decoder.next_frame().expect("ok").expect("frame");
 
-    assert_eq!(first.message_type(), MessageType::Hello);
+    assert_eq!(first.message_type(), Some(MessageType::Hello));
     assert_eq!(first.payload(), b"one");
-    assert_eq!(second.message_type(), MessageType::DataChunk);
+    assert_eq!(second.message_type(), Some(MessageType::DataChunk));
     assert_eq!(second.payload(), b"two");
-    assert_eq!(third.message_type(), MessageType::Complete);
+    assert_eq!(third.message_type(), Some(MessageType::Complete));
     assert_eq!(decoder.next_frame().expect("ok"), None);
     assert_eq!(decoder.buffered_len(), 0);
 }

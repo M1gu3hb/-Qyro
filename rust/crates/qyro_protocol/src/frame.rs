@@ -40,10 +40,10 @@ impl Frame {
     /// Returns [`FrameError::TruncatedPayload`] when the payload length does not
     /// match what the header declares.
     pub fn from_parts(header: FrameHeader, payload: Vec<u8>) -> Result<Self, FrameError> {
-        if payload.len() != header.payload_len as usize {
+        if payload.len() != header.payload_len() as usize {
             return Err(FrameError::TruncatedPayload {
                 available: payload.len(),
-                required: header.payload_len as usize,
+                required: header.payload_len() as usize,
             });
         }
         Ok(Self { header, payload })
@@ -70,7 +70,7 @@ impl Frame {
     /// Returns the message type.
     #[must_use]
     pub const fn message_type(&self) -> MessageType {
-        self.header.message_type
+        self.header.message_type()
     }
 
     /// Sets the routing identifiers.
@@ -82,25 +82,29 @@ impl Frame {
         stream_id: u32,
         item_id: u32,
     ) -> Self {
-        self.header.session_id = session_id;
-        self.header.transfer_id = transfer_id;
-        self.header.stream_id = stream_id;
-        self.header.item_id = item_id;
+        self.header = self
+            .header
+            .with_identifiers(session_id, transfer_id, stream_id, item_id);
         self
     }
 
     /// Sets the sequence number.
     #[must_use]
     pub const fn with_sequence(mut self, sequence: u64) -> Self {
-        self.header.sequence = sequence;
+        self.header = self.header.with_sequence(sequence);
         self
     }
 
-    /// Sets the flags.
-    #[must_use]
-    pub const fn with_flags(mut self, flags: Flags) -> Self {
-        self.header.flags = flags;
-        self
+    /// Sets transport flags.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FrameError::UnsupportedFlag`] for `ENCRYPTED` or `COMPRESSED`.
+    /// Those assert something about the payload a caller cannot make true, so
+    /// only the sealing path in `qyro_crypto` may set them.
+    pub fn with_flags(mut self, flags: Flags) -> Result<Self, FrameError> {
+        self.header = self.header.with_transport_flags(flags)?;
+        Ok(self)
     }
 
     /// Serializes the frame to bytes.

@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use qyro_protocol::{FrameDecoder, HEADER_LEN, MAX_PAYLOAD_LEN};
+use qyro_protocol::{DecodedFrame, FrameDecoder, HEADER_LEN, MAX_PAYLOAD_LEN};
 
 fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -45,7 +45,7 @@ fn every_corpus_input_is_handled_without_panicking() {
                 let mut drained = true;
                 while drained {
                     match decoder.next_frame() {
-                        Ok(Some(frame)) => {
+                        Ok(Some(DecodedFrame::Message(frame))) => {
                             assert!(
                                 frame.payload().len() <= MAX_PAYLOAD_LEN,
                                 "{} accepted an oversize payload",
@@ -53,13 +53,17 @@ fn every_corpus_input_is_handled_without_panicking() {
                             );
                             assert_eq!(
                                 frame.payload().len(),
-                                frame.header().payload_len as usize,
+                                frame.header().payload_len() as usize,
                                 "{} payload disagreed with its header",
                                 path.display()
                             );
-                            assert!(frame.header().header_len as usize >= HEADER_LEN);
-                            assert_eq!(frame.header().trailer_len, 0);
+                            assert_eq!(frame.header().header_len() as usize, HEADER_LEN);
+                            assert_eq!(frame.header().trailer_len(), 0);
                         }
+                        // An unknown type is delimited, so the stream survives.
+                        // A sealed frame keeps its ciphertext; no corpus seed is
+                        // sealed today, but the arm must exist.
+                        Ok(Some(DecodedFrame::Unsupported(_) | DecodedFrame::Sealed(_))) => {}
                         Ok(None) => drained = false,
                         Err(_) => {
                             drained = false;

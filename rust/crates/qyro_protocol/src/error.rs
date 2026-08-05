@@ -74,10 +74,31 @@ pub enum FrameError {
         /// Bytes the declared body needs.
         required: usize,
     },
-    /// A future-minor header extension was malformed.
-    InvalidExtension {
-        /// Extension length the peer declared.
+    /// The peer declared a header extension QYRO/1.0 cannot preserve.
+    ///
+    /// Structural: skipping bytes that are neither stored nor re-serialized
+    /// would break byte-exact re-encoding and leave a future AEAD unable to
+    /// authenticate them. See `docs/adr/ADR-0018-protocol-semantic-errors.md`.
+    UnsupportedHeaderExtension {
+        /// Header length the peer declared.
         declared: u16,
+        /// Header length this version accepts.
+        supported: u16,
+    },
+    /// A flag is defined but its feature does not exist yet.
+    UnsupportedFlag {
+        /// Bits actually present.
+        bits: u8,
+        /// The unsupported bits among them.
+        unsupported: u8,
+    },
+    /// `ENCRYPTED` was set without an authentication trailer.
+    ///
+    /// A frame that claims to be sealed but carries no tag is lying about its
+    /// own contents; only the sealing path may set this flag.
+    EncryptedWithoutTrailer {
+        /// Trailer length the peer declared.
+        declared: u8,
     },
     /// An identifier field held a value this protocol version forbids.
     InvalidIdentifier {
@@ -173,9 +194,21 @@ impl fmt::Display for FrameError {
             } => {
                 write!(formatter, "body truncated: {available} of {required} bytes")
             }
-            Self::InvalidExtension { declared } => {
-                write!(formatter, "invalid header extension of {declared} bytes")
-            }
+            Self::UnsupportedHeaderExtension {
+                declared,
+                supported,
+            } => write!(
+                formatter,
+                "header extension of {declared} bytes is not preserved by this version, which requires {supported}"
+            ),
+            Self::UnsupportedFlag { bits, unsupported } => write!(
+                formatter,
+                "flag bits {unsupported:#010b} in {bits:#010b} are defined but unimplemented"
+            ),
+            Self::EncryptedWithoutTrailer { declared } => write!(
+                formatter,
+                "ENCRYPTED set with a trailer length of {declared}"
+            ),
             Self::InvalidIdentifier { field } => {
                 write!(formatter, "invalid identifier in {field}")
             }

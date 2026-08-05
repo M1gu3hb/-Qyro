@@ -8,7 +8,7 @@
 //! the printed seed alone, with no regression file to keep in sync.
 
 use qyro_protocol::{
-    Flags, Frame, FrameDecoder, FrameError, HEADER_LEN, MAX_PAYLOAD_LEN, MessageType,
+    DecodedFrame, Flags, Frame, FrameDecoder, FrameError, HEADER_LEN, MAX_PAYLOAD_LEN, MessageType,
 };
 
 /// xorshift64*, deterministic and dependency-free.
@@ -46,18 +46,34 @@ fn arbitrary_frame(rng: &mut Rng) -> Frame {
     let message_type = MessageType::ALL[rng.below(MessageType::ALL.len())];
     let payload_len = rng.below(512);
     let payload = rng.bytes(payload_len);
-    let flags = match rng.below(5) {
+    // Only transport flags: ENCRYPTED and COMPRESSED are not publicly settable,
+    // because a caller cannot make either assertion true. (ADR-0018)
+    let flags = match rng.below(4) {
         0 => Flags::NONE,
         1 => Flags::END_OF_ITEM,
         2 => Flags::END_OF_TRANSFER,
-        3 => Flags::ENCRYPTED,
-        _ => Flags::END_OF_ITEM.union(Flags::COMPRESSED),
+        _ => Flags::END_OF_ITEM.union(Flags::END_OF_TRANSFER),
     };
     Frame::new(message_type, payload)
         .expect("generated payload stays within limits")
         .with_identifiers(rng.next_u64(), rng.next_u64(), 0, 0)
         .with_sequence(rng.next_u64())
         .with_flags(flags)
+        .expect("transport flags only")
+}
+
+/// Unwraps a known message; generated frames always use known types.
+fn expect_message(decoded: DecodedFrame) -> Frame {
+    match decoded {
+        DecodedFrame::Message(frame) => frame,
+        DecodedFrame::Sealed(_) => panic!("generated frames are never sealed"),
+        DecodedFrame::Unsupported(event) => {
+            panic!(
+                "generated frames use known types, got {}",
+                event.message_type_value()
+            )
+        }
+    }
 }
 
 #[test]
@@ -67,10 +83,12 @@ fn decoding_what_was_encoded_preserves_the_frame() {
         let frame = arbitrary_frame(&mut rng);
         let mut decoder = FrameDecoder::new();
         decoder.push(&frame.encode()).expect("within buffer");
-        let decoded = decoder
-            .next_frame()
-            .unwrap_or_else(|error| panic!("case {case} failed to decode: {error}"))
-            .unwrap_or_else(|| panic!("case {case} produced no frame"));
+        let decoded = expect_message(
+            decoder
+                .next_frame()
+                .unwrap_or_else(|error| panic!("case {case} failed to decode: {error}"))
+                .unwrap_or_else(|| panic!("case {case} produced no frame")),
+        );
         assert_eq!(decoded, frame, "case {case} did not round-trip");
     }
 }
@@ -91,7 +109,7 @@ fn incremental_delivery_always_matches_whole_delivery() {
         whole.push(&stream).expect("within buffer");
         let mut expected = Vec::new();
         while let Some(frame) = whole.next_frame().expect("valid stream") {
-            expected.push(frame);
+            expected.push(expect_message(frame));
         }
 
         // Split the same stream at arbitrary boundaries.
@@ -105,7 +123,7 @@ fn incremental_delivery_always_matches_whole_delivery() {
                 .expect("within buffer");
             offset += take;
             while let Some(frame) = incremental.next_frame().expect("valid stream") {
-                actual.push(frame);
+                actual.push(expect_message(frame));
             }
         }
 
@@ -139,11 +157,11 @@ fn arbitrary_bytes_never_panic_and_never_exceed_limits() {
         }
         // Needing more bytes or rejecting the input are both fine; the property
         // is only about what the decoder is willing to accept.
-        if let Ok(Some(frame)) = decoder.next_frame() {
+        if let Ok(Some(DecodedFrame::Message(frame))) = decoder.next_frame() {
             assert!(frame.payload().len() <= MAX_PAYLOAD_LEN);
-            assert_eq!(frame.payload().len(), frame.header().payload_len as usize);
-            assert!(frame.header().header_len as usize >= HEADER_LEN);
-            assert_eq!(frame.header().trailer_len, 0);
+            assert_eq!(frame.payload().len(), frame.header().payload_len() as usize);
+            assert_eq!(frame.header().header_len() as usize, HEADER_LEN);
+            assert_eq!(frame.header().trailer_len(), 0);
         }
     }
 }

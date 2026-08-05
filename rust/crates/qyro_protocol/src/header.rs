@@ -1,50 +1,46 @@
 //! The fixed 48-byte QYRO/1 frame header.
 //!
-//! Layout and rationale: `docs/adr/ADR-0016-qyro1-wire-framing.md`.
+//! Layout and rationale: `docs/adr/ADR-0016-qyro1-wire-framing.md`, amended by
+//! `docs/adr/ADR-0018-protocol-semantic-errors.md`.
+//!
+//! Every field is private. The only ways to build a header are the validated
+//! constructors below, so no public API can produce a header that this crate's
+//! own decoder would reject.
 
 use crate::error::FrameError;
 use crate::limits::{
-    HEADER_LEN, MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, SUPPORTED_TRAILER_LEN,
+    HEADER_LEN, MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MAX_TRAILER_LEN,
+    SUPPORTED_TRAILER_LEN,
 };
 use crate::message::{Flags, MessageType};
 use crate::version::{MAGIC, VERSION_MAJOR, VERSION_MINOR};
 
-/// Decoded frame header.
+/// A validated frame header.
+///
+/// Its existence is the proof that magic, version, flags and every declared
+/// length are within QYRO/1.0's rules.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FrameHeader {
-    /// Minor version declared by the sender. May exceed [`VERSION_MINOR`].
-    pub version_minor: u8,
-    /// Message kind.
-    pub message_type: MessageType,
-    /// Frame flags.
-    pub flags: Flags,
-    /// Header length in bytes, at least [`HEADER_LEN`].
-    pub header_len: u16,
-    /// Authentication trailer length. Always zero in QYRO/1.0.
-    pub trailer_len: u8,
-    /// Payload length in bytes.
-    pub payload_len: u32,
-    /// Opaque session identifier.
-    pub session_id: u64,
-    /// Opaque transfer identifier.
-    pub transfer_id: u64,
-    /// Opaque stream identifier.
-    pub stream_id: u32,
-    /// Opaque item identifier.
-    pub item_id: u32,
-    /// Monotonic sequence number within the stream.
-    pub sequence: u64,
+    version_minor: u8,
+    message_type: MessageType,
+    flags: Flags,
+    trailer_len: u8,
+    payload_len: u32,
+    session_id: u64,
+    transfer_id: u64,
+    stream_id: u32,
+    item_id: u32,
+    sequence: u64,
 }
 
 impl FrameHeader {
-    /// Builds a QYRO/1.0 header with the current version and no trailer.
+    /// Builds a plain QYRO/1.0 header: no flags, no trailer.
     #[must_use]
     pub const fn new(message_type: MessageType, payload_len: u32) -> Self {
         Self {
             version_minor: VERSION_MINOR,
             message_type,
             flags: Flags::NONE,
-            header_len: HEADER_LEN as u16,
             trailer_len: SUPPORTED_TRAILER_LEN as u8,
             payload_len,
             session_id: 0,
@@ -55,13 +51,159 @@ impl FrameHeader {
         }
     }
 
+    /// Minor version declared by the sender.
+    #[must_use]
+    pub const fn version_minor(&self) -> u8 {
+        self.version_minor
+    }
+
+    /// Message kind.
+    #[must_use]
+    pub const fn message_type(&self) -> MessageType {
+        self.message_type
+    }
+
+    /// Frame flags.
+    #[must_use]
+    pub const fn flags(&self) -> Flags {
+        self.flags
+    }
+
+    /// Header length in bytes.
+    ///
+    /// QYRO/1.0 has exactly one valid value; the accessor exists so callers can
+    /// assert it rather than assume it.
+    #[must_use]
+    pub const fn header_len(&self) -> u16 {
+        HEADER_LEN as u16
+    }
+
+    /// Authentication trailer length.
+    #[must_use]
+    pub const fn trailer_len(&self) -> u8 {
+        self.trailer_len
+    }
+
+    /// Payload length in bytes.
+    #[must_use]
+    pub const fn payload_len(&self) -> u32 {
+        self.payload_len
+    }
+
+    /// Opaque session identifier.
+    #[must_use]
+    pub const fn session_id(&self) -> u64 {
+        self.session_id
+    }
+
+    /// Opaque transfer identifier.
+    #[must_use]
+    pub const fn transfer_id(&self) -> u64 {
+        self.transfer_id
+    }
+
+    /// Opaque stream identifier.
+    #[must_use]
+    pub const fn stream_id(&self) -> u32 {
+        self.stream_id
+    }
+
+    /// Opaque item identifier.
+    #[must_use]
+    pub const fn item_id(&self) -> u32 {
+        self.item_id
+    }
+
+    /// Sequence number within the stream.
+    #[must_use]
+    pub const fn sequence(&self) -> u64 {
+        self.sequence
+    }
+
+    /// Rejects any header length other than the one QYRO/1.0 can preserve.
+    ///
+    /// Exists so the contradiction ADR-0018 records stays visible in the API: a
+    /// caller cannot ask for an extended header and get one silently.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`FrameError::UnsupportedHeaderExtension`] for anything
+    /// other than [`HEADER_LEN`].
+    pub const fn with_header_len(self, header_len: u16) -> Result<Self, FrameError> {
+        if header_len as usize == HEADER_LEN {
+            return Ok(self);
+        }
+        Err(FrameError::UnsupportedHeaderExtension {
+            declared: header_len,
+            supported: HEADER_LEN as u16,
+        })
+    }
+
+    /// Sets the routing identifiers.
+    #[must_use]
+    pub const fn with_identifiers(
+        mut self,
+        session_id: u64,
+        transfer_id: u64,
+        stream_id: u32,
+        item_id: u32,
+    ) -> Self {
+        self.session_id = session_id;
+        self.transfer_id = transfer_id;
+        self.stream_id = stream_id;
+        self.item_id = item_id;
+        self
+    }
+
+    /// Sets the sequence number.
+    #[must_use]
+    pub const fn with_sequence(mut self, sequence: u64) -> Self {
+        self.sequence = sequence;
+        self
+    }
+
+    /// Sets transport flags.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FrameError::UnsupportedFlag`] for protected flags: `ENCRYPTED`
+    /// and `COMPRESSED` assert something about the payload that a caller cannot
+    /// make true, so only the sealing path may set them.
+    pub const fn with_transport_flags(mut self, flags: Flags) -> Result<Self, FrameError> {
+        if !flags.is_transport_only() {
+            return Err(FrameError::UnsupportedFlag {
+                bits: flags.bits(),
+                unsupported: flags.protected_bits(),
+            });
+        }
+        self.flags = flags;
+        Ok(self)
+    }
+
+    /// Marks the header as sealed, with the exact tag length.
+    ///
+    /// Crate-internal on purpose: `qyro_crypto` reaches it through the sealing
+    /// entry point, which encrypts the payload and computes the tag in the same
+    /// operation. There is no way to set `ENCRYPTED` without producing a tag.
+    pub(crate) const fn sealed(mut self, tag_len: u8) -> Result<Self, FrameError> {
+        if tag_len == 0 || tag_len as usize > MAX_TRAILER_LEN {
+            return Err(FrameError::AuthenticationTrailerInvalid {
+                declared: tag_len,
+                expected: 0,
+            });
+        }
+        self.flags = Flags::ENCRYPTED;
+        self.trailer_len = tag_len;
+        Ok(self)
+    }
+
     /// Total frame size: header, payload and trailer.
     ///
     /// Uses `u64` so the sum cannot overflow before it is compared against
     /// [`MAX_FRAME_LEN`], even on a 32-bit target.
     #[must_use]
     pub const fn total_len(&self) -> u64 {
-        self.header_len as u64 + self.payload_len as u64 + self.trailer_len as u64
+        HEADER_LEN as u64 + self.payload_len as u64 + self.trailer_len as u64
     }
 
     /// Serializes the header into exactly [`HEADER_LEN`] big-endian bytes.
@@ -73,7 +215,7 @@ impl FrameHeader {
         out[5] = self.version_minor;
         out[6] = self.message_type.to_wire();
         out[7] = self.flags.bits();
-        out[8..10].copy_from_slice(&self.header_len.to_be_bytes());
+        out[8..10].copy_from_slice(&(HEADER_LEN as u16).to_be_bytes());
         out[10] = self.trailer_len;
         out[11] = 0; // reserved
         out[12..16].copy_from_slice(&self.payload_len.to_be_bytes());
@@ -93,10 +235,22 @@ impl FrameHeader {
     /// allocated. A hostile `payload_len` of `0xFFFF_FFFF` is rejected here, so
     /// it can never become a reservation.
     ///
+    /// The message type is resolved last, so a frame carrying an unknown type is
+    /// still fully delimited and can be consumed without desynchronising the
+    /// stream. See [`crate::FrameDecoder`] and ADR-0018.
+    ///
     /// # Errors
     ///
     /// Returns the [`FrameError`] describing the first violated rule.
     pub fn decode(bytes: &[u8]) -> Result<Self, FrameError> {
+        Self::decode_parts(bytes).map(|(header, _)| header)
+    }
+
+    /// Parses a header, returning the raw message-type byte alongside it.
+    ///
+    /// The decoder needs the raw value so an unknown type can be surfaced as a
+    /// delimited event instead of a framing failure.
+    pub(crate) fn decode_parts(bytes: &[u8]) -> Result<(Self, u8), FrameError> {
         if bytes.len() < HEADER_LEN {
             return Err(FrameError::TruncatedHeader {
                 available: bytes.len(),
@@ -117,8 +271,8 @@ impl FrameHeader {
                 supported: VERSION_MAJOR,
             });
         }
-        // A newer minor version may only append header fields or add message
-        // types, so it is accepted and the extra bytes are skipped.
+        // A newer minor version may add message types; it may not change the
+        // header layout, because 1.0 refuses extensions it cannot preserve.
         let version_minor = bytes[5];
 
         let header_len = u16::from_be_bytes([bytes[8], bytes[9]]);
@@ -131,9 +285,36 @@ impl FrameHeader {
                 maximum,
             });
         }
+        if header_len != minimum {
+            // Skipping bytes that are neither stored nor re-serialized would
+            // break byte-exact re-encoding and leave a future AEAD unable to
+            // authenticate them. Refusing is safer than pretending. (ADR-0018)
+            return Err(FrameError::UnsupportedHeaderExtension {
+                declared: header_len,
+                supported: minimum,
+            });
+        }
+
+        let flags = Flags::from_bits(bytes[7])?;
+        let unimplemented = flags.unimplemented_bits();
+        if unimplemented != 0 {
+            return Err(FrameError::UnsupportedFlag {
+                bits: flags.bits(),
+                unsupported: unimplemented,
+            });
+        }
 
         let trailer_len = bytes[10];
-        if usize::from(trailer_len) != SUPPORTED_TRAILER_LEN {
+        let is_encrypted = flags.contains(Flags::ENCRYPTED);
+        if is_encrypted {
+            // A frame claiming to be sealed must carry a tag; otherwise it is
+            // asserting protection it does not have.
+            if trailer_len == 0 || usize::from(trailer_len) > MAX_TRAILER_LEN {
+                return Err(FrameError::EncryptedWithoutTrailer {
+                    declared: trailer_len,
+                });
+            }
+        } else if usize::from(trailer_len) != SUPPORTED_TRAILER_LEN {
             return Err(FrameError::AuthenticationTrailerInvalid {
                 declared: trailer_len,
                 expected: SUPPORTED_TRAILER_LEN as u8,
@@ -157,14 +338,15 @@ impl FrameHeader {
             });
         }
 
-        let flags = Flags::from_bits(bytes[7])?;
-        let message_type = MessageType::from_wire(bytes[6])?;
+        // Resolved last: everything above delimits the frame, so an unknown type
+        // is recoverable rather than fatal.
+        let raw_message_type = bytes[6];
+        let message_type = MessageType::from_wire(raw_message_type).unwrap_or(MessageType::Hello);
 
         let header = Self {
             version_minor,
             message_type,
             flags,
-            header_len,
             trailer_len,
             payload_len,
             session_id: u64::from_be_bytes(bytes[16..24].try_into().expect("slice is eight bytes")),
@@ -185,6 +367,6 @@ impl FrameHeader {
             });
         }
 
-        Ok(header)
+        Ok((header, raw_message_type))
     }
 }
