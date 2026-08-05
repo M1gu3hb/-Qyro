@@ -3,10 +3,10 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T05:00:00Z
-- Branch: claude/qyro-authenticated-handshake
+- Updated UTC: 2026-08-05T16:40:00Z
+- Branch: claude/qyro-handshake-closure
 - Verified commit: 9f006b01d2b65806995bfa40a0f7bd0ac0308f0a
-- Milestone: handshake autenticado en memoria; AEAD y transporte NO iniciados
+- Milestone: handshake cerrado, documentado y con vectores; AEAD y transporte NO iniciados
 
 La rama reconcilia `audit/baseline-hardening` (`e9ed7f3`, 58 commits de trabajo)
 con los dos commits del propietario en `main` (`e0041de`). Ninguna rama fue
@@ -59,7 +59,17 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - **Handshake autenticado de cuatro mensajes (ADR-0021)**: IMPLEMENTED, en
   memoria. X25519 + Ed25519 + HKDF-SHA256 + HMAC-SHA256, máquina de estados
   con estados consumidos. **No corre sobre ningún transporte y no cifra nada.**
-- KAT RFC 8032 (5 vectores) y RFC 4231 (7 vectores): IMPLEMENTED
+- KAT RFC 8032 (5 vectores), RFC 4231 (7 casos) y RFC 7748 (§5 y §6.1): IMPLEMENTED
+- **Vectores interoperables del handshake**: IMPLEMENTED.
+  `docs/security/test-vectors/handshake-v1.json` con una ejecución completa,
+  `handshake-v1.schema.json` estricto, regeneración byte a byte y verificación
+  independiente contra las primitivas.
+- `SessionId` canónico de ocho bytes compartido por `qyro_protocol` y
+  `qyro_crypto`: IMPLEMENTED. Sin truncamiento en ningún punto.
+- Estado `ResponderFinishPending`: IMPLEMENTED. El responder no obtiene sesión
+  hasta confirmar que entregó su último mensaje.
+- Claves de sesión fuera de la API pública: IMPLEMENTED. `SessionKey` no se
+  exporta y no hay accesores de clave.
 
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO (run 30963011815)
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO (run 30963016390)
@@ -74,9 +84,8 @@ reescrita. Auditoría completa: `docs/audits/CLAUDE_RECOVERY_AUDIT.md`.
 - **Handshake sobre transporte**: NOT_IMPLEMENTED. El handshake existe y está
   probado, pero se ejecuta entre dos valores en un proceso. No hay sockets, ni
   descubrimiento, ni integración con el framing de `qyro_protocol`.
-- **Vectores del handshake**: NOT_IMPLEMENTED. `identity-v1.json` fija la
-  identidad; el transcript del handshake solo está fijado por ADR-0021 y por los
-  tests de Rust, que prueban que Rust es consistente consigo mismo.
+- **Sellado de frames**: NOT_IMPLEMENTED. `SealedFrame` y `AuthenticatedFrame`
+  vivirán en `qyro_crypto` con constructores privados cuando exista el AEAD.
 - **SealedFrame / AuthenticatedFrame**: NOT_IMPLEMENTED. Vivirán en
   `qyro_crypto` con constructores privados cuando exista el sellado.
 - **qyro_identity y almacenamiento seguro**: NOT_IMPLEMENTED en las tres
@@ -234,7 +243,7 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 ## Blockers
 
-- **No hay cifrado.** Existe identidad (firmar/verificar) pero ni handshake, ni
+- **No hay cifrado.** Existen identidad y handshake autenticado, pero ni AEAD, ni
   derivación de claves, ni AEAD. Qyro no puede proteger un payload todavía.
 - **La identidad solo vive en memoria.** No hay Keystore, Keychain ni DPAPI/CNG:
   generar una identidad y cerrar el proceso la pierde.
@@ -256,15 +265,16 @@ Referencia del estado anterior en `audit/baseline-hardening` (`e9ed7f3`):
 
 ## Next task
 
-Implementar el handshake autenticado con X25519 efímero, HKDF-SHA256, transcript
-firmado, claves direccionales y vectores conocidos, **sin** conectar todavía
-sockets ni almacenamiento seguro.
+Implementar ChaCha20-Poly1305 para sellar y abrir frames QYRO/1, con las claves
+direccionales que ya deriva el handshake, nonces monotónicos, `SessionId`
+autenticado dentro de los datos asociados y una ventana de replay fija.
+**Todavía sin** sockets ni almacenamiento seguro.
 
-Aceptación: handshake completo en memoria entre Initiator y Responder; fallo ante
-firma incorrecta, transcript alterado, identidad sustituida, reflexión y roles
-intercambiados; claves distintas por dirección; vectores en
-`docs/security/test-vectors/`; y liberar el dominio `HandshakeTranscript`, hoy
-rechazado a propósito hasta que su formato esté congelado.
+Aceptación: `SealedFrame` y `AuthenticatedFrame` con constructores privados en
+`qyro_crypto`, consumiendo `PendingSessionSecrets`; la cabecera completa como
+datos asociados; nonce que no se repite dentro de una sesión y cuyo agotamiento
+es un error, no un envolvimiento; rechazo de frames repetidos o fuera de la
+ventana; y vectores de sellado en `docs/security/test-vectors/`.
 
 ## Provisional values
 

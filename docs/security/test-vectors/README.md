@@ -72,7 +72,34 @@ búsqueda de texto anterior leía el primer campo que apareciera, así que renom
 o reordenar una clave habría cambiado en silencio qué valor se comprobaba
 mientras el test seguía pasando.
 
+## `rfc7748-x25519.json`
+
+Los vectores de **RFC 7748**: las dos multiplicaciones escalares de la sección 5,
+que fijan el clamping que este crate deliberadamente no implementa, y el
+intercambio completo de la sección 6.1.
+
+## `handshake-v1.json` y `handshake-v1.schema.json`
+
+Una ejecución completa del handshake autenticado: identidades, entropía, claves
+efímeras, secreto compartido, los cuatro mensajes, ambos transcripts, ambas
+entradas de firma, ambas firmas, cada `info` de HKDF, cada clave derivada, el
+`session_id` de ocho bytes y ambos MAC de confirmación.
+
+El schema es estricto: `additionalProperties: false`, todos los campos
+obligatorios, cada campo hex fijado a su longitud exacta, versiones como
+constantes. Se genera a partir de los anchos del propio documento, así que no
+puede discrepar en silencio de ADR-0021.
+
+El validador de las pruebas implementa solo el subconjunto de JSON Schema que
+este schema usa y **falla ante cualquier palabra clave que no entienda**. Un
+validador que ignora lo desconocido informa de éxito sobre restricciones que
+nunca comprobó, que es peor que no validar.
+
+Regenerar:
+
+    cargo test -p qyro_crypto generate_handshake_vector -- --ignored --nocapture
+
 ## Todavía no existe
 
-Handshake, X25519, HKDF, AEAD, replay protection y almacenamiento seguro. Cuando
+AEAD, sellado de frames, replay protection y almacenamiento seguro. Cuando
 existan tendrán sus propios archivos de vectores.

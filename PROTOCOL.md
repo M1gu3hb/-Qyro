@@ -1,7 +1,9 @@
 # QYRO/1
 
-Estado: framing binario implementado y probado; transporte, cifrado y modo
-óptico no implementados.
+Estado: framing binario implementado y probado; handshake autenticado
+implementado en memoria en `qyro_crypto`. Transporte, cifrado de frames y modo
+óptico no implementados: nada pone todavía un frame en un socket ni calcula un
+tag.
 
 El encoder y el decoder incremental viven en `rust/crates/qyro_protocol` y el
 manifest en `rust/crates/qyro_manifest`. La especificación completa está en
@@ -25,6 +27,11 @@ Cabecera fija de 48 bytes, big-endian, con magic, versión mayor/menor, tipo,
 flags, longitud de cabecera, longitud de trailer, longitud de payload, session,
 transfer, stream e item ID y secuencia. Endianness y tamaños están congelados
 con tests de bytes; ver la especificación.
+
+`session_id` son ocho bytes y su tipo es `qyro_protocol::SessionId`, el mismo que
+deriva el handshake de `qyro_crypto` bajo la etiqueta `session-id`. Un único
+tipo, un único ancho: nada trunca ni convierte entre establecer una sesión y
+nombrarla en el cable.
 
 ## Manifest
 

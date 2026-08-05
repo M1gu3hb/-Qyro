@@ -4,6 +4,44 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 4B.1)
+
+- Handshake autenticado de cuatro mensajes cerrado y documentado: X25519,
+  Ed25519 en el dominio `HandshakeTranscript`, HKDF-SHA256 y HMAC-SHA256, con
+  estados consumidos (ADR-0021).
+- `qyro_protocol::SessionId`: ocho bytes, un solo tipo, compartido por la
+  cabecera QYRO/1 y por el schedule del handshake.
+- `ResponderFinishPending`: el respondedor no obtiene una sesión hasta confirmar
+  que entregó su `ResponderFinish`.
+- Vectores interoperables del handshake con schema estricto, regeneración byte a
+  byte y verificación independiente contra las primitivas.
+- KAT de X25519 (RFC 7748 §5 y §6.1).
+- `docs/security/authenticated-handshake.md`,
+  `docs/security/handshake-state-machine.md`,
+  `docs/security/handshake-threat-analysis.md` y
+  `docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md`.
+
+### Fixed (sprint 4B.1)
+
+- El identificador de sesión ya no existe en dos anchos incompatibles. La
+  etiqueta `session-id` deriva ocho bytes; antes producía 32 mientras la
+  cabecera reservaba ocho, sin conversión, de modo que quien conectara el
+  transporte habría tenido que inventar un truncamiento.
+- Las claves de sesión salen de la API pública: `SessionKey` deja de exportarse
+  y desaparecen `sending_key()` y `receiving_key()`.
+- La entropía efímera ya no puede sustituirse. El adaptador RNG rellenaba con
+  ceros y devolvía éxito ante una lectura de más, y un secreto X25519 de ceros
+  se clampea a un escalar válido y completa un handshake sin entropía dentro. No
+  se pudo reparar el adaptador —`random_from_rng` exige un `CryptoRng`
+  infalible— así que el secreto se construye directamente desde bytes obtenidos
+  de forma falible.
+- `check_docs_consistency` detecta la deriva documental que se acumuló durante
+  tres sprints: capacidades negadas en prosa que existen en código, hitos
+  pedidos después de entregarse, vectores declarados sin archivo, plegado
+  descrito como ASCII/Latin-1 y plataformas marcadas como ejecutadas sin run id.
+- `SECURITY.md` decía que el workspace no tiene dependencias externas y que no
+  hay KAT de criptografía. Ambas cosas eran falsas desde el sprint 4A.
+
 ### Fixed (sprint 3)
 
 - El decoder ya no envenena el stream ante un tipo de mensaje desconocido: lo

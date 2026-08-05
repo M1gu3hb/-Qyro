@@ -5,8 +5,8 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-authenticated-handshake`, que continúa
-   `claude/qyro-crypto-foundation` (identidad) y añade el handshake.
+2. Confirmar la rama `claude/qyro-handshake-closure`, que continúa
+   `claude/qyro-authenticated-handshake` y cierra el handshake.
 3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
    más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
    (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B) y ADR-0021
@@ -55,7 +55,9 @@ propósito, y el README sigue diciendo que Qyro todavía no transfiere archivos.
 Concretamente, después del sprint 4B:
 
 - El handshake **corre entre dos valores en un proceso**. No hay socket, ni
-  descubrimiento, ni integración con el framing.
+  descubrimiento, ni integración con el framing. El `SessionId` que deriva sí es
+  ya el tipo que lleva la cabecera QYRO/1, así que conectarlo no exigirá
+  inventar ninguna conversión.
 - Las claves de sesión que deriva **no cifran nada**: no existe AEAD.
 - `EncryptedEnvelope` sigue siendo una forma de cable sin nadie que calcule el
   tag. Su nombre lo dice a propósito.
@@ -76,3 +78,10 @@ Así se descubrió que el enlace de la firma del iniciador sobre la del
 respondedor no aporta nada con Ed25519 determinista, que cinco de doce
 codificaciones «de orden bajo» de X25519 no lo son, y que `[0xFF; 32]` es una
 clave Ed25519 perfectamente válida.
+
+El sprint 4B.1 lo aplicó también a las propias reglas del verificador
+documental, y encontró dos que no comprobaban lo que decían: una búsqueda de
+`SI` insensible a mayúsculas encontraba el «si» dentro de «físico», y una prueba
+de entropía fallaba contra el comentario que explica por qué ese constructor se
+rechaza. Ninguna era un defecto del producto; las dos habrían quedado como
+reglas que parecen estrictas y no lo son.

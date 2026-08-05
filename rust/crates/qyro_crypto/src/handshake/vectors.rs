@@ -655,7 +655,7 @@ fn every_recorded_value_verifies_against_the_primitives() {
 
     // --- HKDF, run directly -------------------------------------------------
     let hkdf = Hkdf::<Sha256>::new(Some(&base), &shared.to_bytes());
-    let mut check = |label: &str, recorded: &str, width: usize| {
+    let check = |label: &str, recorded: &str, width: usize| {
         let mut out = vec![0u8; width];
         hkdf.expand(&info_for(label, &auth), &mut out)
             .expect("valid length");

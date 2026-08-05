@@ -167,11 +167,22 @@ auth_transcript = SHA-256(
 PRK = HKDF-Extract( salt = base_transcript, IKM = x25519_shared_secret )
 
 info(label) = "QYRO-HS-V1/" || label || 0x00 || auth_transcript
-key(label)  = HKDF-Expand( PRK, info(label), 32 )
+key(label)  = HKDF-Expand( PRK, info(label), len(label) )
 ```
 
-Etiquetas: `initiator-finished`, `responder-finished`, `initiator-to-responder`,
-`responder-to-initiator`, `session-id`.
+| Etiqueta | Bytes |
+|---|---|
+| `initiator-finished` | 32 |
+| `responder-finished` | 32 |
+| `initiator-to-responder` | 32 |
+| `responder-to-initiator` | 32 |
+| `session-id` | **8** |
+
+El identificador de sesión se deriva a ocho bytes, el ancho exacto que reserva la
+cabecera QYRO/1. No son 32 recortados: HKDF-Expand está definido para cualquier
+longitud, así que pedir ocho es una derivación completa. Esta tabla la fijó la
+enmienda del sprint 4B.1; antes este ADR no decía el ancho, y el código derivaba
+32 mientras la cabecera llevaba ocho.
 
 `auth_transcript` entra en cada `info`, así que **ninguna clave derivada existe
 sin que ambas firmas hayan entrado en su derivación**. Dos ejecuciones que
@@ -246,3 +257,31 @@ compilador los rechaza.
 - El handshake **no** se ejecuta sobre ningún transporte. No hay sockets, no hay
   descubrimiento, y los botones Enviar/Recibir siguen deshabilitados.
 - Las claves derivadas no cifran nada todavía: no hay AEAD.
+
+## Enmienda (sprint 4B.1)
+
+Cuatro endurecimientos que **no cambian el formato de cable de los cuatro
+mensajes ni los transcripts**, más una precisión sobre el identificador de
+sesión que sí lo fija.
+
+1. **`SessionId` de ocho bytes.** La etiqueta `session-id` deriva exactamente
+   ocho bytes con HKDF-Expand, y ese es el tipo que lleva la cabecera QYRO/1.
+   Este ADR no había dicho el ancho, y el código derivaba 32 bytes mientras la
+   cabecera reservaba ocho. Ocho **derivados**, no 32 recortados: HKDF-Expand
+   está definido para cualquier longitud, así que pedir ocho es una derivación
+   completa y no una clave acortada. Queda congelado aquí.
+2. **`ResponderFinishPending`.** El respondedor no obtiene una sesión hasta
+   confirmar que entregó su `ResponderFinish`. Es un estado más en la máquina,
+   no un mensaje más en el cable.
+3. **Claves fuera de la API pública.** `SessionKey` es privado del crate y no
+   hay accesores de clave.
+4. **Entropía sin sustitución posible.** El secreto X25519 se construye
+   directamente desde bytes obtenidos de forma falible. No se usa
+   `EphemeralSecret::random_from_rng`: exige un `CryptoRng` infalible, de modo
+   que ningún adaptador puede informar de agotamiento, y el relleno con ceros que
+   había estaba forzado por la forma del trait. Un secreto de ceros se clampea a
+   un escalar válido y completa un handshake sin entropía, así que el modo de
+   fallo se elimina en vez de gestionarse.
+
+`docs/security/test-vectors/handshake-v1.json` fija una ejecución completa contra
+esta especificación, con `handshake-v1.schema.json` como schema estricto.

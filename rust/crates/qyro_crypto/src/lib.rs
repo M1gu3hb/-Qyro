@@ -5,9 +5,14 @@
 //! deciding to trust a peer are separate, later, explicit steps. It carries no
 //! name, email or phone number, and nothing here will ever add one.
 //!
-//! Scope of this crate today is identity only — keys, domain-separated
-//! signatures and fingerprints. There is **no handshake, no X25519, no HKDF and
-//! no AEAD**; those arrive in a later sprint. Nothing here can encrypt anything.
+//! Scope today is identity and the authenticated handshake: Ed25519 keys,
+//! domain-separated signatures, fingerprints, and the four-message handshake in
+//! [`handshake`] built on X25519, HKDF-SHA256 and HMAC-SHA256.
+//!
+//! There is still **no AEAD**. The handshake derives directional traffic
+//! secrets and a session identifier; nothing consumes them, so this crate
+//! cannot encrypt anything yet. It also has no transport: the handshake runs
+//! between two values in one process.
 //!
 //! # Secret handling
 //!

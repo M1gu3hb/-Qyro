@@ -21,6 +21,11 @@
 - ADR-0020: fundación de identidad de dispositivo.
 - ADR-0021: handshake autenticado de cuatro mensajes.
 
+El sprint 4B.1 cerró el handshake sin cambiar ninguna decisión: unificó el
+`SessionId` en ocho bytes, añadió `ResponderFinishPending`, sacó las claves de
+la API pública y comprometió vectores. Está registrado como enmienda dentro de
+ADR-0021.
+
 No existe ADR-0011.
 
 Consulta docs/adr/.

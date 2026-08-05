@@ -14,7 +14,25 @@ Todo comportamiento comprobable sigue rojo → verde → refactor. El test debe 
 - Scripts: contratos Bash y PowerShell.
 - Documentación: consistencia con STATUS.md.
 - Seguridad/licencias: checks ejecutables, no afirmaciones Markdown.
+- Criptografía: KAT contra los RFC (7748, 8032, 4231) y vectores propios con
+  schema estricto, regeneración byte a byte y verificación independiente desde
+  las primitivas.
 - Intro: unit/widget/golden según corresponda.
+
+## Cómo se comprueba una invariante
+
+Escribir la prueba no basta. **Borra la corrección y comprueba que alguna prueba
+falla.** Si ninguna falla, la propiedad no estaba cubierta, por convincente que
+sea el argumento a favor.
+
+Ese método encontró que el enlace de la firma del iniciador sobre la del
+respondedor no aportaba nada con Ed25519 determinista, que cinco de doce
+codificaciones «de orden bajo» de X25519 no lo son, y que dos reglas nuevas del
+verificador documental no comprobaban lo que decían comprobar.
+
+Un verificador que ignora lo que no entiende es peor que ninguno: informa de
+éxito sobre restricciones que nunca comprobó. El validador de schema de los
+vectores falla ante cualquier palabra clave desconocida por esa razón.
 
 ## Honestidad de plataforma
 

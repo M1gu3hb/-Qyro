@@ -135,6 +135,119 @@ if ($allText.Contains('com.owner.qyro') -and -not $status.Contains('com.owner.qy
     $blockers++
 }
 
+# ---------------------------------------------------------------- capability drift
+#
+# Twin of the Bash rules. A capability that exists in code but is denied in
+# prose, or is still requested after it shipped, is how STATUS stopped being the
+# source of truth three sprints running.
+
+function Test-UnquotedClaim {
+    # A document that quotes its own former wording while correcting it is doing
+    # the right thing, so a claim inside guillemets does not count.
+    param([string]$Content, [string]$Pattern)
+    foreach ($line in ($Content -split "`n")) {
+        if ($line -match $Pattern -and $line -notmatch '\u00ab') { return $true }
+    }
+    return $false
+}
+
+$handshakeModule = Join-Path $RepoRoot 'rust/crates/qyro_crypto/src/handshake/mod.rs'
+if (Test-Path -LiteralPath $handshakeModule) {
+    foreach ($doc in @('STATUS.md', 'SECURITY.md', 'THREAT_MODEL.md', 'PROTOCOL.md',
+                       'ARCHITECTURE.md', 'rust/crates/qyro_crypto/src/lib.rs',
+                       'docs/security/device-identity.md')) {
+        $path = Join-Path $RepoRoot $doc
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $content = Get-Content -LiteralPath $path -Raw
+        if ($content -match '(?i)no (handshake|X25519|HKDF)|(sin|ni) handshake|no hay handshake|no existe handshake') {
+            Write-Status 'BLOCKER' 'Capability drift' "$doc says there is no handshake, but rust/crates/qyro_crypto/src/handshake exists"
+            $blockers++
+        }
+    }
+
+    $nextSteps = Join-Path $RepoRoot 'NEXT_STEPS.md'
+    if (Test-Path -LiteralPath $nextSteps) {
+        $pending = (Get-Content -LiteralPath $nextSteps -Raw) -split '(?m)^## Completado' | Select-Object -First 1
+        if ($pending -match '(?i)implementar el handshake|implement the handshake') {
+            Write-Status 'BLOCKER' 'Capability drift' 'NEXT_STEPS.md still asks for the handshake, which is implemented'
+            $blockers++
+        }
+    }
+
+    $nextTask = ($status -split '(?m)^## Next task' | Select-Object -Skip 1 | Select-Object -First 1)
+    if ($nextTask -and (($nextTask -split '(?m)^## ' | Select-Object -First 1) -match '(?i)implementar el handshake|implement the handshake')) {
+        Write-Status 'BLOCKER' 'Capability drift' 'STATUS.md still lists the handshake as the next task'
+        $blockers++
+    }
+}
+
+# --------------------------------------------------------------- vector claims
+foreach ($entry in @(
+    @{ File = 'identity-v1.json'; Pattern = 'identidad|identity' },
+    @{ File = 'handshake-v1.json'; Pattern = 'handshake' }
+)) {
+    $vector = Join-Path $RepoRoot "docs/security/test-vectors/$($entry.File)"
+    if ($status -match "(?i)vectores? (de|del|interoperables? del)? ?($($entry.Pattern)).*: ?IMPLEMENTED") {
+        if (-not (Test-Path -LiteralPath $vector)) {
+            Write-Status 'BLOCKER' 'Vector claim' "STATUS.md marks $($entry.Pattern) vectors implemented but $($entry.File) is missing"
+            $blockers++
+        }
+    }
+}
+if ((Test-Path -LiteralPath (Join-Path $RepoRoot 'docs/security/test-vectors/handshake-v1.json')) -and
+    -not (Test-Path -LiteralPath (Join-Path $RepoRoot 'docs/security/test-vectors/handshake-v1.schema.json'))) {
+    Write-Status 'BLOCKER' 'Vector claim' 'handshake-v1.json has no committed schema'
+    $blockers++
+}
+
+# ------------------------------------------------------------- unicode folding
+$pathRs = Join-Path $RepoRoot 'rust/crates/qyro_manifest/src/path.rs'
+if ((Test-Path -LiteralPath $pathRs) -and ((Get-Content -LiteralPath $pathRs -Raw) -match 'unicode_normalization')) {
+    foreach ($doc in @('docs/protocols/manifest-format.md', 'docs/security/parser-threats.md')) {
+        $path = Join-Path $RepoRoot $doc
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        if (Test-UnquotedClaim (Get-Content -LiteralPath $path -Raw) '(?i)(pliega|folds|plegado de)[^.]*(ASCII|Latin-1)') {
+            Write-Status 'BLOCKER' 'Folding claim' "$doc describes folding as ASCII/Latin-1 while path.rs uses unicode-normalization"
+            $blockers++
+        }
+    }
+}
+
+# ------------------------------------------------------------ dependency claims
+$lock = Join-Path $RepoRoot 'Cargo.lock'
+if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw) -match 'name = "ed25519-dalek"')) {
+    foreach ($doc in @('SECURITY.md', 'STATUS.md')) {
+        $path = Join-Path $RepoRoot $doc
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $content = Get-Content -LiteralPath $path -Raw
+        if (Test-UnquotedClaim $content '(?i)no tiene dependencias externas|sin dependencias externas|cero dependencias externas') {
+            Write-Status 'BLOCKER' 'Dependency claim' "$doc says the workspace has no external dependencies, but Cargo.lock has ed25519-dalek"
+            $blockers++
+        }
+        if ($content -match '(?i)no hay KAT|Tampoco hay KAT|sin KAT') {
+            Write-Status 'BLOCKER' 'Dependency claim' "$doc says there are no cryptographic KATs; RFC 7748/8032/4231 vectors are committed"
+            $blockers++
+        }
+    }
+}
+
+# --------------------------------------------------------- platform evidence
+$platformSection = ($status -split '(?m)^## Platforms executed' | Select-Object -Skip 1 | Select-Object -First 1)
+if ($platformSection) {
+    $platformSection = ($platformSection -split '(?m)^## ' | Select-Object -First 1)
+    foreach ($line in ($platformSection -split "`n")) {
+        if ($line -notmatch '^\s*-') { continue }
+        # Whole word only: a case-insensitive substring match reads the "si"
+        # inside "fisico" as an affirmative.
+        if ($line -notmatch '\bYES\b') { continue }
+        if ($line -match 'run [0-9]{6,}|[0-9]{9,}') { continue }
+        if ($line -match '(?i)host local|esta sesi|this session') { continue }
+        $label = ($line -replace '^\s*-\s*([^:]*):.*', '$1')
+        Write-Status 'BLOCKER' 'Platform evidence' "STATUS.md marks '$label' executed without a run id"
+        $blockers++
+    }
+}
+
 if ($blockers -gt 0) {
     Write-Status 'BLOCKER' 'Documentation consistency' "$blockers inconsistency finding(s)"
     exit 1

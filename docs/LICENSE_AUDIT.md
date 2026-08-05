@@ -99,7 +99,7 @@ a mano que eliminaba diacríticos y provocaba colisiones falsas.
 | zeroize | 1.9.0 | Apache-2.0 OR MIT | RustCrypto |
 | subtle | 2.6.1 | BSD-3-Clause | dalek-cryptography |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 | rust-random |
-| rand_core | 0.10.1 | MIT OR Apache-2.0 | rust-random |
+| rand_core | 0.10.1 | MIT OR Apache-2.0 | rust-random (transitiva) |
 | fiat-crypto | 0.3.0 | MIT OR Apache-2.0 OR BSD-1-Clause | mit-plv |
 
 `ed25519-dalek` con `default-features = false` y solo `rand_core` y `zeroize`;
@@ -112,7 +112,7 @@ sin `serde`, `pkcs8`, `pem`, `batch` ni `hazmat`.
 | x25519-dalek | 3.0.0 | BSD-3-Clause | dalek-cryptography |
 | hkdf | 0.13.0 | MIT OR Apache-2.0 | RustCrypto |
 | hmac | 0.13.0 | MIT OR Apache-2.0 | RustCrypto |
-| rand_core | 0.10.1 | MIT OR Apache-2.0 | rust-random |
+| rand_core | 0.10.1 | MIT OR Apache-2.0 | rust-random (transitiva) |
 | cmov | 0.5.4 | Apache-2.0 OR MIT | RustCrypto (transitiva de digest) |
 | ctutils | 0.4.2 | Apache-2.0 OR MIT | RustCrypto (transitiva de digest) |
 
@@ -123,10 +123,25 @@ transitivas y ahora se declaran directamente, porque este crate compara secretos
 e implementa un `CryptoRng` él mismo. `cmov` y `ctutils` llegan por `digest`, no
 por elección propia.
 
-`x25519-dalek` con `default-features = false` y solo `precomputed-tables` y
-`zeroize`; sin `serde`, `static_secrets`, `reusable_secrets` ni `getrandom` —
-esta última se omite a propósito, porque su `EphemeralSecret::random()` hace
-pánico si el CSPRNG falla y aquí eso debe ser `EntropyUnavailable`.
+`x25519-dalek` con `default-features = false` y solo `precomputed-tables`,
+`static_secrets` y `zeroize`; sin `serde`, `reusable_secrets` ni `getrandom`.
+
+`static_secrets` se activa porque es el único constructor que acepta bytes
+directamente, y construir el secreto desde bytes ya obtenidos es lo que permite
+que esta ruta falle cerrada: `EphemeralSecret::random_from_rng` exige un
+`CryptoRng` infalible, así que ningún adaptador que lo alimente puede informar de
+agotamiento. El tipo se envuelve localmente para recuperar la garantía de un solo
+uso que `StaticSecret` cede.
+
+`getrandom` se omite a propósito: su `random()` hace pánico si el CSPRNG falla, y
+aquí eso debe ser `EntropyUnavailable`.
+
+`rand_core` deja de ser dependencia directa: existía solo para el adaptador RNG
+que se eliminó. Sigue en el árbol como transitiva de la pila dalek.
+
+`qyro_crypto` depende de `qyro_protocol` desde el sprint 4B.1, para compartir
+`SessionId`. No hay dependencia en sentido contrario: `qyro_protocol` no conoce
+la criptografía.
 
 ### Solo desarrollo (`dev-dependencies` de `qyro_crypto`)
 

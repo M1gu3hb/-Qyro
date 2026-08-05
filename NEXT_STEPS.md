@@ -19,15 +19,15 @@
 ## P1
 
 - **AEAD de sesión (ChaCha20-Poly1305) y protección de replay.** El handshake ya
-  deriva claves direccionales y un identificador de sesión; nada las usa. Es el
-  paso que convierte `EncryptedEnvelope` en algo con un tag real, y el que
+  deriva claves direccionales y un identificador de sesión; nada las usa.
+  Consumirá `PendingSessionSecrets`, que existe justamente como esa costura. Es
+  el paso que convierte `EncryptedEnvelope` en algo con un tag real, y el que
   permite que `SealedFrame` y `AuthenticatedFrame` existan con constructores
   privados.
-- **Vectores interoperables del handshake.** Hoy el transcript está fijado por
-  ADR-0021 y por tests de Rust; un test en Rust prueba que Rust es consistente
-  consigo mismo, no que el formato esté definido sin ambigüedad. Debe existir un
-  `handshake-v1.json` con una ejecución completa antes de que haya una segunda
-  implementación.
+- **Una segunda implementación contra los vectores.** `handshake-v1.json` existe
+  y está verificado de forma independiente contra las primitivas, pero hasta que
+  alguien escriba el lado Swift o Kotlin y encuentre las ambigüedades que
+  queden, «formato definido sin ambigüedad» es una intención y no un hecho.
 - Almacenamiento local seguro de la identidad, sin iniciar LAN hasta cerrar los
   vectores criptográficos.
 - Ejecutar una campaña real de `cargo-fuzz` y añadir los hallazgos al corpus.
@@ -45,6 +45,21 @@
 
 - RaptorQ/QR adaptativo.
 - Wi-Fi Direct, Multipeer y Bluetooth experimental.
+
+## Completado el 2026-08-05 (sprint 4B.1, cierre del handshake)
+
+- `SessionId` canónico de ocho bytes compartido por `qyro_protocol` y
+  `qyro_crypto`; la etiqueta `session-id` deriva ese ancho exacto en vez de 32
+  bytes que alguien habría tenido que recortar.
+- `ResponderFinishPending`: el respondedor no obtiene sesión hasta confirmar que
+  entregó su último mensaje.
+- `SessionKey` fuera de la API pública; sin accesores de clave.
+- Entropía efímera sin ningún camino que pueda sustituir bytes.
+- `handshake-v1.json` y su schema estricto, con regeneración byte a byte y
+  verificación independiente desde las primitivas.
+- KAT de X25519 (RFC 7748), que era la única primitiva sin vectores oficiales.
+- Reglas nuevas en `check_docs_consistency` (Bash y PowerShell) contra la deriva
+  documental, verificadas en rojo una por una.
 
 ## Completado el 2026-08-05 (sprint 4B, handshake autenticado)
 
