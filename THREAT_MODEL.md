@@ -30,6 +30,9 @@ Contenido, nombres/rutas, claves, identidad local, confianza, historial, tempora
 | Nombre no portable | caracteres ilegales en Windows rechazados en todas las plataformas |
 | Frame que miente sobre su protección | `ENCRYPTED` solo lo activa el sellado, con tag |
 | Desincronización por mensaje nuevo | tipo desconocido se consume delimitado, no envenena |
+| Pánico provocado por un peer | la ruta AEAD de producción no tiene `panic!`, `unreachable!`, `assert!` ni indexado sin comprobar; un lint `deny` lo mantiene así y una prueba lee el propio fuente |
+| Texto claro que sobrevive al frame | el búfer de `open` y `AuthenticatedFrame::payload` son `Zeroizing<Vec<u8>>`; no hay accesor que entregue un `Vec<u8>` desnudo |
+| Sealer que continúa tras un fallo interno | cualquier error lo envenena de forma permanente, así que no reintenta con una secuencia ya usada |
 | Corrupción | AEAD por chunk y SHA-256 final |
 | Memoria/disco agotados | límites previos, streaming, cuota y preflight |
 | Decompression bomb | ratio/tamaño máximo y streaming |

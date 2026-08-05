@@ -34,15 +34,34 @@ No hay API para elegir una secuencia. No es que esté desaconsejado: no existe.
 
 ## La secuencia no da la vuelta
 
-El contador es `Option<u64>`. `checked_add(1)` devuelve `None` al llegar al
-final, y a partir de ahí `seal` responde `SequenceExhausted` para siempre.
+El estado del sealer es un enum de tres variantes: `Ready(u64)`, `Exhausted` y
+`Poisoned`. `checked_add(1)` pasa de `Ready` a `Exhausted` al llegar al final, y
+a partir de ahí `seal` responde `SequenceExhausted` para siempre.
 
-Es un `Option` y no un `u64` con un flag aparte porque «agotado» debe ser un
-estado que el tipo sostiene, no una condición que alguien tenga que acordarse de
-comprobar. El estado no se recupera: la sesión se acabó.
+Es un estado que el tipo sostiene, no una condición que alguien tenga que
+acordarse de comprobar, y no se recupera: la sesión se acabó. Hasta el sprint
+4C.1 era un `Option<u64>`, que sostenía «agotado» pero no tenía dónde poner la
+tercera variante.
 
 Comprobado invirtiendo el fix —cambiando `checked_add` por `wrapping_add`— y
 viendo fallar `an_exhausted_sequence_is_a_terminal_error`.
+
+## Un fallo interno también quema la sesión
+
+`Poisoned` es la tercera variante y existe desde el sprint 4C.1, cuando la ruta
+AEAD dejó de tener `unreachable!` y `assert!`. Aquellas macros abortaban el
+proceso ante una incoherencia interna; quitarlas sin más habría dejado un sealer
+que devuelve `Err` y sigue aceptando llamadas.
+
+Eso importa aquí y no en cualquier otro sitio: un sealer que falla a mitad de
+`seal` puede haber consumido ya su secuencia. Si el llamante reintenta y el
+sealer vuelve a intentarlo, dos frames pueden salir con el mismo nonce, que es
+exactamente lo que el resto de este documento existe para impedir. Así que
+**cualquier** `Err` de `seal` deja el sealer en `Poisoned` de forma permanente, y
+toda llamada posterior responde `SealerPoisoned` sin mirar el contador.
+
+La opción segura ante un estado que no se entiende es dejar de cifrar, no
+adivinar por dónde iba la cuenta.
 
 ## Descartar un frame no libera su secuencia
 

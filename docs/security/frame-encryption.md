@@ -100,6 +100,37 @@ no coincide.
 Eso lo hace la biblioteca, no este repositorio: aquí no hay ningún orden de
 verificación escrito a mano que alguien pueda invertir en un refactor.
 
+## El texto claro no sobrevive al frame
+
+`AuthenticatedFrame::payload` es un `Zeroizing<Vec<u8>>`, y el único accesor que
+lo entrega es `into_zeroizing_payload`, que conserva el envoltorio. No hay
+`into_payload(self) -> Vec<u8>`: existía hasta el sprint 4C.1, y bastaba llamarlo
+para que el texto claro descifrado quedara en un `Vec` corriente que nadie borra.
+Los búferes temporales de `seal` y `open` son igualmente `Zeroizing`.
+
+Lo que eso garantiza y lo que no está en
+`docs/security/secret-lifecycle-audit.md`. En resumen: garantiza que el `Drop`
+escribe ceros; no garantiza nada sobre swap, hibernación, core dumps, registros,
+ni sobre reasignaciones anteriores de un `Vec` —aquí no las hay, porque estos
+búferes se construyen a su tamaño final y no crecen, pero eso es una propiedad
+del código, no del tipo—.
+
+## Nada en esta ruta puede entrar en pánico
+
+El módulo compila bajo `deny` de `clippy::panic`, `unwrap_used`, `expect_used`,
+`unreachable`, `todo`, `unimplemented` e `indexing_slicing`. Todo lo que antes
+era una macro que aborta es hoy una variante de `AeadError`.
+
+La razón no es de estilo. Cada byte que llega a `open` lo eligió alguien que no
+tiene la clave, y un pánico ante un input de peer es una denegación de servicio
+gratuita. Un `assert!` tampoco valía como control: `debug_assertions` no está
+activo en release, así que la comprobación que «protegía» la ruta desaparecía
+justo en la compilación que se distribuye.
+
+Quitar las macros dejó un hueco que hubo que cerrar aparte: un sealer que
+devuelve `Err` a mitad de `seal` puede haber consumido ya su secuencia. Por eso
+cualquier error lo envenena de forma permanente; ver `nonce-lifecycle.md`.
+
 ## Lo que no hay
 
 Rotación de claves, rekey y renegociación. Una sesión usa una clave por dirección

@@ -73,6 +73,20 @@ otra, aunque ambas usen la secuencia 0.
 `FrameOpener` no es `Clone`: dos openers tendrían dos ventanas, y un frame
 rechazado por uno sería aceptado por el otro.
 
+## Ni un índice sin comprobar
+
+`replay.rs` calcula una palabra y un bit a partir de una secuencia que viene del
+cable. Desde el sprint 4C.1 el módulo compila bajo `deny(clippy::indexing_slicing)`
+junto con el resto de la ruta AEAD, así que un desplazamiento mal calculado es un
+error de compilación y no un pánico en tiempo de ejecución con datos de un peer.
+Donde el índice podría salirse, el código devuelve `ReplayStateCorrupt` y el
+frame se rechaza.
+
+El target `replay_window` de `cargo-fuzz` recorre transiciones arbitrarias de
+`check` y `record` y sostiene los dos invariantes de este documento: `check` no
+muta nada, y una secuencia aceptada no vuelve a aceptarse. Es una campaña
+acotada, no una demostración.
+
 ## Límites
 
 La ventana protege dentro de una sesión. No hay nada que impida a un atacante

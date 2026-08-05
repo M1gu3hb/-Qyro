@@ -175,13 +175,49 @@ provocarlas**, así que no están:
   comprobación en tiempo de ejecución.
 - `PayloadTooLarge`: `seal` recibe un `&Frame`, y un `Frame` no puede llevar más
   de `MAX_PAYLOAD_LEN`. Sellar uno no puede desbordar un frame.
-- `InvalidNonceState`: era `SequenceExhausted` con otro nombre. El contador es un
-  `Option<u64>`, así que «agotado» es un estado del tipo y no una condición que
-  alguien tenga que acordarse de comprobar.
+- `InvalidNonceState`: era `SequenceExhausted` con otro nombre. «Agotado» es un
+  estado del tipo y no una condición que alguien tenga que acordarse de
+  comprobar.
 
 Un error que nadie puede provocar documenta una comprobación que no está. Es la
 misma corrección que ADR-0018 registró para `TrailingBytes`, y se hizo por el
 mismo método: borrar la comprobación y ver si algún test falla.
+
+### Enmienda: cinco variantes que sí hacen falta
+
+Sprint 4C.1. Quitar `panic!`, `unreachable!` y `assert!` de la ruta de producción
+no elimina los estados que aquellas macros nombraban; solo obliga a devolverlos.
+Cada uno necesitó su variante:
+
+`FrameTemplateRejected`, `EnvelopeConstructionFailed` y `AssociatedDataMismatch`
+cubren incoherencias internas del sellado que antes abortaban el proceso.
+`ReplayStateCorrupt` cubre un índice de bitmap que no cuadra, donde antes había
+indexado sin comprobar. `SealerPoisoned` es la consecuencia de las anteriores.
+
+Esa última es la parte que no era obvia. Un sealer que devuelve `Err` a mitad de
+`seal` puede haber consumido ya su secuencia; si el llamante reintenta, dos
+frames podrían salir con el mismo nonce. Así que cualquier `Err` envenena el
+sealer de forma permanente y toda llamada posterior responde `SealerPoisoned`.
+
+Las tres macros no eran un control de seguridad y no podían serlo:
+`debug_assertions` está apagado en release, así que la comprobación desaparecía
+justo en la compilación que se distribuye. Un `deny` de Clippy sobre `panic`,
+`unwrap_used`, `expect_used`, `unreachable`, `todo`, `unimplemented` e
+`indexing_slicing` es lo que hoy lo sostiene, y una prueba lee el propio fuente
+—descartando antes los bloques `cfg(test)`— para que la regla no se relaje sin
+que nadie se entere.
+
+### Enmienda: el texto claro se borra
+
+Sprint 4C.1. `AuthenticatedFrame::payload` pasa a ser `Zeroizing<Vec<u8>>` y el
+accesor `into_payload(self) -> Vec<u8>` desaparece a favor de
+`into_zeroizing_payload`, que conserva el envoltorio. Los búferes temporales de
+`seal` y `open` también. La fila de `AuthenticatedFrame` en la tabla de tipos
+decía «su plaintext está verificado», que sigue siendo cierto y no era todo:
+estaba verificado y luego se quedaba en el heap.
+
+El alcance exacto de esa garantía —y los límites que ningún `Drop` cierra— está
+en `docs/security/secret-lifecycle-audit.md`.
 
 ## Ciclo de vida
 
