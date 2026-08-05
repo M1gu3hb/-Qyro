@@ -1,0 +1,36 @@
+# cargo-fuzz workspace. Excluded from the main workspace because libfuzzer-sys
+# requires a nightly toolchain, while the project builds and tests on stable
+# 1.88.0. CI runs the corpus smoke test instead; see docs/security/parser-threats.md
+# for how to run a real fuzzing campaign.
+[package]
+name = "qyro-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qyro_protocol = { path = "../crates/qyro_protocol" }
+qyro_manifest = { path = "../crates/qyro_manifest" }
+
+[[bin]]
+name = "frame_decoder"
+path = "fuzz_targets/frame_decoder.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "manifest_decoder"
+path = "fuzz_targets/manifest_decoder.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "relative_path"
+path = "fuzz_targets/relative_path.rs"
+test = false
+doc = false
