@@ -4,6 +4,27 @@
 //! also never distinguish *which* cryptographic check failed beyond the
 //! category: a peer learns that its signature did not verify, not which half of
 //! the transcript to keep adjusting.
+//!
+//! # Every variant below is produced by something
+//!
+//! Four were not, and are gone: `UnexpectedRole`, `InvalidEphemeralPublicKey`,
+//! `TranscriptMismatch` and `SequenceViolation`. Nothing anywhere constructed
+//! them, so a caller could match on a check that did not exist and conclude the
+//! handshake enforced something it did not.
+//!
+//! Each had a reason it could not fire. Role confusion and out-of-order
+//! messages are impossible by construction — every transition takes `self` by
+//! value, so the compiler rejects reuse and reordering. An X25519 public key
+//! has no invalid encoding: every 32-byte string is a point, and the hazard
+//! that does exist is a low-order one, reported as
+//! [`HandshakeError::NonContributorySharedSecret`]. A transcript is never
+//! compared, only signed and MACed over, so a disagreement surfaces as
+//! [`HandshakeError::SignatureVerificationFailed`] or
+//! [`HandshakeError::FinishedVerificationFailed`].
+//!
+//! `crate::guards` keeps this true: a variant with no construction site
+//! anywhere in the crate fails the test run. Recorded as an amendment to
+//! ADR-0021.
 
 use core::fmt;
 
@@ -28,8 +49,6 @@ pub enum HandshakeError {
         /// Suite this build implements.
         supported: u8,
     },
-    /// A message arrived at the state belonging to the other role.
-    UnexpectedRole,
     /// A well-formed message of the wrong kind arrived.
     UnexpectedMessage {
         /// Message type found.
@@ -54,8 +73,6 @@ pub enum HandshakeError {
     InvalidPublicIdentity,
     /// A public identity inside a message was a low-order point.
     WeakPublicIdentity,
-    /// An ephemeral X25519 key was not a usable public key.
-    InvalidEphemeralPublicKey,
     /// The X25519 exchange produced a non-contributory shared secret.
     ///
     /// The peer sent a low-order point, so the shared secret is all zeros and
@@ -68,14 +85,10 @@ pub enum HandshakeError {
     /// Distinct from a signature failure because it means something different:
     /// the peer proved its identity but derived different keys.
     FinishedVerificationFailed,
-    /// A recomputed transcript did not match the one in hand.
-    TranscriptMismatch,
     /// The system CSPRNG was unavailable.
     EntropyUnavailable,
     /// The key schedule could not produce output.
     KeyDerivationFailed,
-    /// Messages arrived in an order this role does not accept.
-    SequenceViolation,
     /// A message carried bytes beyond its fixed length.
     TrailingBytes {
         /// How many bytes were left over.
@@ -94,7 +107,6 @@ impl fmt::Display for HandshakeError {
                 formatter,
                 "crypto suite {found} is not supported, this build implements {supported}"
             ),
-            Self::UnexpectedRole => formatter.write_str("message arrived at the wrong role"),
             Self::UnexpectedMessage { found, expected } => write!(
                 formatter,
                 "message type {found} arrived where type {expected} was expected"
@@ -110,9 +122,6 @@ impl fmt::Display for HandshakeError {
             Self::WeakPublicIdentity => {
                 formatter.write_str("the public identity in the message has low order")
             }
-            Self::InvalidEphemeralPublicKey => {
-                formatter.write_str("the ephemeral key is not a usable public key")
-            }
             Self::NonContributorySharedSecret => {
                 formatter.write_str("the key exchange was non-contributory")
             }
@@ -122,14 +131,10 @@ impl fmt::Display for HandshakeError {
             Self::FinishedVerificationFailed => {
                 formatter.write_str("the confirmation MAC did not verify")
             }
-            Self::TranscriptMismatch => formatter.write_str("the transcripts do not match"),
             Self::EntropyUnavailable => {
                 formatter.write_str("the system random number generator was unavailable")
             }
             Self::KeyDerivationFailed => formatter.write_str("key derivation failed"),
-            Self::SequenceViolation => {
-                formatter.write_str("handshake messages arrived out of order")
-            }
             Self::TrailingBytes { extra } => {
                 write!(formatter, "{extra} bytes remained after the message")
             }

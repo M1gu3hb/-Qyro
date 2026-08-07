@@ -93,14 +93,32 @@ criptográfica.
 
 ## Errores
 
-Cada variante nombra una regla distinta; ninguna revela material de clave.
+Cada variante nombra una regla distinta, ninguna revela material de clave, y
+**algo construye cada una**. Una variante que nada produce documenta un control
+que no existe.
 
-`UnsupportedHandshakeVersion`, `UnsupportedCryptoSuite`, `UnexpectedRole`,
-`UnexpectedMessage`, `InvalidState`, `InvalidMessageLength`,
-`InvalidPublicIdentity`, `WeakPublicIdentity`, `InvalidEphemeralPublicKey`,
-`NonContributorySharedSecret`, `SignatureVerificationFailed`,
-`FinishedVerificationFailed`, `TranscriptMismatch`, `EntropyUnavailable`,
-`KeyDerivationFailed`, `SequenceViolation`, `TrailingBytes`.
+`UnsupportedHandshakeVersion`, `UnsupportedCryptoSuite`, `UnexpectedMessage`,
+`InvalidState`, `InvalidMessageLength`, `InvalidPublicIdentity`,
+`WeakPublicIdentity`, `NonContributorySharedSecret`,
+`SignatureVerificationFailed`, `FinishedVerificationFailed`,
+`EntropyUnavailable`, `KeyDerivationFailed`, `TrailingBytes`.
+
+**Corregido en el sprint 4C.2 (QYR-0035).** Esta lista incluía
+`UnexpectedRole`, `InvalidEphemeralPublicKey`, `TranscriptMismatch` y
+`SequenceViolation`. Ninguna se construía en ninguna parte, así que este
+documento afirmaba cuatro controles que el código no tenía. Fueron eliminadas.
+
+Cada una no podía dispararse por una razón concreta. La confusión de rol y el
+desorden de mensajes son imposibles por construcción: cada transición consume
+`self`, de modo que el compilador rechaza reutilizar o reordenar un estado. Una
+clave pública X25519 no tiene codificación inválida —toda cadena de 32 bytes es
+un punto— y el peligro real, un punto de orden pequeño, se reporta como
+`NonContributorySharedSecret`. Un transcript nunca se compara: se firma y se
+autentica con MAC, así que una discrepancia aparece como
+`SignatureVerificationFailed` o `FinishedVerificationFailed`.
+
+`crate::guards` lo mantiene cierto: una variante sin sitio de construcción en
+todo el crate hace fallar la suite. Registrado como enmienda a ADR-0021.
 
 `SignatureVerificationFailed` y `FinishedVerificationFailed` son distintas a
 propósito: la primera dice que el peer no probó su identidad; la segunda, que la
