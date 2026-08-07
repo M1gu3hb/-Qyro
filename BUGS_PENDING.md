@@ -1124,13 +1124,84 @@
   escritura. Lo que **sí** hay que corregir es la afirmación, no el formato:
   `identity-storage.md` decía que el MAC de DPAPI cubre todo el tramo `16..` y
   no es cierto
-- **Decisión pendiente para el próximo tramo**: o la prueba acepta este byte con
-  su razón escrita —documentando que DPAPI no autentica su propia cabecera—, o
-  Qyro deja de tratar el envoltorio como opaco y lo cubre él mismo, que
-  contradice «no inventes criptografía» y la decisión de ADR-0024 §2 de no añadir
-  MAC propio. La primera es casi con seguridad la correcta; no se toma aquí
-  porque este tramo se queda sin contexto y la decisión merece argumentarse
+- **Decisión, tomada**: la prueba acepta el conjunto exacto con su razón escrita.
+  La alternativa era que Qyro dejara de tratar el envoltorio como opaco y lo
+  cubriera con un MAC propio, y eso contradice «no inventes criptografía» y la
+  decisión de ADR-0024 §2 de no añadir uno. Lo que la prueba fija no es una cota
+  ni un permiso: es el conjunto `20..36 × 0..8`, y **cualquier** otro conjunto
+  —una posición nueva, una que deje de sobrevivir— la pone en rojo. Eso es lo
+  que la convierte en una medición vigilada y no en una excepción
+- **Lo que sigue abierto**: el conjunto es una observación sobre el
+  `windows-latest` de hoy, no un contrato de Microsoft, que dice explícitamente
+  que el formato es opaco y no debe parsearse. Otra versión de Windows puede
+  moverlo, y entonces esta prueba falla. Fallar es el comportamiento correcto:
+  quien la vea fallar tiene que volver aquí y decidir de nuevo, no ampliar el
+  rango
 - Lo que **no** se hizo: ajustar la aserción para que pase. El prompt del sprint
   lo dice y es lo correcto: si un tramo cae por otro camino, eso es el hallazgo
 - Estado: abierto
+- Fecha: 2026-08-07
+
+## QYR-0060 — STATUS.md afirmaba la persistencia arriba y la negaba abajo
+
+- Plataforma: documentación
+- Severidad: **P2**
+- Esperado: STATUS.md es la fuente canónica del estado ejecutable, así que dos
+  párrafos suyos no pueden decir cosas incompatibles sobre la misma capacidad
+- Actual: en `91355a8` la línea `Milestone` decía «una identidad sobrevive al
+  cierre del proceso en Windows … **IMPLEMENTED solo en Windows**», y la sección
+  «Sprint 4D.1 en curso», ochenta líneas más abajo, seguía abriendo con «**No hay
+  persistencia en ninguna plataforma**» y listando bajo «lo que no existe
+  todavía»: «No hay crate de plataforma y no hay DPAPI», «No hay harness de dos
+  procesos ni paso de CI que ejecute persistencia», «No hay `storage-v1.json`» y
+  «**No hay `unsafe` en ninguna parte del producto**». Las cinco eran falsas en
+  ese mismo commit
+- Causa: la cabecera se actualizó con la evidencia nueva y el cuerpo no. Es la
+  misma forma que QYR-0055, que se registró en este mismo sprint por tres
+  afirmaciones de este mismo archivo, y volvió a ocurrir **doce commits después**
+  de haberla registrado. Registrar una forma de fallo no la previene
+- Alcance real: nadie fue engañado hacia arriba —el cuerpo era más conservador
+  que la cabecera, no al revés—, pero eso es suerte de esta ocurrencia y no una
+  propiedad. La misma omisión con los signos cambiados es una capacidad
+  reclamada sin evidencia
+- Lo que **no** se hizo: escribir una regla de `check_docs_consistency` que
+  compare la línea `Milestone` con el cuerpo. No hay forma honesta de comprobar
+  con un `grep` que dos párrafos en prosa concuerdan, y una regla que finja
+  hacerlo es una guarda que no guarda —el defecto que QYR-0052, QYR-0053 y
+  QYR-0054 documentan en este mismo sprint—. Queda como disciplina: la sección
+  de sprint en curso se reescribe **en el mismo commit** que mueve la cabecera
+- Estado: cerrado
+- Fecha: 2026-08-07
+
+## QYR-0061 — Dos filas de la tabla de runs no resistían una comprobación
+
+- Plataforma: documentación
+- Severidad: **P2**
+- Esperado: cada fila de las tablas de runs de STATUS.md nombra un run que
+  existe y su conclusión real. Es la única forma de evidencia que este proyecto
+  acepta, así que una fila que no se puede comprobar no es una fila débil: es
+  una fila falsa
+- Actual, dos filas de «Runs de 4D.1»:
+  - `Crypto platform #14` sobre `3f25874` figuraba como **success**. Fue
+    **cancelled**, por el grupo de concurrencia `cancel-in-progress`
+  - `CI` sobre `0cb18ec` citaba el run **31207659962**, que **no existe**: la API
+    responde `404 Not Found`. El run real de ese commit es 31207950941
+- Causa: las dos filas se escribieron desde la memoria de la sesión en vez de
+  desde la lista de runs de la rama. Una cancelación y un éxito se parecen mucho
+  cuando lo que se recuerda es «ese commit estaba bien», y un identificador de
+  once dígitos no se verifica solo por releerlo
+- Además, la tabla **omitía cuatro fallos** —`Crypto platform` #20, #21 y #22, y
+  `CI` #127— y siete runs en verde. La versión actual lista **todos** los `push`
+  de la rama, obtenidos por API
+- Impacto: ninguna conclusión cambia. El run cancelado se sustituyó por
+  `Crypto platform #15` sobre `940b49d`, que sí pasó, y el commit con el
+  identificador equivocado sí tuvo su run en verde. Eso es exactamente por qué
+  merece registrarse: los dos errores eran invisibles precisamente porque no
+  rompían nada
+- Lo que **no** se hizo: una regla automática. `check_docs_consistency` no puede
+  llamar a la API de GitHub —el job documental corre sin red garantizada y una
+  guarda que depende de un servicio externo falla por razones que no son el
+  defecto que vigila—. Lo que sí queda es el método: reconstruir la tabla desde
+  `actions_list` sobre la rama, no desde lo que uno recuerda
+- Estado: cerrado
 - Fecha: 2026-08-07

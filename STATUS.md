@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T22:30:00Z
+- Updated UTC: 2026-08-07T23:10:00Z
 - Branch: claude/qyro-secure-storage-4d1
-- Verified commit: b73127606b6bc2873930799b01b8317dab21a172
+- Verified commit: 91355a84f54c210423d1b4b5a34e3f2a8be78a47
 - Milestone: **una identidad sobrevive al cierre del proceso en Windows**,
   ejecutado en CI en dos invocaciones separadas. La persistencia está
   **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y en iOS**, y nada
@@ -19,11 +19,17 @@ dice sobre qué commit corrió**. Los runs de cierre del sprint 4C.2 se ejecutan
 sobre el commit que lleva los disparadores de CI y se registran en el commit
 siguiente, que es la misma secuencia que usó el sprint 4C.1.
 
-La rama continúa `claude/qyro-crypto-platform-hardening`, que continúa
-`claude/qyro-aead-replay`, que continúa `claude/qyro-handshake-closure`, que a su
-vez reconcilió `audit/baseline-hardening` con los commits del propietario en
-`main`. Ninguna rama fue reescrita ni fusionada a `main`. Auditoría de este
-sprint: `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`.
+La rama continúa `claude/qyro-resource-bounds-4c3`, que continúa
+`claude/qyro-crypto-platform-hardening`, que continúa `claude/qyro-aead-replay`,
+que continúa `claude/qyro-handshake-closure`, que a su vez reconcilió
+`audit/baseline-hardening` con los commits del propietario en `main`. Ninguna
+rama fue reescrita ni fusionada a `main`. Auditoría de este sprint:
+`docs/audits/SPRINT4D1_SECURE_STORAGE.md`.
+
+**El sprint 4D.1 sí añadió función**, y es el primero desde 4A que lo hace: una
+identidad sobrevive al cierre del proceso, en una plataforma de tres. No añadió
+ninguna dependencia externa, no tocó transporte ni UI, y no habilitó Enviar ni
+Recibir.
 
 **El sprint 4C.3 no añadió funcionalidad.** Corrigió un coste cuadrático medido
 en la única ruta que tocará los bytes de un peer, corrigió una cota de memoria
@@ -202,8 +208,9 @@ cuatro quedan abiertos y registrados, no omitidos.
   sentido que mueva bytes.
 - **Rotación y rekey de claves de sesión**: NOT_IMPLEMENTED. Una sesión usa una
   clave por dirección hasta agotar la secuencia.
-- **qyro_identity y almacenamiento seguro**: NOT_IMPLEMENTED en las tres
-  plataformas. No hay Android Keystore, ni iOS Keychain, ni DPAPI/CNG.
+- **Almacenamiento seguro de identidad**: IMPLEMENTED **solo en Windows**,
+  NOT_IMPLEMENTED en Android y en iOS. Hay DPAPI de ámbito de usuario
+  (`qyro_win_dpapi`, ADR-0024); no hay Android Keystore ni iOS Keychain.
 - **FFI criptográfico**: NOT_IMPLEMENTED, y deliberadamente. La biblioteca que
   Dart carga no depende de `qyro_crypto`, así que no hay nada de esto al otro
   lado de la frontera.
@@ -225,10 +232,10 @@ cuatro quedan abiertos y registrados, no omitidos.
   construirlo desde el disco.
 - LAN/discovery/manual IP: NOT_IMPLEMENTED
 - Resume: NOT_IMPLEMENTED
-- Persistencia de identidad, emparejamiento y dispositivos de confianza:
-  NOT_IMPLEMENTED. **La identidad sí existe** (`DeviceIdentity`, Ed25519,
-  ADR-0020) y el handshake la autentica; lo que falta es que sobreviva al cierre
-  del proceso, y que exista un paso de confianza.
+- Emparejamiento y dispositivos de confianza: NOT_IMPLEMENTED. La identidad
+  existe (`DeviceIdentity`, Ed25519, ADR-0020), el handshake la autentica y desde
+  este sprint **sobrevive al cierre del proceso en Windows**; lo que falta es el
+  paso de confianza, y que sobreviva también en Android y en iOS.
 - Database/history: NOT_IMPLEMENTED
 - Optical QR/RaptorQ: NOT_IMPLEMENTED
 - Wi-Fi Direct/Multipeer/Bluetooth transports: NOT_IMPLEMENTED
@@ -276,8 +283,27 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
   harness ejecuta identidad, handshake, derivación, sellado, round trip de cable,
   apertura, replay y manipulación, y devuelve un código de salida estable por
   variante de fallo.
+- **Persistencia de identidad en Windows, en dos procesos distintos**: YES en `b731276` (run 31215102331, job `windows-crypto`).
+  Paso «Persist an identity across two separate process invocations». Un proceso
+  llama a `create` y termina; **otro proceso**, lanzado después, llama a `load` y
+  obtiene el mismo fingerprint:
+
+      created fingerprint: 49eff48e-89bf12b0-…-0bff77f7
+      loaded  fingerprint: 49eff48e-89bf12b0-…-0bff77f7
+
+  `"process_invocations":2` en el informe JSON, checksum SHA-256
+  `209cb450100c0dc3f4cb55a65f71f0416d0fb81ebebbce499247d99652046a79`. Dos
+  llamadas dentro de un proceso no habrían probado nada: el sistema operativo
+  entre ellas es el sujeto de la prueba.
+- **`qyro_win_dpapi` contra la API real**: YES en `b731276` (run 31215102331, job `windows-crypto`).
+  Nueve pruebas, incluido el barrido de 448 posiciones contra DPAPI y no contra
+  el doble. No hay ninguna ejecución de este crate fuera de Windows: es
+  `cfg(windows)` entero.
+- Persistencia en Android o en iOS: **NO**. No existe.
 - iOS/Android **hardware físico**: NO. Un emulador y un simulador no son
-  hardware, y este archivo no los va a contar como tal.
+  hardware, y este archivo no los va a contar como tal. `windows-latest` tampoco
+  es una máquina de usuario: es un perfil recién creado, sin dominio y sin perfil
+  móvil, que son justo los casos que ADR-0024 §2 no puede ejercitar allí.
 - Interactive Windows application smoke: NO
 
 ## Real tests
@@ -287,19 +313,23 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **348 tests**, 0 failed, 2 ignored. Eran 323
-  al empezar el sprint 4D.1: la guarda de caminos públicos, cuatro sobre el
-  accesor de semilla y dieciocho sobre el formato del blob
-- `cargo test --workspace --all-features`: PASS, **348 tests**. Ningún crate
+- `cargo test --workspace`: PASS, **350 tests**, 0 failed, 2 ignored. Eran 323 al
+  empezar el sprint 4D.1: la guarda de caminos públicos, cuatro sobre el accesor
+  de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
+  crate de plataforma. **Las nueve pruebas de `qyro_win_dpapi` no están en esa
+  cuenta**: el crate entero es `cfg(windows)` y en este host no compila ninguna.
+  Corren en CI, y ese es su único sitio
+- `cargo test --workspace --all-features`: PASS, **350 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
-- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **57 crates**.
-  Eran 56: la entrada nueva es `qyro_identity_store`, un miembro del workspace.
-  Este sprint **no añadió ninguna dependencia externa**, como fija ADR-0024: la
-  única entrada nueva del grafo es de primera parte. `serde_json` pasó a ser también
-  dev-dependency de `qyro_ffi` y ya estaba en el lock como dev-dependency de
-  `qyro_crypto`, así que el grafo auditado no cambia. Siete entran con
-  `chacha20poly1305`; ver `docs/LICENSE_AUDIT.md`
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **59 crates**.
+  Eran 56: las tres entradas nuevas son `qyro_identity_store`, `qyro_win_dpapi` y
+  `qyro_store_smoke`, los tres miembros de este workspace. Este sprint **no añadió
+  ninguna dependencia externa**, como fija ADR-0024: las tres entradas nuevas del
+  grafo son de primera parte, y el `extern` a Win32 no es una dependencia de
+  Cargo. `serde_json` pasó a ser también dev-dependency de `qyro_ffi` y ya estaba
+  en el lock como dev-dependency de `qyro_crypto`, así que el grafo auditado no
+  cambia. Siete entran con `chacha20poly1305`; ver `docs/LICENSE_AUDIT.md`
 - `cargo tree --workspace -d`: PASS, sin duplicados
 - `cargo run --package qyro_crypto_smoke -- --json`: PASS,
   `{"target":"linux-x86_64-unix","outcome":"success","code":0}`
@@ -501,9 +531,15 @@ permaneció invisible durante tres sprints.
   frames, y nada de eso mueve un byte: no hay sockets, ni descubrimiento, ni
   escritura en disco. Cifrar un frame en memoria no acerca la transferencia por
   sí solo.
-- **La identidad solo vive en memoria.** No hay Keystore, Keychain ni DPAPI/CNG:
-  generar una identidad y cerrar el proceso la pierde, así que ninguna decisión
-  de confianza sobrevive a un reinicio.
+- **La identidad solo vive en memoria en Android y en iOS.** No hay Keystore ni
+  Keychain: en esas dos plataformas, generar una identidad y cerrar el proceso la
+  pierde. En Windows sí persiste, y aun así **ninguna decisión de confianza
+  sobrevive a un reinicio en ninguna plataforma**, porque no existe el paso de
+  confianza que la usaría.
+- **Nada del producto llama al almacén.** `qyro_ffi` no depende de
+  `qyro_identity_store`, y una prueba lo mantiene así; la aplicación Flutter no
+  guarda ni carga identidad alguna. Lo que persiste en CI es un harness aislado,
+  no la app.
 - No hay FFI criptográfico; Dart no ve nada de esto, y una prueba lo mantiene
   así. Por eso mismo, **la aplicación Flutter no ejercita `qyro_crypto` en
   ninguna plataforma**: lo que corre en el emulador y en el simulador es un
@@ -538,13 +574,22 @@ permaneció invisible durante tres sprints.
 - Autoría y licencia del logo siguen sin registrar.
 - No existe ninguna función de transferencia: el producto no es usable todavía.
 
-## Sprint 4D.1 en curso — qué existe y qué no
+## Sprint 4D.1 — qué existe y qué no
 
-**No hay persistencia en ninguna plataforma.** Lo que existe es la decisión, la
-especificación y **el formato del blob en código y probado**; lo que no existe es
-nada que persista. Este encabezado decía «decisión y especificación, no código» y
-tres viñetas más abajo listaba el crate: se quedó atrás cuando el crate entró
-(QYR-0055).
+**Hay persistencia en Windows y no la hay en Android ni en iOS.** Una identidad
+generada por un proceso la carga otro proceso distinto, ejecutado en CI sobre
+`windows-latest`; en las otras dos plataformas no hay nada y cerrar el proceso
+sigue perdiendo la identidad.
+
+**Esta sección se contradijo con la línea `Milestone` de arriba durante un
+commit** (QYR-0060). En `91355a8` la cabecera ya decía IMPLEMENTED en Windows y
+este párrafo seguía diciendo «no hay persistencia en ninguna plataforma», con
+cuatro viñetas más abajo negando el crate, el harness, los vectores y el
+`unsafe`. Las cinco afirmaciones eran falsas en ese mismo commit. Es la forma
+exacta de QYR-0055 —registrada en este sprint, doce commits antes— repitiéndose:
+registrar una forma de fallo no la previene. Este encabezado, antes de aquello,
+había dicho «decisión y especificación, no código» mientras tres viñetas más
+abajo listaba el crate.
 
 - ADR-0024 congelada, con las cuatro preguntas de diseño resueltas y sus fuentes
   primarias citadas y fechadas: la estrategia de `unsafe`, DPAPI frente a CNG con
@@ -562,15 +607,20 @@ tres viñetas más abajo listaba el crate: se quedó atrás cuando el crate entr
   este sprint y habría quedado contradicho por el código.
 - La guarda que lo acota: `every_public_path_returning_key_material_is_listed`
   enumera **por nombre** los caminos públicos que devuelven material de clave.
-  Antes del sprint la lista estaba vacía; ahora tiene dos entradas,
-  `identity.rs::export_secret` e `identity.rs::as_bytes`. Se escribió con la
-  lista vacía y pasó; añadir el accesor la puso en rojo con exactamente esos dos.
+  Antes del sprint la lista estaba vacía; ahora tiene **tres** entradas,
+  `identity.rs::export_secret`, `identity.rs::as_bytes` y
+  `aead/mod.rs::into_zeroizing_payload`. Se escribió con la lista vacía y pasó;
+  añadir el accesor la puso en rojo con los dos de `identity.rs`, y ampliar los
+  marcadores de retorno al arreglar QYR-0053 destapó el tercero, que llevaba en
+  el árbol desde el sprint 4C.1 sin que ninguna guarda lo viera.
 
 - **El formato del blob está implementado y probado**: `qyro_identity_store` con
-  `blob.rs`, once variantes de `StoreError` —una por paso del orden de lectura,
-  más las de escritura— y dieciocho pruebas adversariales. Voltear un bit en
-  cualquier posición produce un error tipado, comprobado posición por posición y
-  bit por bit, y **la prueba dice por qué camino espera cada tramo**.
+  `blob.rs`, **doce** variantes de `StoreError` —una por paso del orden de
+  lectura, más las de escritura y las del almacén— y dieciocho pruebas
+  adversariales. Voltear un bit en cualquier posición produce un error tipado,
+  comprobado posición por posición y bit por bit, y **la prueba dice por qué
+  camino espera cada tramo**. El mismo barrido corre después contra DPAPI real,
+  donde 128 posiciones **no** producen error: ver QYR-0059.
 - **Tres guardas que no guardaban, ahora verificadas por su propia mutación**
   (QYR-0052, QYR-0053, QYR-0054). Las tres sobrevivían a su propio borrado, que
   es la definición que este proyecto usa para «no cubierto»:
@@ -591,7 +641,10 @@ tres viñetas más abajo listaba el crate: se quedó atrás cuando el crate entr
   `qyro_crypto_smoke` **no pueden** llevarlo —`#[unsafe(no_mangle)]` es un
   atributo unsafe en edición 2024, comprobado añadiéndolo y viendo fallar la
   compilación—; `qyro_core` sí podía y no lo llevaba, así que ahora lo lleva. La
-  lista de excepciones tiene **dos** entradas y una prueba la vigila.
+  lista de excepciones tiene **tres** entradas —las dos anteriores más
+  `qyro_win_dpapi`, que es el crate que ADR-0024 §1 decide— y una prueba la
+  vigila. Añadir la tercera fue el acto central de este sprint: es la única forma
+  de que exista `unsafe` en este repositorio, y exige escribirla a mano.
 - **QYR-0048 corregido antes de escribir el blob**: la entropía congelada era
   circular. La enmienda va en `df9f574`, **anterior al primer commit del blob**
   (`3f25874`). Este párrafo decía «anterior al primer commit de implementación» y
@@ -599,55 +652,135 @@ tres viñetas más abajo listaba el crate: se quedó atrás cuando el crate entr
   anterior a la enmienda. La intención —especificar antes de implementar lo que
   la enmienda gobierna— se cumplió; la frase que la describía, no (QYR-0055).
 
+- **El crate de plataforma existe y llama a DPAPI**: `qyro_win_dpapi`, con
+  `DpapiWrapper` implementando `SecretWrapper` y `WindowsIdentityStore`
+  implementando `IdentityStore` sobre `%LOCALAPPDATA%\Qyro\identity.bin`.
+  `CryptProtectData`/`CryptUnprotectData` declaradas a mano, `#[repr(C)]
+  DATA_BLOB`, `CRYPTPROTECT_UI_FORBIDDEN`, ámbito de usuario. Nueve pruebas, solo
+  en Windows.
+- **`unsafe` existe, en un crate y en tres funciones**, enumeradas por nombre:
+  `ffi.rs::take_and_free`, `store.rs::wrap` y `store.rs::unwrap`. La guarda que
+  lo acota se escribió con la lista **vacía** antes de que hubiera un solo
+  bloque, y el primero la puso en rojo. La lista de crates que pueden relajar
+  `forbid(unsafe_code)` tiene tres entradas —`qyro_ffi`, `qyro_crypto_smoke`,
+  `qyro_win_dpapi`—, cada una argumentada.
+- **El harness de dos procesos existe y corre en CI**: `qyro_store_smoke`, con
+  `create` y `load` como invocaciones separadas y códigos de salida estables por
+  variante de fallo. El paso «Persist an identity across two separate process
+  invocations» del job `windows-crypto` es lo que ejecuta la persistencia.
+- **`storage-v1.json` existe**, con su schema estricto. Congela la cabecera y la
+  construcción de la entropía, y **no** un blob sellado completo: la salida de
+  DPAPI está atada a la máquina que la produjo, así que un blob comprometido en
+  el repositorio no lo podría abrir nadie más. El archivo lo dice de sí mismo en
+  `_what_is_and_is_not_here` en vez de dejar el hueco sin explicar.
+
 Lo que **no** existe todavía, y no debe leerse como progreso:
 
-- **No hay crate de plataforma y no hay DPAPI.** Nada persiste nada: el trait
-  `IdentityStore` está declarado y **no tiene implementaciones**. `seal_identity`
-  y `open_identity` funcionan contra un envoltorio que solo existe en `cfg(test)`.
-- No hay harness de dos procesos ni paso de CI que ejecute persistencia.
-- No hay `storage-v1.json`.
-- **No hay `unsafe` en ninguna parte del producto**, y ahora una prueba lo
-  sostiene en vez de la costumbre. El crate de plataforma que ADR-0024 §1 decide
-  **no existe todavía**.
+- **No hay persistencia en Android ni en iOS.** No hay Keystore ni Keychain, y
+  nada de lo anterior aplica a esas dos plataformas: en ellas, cerrar el proceso
+  sigue perdiendo la identidad. Es el sprint 4D.2.
+- **Nada llama al almacén desde el producto.** `qyro_ffi` no depende de
+  `qyro_identity_store` —una prueba falla si alguien lo añade—, así que la
+  aplicación Flutter no persiste ni carga ninguna identidad. Lo que corre en CI
+  es el harness aislado.
+- No hay emparejamiento ni dispositivos de confianza. Que una identidad
+  sobreviva al proceso no crea por sí solo ninguna decisión de confianza.
+- **No se ha probado en hardware físico.** `windows-latest` es un perfil recién
+  creado, sin dominio, sin perfil móvil y sin historial de contraseñas, que son
+  exactamente los casos que ADR-0024 §2 investigó y allí no se pueden ejercitar.
+- El blob **no está atado a ningún valor propio de la máquina**. `LOCALAPPDATA`
+  evita que viaje con un perfil móvil, pero la MasterKey sí viaja: copiar el
+  archivo a mano a otra máquina del mismo usuario de dominio lo abre. Cerrarlo
+  estaba fuera del alcance de este sprint y sigue abierto.
 - QYR-0050 sigue abierto: la ruta del blob depende del nombre de producto, que
   sigue siendo provisional.
+- QYR-0059 sigue abierto en P3: DPAPI no autentica el GUID de provider de su
+  propio envoltorio, así que 128 mutaciones del blob abren igual. Devuelven **la
+  misma** identidad, comprobado en el bucle del barrido; es maleabilidad en un
+  campo ignorado, no sustitución de identidad.
 
 ## Runs de 4D.1
 
+**Todos los `push` de la rama, en orden, sin filtrar.** Doce runs de este sprint
+no salieron en verde: siete fallos, cuatro cancelaciones y uno que el registro
+anterior contaba mal. La tabla es exhaustiva a propósito; una lista de la que se
+pueden caer los fallos no es evidencia, es un resumen favorable.
+
 | Workflow | Commit | Run | Conclusión |
 |---|---|---|---|
-| CI | `7e272f3` | 31203268535 | **success** |
-| CI | `f5ed985` | 31204272720 | **success** |
-| CI | `8c30304` | 31204477154 | **success** |
-| CI | `e0786ee` | 31205271929 | **success** |
+| CI #107 | `7e272f3` | 31203268535 | **success** |
+| CI #108 | `f5ed985` | 31204272720 | **success** |
+| CI #109 | `8c30304` | 31204477154 | **success** |
+| CI #110 | `0ff21bd` | 31205179103 | **success** |
+| Platform builds #26 | `0ff21bd` | 31205179363 | **success** |
+| Crypto fuzz #10 | `0ff21bd` | 31205179585 | **success** |
+| Crypto platform #13 | `0ff21bd` | 31205179748 | **success** |
+| CI #111 | `e0786ee` | 31205271929 | **success** |
 | CI #112 | `df9f574` | 31205754229 | **success** |
+| Crypto platform #14 | `3f25874` | 31206167733 | **cancelled** por concurrencia |
+| Android runtime ABI #57 | `3f25874` | 31206168276 | **success** |
 | CI #113 | `3f25874` | 31206168355 | **success** |
+| Platform builds #27 | `3f25874` | 31206168849 | **success** |
+| iOS runtime ABI #28 | `3f25874` | 31206170678 | **success** |
 | CI #114 | `3527db7` | 31206287397 | **success**, 4/4 |
 | **CI #115** | **`940b49d`** | **31206358256** | **FAILURE**, job `documentation` |
-| **Crypto platform** | **`b731276`** | **31215102331** | **success**, 4/4 jobs — **persistencia ejecutada** |
-| Platform builds | `b731276` | 31215102388 | **success** |
-| **CI** | **`b731276`** | **31215102373** | **FAILURE**, job `documentation`, misma regla de deriva |
-| Crypto platform | `89022c6` | 31211959010 | **failure**, QYR-0059 |
-| Crypto platform | `5d44ec8` | 31211402008 | **failure**, `LNK2019`: `Crypt32.lib` sin enlazar |
-| Crypto platform | `97756ad` | 31211250812 | **cancelled** por concurrencia; no es evidencia |
-| CI | `0cb18ec` | 31207659962 | **success** — la rama vuelve al verde |
-| **CI** | **`3b2cf61`** | **31208710992** | **success** |
-| **Platform builds** | **`3b2cf61`** | **31208710511** | **success** |
-| **Android runtime ABI** | **`3b2cf61`** | **31208710528** | **success** |
-| **iOS runtime ABI** | **`3b2cf61`** | **31208711030** | **success** |
-| **Crypto platform** | **`3b2cf61`** | **31208710546** | **success** |
-| **Crypto fuzz** | **`3b2cf61`** | **31208710539** | **success** |
-| CI | `0a37573` | 31208802150 | **success** |
+| Crypto platform #15 | `940b49d` | 31206358892 | **success** |
+| CI #116 | `0cb18ec` | 31207950941 | **success** — la rama vuelve al verde |
+| **CI #117** | **`3b2cf61`** | **31208710992** | **success** |
+| **Platform builds #28** | **`3b2cf61`** | **31208710511** | **success** |
+| **Android runtime ABI #58** | **`3b2cf61`** | **31208710528** | **success** |
+| **iOS runtime ABI #29** | **`3b2cf61`** | **31208711030** | **success** |
+| **Crypto platform #16** | **`3b2cf61`** | **31208710546** | **success** |
+| **Crypto fuzz #11** | **`3b2cf61`** | **31208710539** | **success** |
+| CI #118 | `0a37573` | 31208802150 | **success** |
+| CI #119 | `a607550` | 31209622943 | **success** |
+| Android runtime ABI #59 | `97756ad` | 31211250788 | **success** |
+| Crypto platform #17 | `97756ad` | 31211250812 | **cancelled** por concurrencia; no es evidencia |
+| iOS runtime ABI #30 | `97756ad` | 31211251001 | **success** |
+| CI #120 | `97756ad` | 31211251308 | **success** |
+| Platform builds #29 | `97756ad` | 31211252764 | **success** |
+| **Crypto platform #18** | **`5d44ec8`** | **31211402008** | **FAILURE**, `LNK2019`: `Crypt32.lib` sin enlazar |
+| CI #121 | `5d44ec8` | 31211402056 | **success** |
+| Platform builds #30 | `5d44ec8` | 31211402323 | **success** |
+| CI #122 | `23a5660` | 31211535849 | **success** |
+| CI #123 | `89022c6` | 31211958948 | **success** |
+| **Crypto platform #19** | **`89022c6`** | **31211959010** | **FAILURE**, QYR-0059: el byte 20 sobrevivió |
+| Platform builds #31 | `89022c6` | 31211959312 | **success** |
+| Platform builds #32 | `dd568a4` | 31212493685 | **success** |
+| CI #124 | `dd568a4` | 31212493906 | **success** |
+| **Crypto platform #20** | **`dd568a4`** | **31212494494** | **FAILURE**, la prueba seguía en rojo; su log respondió que la identidad era la misma |
+| CI #125 | `764aa32` | 31212853501 | **success** |
+| Platform builds #33 | `1269229` | 31213767572 | **success** |
+| CI #126 | `1269229` | 31213767707 | **success** |
+| **Crypto platform #21** | **`1269229`** | **31213769557** | **FAILURE**, la cota «≤16 posiciones» era falsa: eran 128 |
+| **Crypto platform #22** | **`ec912ef`** | **31214233989** | **FAILURE**, la aserción exacta no llegó a aplicarse |
+| Platform builds #34 | `ec912ef` | 31214234042 | **success** |
+| **CI #127** | **`ec912ef`** | **31214234093** | **FAILURE**, job `documentation`, regla de deriva |
+| **Crypto platform #23** | **`b731276`** | **31215102331** | **success**, 4/4 jobs — **persistencia ejecutada** |
+| **CI #128** | **`b731276`** | **31215102373** | **FAILURE**, job `documentation`, misma regla de deriva |
+| Platform builds #35 | `b731276` | 31215102388 | **success** |
+| **CI #129** | **`91355a8`** | **31215543466** | **success**, 4/4 — la rama vuelve al verde |
 
 **Los seis sobre `3b2cf61`, por `push`, y los seis en success.** Es el primer
-commit de este sprint con evidencia de los seis, y por eso el ancla apunta ahí.
-Corrieron los seis porque ese commit tocó `rust/crates/**`, incluido el filtro de
-rutas que `940b49d` añadió para que `crypto-platform.yml` vigile el crate nuevo
-(QYR-0045).
-| Crypto platform #14 | `3f25874` | ver §runs | **success** |
-| Platform builds #27 | `3f25874` | ver §runs | **success** |
-| Android runtime ABI #57 | `3f25874` | ver §runs | **success** |
-| iOS runtime ABI #28 | `3f25874` | ver §runs | **success** |
+commit de este sprint con evidencia de los seis, y por eso el ancla apuntó ahí
+durante ese tramo. Corrieron los seis porque ese commit tocó `rust/crates/**`,
+incluido el filtro de rutas que `940b49d` añadió para que `crypto-platform.yml`
+vigile el crate nuevo (QYR-0045).
+
+### Dos filas de esta tabla estaban mal (QYR-0061)
+
+La versión anterior de esta tabla decía **`Crypto platform #14` sobre `3f25874`:
+success**. Fue **cancelled**, por el grupo de concurrencia. Y decía **`CI` sobre
+`0cb18ec`: run 31207659962**, que **no existe**: la API responde 404. El run real
+es 31207950941.
+
+Ninguna de las dos cambia una conclusión —la primera se sustituyó por el run #15
+sobre `940b49d`, que sí pasó; la segunda tuvo su run y sí fue success—, y por eso
+mismo merecen quedar escritas: una cancelación contada como éxito y un
+identificador que no resuelve son las dos formas de que una tabla de evidencia
+deje de serlo sin que nada falle. Se encontraron listando **todos** los runs de la
+rama por API en vez de reescribir la tabla desde la memoria de la sesión, que es
+exactamente de donde salieron los dos errores.
 
 ### La rama estuvo en rojo, y por qué
 
@@ -667,10 +800,12 @@ sostenerse a la vez en un sprint largo**, y la primera no tenía por qué existi
 `HANDOFF.md` ya decía «STATUS.md debe actualizarse dentro del mismo tramo de
 trabajo, no al final».
 
-**Y volvió a pasar en `b731276`** (CI 31215102373), por la misma razón y con el
-ancla en `3b2cf61`: doce commits de deriva. La política de abajo es correcta y
-**mover el ancla hay que hacerlo, no solo escribirlo**. Esta vez el ancla se
-mueve en el mismo commit que registra la evidencia.
+**Y volvió a pasar dos veces más**: en `ec912ef` (CI #127, 31214234093) y en
+`b731276` (CI #128, 31215102373), por la misma razón y con el ancla en `3b2cf61`
+—once y doce commits de deriva—. Tres ocurrencias del mismo blocker en un solo
+sprint. La política de abajo es correcta y **mover el ancla hay que hacerlo, no
+solo escribirlo**; el registro anterior mencionaba dos de las tres y omitía la de
+`ec912ef`.
 
 **La política que manda, y queda escrita aquí para que nadie la vuelva a
 inventar:** `Verified commit` es *el commit hasta el que este archivo describe el
@@ -686,33 +821,42 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**El crate de plataforma Windows.** Es lo único que falta para que algo persista;
-todo lo demás del sprint está hecho y verificado. En este orden:
+**Sprint 4D.2: Android Keystore e iOS Keychain, detrás del mismo trait.** La
+persistencia existe en una plataforma de tres, y ese desequilibrio es el estado
+menos estable posible: una app que guarda la identidad en Windows y la pierde en
+el teléfono se comporta de dos maneras distintas sin decirlo.
 
-1. `only_the_listed_crates_may_relax_forbid_unsafe` ya existe y la lista de
-   excepciones tiene dos entradas. Añadir el crate de plataforma es **una tercera
-   entrada argumentada**, no un `forbid` que nunca estuvo: eso es exactamente por
-   qué la guarda se escribió antes.
-2. `the_unsafe_blocks_are_the_ones_we_listed`, **antes** de escribir un bloque
-   `unsafe`. Por nombre de función contenedora, no por número: sustituir un bloque
-   por otro deja el número igual.
-3. El `extern "system"` a mano para `CryptProtectData`, `CryptUnprotectData` y
-   `LocalFree`, más `#[repr(C)] DATA_BLOB`. `CRYPTPROTECT_UI_FORBIDDEN`, ámbito de
-   usuario, `pPromptStruct = NULL` (ADR-0024 §2). Borrar el búfer **antes** de
-   `LocalFree`: liberar sin borrar es el defecto que QYR-0018 ya cerró una vez.
-4. `a_data_blob_survives_a_protect_and_unprotect` en `windows-latest`. Es la
-   mitigación que ADR-0024 §1 prometió a cambio de transcribir el `extern` a mano.
-5. La implementación de `IdentityStore` sobre `%LOCALAPPDATA%`, con QYR-0050
-   resuelto o registrado, y `two_creates_do_not_lose_data` decidido y probado.
-6. El barrido de 448 posiciones **contra DPAPI**, no contra el doble. Los tres
-   tramos deben caer por los mismos caminos; si alguno cae por otro, eso es el
-   hallazgo.
-7. El harness de dos procesos (ADR-0023) y su paso en `windows-crypto`.
-8. `storage-v1.json` verificado **desde las primitivas**, no desde el módulo que
-   lo produce (QYR-0025).
+Lo que 4D.2 tiene que reproducir, no reinventar:
 
-Después: los seis workflows en verde sobre un mismo commit, y `Verified commit`
-movido a él.
+1. `IdentityStore` y `SecretWrapper` ya existen y no deberían cambiar. Si cambian
+   para acomodar Keystore o Keychain, el trait estaba mal y eso es el hallazgo.
+2. El mismo barrido de corrupción, posición por posición, **contra la API real de
+   cada plataforma** y no contra un doble. Es lo que destapó QYR-0059 en Windows,
+   y no hay razón para esperar que Keystore y Keychain autentiquen todos los
+   bytes de su propio envoltorio solo porque sería cómodo.
+3. Rotación y borrado probados, como en `rotate_replaces_exactly_one_identity` y
+   `delete_leaves_nothing_loadable`.
+4. Emulador y simulador según ADR-0023, con sus runs nombrados. **Ni el emulador
+   ni el simulador son hardware**, y el resultado se registra como lo que es.
+
+Preguntas abiertas que 4D.2 tiene que decidir **antes** de escribir código, con
+fuente primaria citada y fechada, igual que hizo ADR-0024:
+
+- **Secure Enclave solo hace P-256**, no Ed25519. O la identidad de Qyro deja de
+  ser Ed25519 en iOS —lo que rompe el handshake congelado en ADR-0021—, o la
+  semilla se envuelve con una clave del Enclave en vez de vivir en él. Son
+  decisiones distintas con propiedades distintas y hay que argumentar cuál.
+- `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` frente a
+  `…AfterFirstUnlockThisDeviceOnly`: la primera impide leer la identidad con el
+  dispositivo bloqueado, la segunda no. `ThisDeviceOnly` en las dos, porque una
+  identidad de dispositivo que viaja en un respaldo deja de identificar un
+  dispositivo.
+- Respaldo, restauración y migración en Android. Si la identidad viaja en un
+  respaldo, dos teléfonos presentan la misma; si no viaja, cambiar de teléfono la
+  pierde sin aviso. Hay que elegir y decirlo.
+
+Fuera de 4D.2 y sin fecha: atar el blob a un valor propio de la máquina, el paso
+de confianza, y que algo del producto llame al almacén.
 
 ## Provisional values
 
