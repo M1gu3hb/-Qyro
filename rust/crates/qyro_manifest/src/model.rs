@@ -539,6 +539,33 @@ fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
                 collides_with: first,
             });
         }
+
+        // Equality is only half of it. `a` and `a/b` fold to `"a"` and
+        // `"a\0b"`, which are different strings and were therefore accepted —
+        // even though a receiver would have to create `a` as a file and `a` as
+        // a directory, and whichever it did second would lose the other.
+        //
+        // The rule is a prefix rule. A key that is a proper prefix of the next
+        // one, *at a NUL boundary*, is that key's ancestor. The NUL matters:
+        // `"report"` is a prefix of `"reports\0..."` as a string and an
+        // ancestor of nothing, so a raw prefix test would refuse two unrelated
+        // files.
+        //
+        // Sorting is enough to make adjacency sufficient. NUL is the lowest
+        // byte no path may contain, so every descendant of `a` sorts
+        // immediately after `a` and before any other key beginning with `a`.
+        //
+        // Only a *file* ancestor is a conflict. A directory item with children
+        // is the ordinary shape of a tree.
+        if let Some(rest) = window[1].0.as_str().strip_prefix(window[0].0.as_str())
+            && rest.starts_with('\u{0}')
+            && items[window[0].1].kind == ItemKind::File
+        {
+            return Err(ManifestError::FileIsAlsoADirectory {
+                index: window[1].1,
+                ancestor: window[0].1,
+            });
+        }
     }
 
     // Identifier uniqueness is quadratic-free via a sorted copy: manifests are
