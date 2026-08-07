@@ -18,6 +18,10 @@ on:
       - "rust/crates/qyro_crypto/**"
       - "rust/crates/qyro_protocol/**"
       - "rust/tools/qyro_crypto_smoke/**"
+      # `rust/guards/source_guard.rs` is `include!`d into the test build of
+      # every crate this workflow exercises, so a change to it changes the
+      # result here and must re-run it (QYR-0045).
+      - "rust/guards/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/crypto-platform.yml"

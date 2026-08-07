@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - "apps/qyro/**"
+      # `rust/**` and not `rust/crates/**`: it also covers `rust/guards/`,
+      # `rust/tools/` and `rust/fuzz/`, which sit outside `crates` (QYR-0045).
       - "rust/**"
       - "Cargo.toml"
       - "Cargo.lock"

@@ -7,6 +7,11 @@ on:
       - ".github/workflows/android-runtime.yml"
       - "apps/qyro/**"
       - "rust/crates/qyro_ffi/**"
+      # `qyro_ffi` depends on `qyro_core`, so a change there changes the
+      # library this workflow loads. It was not listed, which meant the ABI
+      # check would not run for the one crate that can actually alter what
+      # Dart links (QYR-0045).
+      - "rust/crates/qyro_core/**"
       - "Cargo.*"
   push:
     # Any working branch, by pattern. Naming one is what QYR-0040 was:
@@ -28,6 +33,11 @@ on:
       - ".github/workflows/android-runtime.yml"
       - "apps/qyro/**"
       - "rust/crates/qyro_ffi/**"
+      # `qyro_ffi` depends on `qyro_core`, so a change there changes the
+      # library this workflow loads. It was not listed, which meant the ABI
+      # check would not run for the one crate that can actually alter what
+      # Dart links (QYR-0045).
+      - "rust/crates/qyro_core/**"
       - "Cargo.*"
 
 permissions:

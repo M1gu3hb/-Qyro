@@ -20,6 +20,11 @@ on:
     # thing STATUS.md has to name.
     branches: [main, 'claude/**']
 
+# No `paths:` filter, deliberately. This job is the one that has to run on every
+# push whatever changed — it is what says the workspace still builds, still
+# passes, and still agrees with its own documentation. A filter here is a filter
+# on "is the repository sound" (QYR-0045).
+
 permissions:
   contents: read
 

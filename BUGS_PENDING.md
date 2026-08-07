@@ -805,3 +805,27 @@
   build no longer computes the transcript ADR-0021 specifies**. Do not
   regenerate»
 - Fecha: 2026-08-07
+
+## QYR-0045 — Filtros de rutas que no cubren el código que el workflow construye
+
+- Plataforma: CI
+- Severidad: P2
+- Esperado: si cambia el código que un workflow compila, ese workflow corre
+- Actual: encontrado al comprobar QYR-0040. Un push documental disparó cuatro de
+  los seis, lo cual es correcto, pero al mirar por qué aparecieron dos huecos
+  reales:
+  - `android-runtime.yml` e `ios-runtime.yml` compilan `qyro_ffi`, que depende
+    de `qyro_core`, y `rust/crates/qyro_core/**` no estaba en ninguno de los
+    dos. Un cambio en el único crate que puede alterar lo que Dart enlaza no
+    disparaba la comprobación de ABI.
+  - `crypto-platform.yml` y `crypto-fuzz.yml` no listaban `rust/guards/**`, que
+    este mismo sprint introdujo y que se `include!` en el build de pruebas de
+    los tres crates que esos workflows ejercitan. Un cambio en el analizador
+    compartido cambia su resultado y no los disparaba
+- Resolución: las cuatro rutas añadidas. `platform-builds.yml` ya lo cubría con
+  `rust/**` y `ci.yml` no tiene filtro; los dos lo dicen ahora, porque
+  `rust/guards/` es un directorio nuevo fuera de `rust/crates/` y un lector que
+  compruebe la cobertura merece encontrar la respuesta
+- Estado: resuelto
+- Evidencia: los seis runs finales de STATUS.md
+- Fecha: 2026-08-07

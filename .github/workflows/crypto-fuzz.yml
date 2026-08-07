@@ -45,6 +45,10 @@ on:
       - "rust/crates/qyro_crypto/**"
       - "rust/crates/qyro_protocol/**"
       - "rust/crates/qyro_manifest/**"
+      # `rust/guards/source_guard.rs` is `include!`d into the test build of
+      # every crate this workflow exercises, so a change to it changes the
+      # result here and must re-run it (QYR-0045).
+      - "rust/guards/**"
       - ".github/workflows/crypto-fuzz.yml"
 
 permissions:
