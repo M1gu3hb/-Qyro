@@ -595,3 +595,213 @@
 - Estado: abierto
 - Dueño: el sprint que toque esos dos crates
 - Fecha: 2026-08-07
+
+## QYR-0024 — El decoder drenaba cada frame con un memmove del búfer entero
+
+- Plataforma: todas
+- Severidad: P1
+- Esperado: recibir frames cuesta un trabajo proporcional a los bytes que llegan
+- Actual: `next_frame` reclamaba el frame que acababa de entregar con
+  `self.buffer.drain(..total)`, que memmovea todo lo que queda detrás. Llenar el
+  búfer de frames mínimos y drenarlo cuesta Θ(n²/48). Medido con un contador
+  instrumentado: 21 868 heartbeats, 1 049 664 bytes empujados,
+  **11 476 501 344 bytes movidos**, 10 935 veces la entrada. Es tráfico válido:
+  ningún frame está mal formado y ningún limitador basado en validez lo vería
+- Resolución: cursor de lectura y compactación amortizada. Un frame entregado
+  solo mueve el cursor; el espacio se reclama en `compact`, y solo cuando los
+  bytes entrantes no caben o al menos la mitad del búfer está consumida. Esa
+  segunda condición es la amortización: una compactación mueve como mucho la
+  mitad del búfer y no puede repetirse hasta que se haya consumido otro tanto
+- Estado: resuelto
+- Evidencia: rojo en `9c4a1a2`. Después: 0 bytes movidos en el llenado-drenado, y
+  2 359 296 contra 2 596 608 empujados en el bucle con backlog, que es donde la
+  compactación corre de verdad. Enmienda a ADR-0016
+- Fecha: 2026-08-07
+
+## QYR-0027 — La capacidad del búfer llegaba al doble de su límite
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `buffer_capacity() <= MAX_BUFFER_LEN` siempre
+- Actual: `push` acotaba `len`, y `Vec::extend_from_slice` crece
+  geométricamente, así que goteando un byte por push la capacidad llegaba a
+  2 097 152 frente a `MAX_BUFFER_LEN` de 1 049 664. `wire_contract.rs:353` y
+  `property.rs:191` ya afirmaban lo contrario y pasaban porque nunca llenan el
+  búfer
+- Resolución: `reserve_for` conserva el doblado —que es lo que mantiene un push
+  amortizado O(1)— y lo recorta al techo. `reserve_exact` a secas habría sido
+  peor que el defecto: con pushes de un byte reasigna en cada byte
+- Estado: resuelto
+- Evidencia: `the_buffer_never_reserves_more_than_its_limit`, que llena el búfer
+  de verdad, rojo en `9c4a1a2`
+- Fecha: 2026-08-07
+
+## QYR-0036 — Sin denegación de pánico ni de indexado en los dos crates de parsing
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: ninguna ruta que analice bytes de un peer puede terminar el proceso
+- Actual: el sprint 4C.2 denegó la familia de pánico y `clippy::indexing_slicing`
+  en `qyro_crypto` y no en `qyro_protocol` ni en `qyro_manifest`, que son la
+  primera superficie que toca esos bytes
+- Resolución: denegación en los dos, más la guarda estructural. Aparecieron
+  **33 infracciones en `qyro_protocol`** (29 en `header.rs`, 3 en `envelope.rs`,
+  1 en `frame.rs`) y **22 en `qyro_manifest`** (18 en `model.rs`, 2 en
+  `codec.rs`, 2 en `path.rs`). Ninguna se silenció con `allow` salvo los módulos
+  de prueba dentro de cada crate. La guarda encontró además un
+  `debug_assert_eq!` en `codec.rs` que ningún lint de Clippy cubre, duplicando
+  un test que ya corre en todos los perfiles
+- Estado: resuelto
+- Evidencia: reintroducir `.expect(` en cualquier archivo de producción de
+  cualquiera de los dos hace fallar su guarda por nombre
+- Fecha: 2026-08-07
+
+## QYR-0037 — Correcciones aplicadas sin numerar
+
+- Plataforma: todas
+- Severidad: P3
+- Origen: auditoría externa del sprint 4C.1. **El identificador nunca entró en
+  este repositorio**, así que el contenido de esta entrada se reconstruye a
+  partir de la descripción del prompt del sprint 4C.3 y no de la auditoría
+  original, que no está aquí
+- Actual: parte del hallazgo se corrigió en el sprint 4C.2 sin numerarlo: la
+  comprobación redundante de `U+007F` eliminada, la documentación que decía
+  `cfg(test)` donde el atributo es `cfg(any(test, fuzzing))` corregida, y la
+  nota sobre `RUSTFLAGS` añadida a `fuzzing.rs`. Corregir sin numerar deja el
+  trabajo hecho y la trazabilidad rota: nadie puede comprobar qué se cerró
+- Resolución: registrado aquí y enlazado desde
+  `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`, que describe los tres cambios sin
+  haberles puesto identificador. La regla nueva de `check_docs_consistency`
+  impide que vuelva a ocurrir: un identificador citado sin entrada es un
+  BLOCKER
+- Estado: resuelto
+- Fecha: 2026-08-07
+
+## QYR-0038 — Cotas inalcanzables presentadas como cotas
+
+- Plataforma: todas
+- Severidad: P3
+- Origen: auditoría externa. Como QYR-0037, el identificador nunca entró en este
+  repositorio y el contenido se reconstruye del prompt del sprint 4C.3
+- Actual: `MAX_HASH_LEN` en `qyro_manifest` y `FrameError::FrameTooLarge` en
+  `qyro_protocol` se presentaban como límites vivos sin serlo
+- Resolución: distintas, porque los dos casos son distintos.
+  `MAX_HASH_LEN` **sí es alcanzable**, por el constructor y nunca por el cable
+  —`decode` lee exactamente `digest_len()` bytes, que son 0 o 32—, y ahora hay
+  dos pruebas que lo dicen y lo demuestran. La comprobación de `FrameTooLarge`
+  en `FrameHeader::parse` **no puede dispararse**: las cotas de payload y
+  trailer ya sujetan la suma. Se conserva, se documenta como inalcanzable con su
+  razón, y una aserción `const` fija la aritmética para que subir una constante
+  detenga el build en vez de convertir una rama muerta en una viva sin que nadie
+  se entere. La variante no está muerta: `FrameDecoder::next_frame` la construye
+  cuando un total declarado no cabe en un `usize`, inalcanzable en 64 bits y
+  alcanzable en 16
+- Estado: resuelto
+- Fecha: 2026-08-07
+
+## QYR-0039 — Hallazgo sin contenido registrado
+
+- Plataforma: desconocida
+- Severidad: desconocida
+- Actual: los prompts de los sprints 4C.2 y 4C.3 citan `QYR-0039` como no
+  objetivo declarado, y **su contenido no está en ninguna parte de este
+  repositorio**. No se sabe qué describe. Esta entrada existe para que el
+  identificador deje de ser una referencia colgante, no porque el hallazgo se
+  entienda
+- Workaround: ninguno posible sin saber qué es
+- Estado: abierto, **sin descripción**
+- Dueño: quien tenga la auditoría externa original
+- Acción concreta: copiar aquí el enunciado del hallazgo. Hasta entonces no se
+  puede ni cerrar ni evaluar
+- Fecha: 2026-08-07
+
+## QYR-0040 — El disparador de CI llevaba el nombre de la rama escrito a mano
+
+- Plataforma: CI
+- Severidad: P2
+- Esperado: los seis workflows corren solos sobre cualquier rama de trabajo
+- Actual: el sprint 4C.2 cerró QYR-0026 escribiendo el nombre de la rama de
+  entonces en los seis YAML. Eso hizo de «CI corre sobre la rama de trabajo» una
+  propiedad de *esa* rama y no del repositorio, y STATUS.md lo registró como lo
+  segundo. La rama siguiente heredaba el defecto original intacto.
+  `crypto-fuzz.yml` y `crypto-platform.yml` acumulaban ya dos nombres cada uno
+- Resolución: `branches: [main, 'claude/**']` en los seis. Un patrón, no un
+  nombre. `claude/**` y no `**`: cubrir cualquier rama del repositorio gasta
+  minutos de runner en trabajo que este proyecto no empezó. Regla nueva en
+  `check_docs_consistency` (Bash y PowerShell) que rechaza un nombre literal en
+  cualquier `branches:`
+- Estado: resuelto
+- Evidencia: los seis runs finales se dispararon por `push` sobre
+  `claude/qyro-resource-bounds-4c3`, un nombre que ningún YAML menciona
+- Fecha: 2026-08-07
+
+## QYR-0041 — Fecha incorrecta en la cita de Unicode 16.0.0
+
+- Plataforma: todas
+- Severidad: P3
+- Actual: `path.rs` y ADR-0019 databan Unicode 16.0.0 con la marca de tiempo
+  interna de `DerivedGeneralCategory.txt`, que es cuando se generó el archivo y
+  no cuando se publicó la versión. Unicode 16.0.0 se publicó el 2024-09-10
+- Resolución: fecha corregida en los dos sitios. La tabla en sí era y sigue
+  siendo correcta, comprobada punto por punto contra el archivo: 170 puntos de
+  código, veintiún rangos
+- Estado: resuelto
+- Fecha: 2026-08-07
+
+## QYR-0042 — La lista de exenciones de la guarda se satisfacía borrando el gate
+
+- Plataforma: todas
+- Severidad: P3
+- Esperado: quitar `#[cfg(test)]` de un módulo exento hace fallar la guarda
+- Actual: `guards.rs` llevaba un array `TEST_ONLY` de diez nombres escritos a
+  mano y `every_production_file_is_listed` aceptaba la pertenencia a ese array
+  como suficiente. Quitar `#[cfg(test)]` de `mod schema;` habría convertido
+  `schema.rs` en un archivo de producción exento de la guarda sin que nada
+  fallara: la misma forma de defecto que la guarda existe para cerrar
+- Resolución: las exenciones se derivan de las declaraciones `mod` mismas. El
+  gate *es* la exención, así que quitarlo mueve el archivo al conjunto de
+  producción en vez de eximirlo
+- Estado: resuelto
+- Evidencia: quitar `#[cfg(test)]` de `mod schema;` falla con «src/schema.rs is
+  compiled into a release build and no guard covers it»
+- Fecha: 2026-08-07
+
+## QYR-0043 — Identificadores sin entrada en el registro
+
+- Plataforma: todas
+- Severidad: P3
+- Actual: QYR-0037 y QYR-0038 tenían cero menciones en `BUGS_PENDING.md`,
+  `NEXT_STEPS.md`, `STATUS.md` y la auditoría del sprint. QYR-0024 y QYR-0027
+  estaban registrados en STATUS y NEXT_STEPS pero no en el registro, donde están
+  todos los demás. QYR-0039 se citaba como no objetivo y no existía en ninguna
+  parte
+- Resolución: una entrada por identificador, y una regla en
+  `check_docs_consistency` (Bash y PowerShell) que hace BLOCKER de cualquier
+  `QYR-00xx` citado sin entrada
+- Estado: resuelto
+- Evidencia: la regla falló con ocho hallazgos antes de escribirse estas
+  entradas, en `a1b61c4`
+- Fecha: 2026-08-07
+
+## QYR-0044 — «Regenera el vector» como consejo incondicional
+
+- Plataforma: todas
+- Severidad: P3
+- Actual: bajo la mutación del prefijo `u32`-BE del transcript, la suite imprimía
+  seis fallos: uno decía que el código debe cambiar y tres decían «the committed
+  vector is stale; regenerate it with …». La trampa sustancial ya estaba cerrada
+  —`the_transcript_is_what_the_specification_says_it_is` compara contra bytes
+  literales de ADR-0021 y regenerar no deja la suite en verde—, pero el mensaje
+  es lo que se lee primero, y decirle a alguien que regenere es decirle que
+  registre lo que el código produce ahora
+- Resolución: el mensaje del handshake es condicional de verdad, evaluado sobre
+  lo único que distingue los dos casos: si este build todavía calcula el
+  transcript que ADR-0021 especifica, comprobado con SHA-256 sobre bytes
+  literales. Si no lo calcula, dice «Do not regenerate». El documento AEAD no
+  tiene una comprobación equivalente de una línea, así que su consejo se
+  reformula como «if and only if» con la condición escrita
+- Estado: resuelto
+- Evidencia: bajo la mutación, el mensaje del handshake cambia a «**and this
+  build no longer computes the transcript ADR-0021 specifies**. Do not
+  regenerate»
+- Fecha: 2026-08-07
