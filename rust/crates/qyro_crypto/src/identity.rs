@@ -147,9 +147,15 @@ impl DeviceIdentity {
 
     /// Hands out the secret half, for a secure store and nothing else.
     ///
-    /// This is one of exactly two public paths in this crate that return key
-    /// material; `src/guards.rs` enumerates them by name and fails if a third
+    /// This is one of three public paths in this crate that return key
+    /// material; `src/guards.rs` enumerates them by name and fails if a fourth
     /// appears. See ADR-0024 §4.
+    ///
+    /// This said "one of exactly two" until the guard it cites was repaired.
+    /// Two was the count the guard could *see*: its markers missed
+    /// `aead/mod.rs::into_zeroizing_payload`, which had been public since
+    /// sprint 4C.1 (QYR-0053). The number here now comes from the list rather
+    /// than from what the list happened to catch.
     ///
     /// The seed is reconstructed from the signing key rather than kept beside
     /// it, so this type still holds one copy of the secret and not two.

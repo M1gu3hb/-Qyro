@@ -4,12 +4,14 @@
 //!
 //! # What exists and what does not
 //!
-//! The blob format and its refusals are implemented and tested. **No platform
-//! backend exists yet**: the Windows DPAPI wrapper is the next step, and until
-//! it lands nothing in this crate can persist anything. There is deliberately
-//! no in-memory backend outside `cfg(test)` — a working fake in the public API
-//! is one import away from becoming the thing a caller ships, which is the same
-//! reasoning that keeps `from_test_seed` crate-private in `qyro_crypto`.
+//! The blob format and its refusals are implemented and tested. **One platform
+//! backend exists**: `qyro_win_dpapi`, Windows only. There is none for Android
+//! and none for iOS, so on those two platforms nothing here persists anything.
+//!
+//! There is deliberately no in-memory backend outside `cfg(test)` — a working
+//! fake in the public API is one import away from becoming the thing a caller
+//! ships, which is the same reasoning that keeps `from_test_seed` crate-private
+//! in `qyro_crypto`.
 //!
 //! # What this crate never does
 //!
