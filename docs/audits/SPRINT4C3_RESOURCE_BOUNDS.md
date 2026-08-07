@@ -4,7 +4,7 @@
 - Rama: `claude/qyro-resource-bounds-4c3`
 - Base: `claude/qyro-audit-closure-4c2-9a3v4j` en
   `8725ab7cc2e5da9a2412f96e7bbc33a7ae57707b`
-- Alcance: QYR-0024, QYR-0027, QYR-0036 y QYR-0040 … QYR-0044.
+- Alcance: QYR-0024, QYR-0027, QYR-0036 y QYR-0040 … QYR-0045.
   **Este sprint no añade funcionalidad.**
 
 Nada consume todavía `qyro_protocol` ni `qyro_manifest`. Eso es exactamente
@@ -31,6 +31,7 @@ de implementarla.
 | QYR-0043 | citar un `QYR-00xx` sin entrada en el registro | `check_docs_consistency`, regla «Finding ledger» | `a1b61c4` |
 | QYR-0044 | borrar los prefijos `u32`-BE del transcript | el consejo cambia a «Do not regenerate» | solo bajo mutación |
 | QYR-0041 | — (una fecha; se comprueba leyendo la fuente, no mutando) | — | — |
+| QYR-0045 | — (filtros de rutas; se comprueba por ejecución, no mutando) | — | — |
 
 ### Lo que dijo cada mutación
 
@@ -50,6 +51,23 @@ de implementarla.
   covers it».
 - **QYR-0044.** «**and this build no longer computes the transcript ADR-0021
   specifies**. Do not regenerate».
+
+## QYR-0045, encontrado comprobando QYR-0040
+
+El primer push de cierre disparó **cuatro** de los seis. Eso es correcto —era un
+commit documental y los filtros de rutas existen para eso—, pero mirar por qué
+destapó dos huecos reales:
+
+- `android-runtime.yml` e `ios-runtime.yml` compilan `qyro_ffi`, que depende de
+  `qyro_core`, y ninguno listaba `rust/crates/qyro_core/**`. Un cambio en el
+  único crate que puede alterar lo que Dart enlaza no disparaba la comprobación
+  de ABI.
+- `crypto-platform.yml` y `crypto-fuzz.yml` no listaban `rust/guards/**`, que
+  este sprint introdujo y que se `include!` en el build de pruebas de los tres
+  crates que esos workflows ejercitan.
+
+Es la misma familia que QYR-0040: una condición de disparo que no cubre lo que
+debería, escrita a mano y correcta el día que se escribió.
 
 ## Coste, antes y después
 
