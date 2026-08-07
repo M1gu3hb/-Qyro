@@ -16,6 +16,11 @@ on:
   pull_request:
     paths:
       - "rust/crates/qyro_crypto/**"
+      # The identity store links qyro_crypto and will carry the Windows backend
+      # this workflow has to exercise. Listed the moment the crate existed, not
+      # the moment it broke: QYR-0045 is the record of that being forgotten
+      # twice, and a path filter is only ever wrong in the silent direction.
+      - "rust/crates/qyro_identity_store/**"
       - "rust/crates/qyro_protocol/**"
       - "rust/tools/qyro_crypto_smoke/**"
       # `rust/guards/source_guard.rs` is `include!`d into the test build of
@@ -48,6 +53,11 @@ on:
     branches: [main, 'claude/**']
     paths:
       - "rust/crates/qyro_crypto/**"
+      # The identity store links qyro_crypto and will carry the Windows backend
+      # this workflow has to exercise. Listed the moment the crate existed, not
+      # the moment it broke: QYR-0045 is the record of that being forgotten
+      # twice, and a path filter is only ever wrong in the silent direction.
+      - "rust/crates/qyro_identity_store/**"
       - "rust/crates/qyro_protocol/**"
       - "rust/tools/qyro_crypto_smoke/**"
       - "Cargo.toml"
