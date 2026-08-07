@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T23:10:00Z
+- Updated UTC: 2026-08-07T23:40:00Z
 - Branch: claude/qyro-secure-storage-4d1
-- Verified commit: 91355a84f54c210423d1b4b5a34e3f2a8be78a47
+- Verified commit: d20afd7a78566755d1c325c7e4e3226b7cc1fc40
 - Milestone: **una identidad sobrevive al cierre del proceso en Windows**,
   ejecutado en CI en dos invocaciones separadas. La persistencia está
   **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y en iOS**, y nada
@@ -765,10 +765,45 @@ pueden caer los fallos no es evidencia, es un resumen favorable.
 | **CI #128** | **`b731276`** | **31215102373** | **FAILURE**, job `documentation`, misma regla de deriva |
 | Platform builds #35 | `b731276` | 31215102388 | **success** |
 | **CI #129** | **`91355a8`** | **31215543466** | **success**, 4/4 — la rama vuelve al verde |
+| **CI #130** | **`d20afd7`** | **31217230007** | **success** |
+| **Platform builds #36** | **`d20afd7`** | **31217226979** | **success** |
+| **Crypto platform #24** | **`d20afd7`** | **31217226445** | **success** |
+| **Crypto fuzz #12** | **`d20afd7`** | **31217226480** | **success** |
+| **Android runtime ABI #60** | **`d20afd7`** | **31217227701** | **success** |
+| **iOS runtime ABI #31** | **`d20afd7`** | **31217226706** | **success** |
+
+### Cierre del sprint: los seis sobre `d20afd7`
+
+**Los seis workflows en success sobre un mismo commit, los seis por `push`.** Es
+la evidencia de cierre de 4D.1, y el ancla apunta ahí.
+
+| Workflow | Run | Evento | Conclusión |
+|---|---|---|---|
+| CI | 31217230007 | `push` | **success**, 4/4 jobs |
+| Platform builds | 31217226979 | `push` | **success** |
+| Crypto platform | 31217226445 | `push` | **success** — incluye la persistencia en dos procesos |
+| Crypto fuzz | 31217226480 | `push` | **success** |
+| Android runtime ABI | 31217227701 | `push` | **success**, emulador |
+| iOS runtime ABI | 31217226706 | `push` | **success**, XCTest en simulador |
+
+Corrieron los seis porque `d20afd7` toca `qyro_crypto`, `qyro_identity_store` y
+`qyro_core`, que entre los tres cubren los filtros de rutas de los cinco
+workflows filtrados; `ci.yml` no filtra. **Ese reparto es deliberado y su commit
+lo dice**: sin él, un commit documental dispara solo CI, que es correcto y no
+sirve como evidencia de los seis. Lo que el commit lleva son tres correcciones
+reales de comentarios que este sprint volvió falsos, no un toque para activar un
+filtro.
+
+La persistencia se ejecutó **dos veces** sobre commits distintos: `b731276` (run
+31215102331) y `d20afd7` (run 31217226445). La segunda no reemplaza a la primera
+ni la primera a la segunda; están las dos porque las dos ocurrieron.
 
 **Los seis sobre `3b2cf61`, por `push`, y los seis en success.** Es el primer
 commit de este sprint con evidencia de los seis, y por eso el ancla apuntó ahí
-durante ese tramo. Corrieron los seis porque ese commit tocó `rust/crates/**`,
+durante ese tramo. **No es la evidencia de cierre**: en `3b2cf61` no existía
+todavía el crate de plataforma, así que aquellos seis dicen que el repositorio
+seguía en pie, no que algo persistiera. Los seis de cierre son los de `d20afd7`,
+más abajo. Corrieron los seis porque ese commit tocó `rust/crates/**`,
 incluido el filtro de rutas que `940b49d` añadió para que `crypto-platform.yml`
 vigile el crate nuevo (QYR-0045).
 
