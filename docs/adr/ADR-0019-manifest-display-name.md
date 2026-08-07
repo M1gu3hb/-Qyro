@@ -80,7 +80,7 @@ transferencia. `lib.rs` y `THREAT_MODEL.md` afirmaban lo mismo que este ADR.
 > `Cf`, con `PathError::FormatCharacter`, además de los `Cc` que ya rechazaba.
 
 La tabla está transcrita de `extracted/DerivedGeneralCategory.txt` de Unicode
-16.0.0 (2024-04-30): veintiún rangos, 170 puntos de código, citados en el propio
+16.0.0, publicado el 2024-09-10: veintiún rangos, 170 puntos de código, citados en el propio
 código fuente y comprobados contra el archivo.
 
 ### Por qué la categoría entera, y no solo los overrides
@@ -127,3 +127,17 @@ ruta que analiza bytes de un peer antes de tocar el disco.
 unitarias en `path.rs` que fijan que la tabla está ordenada, es disjunta y
 responde en ambos extremos de cada rango: una búsqueda binaria sobre una tabla
 mal formada falla en silencio.
+
+### Corrección de la cita — sprint 4C.3 (QYR-0041)
+
+Esta enmienda databa Unicode 16.0.0 el **30 de abril de 2024**. Esa es la fecha
+estampada dentro de `DerivedGeneralCategory.txt`, que es cuando se generó el
+archivo, no cuando se publicó la versión: Unicode 16.0.0 se publicó el
+**2024-09-10**.
+
+La fecha antigua se escribe en palabras y no en formato ISO a propósito: una
+cita literal del valor equivocado seguiría apareciendo en cualquier búsqueda que
+vaya a comprobar que ya no está. La
+tabla en sí es correcta —comprobada punto por punto contra el archivo, 170
+puntos de código— y no cambia. Lo que cambia es la cita, en el ADR y en
+`path.rs`.

@@ -350,8 +350,19 @@ fn the_committed_vector_is_exactly_what_regeneration_produces() {
     let regenerated = render(&build_document());
     assert_eq!(
         regenerated, COMMITTED,
-        "the committed AEAD vector is stale; regenerate it with \
-         `cargo test -p qyro_crypto generate_aead_vector -- --ignored --nocapture`"
+        // QYR-0044. Not "stale; regenerate it": that reads as an instruction
+        // whichever side is wrong, and regenerating a vector when the *code*
+        // drifted destroys the only record of the format the ADR froze. There
+        // is no one-line primitives check for the whole AEAD document the way
+        // there is for the handshake transcript, so the condition is stated
+        // rather than evaluated.
+        "the committed AEAD vector does not match what this build produces. \
+         Regenerate it with `cargo test -p qyro_crypto generate_aead_vector -- \
+         --ignored --nocapture` **if and only if** the format change was \
+         intended and ADR-0022 already records it. If \
+         `every_recorded_value_verifies_against_the_primitives` is failing too, \
+         the code has drifted from the specification and regenerating would \
+         only record the drift."
     );
 }
 

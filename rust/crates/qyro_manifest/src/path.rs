@@ -265,9 +265,15 @@ fn validate_segment(segment: &str) -> Result<(), PathError> {
 /// # Source
 ///
 /// Transcribed from the Unicode Character Database,
-/// `extracted/DerivedGeneralCategory.txt` of Unicode 16.0.0 (2024-04-30), by
-/// taking every line whose category is `Cf` in file order. The table is sorted
-/// and disjoint, which [`is_unicode_format`] relies on and a test checks.
+/// `extracted/DerivedGeneralCategory.txt` of Unicode 16.0.0, published
+/// 2024-09-10, by taking every line whose category is `Cf` in file order. The
+/// table is sorted and disjoint, which [`is_unicode_format`] relies on and a
+/// test checks.
+///
+/// The citation used to carry the date stamped inside that data file, which is
+/// when the file was generated and not when the version was published; it read
+/// as a release date and was wrong by four months (QYR-0041). The contents were
+/// and are correct — checked point by point against the file.
 ///
 /// A hand-written table rather than a new dependency, deliberately. This code
 /// runs on peer-supplied bytes before anything reaches the filesystem, so

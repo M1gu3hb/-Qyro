@@ -39,6 +39,13 @@ pub enum FrameError {
         limit: u32,
     },
     /// Header, payload and trailer together exceed [`crate::MAX_FRAME_LEN`].
+    ///
+    /// Constructed in one place: `FrameDecoder::next_frame`, where a declared
+    /// total does not fit in a `usize`. That is unreachable on a 64-bit target
+    /// and reachable on a 16-bit one. The sibling check in `FrameHeader::parse`
+    /// cannot fire at all — the payload and trailer bounds already hold the sum
+    /// down, pinned by a `const` assertion there — and says so where it sits
+    /// (QYR-0043).
     FrameTooLarge {
         /// Total frame length implied by the header.
         declared: u64,

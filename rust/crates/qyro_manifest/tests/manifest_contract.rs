@@ -1,9 +1,9 @@
 //! Security and canonicity contracts for transfer manifests.
 
 use qyro_manifest::{
-    Compression, HashAlgorithm, HashMetadata, ItemKind, MANIFEST_MAGIC, MAX_ITEMS, MAX_PATH_LEN,
-    MAX_SEGMENT_LEN, ManifestError, ManifestField, ManifestItem, PathError, RelativePath,
-    TransferManifest, codec,
+    Compression, HashAlgorithm, HashMetadata, ItemKind, MANIFEST_MAGIC, MAX_HASH_LEN, MAX_ITEMS,
+    MAX_PATH_LEN, MAX_SEGMENT_LEN, ManifestError, ManifestField, ManifestItem, PathError,
+    RelativePath, TransferManifest, codec,
 };
 
 /// Every file needs a final digest, so fixtures carry a deterministic one.
@@ -410,6 +410,53 @@ fn hash_length_must_match_its_algorithm() {
         HashMetadata::new(HashAlgorithm::None, vec![0; 32]),
         Err(ManifestError::InvalidHashLength { .. })
     ));
+}
+
+#[test]
+fn a_digest_longer_than_the_hash_limit_is_rejected() {
+    // QYR-0043. `MAX_HASH_LEN` was a bound with no test, which is how a bound
+    // becomes a comment. It is reachable — but only through the constructor,
+    // never off the wire, and saying which is the point.
+    let oversize = HashMetadata::new(HashAlgorithm::Sha256, vec![0x11; MAX_HASH_LEN + 1]);
+    assert!(
+        matches!(
+            oversize,
+            Err(ManifestError::FieldTooLong {
+                field: ManifestField::Hash,
+                length: 65,
+                limit: 64,
+            })
+        ),
+        "a digest past MAX_HASH_LEN must be refused, got {oversize:?}"
+    );
+
+    // The wire cannot reach it. `decode` reads exactly `algorithm.digest_len()`
+    // bytes, which is 0 or 32, so no manifest can declare a 65-byte digest. The
+    // check guards the constructor, and this is where a caller meets it.
+    assert_eq!(HashAlgorithm::Sha256.digest_len(), 32);
+    assert_eq!(HashAlgorithm::None.digest_len(), 0);
+}
+
+#[test]
+fn a_digest_that_does_not_match_its_algorithm_is_rejected() {
+    // The neighbouring rule, and the one the wire *can* reach: an algorithm
+    // that implies 32 bytes with anything else behind it.
+    for (algorithm, digest_len, expected) in [
+        (HashAlgorithm::Sha256, 31usize, 32usize),
+        (HashAlgorithm::Sha256, 33, 32),
+        (HashAlgorithm::Sha256, 0, 32),
+        (HashAlgorithm::None, 32, 0),
+    ] {
+        let result = HashMetadata::new(algorithm, vec![0x22; digest_len]);
+        assert!(
+            matches!(
+                result,
+                Err(ManifestError::InvalidHashLength { length, expected: e })
+                    if length == digest_len && e == expected
+            ),
+            "{algorithm:?} with {digest_len} bytes must be refused, got {result:?}"
+        );
+    }
 }
 
 #[test]

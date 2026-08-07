@@ -357,11 +357,44 @@ fn generate_handshake_vector() {
 #[test]
 fn the_committed_vector_is_exactly_what_regeneration_produces() {
     let regenerated = render(&build_document());
-    assert_eq!(
-        regenerated, COMMITTED,
-        "the committed handshake vector is stale; regenerate it with \
-         `cargo test -p qyro_crypto generate_handshake_vector -- --ignored --nocapture`"
-    );
+    assert_eq!(regenerated, COMMITTED, "{}", regeneration_advice());
+}
+
+/// What to say when the committed vector and the code disagree.
+///
+/// QYR-0044. This used to read "the committed handshake vector is stale;
+/// regenerate it with …", unconditionally. Telling somebody to regenerate is
+/// telling them to record whatever the code now produces. That is right when
+/// the format changed on purpose and the ADR already says so. It is exactly
+/// wrong when the code has drifted from the ADR — then the committed file is
+/// the only thing still holding the specification, and regenerating destroys
+/// the evidence.
+///
+/// So the advice is conditional on the thing that tells the two apart: whether
+/// this build still computes the transcript ADR-0021 specifies, checked here
+/// against SHA-256 over literal bytes rather than against the code that
+/// produced them.
+fn regeneration_advice() -> String {
+    let initiator_hello = [0xA1u8; HELLO_UNSIGNED_LEN];
+    let responder_unsigned = [0xB2u8; HELLO_UNSIGNED_LEN];
+    let matches_the_adr = base_transcript(&initiator_hello, &responder_unsigned)
+        == base_transcript_from_primitives(&initiator_hello, &responder_unsigned);
+
+    if matches_the_adr {
+        "the committed handshake vector does not match what this build \
+         produces, and the transcript still agrees with ADR-0021. If the format \
+         change was intended and the ADR already records it, regenerate with \
+         `cargo test -p qyro_crypto generate_handshake_vector -- --ignored \
+         --nocapture`. If it was not, the code changed and the file is right."
+            .to_owned()
+    } else {
+        "the committed handshake vector does not match what this build \
+         produces, **and this build no longer computes the transcript ADR-0021 \
+         specifies**. Do not regenerate: the committed file is the only thing \
+         still holding the specification, and recording the new output would \
+         only record the disagreement. Fix the code, or amend the ADR first."
+            .to_owned()
+    }
 }
 
 // ------------------------------------------------------------------- the schema

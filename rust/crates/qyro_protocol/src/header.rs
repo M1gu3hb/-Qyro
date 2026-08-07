@@ -34,6 +34,15 @@ pub struct FrameHeader {
     sequence: u64,
 }
 
+/// The arithmetic behind the frame-length check in `parse`.
+///
+/// A header this crate accepts declares at most `MAX_PAYLOAD_LEN` of payload
+/// and at most `MAX_TRAILER_LEN` of trailer, on top of a fixed `HEADER_LEN`.
+/// While that sum stays under `MAX_FRAME_LEN`, the check there cannot fire; the
+/// day somebody raises one of the constants, this stops the build rather than
+/// silently making a dead branch live.
+const _: () = assert!(HEADER_LEN + MAX_PAYLOAD_LEN + MAX_TRAILER_LEN <= MAX_FRAME_LEN);
+
 /// Copies a fixed-width field out of the fixed-width header.
 ///
 /// Offsets and widths are compile-time constants and the input is an array, so
@@ -449,6 +458,23 @@ impl FrameHeader {
             sequence: u64::from_be_bytes(field::<40, 8>(bytes)),
         };
 
+        // **This cannot fire, and that is proved rather than asserted.**
+        // `payload_len` was already bounded by `MAX_PAYLOAD_LEN` and
+        // `trailer_len` by `MAX_TRAILER_LEN` — both above, both before any
+        // arithmetic — and `HEADER_LEN` is fixed, so the sum is bounded by
+        // construction. The `const` assertion below is what keeps that true:
+        // raising any of the three past the frame limit stops the build instead
+        // of turning this into a live check nobody noticed had become
+        // necessary.
+        //
+        // Kept rather than deleted because the arithmetic is the argument, not
+        // the check, and a reader who does not reconstruct the arithmetic
+        // deserves to find the bound stated where the bound applies. Recorded
+        // as QYR-0043: a bound that cannot fire must say so.
+        //
+        // `FrameError::FrameTooLarge` is *not* dead. `FrameDecoder::next_frame`
+        // constructs it where a declared total does not fit in a `usize`, which
+        // is unreachable on a 64-bit target and reachable on a 16-bit one.
         let total = header.total_len();
         let frame_limit = MAX_FRAME_LEN as u64;
         if total > frame_limit {
