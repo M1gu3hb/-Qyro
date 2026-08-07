@@ -180,17 +180,24 @@ fn a_single_flipped_byte_is_a_typed_error_against_dpapi() {
              this is not QYR-0059 — it is a new hole."
         );
     }
-    // And the set is small. If a Windows update made most of the wrapper
-    // malleable, this is what would say so.
-    assert!(
-        survivors.len() <= 16,
-        "{} positions survived corruption, which is too many to call a header \
-         quirk: {survivors:?}",
-        survivors.len()
-    );
-    println!(
-        "QYR-0059: {} surviving position(s): {survivors:?}",
-        survivors.len()
+    // The survivors are exactly one field, not a scattering: sixteen contiguous
+    // bytes at wrapper offset 4..20, which is the provider GUID. DPAPI neither
+    // authenticates nor consults it.
+    //
+    // An exact set, not a bound. The previous version asserted "at most sixteen
+    // positions", a number extrapolated from a sample of one — the test used to
+    // panic on the first survivor, so byte 20 bit 0 was all anyone had seen. The
+    // real figure is 128. A ceiling that happens to hold is not a property, and
+    // this one would have kept holding while hiding eight times as much.
+    let expected: Vec<(usize, u8)> = PROVIDER_GUID_RANGE
+        .flat_map(|position| (0..8u8).map(move |bit| (position, bit)))
+        .collect();
+    assert_eq!(
+        survivors, expected,
+        "the set of positions DPAPI ignores is not the provider GUID at blob \
+         bytes {PROVIDER_GUID_RANGE:?}. A different set means either a different \
+         Windows version or a hole somewhere new, and both deserve to fail here \
+         rather than fit under a ceiling."
     );
 
     // The untouched blob still opens, so the sweep was not passing because
