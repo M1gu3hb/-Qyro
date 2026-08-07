@@ -209,6 +209,18 @@ pub enum ManifestError {
         /// Index of the item it collides with.
         collides_with: usize,
     },
+    /// One item is a file and also the parent directory of another item.
+    ///
+    /// Distinct from [`ManifestError::PortableCollision`], which is two names
+    /// that fold to the *same* path. This is two names at different depths that
+    /// a receiver cannot both create: it would have to write `a` as a file and
+    /// `a` as a directory, and whichever it does second loses the other.
+    FileIsAlsoADirectory {
+        /// Index of the item nested inside the file.
+        index: usize,
+        /// Index of the file that is also its parent directory.
+        ancestor: usize,
+    },
     /// A string field exceeded its limit.
     FieldTooLong {
         /// Which field.
@@ -342,6 +354,10 @@ impl fmt::Display for ManifestError {
             } => write!(
                 formatter,
                 "item {index} collides with item {collides_with} on a case-insensitive or normalizing filesystem"
+            ),
+            Self::FileIsAlsoADirectory { index, ancestor } => write!(
+                formatter,
+                "item {index} is nested inside item {ancestor}, which is a file"
             ),
             Self::FieldTooLong {
                 field,
