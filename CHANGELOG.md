@@ -4,6 +4,77 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Security (sprint 4C.3)
+
+- El decoder de `qyro_protocol` ya no es cuadrático. `next_frame` reclamaba cada
+  frame entregado con `drain(..total)`, que memmovea todo lo que queda detrás,
+  así que un peer enviando heartbeats bien formados —tráfico válido, ningún
+  error, nada que un limitador basado en validez vea— hacía trabajar al bucle de
+  recepción con el cuadrado de lo que enviaba. Medido: 21 868 frames,
+  1 049 664 bytes empujados, **11 476 501 344 bytes movidos**. Ahora 0 en esa
+  forma y 2 359 296 sobre 2 596 608 en el bucle con backlog, que es donde la
+  compactación corre de verdad (QYR-0024, ADR-0016 enmendado).
+- `buffer_capacity()` ya no supera `MAX_BUFFER_LEN`. Goteando un byte por push
+  llegaba a 2 097 152 frente a 1 049 664, y dos pruebas del repositorio ya
+  afirmaban lo contrario porque nunca llenaban el búfer (QYR-0027).
+- Ninguna ruta de producción de `qyro_protocol` ni de `qyro_manifest` puede
+  terminar el proceso. Son la primera superficie que toca los bytes de un peer y
+  no tenían ninguna de las denegaciones que `qyro_crypto` lleva desde 4C.2: 33 y
+  22 infracciones respectivamente (QYR-0036).
+
+### Added (sprint 4C.3)
+
+- `rust/guards/source_guard.rs`: el análisis de la guarda anti-pánico,
+  compartido por los tres crates con `include!`. Un archivo, porque un análisis
+  duplicado son tres análisis que pueden discrepar sobre qué es código de
+  producción — que es justo la deriva que la guarda existe para detectar.
+- Pruebas de coste del decoder que cuentan bytes movidos en vez de cronometrar:
+  un reloj de pared en un runner compartido mide el runner.
+- Cinco formas adversariales fijadas en el decoder: búfer lleno de frames
+  mínimos, el mismo goteando un byte por push, un frame máximo goteando un byte
+  por push, un frame mayor que un techo personalizado (rechazado y envenenado,
+  nunca esperado), y frames válidos alternando con basura.
+- Dos reglas nuevas en `check_docs_consistency` (Bash y PowerShell): un nombre
+  de rama literal en cualquier `branches:` es un BLOCKER (QYR-0040), y un
+  `QYR-00xx` citado sin entrada en `BUGS_PENDING.md` también (QYR-0043).
+
+### Changed (sprint 4C.3)
+
+- Los seis workflows disparan sobre `[main, 'claude/**']`. El sprint 4C.2 había
+  escrito el nombre de la rama de entonces en los seis, lo que hacía de «CI
+  corre sobre la rama de trabajo» una propiedad de esa rama y no del
+  repositorio (QYR-0040).
+- Las exenciones de la guarda se derivan de las declaraciones `mod` en vez de
+  una lista escrita a mano, así que quitar un `#[cfg(test)]` mueve el archivo al
+  conjunto de producción en vez de eximirlo (QYR-0042).
+- El consejo de regenerar un vector es condicional: si este build ya no calcula
+  el transcript que ADR-0021 especifica, dice «Do not regenerate», porque el
+  archivo comprometido es entonces lo único que sostiene la especificación
+  (QYR-0044).
+- `ParsedHeader::parse` toma un `&[u8; HEADER_LEN]` en vez de comparar una
+  longitud y confiar en ella cuarenta veces.
+
+### Removed (sprint 4C.3)
+
+- El `debug_assert_eq!` al final de `codec::encode`. Duplicaba un invariante que
+  `encoded_len_matches_the_bytes_actually_produced` ya fija en todos los
+  perfiles, y lo hacía en una forma ausente de un build de release y letal en
+  uno de debug. Ningún lint de Clippy cubre la familia `debug_assert`; lo
+  encontró la guarda estructural.
+
+### Fixed (sprint 4C.3)
+
+- La cita de Unicode 16.0.0 llevaba la fecha de generación del archivo de datos
+  en lugar de la de publicación de la versión, equivocada por cuatro meses
+  (QYR-0041).
+- `MAX_HASH_LEN` y `FrameError::FrameTooLarge` se presentaban como cotas vivas.
+  El primero lo es —por el constructor, nunca por el cable— y ahora tiene
+  prueba; la comprobación del segundo no puede dispararse, lo dice donde está, y
+  una aserción `const` fija la aritmética que lo garantiza (QYR-0038).
+- Diez identificadores `QYR-00xx` sin entrada en el registro, incluidos dos que
+  nunca habían entrado en este repositorio y uno cuyo contenido sigue sin
+  conocerse y se registra como tal (QYR-0043).
+
 ### Security (sprint 4C.2)
 
 - `qyro_manifest` rechaza toda la categoría general Unicode `Cf` en una ruta,

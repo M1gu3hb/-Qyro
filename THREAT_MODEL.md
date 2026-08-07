@@ -30,7 +30,9 @@ Contenido, nombres/rutas, claves, identidad local, confianza, historial, tempora
 | Nombre no portable | caracteres ilegales en Windows rechazados en todas las plataformas |
 | Frame que miente sobre su protección | `ENCRYPTED` solo lo activa el sellado, con tag |
 | Desincronización por mensaje nuevo | tipo desconocido se consume delimitado, no envenena |
-| Pánico provocado por un peer | **ningún** archivo de producción de `qyro_crypto` tiene `panic!`, `unreachable!`, `expect`, `assert!` ni indexado sin comprobar; un lint `deny` lo mantiene así por módulo y `crate::guards` lee los doce archivos, incluido uno que nadie recordara anotar (QYR-0033) |
+| Coste cuadrático con tráfico válido | El decoder drena con un cursor y compacta de forma amortizada: un byte se copia un número acotado de veces entre entrar al búfer y salir de él (ADR-0016 enmendado, QYR-0024) | `draining_a_full_buffer_copies_a_bounded_number_of_bytes`, `a_socket_loop_with_a_backlog_stays_bounded` |
+| Reserva que supera su propio techo | `push` conserva el doblado y lo recorta a `MAX_BUFFER_LEN`, con una prueba que llena el búfer de verdad (QYR-0027) | `the_buffer_never_reserves_more_than_its_limit` |
+| Pánico provocado por un peer | **ningún** archivo de producción de `qyro_crypto`, `qyro_protocol` ni `qyro_manifest` tiene `panic!`, `unreachable!`, `expect`, `assert!` ni indexado sin comprobar; un lint `deny` lo mantiene así por módulo y una guarda estructural compartida lee los veintiocho archivos de los tres crates, incluido uno que nadie recordara anotar (QYR-0033, QYR-0036) |
 | Texto claro que sobrevive al frame | el búfer de `open` y `AuthenticatedFrame::payload` son `Zeroizing<Vec<u8>>`; no hay accesor que entregue un `Vec<u8>` desnudo |
 | Sealer que continúa tras un fallo interno | cualquier error lo envenena de forma permanente, así que no reintenta con una secuencia ya usada |
 | Corrupción | AEAD por chunk y SHA-256 final |

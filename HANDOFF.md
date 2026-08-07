@@ -5,30 +5,35 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-audit-closure-4c2-9a3v4j`, que continúa
-   `claude/qyro-crypto-platform-hardening` y cierra una auditoría independiente
+2. Confirmar la rama `claude/qyro-resource-bounds-4c3`, que continúa
+   `claude/qyro-audit-closure-4c2-9a3v4j` y acota el coste de los dos parsers
    sin añadir funcionalidad.
 
-   El nombre lleva un sufijo de sesión. El prompt del sprint pedía
-   `claude/qyro-audit-closure-4c2`; la rama asignada al agente fue
-   `claude/qyro-audit-closure-4c2-9a3v4j`, y se usó esa, porque empujar a otra
-   rama sin permiso explícito no es una decisión que un agente deba tomar por su
-   cuenta. Los seis workflows nombran esta rama en su `push: branches:`.
+   **Los workflows ya no nombran ninguna rama.** Disparan sobre
+   `[main, 'claude/**']`, así que una rama nueva con ese prefijo tiene CI sin
+   tocar un solo YAML. Hasta el sprint 4C.3 el nombre estaba escrito a mano en
+   los seis archivos, y cada sprint heredaba el defecto del anterior
+   (QYR-0040). Una regla de `check_docs_consistency` rechaza ahora un nombre
+   literal en cualquier `branches:`.
 3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
    más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
    (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
    (handshake), ADR-0022 (AEAD de frames, con sus tres enmiendas) y ADR-0023
    (harness de criptografía por plataforma). Las especificaciones están en
    `docs/protocols/` y `docs/security/`; las auditorías de los tres últimos
-   sprints, en `docs/audits/SPRINT4C_AEAD_AUDIT.md`,
-   `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md` y
-   `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`. Esta última lleva la tabla de
+   sprints, en `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`,
+   `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md` y
+   `docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md`. La última lleva los números de
+   coste del decoder antes y después, medidos con el mismo método, y la
+   advertencia que costó descubrir: una mutación que no toca el camino que la
+   prueba recorre sale verde y no prueba nada. Esta última lleva la tabla de
    mutación del sprint 4C.2: hallazgo, mutación aplicada, prueba que falló y
    commit en que estuvo roja. Léela antes de tocar `qyro_manifest` o
    `qyro_crypto`; explica por qué varias comprobaciones están escritas de una
    forma que parece rebuscada.
 
-   ADR-0017, ADR-0019 y ADR-0021 llevan enmiendas del sprint 4C.2. Las
+   ADR-0016 lleva la enmienda de coste del sprint 4C.3, y ADR-0017, ADR-0019 y
+   ADR-0021 las del 4C.2 —con la fecha de Unicode corregida en 4C.3. Las
    afirmaciones anteriores que corrigen están marcadas como corregidas, no
    borradas.
 4. Leer NEXT_STEPS.md y ADR relacionadas.

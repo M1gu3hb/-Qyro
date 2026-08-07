@@ -23,22 +23,19 @@
      y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
      lo que se está afirmando.
 
-## P0 — siguiente sprint (4C.3)
+## P0 — siguiente sprint (4D.1)
 
-- **Cotas de recursos de `qyro_protocol`.** Los dos hallazgos que el sprint 4C.2
-  dejó fuera a propósito, para que un fallo de CI siguiera diciendo qué se
-  rompió.
-  - QYR-0024: el decoder hace `drain(..total)` por frame y es cuadrático.
-    1 049 616 bytes de frames mínimos cuestan 3,62 s en `--release`.
-  - QYR-0027: `buffer_capacity` alcanza 2 097 152 frente a
-    `MAX_BUFFER_LEN = 1 049 664`, y las pruebas del repositorio afirman lo
-    contrario sin llenar nunca el búfer.
-  - Aceptación: una prueba que mide y falla con la implementación cuadrática, y
-    otra que llena el búfer de verdad. Ninguna puede pasar antes de la
-    corrección.
-- **QYR-0036**: denegar `clippy::indexing_slicing` y la familia de pánico en
-  `qyro_protocol` y `qyro_manifest`, que son la primera superficie que toca los
-  bytes de un peer. El sprint 4C.2 lo hizo solo en `qyro_crypto`.
+- **Almacenamiento seguro, primera plataforma.** Una ADR que resuelva las cuatro
+  preguntas abiertas —backup/restore y migración en Android Keystore;
+  `WhenUnlockedThisDeviceOnly` frente a `AfterFirstUnlockThisDeviceOnly` en iOS
+  y si el Secure Enclave entra, que al admitir solo P-256 obliga a decidir si la
+  identidad persistida es la misma clave envuelta o una distinta; DPAPI frente a
+  CNG en Windows y qué pasa tras un cambio de contraseña de dominio; y el
+  formato del blob, con versión, AAD y detección de corrupción—, más el trait de
+  almacenamiento y **una sola** plataforma detrás de él.
+- **QYR-0039**: recuperar el enunciado del hallazgo. Está citado como no
+  objetivo por dos prompts de sprint y su contenido no está en este repositorio,
+  así que no se puede ni cerrar ni evaluar.
 
 ## P1
 
@@ -72,6 +69,37 @@
 
 - RaptorQ/QR adaptativo.
 - Wi-Fi Direct, Multipeer y Bluetooth experimental.
+
+## Completado el 2026-08-07 (sprint 4C.3, cotas de recursos)
+
+No añadió funcionalidad. Corrigió dos cotas y extendió una guarda, todo en la
+ruta que tocará los bytes de un peer, y todo antes de que exista un consumidor
+— que es exactamente cuándo conviene, porque el único perjudicado es una prueba.
+
+- **El decoder ya no es cuadrático.** `next_frame` reclamaba cada frame
+  entregado con `drain(..total)`, que memmovea todo lo que queda detrás. Llenar
+  el búfer de heartbeats y drenarlo movía **11 476 501 344 bytes** para
+  1 049 664 empujados; ahora mueve 0, y el bucle realista con backlog pasó de
+  9,8 GB a 2 359 296 sobre 2 596 608. Contado, no cronometrado (QYR-0024,
+  ADR-0016 enmendado).
+- **La capacidad del búfer ya no dobla su límite.** Llegaba a 2 097 152 frente a
+  `MAX_BUFFER_LEN` de 1 049 664, y dos pruebas ya afirmaban lo contrario sin
+  llenar nunca el búfer (QYR-0027).
+- **`qyro_protocol` y `qyro_manifest` no pueden terminar el proceso.** 33 y 22
+  infracciones respectivamente, ninguna silenciada; la guarda encontró además un
+  `debug_assert_eq!` que ningún lint cubre (QYR-0036).
+- **Las exenciones de la guarda se derivan del código.** Quitar un
+  `#[cfg(test)]` mueve el archivo al conjunto de producción en vez de eximirlo
+  (QYR-0042).
+- **Los seis workflows corren sobre cualquier rama `claude/**`.** En 4C.2 el
+  nombre de la rama estaba escrito a mano en los seis YAML, así que la rama
+  siguiente heredaba el defecto entero (QYR-0040).
+- Registro completo: un `QYR-00xx` citado sin entrada es ahora un BLOCKER
+  (QYR-0043); fecha de Unicode corregida (QYR-0041); consejo de regeneración
+  condicionado (QYR-0044); `MAX_HASH_LEN` con prueba y `FrameTooLarge`
+  documentado como inalcanzable donde lo es (QYR-0038).
+- 307 → 323 tests. `cargo audit` sigue en 56 crates, `cargo tree -d` sin
+  duplicados, cero dependencias nuevas.
 
 ## Completado el 2026-08-07 (sprint 4C.2, cierre de la auditoría independiente)
 

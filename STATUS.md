@@ -3,11 +3,11 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T04:20:00Z
-- Branch: claude/qyro-audit-closure-4c2-9a3v4j
-- Verified commit: 496e066bae2541071bfdd15ee514d873e3e7cecb
-- Milestone: auditoría independiente cerrada; transporte y almacenamiento seguro
-  NO iniciados
+- Updated UTC: 2026-08-07T05:05:00Z
+- Branch: claude/qyro-resource-bounds-4c3
+- Verified commit: 507699b6b8208ccf1283f8f65a90b74b9a3c9262
+- Milestone: cotas de recursos de los dos parsers cerradas; transporte y
+  almacenamiento seguro NO iniciados
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -22,6 +22,12 @@ La rama continúa `claude/qyro-crypto-platform-hardening`, que continúa
 vez reconcilió `audit/baseline-hardening` con los commits del propietario en
 `main`. Ninguna rama fue reescrita ni fusionada a `main`. Auditoría de este
 sprint: `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`.
+
+**El sprint 4C.3 no añadió funcionalidad.** Corrigió un coste cuadrático medido
+en la única ruta que tocará los bytes de un peer, corrigió una cota de memoria
+que las propias pruebas del repositorio afirmaban mal, y extendió a los dos
+crates de parsing la denegación de pánico e indexado que solo tenía
+`qyro_crypto`. Auditoría: `docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md`.
 
 **El sprint 4C.2 no añadió funcionalidad.** Cerró un fallo de seguridad real en
 `qyro_manifest`, convirtió en pruebas tres garantías de `qyro_crypto` que
@@ -127,6 +133,28 @@ cuatro quedan abiertos y registrados, no omitidos.
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO
 
+### Sprint 4C.3 — cotas de recursos
+
+- Coste de drenado del decoder acotado (ADR-0016 enmendado): IMPLEMENTED. Un
+  byte se copia un número acotado de veces entre entrar al búfer y salir de él.
+  Llenar `MAX_BUFFER_LEN` de frames mínimos y drenarlo pasó de **11 476 501 344
+  bytes movidos a 0**; el bucle con backlog, de 9 830 400 000 a 2 359 296 sobre
+  2 596 608 empujados. Contado con un contador instrumentado, no cronometrado
+- `buffer_capacity()` nunca supera `MAX_BUFFER_LEN`: IMPLEMENTED, con una prueba
+  que llena el búfer de verdad. Llegaba a 2 097 152 frente a 1 049 664
+- Familia de pánico e `indexing_slicing` denegados en `qyro_protocol` y
+  `qyro_manifest`, con guarda estructural: IMPLEMENTED. 33 y 22 infracciones
+  respectivamente, ninguna silenciada con `allow` fuera de los módulos de prueba
+- Análisis de la guarda compartido por los tres crates y exenciones **derivadas**
+  de las declaraciones `mod`: IMPLEMENTED. Quitar un `#[cfg(test)]` mueve el
+  archivo al conjunto de producción en vez de eximirlo
+- Los seis workflows se disparan sobre **cualquier** rama `claude/**` sin editar
+  un solo YAML: IMPLEMENTED. Antes era propiedad de una rama concreta
+- Un `QYR-00xx` citado sin entrada en `BUGS_PENDING.md` es un BLOCKER:
+  IMPLEMENTED
+- Consejo de regeneración de vectores condicionado a que el formato siga
+  coincidiendo con el ADR: IMPLEMENTED
+
 ### Sprint 4C.2 — cierre de la auditoría independiente
 
 - Rechazo de la categoría Unicode `Cf` completa en rutas (ADR-0019 enmendado):
@@ -159,7 +187,10 @@ cuatro quedan abiertos y registrados, no omitidos.
 - Decisión sobre codificaciones X25519 no canónicas (ADR-0021 enmendado):
   REGISTRADA. Se aceptan, conforme a RFC 7748 §5; la verificación de
   libsodium/CryptoKit queda abierta (QYR-0034)
-- Los seis workflows se disparan solos sobre la rama de trabajo: IMPLEMENTED
+- Los seis workflows se disparan solos sobre la rama de trabajo: IMPLEMENTED.
+  **Corregido en 4C.3 (QYR-0040)**: en 4C.2 esto era cierto de *una* rama, cuyo
+  nombre estaba escrito a mano en los seis YAML, y este archivo lo registró como
+  propiedad del repositorio. Ahora lo es: el disparador es `claude/**`
 
 ## Not implemented
 
@@ -254,9 +285,9 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **307 tests**, 0 failed, 2 ignored. Eran 278
-  al empezar el sprint: 29 pruebas nuevas
-- `cargo test --workspace --all-features`: PASS, **307 tests**. Ningún crate
+- `cargo test --workspace`: PASS, **323 tests**, 0 failed, 2 ignored. Eran 307
+  al empezar el sprint: 16 pruebas nuevas
+- `cargo test --workspace --all-features`: PASS, **323 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
 - `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **56 crates**,
@@ -295,6 +326,17 @@ documentales del sprint 4C.1 no habían sido ejecutados por nada.
 | Crypto fuzz | 31142705935 | **success** |
 | Android runtime ABI | 31142707020 | **success** |
 | iOS runtime ABI | 31142708306 | **success** |
+
+### Sprint 4C.3 — runs de cierre
+
+<!-- SPRINT_4C3_CLOSING_RUNS -->
+**Pendientes en el momento de escribir esta línea.** Se ejecutan por `push`
+sobre el commit que cierra el sprint y se registran en el commit siguiente con
+su ID y su conclusión. Nada de este archivo debe leerse como si ya existieran.
+
+Un primer push sobre esta rama, en `a579673`, ya disparó los seis
+automáticamente sin que ningún YAML mencione el nombre de la rama: esa es la
+evidencia de QYR-0040, y sus IDs se registran junto a los de cierre.
 
 ### Sprint 4C.2 — runs de cierre
 
@@ -465,7 +507,26 @@ permaneció invisible durante tres sprints.
 
 ## Next task
 
-**Sprint 4C.3 — cotas de recursos de `qyro_protocol`.** Cerrar QYR-0024 y
+**Sprint 4D.1 — almacenamiento seguro, primera plataforma.** Una ADR que
+resuelva las cuatro preguntas todavía abiertas del research backlog, más el
+trait de almacenamiento y **una sola** plataforma implementada tras él.
+
+Las cuatro preguntas, porque son la razón de que esto sea una ADR y no una
+tarea:
+
+1. Android Keystore: qué ocurre con backup/restore y con la migración.
+2. iOS: `WhenUnlockedThisDeviceOnly` frente a
+   `AfterFirstUnlockThisDeviceOnly`, y si el Secure Enclave entra — solo admite
+   P-256, no Ed25519, así que hay que decidir si la identidad persistida es la
+   misma clave envuelta o una distinta.
+3. Windows: DPAPI frente a CNG, y qué pasa tras un cambio de contraseña de
+   dominio.
+4. El formato del blob: versión, AAD y detección de corrupción.
+
+Keystore, Keychain y DPAPI en la misma sesión es el error que la sección de
+control de alcance prohíbe.
+
+### Cerrado en 4C.3 — cotas de recursos de `qyro_protocol` Cerrar QYR-0024 y
 QYR-0027, los dos hallazgos de la auditoría independiente que este sprint dejó
 fuera a propósito para que un fallo de CI siguiera diciendo qué se rompió.
 
@@ -479,10 +540,7 @@ Aceptación: una prueba que mide y falla con la implementación cuadrática, y o
 que llena el búfer de verdad en vez de afirmar su capacidad. Ninguna de las dos
 puede pasar con el código actual antes de la corrección.
 
-Después, 4D.1: ADR de almacenamiento seguro y la primera plataforma, cuyo
-enunciado se conserva aquí porque sigue siendo la siguiente pieza de producto.
-
-### Después de 4C.3 — 4D.1
+### Después de 4D.1
 
 Implementar persistencia **segura y versionada** de `DeviceIdentity` mediante
 Android Keystore, iOS Keychain y Windows DPAPI/CNG, con creación, carga,
