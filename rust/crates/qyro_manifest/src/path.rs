@@ -28,9 +28,56 @@ const WINDOWS_ILLEGAL: [char; 7] = ['<', '>', ':', '"', '|', '?', '*'];
 ///
 /// They are reserved with or without an extension, so `CON.txt` is checked by
 /// its stem.
-const WINDOWS_RESERVED: [&str; 22] = [
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+///
+/// # Source
+///
+/// "Naming Files, Paths, and Namespaces", Microsoft Learn:
+/// <https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file>
+///
+/// > Do not use the following reserved names for the name of a file: CON, PRN,
+/// > AUX, NUL, COM1, COM2, COM3, COM4, COM5, COM6, COM7, COM8, COM9, COM¹,
+/// > COM², COM³, LPT1, LPT2, LPT3, LPT4, LPT5, LPT6, LPT7, LPT8, LPT9, LPT¹,
+/// > LPT², and LPT³. Also avoid these names followed immediately by an
+/// > extension.
+///
+/// > Windows recognizes the 8-bit ISO/IEC 8859-1 superscript digits ¹, ², and ³
+/// > as digits and treats them as valid parts of COM# and LPT# device names,
+/// > making them reserved in every directory.
+///
+/// This list is exactly that page and nothing else. `COM0`, `LPT0`, `CONIN$`,
+/// `CONOUT$` and `CLOCK$` are **not** here because the page does not list them,
+/// and a rule invented without a source refuses legitimate names — the same
+/// class of defect as omitting one. QYR-0029 stays open in BUGS_PENDING.md
+/// until somebody produces evidence either way.
+const WINDOWS_RESERVED: [&str; 28] = [
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "COM\u{00B9}",
+    "COM\u{00B2}",
+    "COM\u{00B3}",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
+    "LPT\u{00B9}",
+    "LPT\u{00B2}",
+    "LPT\u{00B3}",
 ];
 
 /// A validated relative path.
