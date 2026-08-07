@@ -25,8 +25,10 @@ devuelve incluye su propia cabecera, el GUID de la MasterKey, sal y un MAC. No s
 parsea nunca. La [documentación][wdp] es explícita: «Being opaque, application
 developers do not need to parse or understand the format at all.»
 
-Los 16 primeros bytes son **la cabecera**, y aparecen dos veces: en el archivo y
-dentro de la entropía adicional que se pasa a DPAPI.
+Los 16 primeros bytes son **la cabecera**. Sus doce primeros aparecen dos veces
+—en el archivo y dentro de la entropía adicional que se pasa a DPAPI—; los cuatro
+de `wrapped_len`, solo en el archivo, por la razón de QYR-0048 que se explica más
+abajo.
 
 ## Qué autentica qué
 
@@ -36,17 +38,37 @@ against data tampering» ([CryptProtectData][cpd], consultada 2026-08-07).
 
 La cabecera queda autenticada **indirectamente**, y esa indirección es el diseño:
 
-    entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..16]
+    entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]
+
+**`cabecera[0..12]`, no `[0..16]`.** Los doce primeros bytes son magia, versión,
+`wrap` y `reserved`; los cuatro restantes son `wrapped_len`, y meterlos era
+imposible de implementar: para componer la entropía haría falta `wrapped_len`,
+que solo se conoce después de llamar a `CryptProtectData`, que necesita la
+entropía. Circular. Corregido en la enmienda QYR-0048 de ADR-0024, que explica
+por qué el defecto sobrevivió a la revisión —solo se había especificado un orden
+de lectura, y al leer los dieciséis bytes ya están en disco—.
 
 Como la entropía tiene que ser idéntica al proteger y al desproteger, alterar un
-byte de la cabecera cambia la entropía y `CryptUnprotectData` falla. Así la
+byte de esos doce cambia la entropía y `CryptUnprotectData` falla. Así la
 cabecera cae bajo el MAC de DPAPI **sin que Qyro añada un MAC propio**, que sería
 criptografía casera sobre una capa que ya autentica.
 
+Lo que liga la entropía es la **interpretación** del envoltorio —qué versión, qué
+algoritmo de envoltura—, no su longitud. `wrapped_len` nunca aportó a esa
+propiedad.
+
 Consecuencia práctica: voltear un bit en **cualquier** posición del archivo
-—cabecera o envoltorio— produce un error tipado. Las dos mitades llegan ahí por
-caminos distintos, y por eso la prueba recorre todas las posiciones en vez de
-comprobar una de cada.
+produce un error tipado. Llegan ahí por **tres** caminos distintos, y una prueba
+que no distinga cuál esperaba en cada tramo puede pasar comprobando otra cosa:
+
+| Tramo | Qué lo atrapa |
+|---|---|
+| `0..12` | la entropía cambia y `CryptUnprotectData` no autentica |
+| `12..16` | el paso 7 del orden de lectura, `LengthMismatch` |
+| `16..` | el MAC propio de DPAPI sobre el envoltorio |
+
+Por eso la prueba recorre todas las posiciones y su mensaje de fallo dice por qué
+camino se esperaba cada una.
 
 ## La constante de entropía no es un secreto
 
@@ -77,6 +99,24 @@ con el perfil, dos máquinas presentarían la misma identidad de dispositivo.
 Esto **reduce** el problema y no lo cierra: la MasterKey sí viaja, así que quien
 copie el archivo a mano a la otra máquina puede abrirlo. Cerrarlo exige atar el
 blob a un valor propio de la máquina, que el sprint 4D.1 no hace.
+
+## Orden de escritura
+
+Numerado, porque no tenerlo es lo que dejó pasar QYR-0048:
+
+1. Obtener la semilla con `DeviceIdentity::export_secret`.
+2. Componer `cabecera[0..12]`: magia, `version`, `wrap`, `reserved`.
+   `wrapped_len` **todavía no se conoce y no se finge**.
+3. `entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]`.
+4. `CryptProtectData(semilla, entropía, UI_FORBIDDEN)` → `wrapped`.
+5. ¿`wrapped.len()` cabe en un `u32`? Si no: error tipado, nunca truncamiento.
+6. Escribir `cabecera[0..12] ‖ wrapped_len ‖ wrapped`.
+7. Borrar la semilla y el búfer intermedio, y `LocalFree` sobre `pbData`
+   **después** de borrarlo: liberar sin borrar deja material sensible en memoria
+   liberada.
+
+El paso 2 es el que la especificación anterior no podía expresar: una cabecera
+que existe a medias mientras dura el procedimiento.
 
 ## Orden de lectura
 

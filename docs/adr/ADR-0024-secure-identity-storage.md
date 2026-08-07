@@ -270,6 +270,78 @@ enum y no dos usos del mismo error.
 
 ---
 
+### Enmienda (QYR-0048, 2026-08-07): la entropía no puede incluir `wrapped_len`
+
+**Corrige una afirmación anterior de esta ADR.** El texto de §2 y §3 fijaba:
+
+    entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..16]
+
+y la cabecera lleva `wrapped_len` en el offset 12. Eso **no se puede
+implementar**: para componer la entropía hace falta `wrapped_len`; para conocer
+`wrapped_len` hay que haber llamado ya a `CryptProtectData`; y esa llamada
+necesita la entropía. Circular.
+
+No hay escapatoria por predicción, y esta misma ADR ya la había cerrado sin
+darse cuenta: «`N` lo elige DPAPI y no es constante», y la referencia dice
+«Being opaque, application developers do not need to parse or understand the
+format at all». Un formato opaco cuya longitud alguien calcula por adelantado
+deja de ser opaco.
+
+**Por qué no se vio:** los dos documentos especificaban un **orden de lectura** y
+ninguno un orden de escritura. Al leer, los dieciséis bytes ya están en disco y
+la regla se aplica sin esfuerzo. El hueco solo aparece al escribir, y no había
+nada escrito sobre escribir. La lección es del mismo tipo que QYR-0024: una ruta
+que nadie especificó es una ruta que nadie revisó.
+
+**Regla nueva, que sustituye a la anterior:**
+
+    entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]
+
+Todo menos `wrapped_len`: magia, versión, `wrap` y `reserved`. Esos cuatro campos
+se conocen antes de envolver nada.
+
+**Qué sobrevive a la corrección, explícitamente:**
+
+- **«Voltear un bit en cualquier posición produce un error tipado» sigue siendo
+  cierto**, por dos caminos en vez de uno. Las posiciones `0..12` fallan porque
+  la entropía cambia y `CryptUnprotectData` no autentica. Las posiciones `12..16`
+  las atrapa el paso 7 del orden de lectura, `LengthMismatch`, que es una
+  variante tipada como cualquier otra. Las posiciones `16..` las atrapa el MAC de
+  DPAPI. Las pruebas deben cubrir los tres tramos y **decir por qué camino se
+  espera cada uno**, porque un tramo que fallara por el motivo equivocado sería
+  una prueba que pasa sin comprobar lo que dice.
+- **La razón de meter la cabecera en la entropía sigue en pie.** Liga el
+  envoltorio a ese `version`, ese `wrap` y ese `reserved`, de modo que un
+  envoltorio no pueda reetiquetarse bajo otra cabecera válida el día que exista
+  un segundo valor de `wrap`. `wrapped_len` no aportaba nada a esa propiedad: es
+  una longitud, no una etiqueta de interpretación.
+
+**La alternativa descartada:** poner `wrapped_len` a cero al componer la entropía
+en ambas fases. Funciona, y es lo mismo con más ceremonia y con un campo que
+miente en el único sitio donde se usa. Un lector futuro que compare la entropía
+con el archivo encontraría cuatro bytes que no coinciden y tendría que averiguar
+por qué. `0..12` no necesita explicación.
+
+### El orden de escritura
+
+No existía en ninguno de los dos documentos, que es de donde vino el defecto.
+Numerado, como el de lectura:
+
+1. Obtener la semilla: `DeviceIdentity::export_secret`.
+2. Componer los doce primeros bytes de la cabecera: magia, `version`, `wrap`,
+   `reserved`. `wrapped_len` **todavía no se conoce y no se finge**.
+3. `entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]`.
+4. `CryptProtectData(semilla, entropía, UI_FORBIDDEN)` → `wrapped`.
+5. Comprobar que `wrapped.len()` cabe en un `u32`. Si no: error tipado, no
+   truncamiento. Es inalcanzable en la práctica y por eso mismo se comprueba: una
+   conversión que «no puede fallar» y no se comprueba es la que falla.
+6. Escribir `cabecera[0..12] ‖ wrapped_len ‖ wrapped`, en ese orden.
+7. Borrar la semilla y el búfer intermedio; `LocalFree` sobre `pbData` **después**
+   de borrarlo.
+
+El paso 2 es el que la especificación anterior no podía expresar: una cabecera
+que existe a medias durante una parte del procedimiento.
+
 ## 4. El accesor de semilla — la decisión peligrosa
 
 Sin un camino que entregue la semilla no hay persistencia. Hoy no existe:

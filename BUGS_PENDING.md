@@ -877,3 +877,33 @@
 - Estado: resuelto en lo que este sprint puede resolver; el hueco de procedencia
   de QYR-0037 y QYR-0038 solo lo cierra quien tenga el documento original
 - Fecha: 2026-08-07
+
+## QYR-0048 — La entropía especificada era circular y no se podía implementar
+
+- Plataforma: Windows, especificación
+- Severidad: P1
+- Esperado: la regla de entropía congelada en ADR-0024 se puede ejecutar
+- Actual: `entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..16]`, y la cabecera
+  lleva `wrapped_len` en el offset 12. Para componer la entropía hace falta
+  `wrapped_len`; para conocerlo hay que haber llamado ya a `CryptProtectData`; y
+  esa llamada necesita la entropía. Circular
+- Sin escapatoria por predicción: la propia ADR dice «`N` lo elige DPAPI y no es
+  constante», y la referencia de Microsoft que cita dice «Being opaque,
+  application developers do not need to parse or understand the format at all»
+- Causa: los dos documentos especificaban un **orden de lectura** y ninguno un
+  orden de escritura. Al leer, los dieciséis bytes ya están en disco y la regla
+  se aplica sin esfuerzo; el hueco solo existe al escribir, y no había nada
+  escrito sobre escribir. Es la misma forma que QYR-0024: una ruta que nadie
+  especificó es una ruta que nadie revisó
+- Resolución: `entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]` —todo menos
+  `wrapped_len`—, más un orden de escritura numerado en ADR-0024 y en
+  `docs/security/identity-storage.md`
+- Lo que sobrevive: «voltear un bit en cualquier posición produce un error
+  tipado» sigue siendo cierto por **tres** caminos —`0..12` por la entropía,
+  `12..16` por `LengthMismatch`, `16..` por el MAC de DPAPI—, y las pruebas dicen
+  cuál esperan en cada tramo. Y la razón de ligar la cabecera sigue en pie: liga
+  la **interpretación** del envoltorio, no su longitud
+- Alternativa descartada: poner `wrapped_len` a cero al componer la entropía en
+  ambas fases. Equivalente, con más ceremonia y con un campo que miente
+- Estado: resuelto en la especificación; la implementación llega después
+- Fecha: 2026-08-07
