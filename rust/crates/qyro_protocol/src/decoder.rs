@@ -169,6 +169,15 @@ pub struct FrameDecoder {
     buffer: Vec<u8>,
     max_buffer_len: usize,
     poisoned: Option<FrameError>,
+    /// Bytes memmoved by reclaiming the consumed prefix of the buffer.
+    ///
+    /// `cfg(test)`, never a feature. It exists because the cost of this decoder
+    /// is a security property — a peer choosing frame sizes chooses how much
+    /// work the receive loop does — and a property nothing measures is a
+    /// comment. A wall clock cannot be that measurement: it is unstable on a
+    /// shared runner and it does not say what broke.
+    #[cfg(test)]
+    bytes_moved: u64,
 }
 
 impl Default for FrameDecoder {
@@ -185,6 +194,8 @@ impl FrameDecoder {
             buffer: Vec::new(),
             max_buffer_len: MAX_BUFFER_LEN,
             poisoned: None,
+            #[cfg(test)]
+            bytes_moved: 0,
         }
     }
 
@@ -203,6 +214,8 @@ impl FrameDecoder {
             buffer: Vec::new(),
             max_buffer_len: bounded,
             poisoned: None,
+            #[cfg(test)]
+            bytes_moved: 0,
         }
     }
 
@@ -311,6 +324,7 @@ impl FrameDecoder {
         // and the stream stays synchronised. (ADR-0018)
         let header = match parsed {
             ParsedHeader::Unknown(unknown) => {
+                self.count_front_drain(total);
                 self.buffer.drain(..total);
                 return Ok(Some(DecodedFrame::Unsupported(UnsupportedFrame::from(
                     unknown, total,
@@ -322,6 +336,7 @@ impl FrameDecoder {
         // Ciphertext keeps its trailer and never becomes a plain payload.
         if header.flags().contains(crate::message::Flags::ENCRYPTED) {
             let body = self.buffer[HEADER_LEN..total].to_vec();
+            self.count_front_drain(total);
             self.buffer.drain(..total);
             return match EncryptedEnvelope::from_parts(header, &body) {
                 Ok(envelope) => Ok(Some(DecodedFrame::Encrypted(envelope))),
@@ -331,6 +346,7 @@ impl FrameDecoder {
 
         let payload_end = HEADER_LEN + header.payload_len() as usize;
         let payload = self.buffer[HEADER_LEN..payload_end].to_vec();
+        self.count_front_drain(total);
         self.buffer.drain(..total);
 
         match Frame::from_parts(header, payload) {
@@ -339,8 +355,140 @@ impl FrameDecoder {
         }
     }
 
+    /// Records the memmove a front `drain` performs: everything after the
+    /// drained prefix slides down.
+    #[allow(unused_variables, reason = "the argument is only read under cfg(test)")]
+    fn count_front_drain(&mut self, drained: usize) {
+        #[cfg(test)]
+        {
+            self.bytes_moved += (self.buffer.len() - drained) as u64;
+        }
+    }
+
+    /// Bytes memmoved so far to reclaim consumed buffer space.
+    #[cfg(test)]
+    pub(crate) const fn bytes_moved(&self) -> u64 {
+        self.bytes_moved
+    }
+
     fn poison(&mut self, error: FrameError) -> FrameError {
         self.poisoned = Some(error);
         error
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::{FrameDecoder, MAX_BUFFER_LEN};
+    use crate::frame::Frame;
+    use crate::message::MessageType;
+
+    /// The smallest well-formed frame: a header and nothing else.
+    fn minimal_frame() -> Vec<u8> {
+        Frame::new(MessageType::Heartbeat, Vec::new())
+            .expect("a heartbeat with no payload is a valid frame")
+            .encode()
+    }
+
+    #[test]
+    fn draining_a_full_buffer_copies_a_bounded_number_of_bytes() {
+        // QYR-0024. `next_frame` reclaimed the frame it had just yielded with
+        // `drain(..total)`, which memmoves the entire rest of the buffer. Filling
+        // the buffer with minimal frames and draining it therefore costs
+        // Theta(n^2 / frame_len): a peer sending well-formed heartbeats — valid
+        // traffic, no errors, nothing a validity-based limiter would catch —
+        // makes the receive loop do quadratic work.
+        //
+        // Counted, not timed. A wall clock on a shared runner measures the
+        // runner.
+        let frame = minimal_frame();
+        let mut decoder = FrameDecoder::new();
+
+        let mut pushed = 0usize;
+        while pushed + frame.len() <= MAX_BUFFER_LEN {
+            decoder.push(&frame).expect("within the ceiling");
+            pushed += frame.len();
+        }
+        let frames = pushed / frame.len();
+        assert!(frames > 20_000, "the buffer should hold many frames");
+
+        while decoder
+            .next_frame()
+            .expect("every frame is well formed")
+            .is_some()
+        {}
+        assert_eq!(decoder.buffered_len(), 0, "everything was consumed");
+
+        // The bound: reclaiming space may copy each pushed byte a small constant
+        // number of times, so the work is proportional to the bytes that arrived
+        // and not to their square.
+        let limit = 2 * pushed as u64;
+        assert!(
+            decoder.bytes_moved() <= limit,
+            "draining {frames} frames moved {} bytes, more than the {limit} a \
+             bounded reclaim allows. A byte must be copied a bounded number of \
+             times between entering the buffer and leaving it (ADR-0016).",
+            decoder.bytes_moved()
+        );
+    }
+
+    #[test]
+    fn the_cost_of_draining_does_not_grow_with_the_buffer() {
+        // The same property stated as a rate, which is what makes it a bound
+        // rather than a threshold somebody tuned: doubling the bytes must not
+        // more than roughly double the work.
+        let frame = minimal_frame();
+
+        let mut measure = |ceiling: usize| -> (u64, u64) {
+            let mut decoder = FrameDecoder::with_max_buffer_len(ceiling);
+            let mut pushed = 0u64;
+            while pushed as usize + frame.len() <= ceiling {
+                decoder.push(&frame).expect("within the ceiling");
+                pushed += frame.len() as u64;
+            }
+            while decoder.next_frame().expect("well formed").is_some() {}
+            (pushed, decoder.bytes_moved())
+        };
+
+        let (small_bytes, small_moved) = measure(128 * 1024);
+        let (large_bytes, large_moved) = measure(256 * 1024);
+
+        assert_eq!(
+            large_bytes,
+            2 * small_bytes,
+            "the second run is twice the first"
+        );
+        assert!(
+            large_moved <= 3 * small_moved.max(large_bytes),
+            "doubling the buffer took {large_moved} byte moves against \
+             {small_moved}; the cost is growing faster than the input"
+        );
+    }
+
+    #[test]
+    fn the_buffer_never_reserves_more_than_its_limit() {
+        // QYR-0027. `push` bounds `len`, and `Vec::extend_from_slice` grows
+        // `capacity` geometrically, so dripping one byte at a time walks the
+        // capacity past the ceiling the decoder exists to enforce: measured at
+        // 2 097 152 against a MAX_BUFFER_LEN of 1 049 664.
+        //
+        // Two existing assertions in `wire_contract.rs` and `property.rs` claim
+        // this already holds. They pass because neither ever fills the buffer.
+        let mut decoder = FrameDecoder::new();
+        let byte = [0u8; 1];
+
+        while decoder.buffered_len() < MAX_BUFFER_LEN {
+            decoder
+                .push(&byte)
+                .expect("one byte at a time, under the ceiling");
+            assert!(
+                decoder.buffer_capacity() <= MAX_BUFFER_LEN,
+                "capacity reached {} at {} buffered bytes, past the \
+                 MAX_BUFFER_LEN of {MAX_BUFFER_LEN}",
+                decoder.buffer_capacity(),
+                decoder.buffered_len()
+            );
+        }
+        assert_eq!(decoder.buffered_len(), MAX_BUFFER_LEN);
     }
 }
