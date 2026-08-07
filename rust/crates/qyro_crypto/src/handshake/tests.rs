@@ -896,3 +896,92 @@ fn the_transcript_is_what_the_specification_says_it_is() {
         "the two signatures enter the auth transcript in a fixed order"
     );
 }
+
+// ---------------------------------------------------- sprint 4C.2 (QYR-0034)
+
+#[test]
+fn a_non_canonical_x25519_encoding_is_accepted_and_reduced() {
+    // QYR-0034. A u-coordinate is 32 little-endian bytes, and a value at or
+    // above the field prime p = 2^255 - 19 is a second encoding of a point that
+    // already has one. This crate accepts it and the field arithmetic reduces
+    // it, which is what RFC 7748 §5 asks for:
+    //
+    //   "implementations of X25519 ... MUST mask the most significant bit in
+    //    the final byte"
+    //
+    // Accepting is the decision, not an oversight, and ADR-0021 records it with
+    // the reasoning. This test states it in that direction so the behaviour
+    // cannot drift without somebody choosing to change it — and so that whoever
+    // writes the Swift or Kotlin side finds the answer rather than discovering
+    // it in an interoperability failure.
+    use x25519_dalek::PublicKey as X25519PublicKey;
+
+    use super::EphemeralKeyPair;
+
+    // The basepoint, u = 9, in the canonical encoding.
+    let mut canonical = [0u8; X25519_PUBLIC_LEN];
+    canonical[0] = 9;
+
+    // The same field element written as u + p. p is 0xED, thirty 0xFF bytes,
+    // then 0x7F; adding 9 to the low byte carries nowhere.
+    let mut non_canonical = [0xFFu8; X25519_PUBLIC_LEN];
+    non_canonical[0] = 0xF6;
+    non_canonical[31] = 0x7F;
+
+    assert_ne!(
+        canonical, non_canonical,
+        "the premise is two different encodings"
+    );
+
+    // Two key pairs from the same secret, because the exchange consumes one.
+    let from_canonical = EphemeralKeyPair::from_secret_bytes([0x31; 32])
+        .diffie_hellman(&X25519PublicKey::from(canonical))
+        .expect("the basepoint is not low order");
+    let from_non_canonical = EphemeralKeyPair::from_secret_bytes([0x31; 32])
+        .diffie_hellman(&X25519PublicKey::from(non_canonical))
+        .expect("a reduced u-coordinate is the same point");
+
+    assert_eq!(
+        *from_canonical, *from_non_canonical,
+        "u + p and u are the same field element, so the exchange must agree"
+    );
+
+    // A responder accepts a hello carrying the non-canonical form.
+    use super::{TYPE_INITIATOR_HELLO, write_hello_unsigned};
+    let (alice, bob) = identities();
+    let hello = write_hello_unsigned(
+        TYPE_INITIATOR_HELLO,
+        &X25519PublicKey::from(non_canonical),
+        &[0x42; NONCE_LEN],
+        alice.public_identity(),
+    );
+    assert!(
+        ResponderStart::new(&bob)
+            .receive_initiator_hello(&hello, entropy(0xB0))
+            .is_ok(),
+        "a hello with a reduced u-coordinate is a valid hello"
+    );
+
+    // And this is why accepting it is not malleability: the hello is hashed
+    // into the transcript verbatim, so the two encodings never produce the same
+    // session. A peer cannot resend "the same" hello in a second form.
+    let canonical_hello = write_hello_unsigned(
+        TYPE_INITIATOR_HELLO,
+        &X25519PublicKey::from(canonical),
+        &[0x42; NONCE_LEN],
+        alice.public_identity(),
+    );
+    assert_ne!(
+        hello, canonical_hello,
+        "the two encodings are different bytes on the wire"
+    );
+
+    use super::transcript::base_transcript;
+    let responder_hello = [0x77; super::HELLO_UNSIGNED_LEN];
+    assert_ne!(
+        base_transcript(&hello, &responder_hello),
+        base_transcript(&canonical_hello, &responder_hello),
+        "different bytes in the hello are a different transcript, so the two \
+         encodings bind to different keys and neither can stand in for the other"
+    );
+}
