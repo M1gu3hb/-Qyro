@@ -22,6 +22,11 @@
 - ADR-0021: handshake autenticado de cuatro mensajes.
 - ADR-0022: cifrado autenticado de frames QYRO/1.
 - ADR-0023: harness aislado de pruebas criptográficas por plataforma.
+- ADR-0024: persistencia segura de `DeviceIdentity`, formato del blob y Windows
+  DPAPI. Congela dos decisiones que cuestan algo y lo dicen: `unsafe` vive en un
+  crate de plataforma aparte para no relajar `forbid(unsafe_code)` en el crate
+  que guarda las claves, y a cambio el accesor de semilla tiene que ser público.
+  Se prefiere una superficie de API contable a una regla relajada.
 
 El sprint 4B.1 cerró el handshake sin cambiar ninguna decisión: unificó el
 `SessionId` en ocho bytes, añadió `ResponderFinishPending`, sacó las claves de
