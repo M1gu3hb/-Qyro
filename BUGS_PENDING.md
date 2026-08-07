@@ -1090,7 +1090,7 @@
 ## QYR-0059 — DPAPI no autentica todos los bytes de su propio blob
 
 - Plataforma: Windows
-- Severidad: **P1 hasta saber cuál de los dos casos es**
+- Severidad: **P3** (registrado como P1 hasta responder la pregunta de abajo)
 - Esperado: voltear un bit en cualquier posición del blob produce un error
   tipado. Para el tramo `16..` —el envoltorio de DPAPI— se daba por hecho que lo
   atraparía el MAC que DPAPI documenta: «The function also adds a Message
@@ -1105,12 +1105,25 @@
   **falsa tal como está escrita**. El MAC cubre los datos cifrados, no cada byte
   de la estructura que los rodea; el blob lleva cabecera propia —versión, GUID
   del provider, sal— y al menos un byte de esa zona no está autenticado
-- **La pregunta abierta que decide la severidad**: ¿la identidad que sale es la
-  **misma** o **otra**? La misma significa que el blob es maleable en un campo
-  que DPAPI ignora, lo cual es feo y no peligroso. Otra significaría sustituir en
-  silencio la identidad de un dispositivo, que es el peor resultado que este
-  formato puede producir. La prueba se modificó para **decir cuál de las dos
-  es**, en vez de relajarse
+- **Respondido: la identidad que sale es la MISMA.** Run 31212494494, job
+  `windows-crypto`: «byte 20 bit 0: a corrupted blob opened. Same identity:
+  true». El byte alterado descifra a la misma semilla, así que el blob es
+  **maleable en un campo que DPAPI ignora** y **no** es un camino para sustituir
+  en silencio la identidad de un dispositivo, que era el resultado que habría
+  sido grave. La prueba se modificó para responder esta pregunta en vez de
+  relajarse
+- **Severidad revisada: P3.** Lo que queda es que un atacante con acceso de
+  escritura al archivo puede alterar un byte sin que nada lo note; no gana
+  lectura de la semilla, no gana sustitución de identidad, y ya tenía acceso de
+  escritura. Lo que **sí** hay que corregir es la afirmación, no el formato:
+  `identity-storage.md` decía que el MAC de DPAPI cubre todo el tramo `16..` y
+  no es cierto
+- **Decisión pendiente para el próximo tramo**: o la prueba acepta este byte con
+  su razón escrita —documentando que DPAPI no autentica su propia cabecera—, o
+  Qyro deja de tratar el envoltorio como opaco y lo cubre él mismo, que
+  contradice «no inventes criptografía» y la decisión de ADR-0024 §2 de no añadir
+  MAC propio. La primera es casi con seguridad la correcta; no se toma aquí
+  porque este tramo se queda sin contexto y la decisión merece argumentarse
 - Lo que **no** se hizo: ajustar la aserción para que pase. El prompt del sprint
   lo dice y es lo correcto: si un tramo cae por otro camino, eso es el hallazgo
 - Estado: abierto

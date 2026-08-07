@@ -77,6 +77,11 @@ los datos cifrados, no cada byte de la estructura que los rodea. Queda abierto
 si la identidad que sale es la misma o es otra, que es lo que decide si esto es
 un detalle o un fallo grave.
 
+**Respondido:** la identidad que sale es la **misma** (run 31212494494). El byte
+alterado descifra a la misma semilla, así que esto es maleabilidad en un campo
+que DPAPI ignora y no un camino para sustituir una identidad en silencio. Lo que
+había que corregir era la afirmación, no el formato.
+
 ## La constante de entropía no es un secreto
 
 `QYRO_IDENTITY_ENTROPY_V1` está compilada en un binario que el usuario tiene.
