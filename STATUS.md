@@ -6,9 +6,9 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 - Updated UTC: 2026-08-07T07:10:00Z
 - Branch: claude/qyro-secure-storage-4d1
 - Verified commit: c21dd723ced41f18735cbcaf11d148d155115c11
-- Milestone: ADR-0024 congelada y formato de blob especificado; **la
-  persistencia no está implementada en ninguna plataforma todavía**, ni en
-  Windows ni en Android ni en iOS
+- Milestone: ADR-0024 congelada, formato de blob especificado y accesor de
+  semilla abierto con su guarda; **la persistencia no está implementada en
+  ninguna plataforma todavía**, ni en Windows ni en Android ni en iOS
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -286,9 +286,10 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **323 tests**, 0 failed, 2 ignored. Eran 307
-  al empezar el sprint: 16 pruebas nuevas
-- `cargo test --workspace --all-features`: PASS, **323 tests**. Ningún crate
+- `cargo test --workspace`: PASS, **328 tests**, 0 failed, 2 ignored. Eran 323
+  al empezar el sprint 4D.1: cinco pruebas nuevas, la guarda de caminos públicos
+  y cuatro sobre el accesor de semilla
+- `cargo test --workspace --all-features`: PASS, **328 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
 - `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **56 crates**,
@@ -547,13 +548,27 @@ decisión y especificación, no código:
   DPAPI: un atacante que ya ejecuta código como ese usuario descifra el blob
   llamando a la misma API.
 
+- **El accesor de semilla existe**, que es el cambio de superficie que este
+  sprint tenía que revisar dos veces: `DeviceIdentity::export_secret` y
+  `DeviceIdentity::from_secret`, sobre un `IdentitySecret` que se borra al
+  soltarse, no es `Clone` y tiene `Debug` redactado. `identity.rs` ya **no**
+  dice «there is no accessor for the seed or the private key»; decía eso hasta
+  este sprint y habría quedado contradicho por el código.
+- La guarda que lo acota: `every_public_path_returning_key_material_is_listed`
+  enumera **por nombre** los caminos públicos que devuelven material de clave.
+  Antes del sprint la lista estaba vacía; ahora tiene dos entradas,
+  `identity.rs::export_secret` e `identity.rs::as_bytes`. Se escribió con la
+  lista vacía y pasó; añadir el accesor la puso en rojo con exactamente esos dos.
+
 Lo que **no** existe todavía, y no debe leerse como progreso:
 
-- `DeviceIdentity` sigue **sin accesor de semilla**. `identity.rs` sigue diciendo
-  «There is no accessor for the seed or the private key», y sigue siendo cierto.
-- No hay crate de almacenamiento, ni trait, ni implementación de Windows.
+- No hay crate de almacenamiento, ni trait, ni implementación de Windows: **nada
+  llama todavía a `export_secret`**, así que la semilla se puede pedir y no hay
+  dónde guardarla.
 - No hay harness de persistencia ni paso de CI que la ejecute.
 - No hay `storage-v1.json`.
+- No hay `unsafe` en ninguna parte: el crate de plataforma que ADR-0024 §1
+  decide todavía no existe, y todos los crates conservan `forbid(unsafe_code)`.
 
 ## Next task
 
