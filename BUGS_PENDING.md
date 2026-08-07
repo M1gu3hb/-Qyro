@@ -1040,3 +1040,49 @@
 - Resolución: corregidas diciendo lo que sí es cierto, no borradas
 - Estado: resuelto
 - Fecha: 2026-08-07
+
+## QYR-0058 — Las dos guardas de aislamiento nombraban un solo harness
+
+- Plataforma: CI, pruebas
+- Severidad: P2
+- Esperado: ningún harness de pruebas puede alcanzar el producto
+- Actual: `check_harness_isolation.{sh,ps1}` tenían `harness="qyro_crypto_smoke"`
+  escrito a mano. Al añadir `qyro_store_smoke` en el sprint 4D.1, las dos guardas
+  siguieron en verde sobre un segundo harness **completamente sin vigilar**
+- Causa: una guarda que nombra *una instancia* de una categoría deja de cubrir la
+  categoría en cuanto aparece la segunda. Es la misma forma que QYR-0045 —un
+  filtro de rutas que enumera crates— y que QYR-0053 —una lista de marcadores de
+  tipo—, y las tres fallan en la dirección silenciosa
+- Resolución: las dos guardas iteran sobre una lista de harnesses
+- Evidencia: hacer que `qyro_crypto` dependa de `qyro_store_smoke` hace fallar
+  las dos por nombre, comprobado en Bash y en PowerShell
+- Estado: resuelto
+- Fecha: 2026-08-07
+
+## QYR-0056 — La guarda de material de clave no ve `Vec<u8>` ni `String`
+
+- Plataforma: criptografía, pruebas
+- Severidad: P2
+- Esperado: cualquier camino público que devuelva la semilla hace fallar la guarda
+- Actual: `every_public_path_returning_key_material_is_listed` clasifica por
+  **forma del tipo de retorno**, así que un `pub fn` que devolviera la semilla
+  como `Vec<u8>` o `String` no dispara ningún marcador
+- Solución medida, para cuando se aborde: dejar de adivinar formas y congelar los
+  **sitios de origen**. `signing_key.to_` aparece una sola vez en producción, en
+  `identity.rs` dentro de `export_secret`. Una prueba que enumere esos sitios y
+  falle si aparece otro es la misma técnica que
+  `every_handshake_error_has_a_construction_site`
+- Estado: abierto
+- Fecha: 2026-08-07
+
+## QYR-0057 — Tres entradas del ledger usan un `Estado` que no es un estado
+
+- Plataforma: documentación
+- Severidad: P3
+- Actual: QYR-0052, QYR-0053 y QYR-0054 dicen `Estado: abierto al inicio de este
+  tramo`, que describe una historia y no un estado. Las tres están resueltas
+- Solución: `Estado` debe ser uno de un conjunto cerrado —`abierto`, `resuelto`,
+  `parcial`, `cerrado por obsolescencia`—, con la narración en otra línea, y una
+  regla de `check_docs_consistency` que rechace cualquier otra cosa
+- Estado: abierto
+- Fecha: 2026-08-07

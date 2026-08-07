@@ -3,13 +3,13 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T20:20:00Z
+- Updated UTC: 2026-08-07T21:20:00Z
 - Branch: claude/qyro-secure-storage-4d1
 - Verified commit: 3b2cf613baa006545b6509c59ba8fd416694d0a8
-- Milestone: formato del blob implementado y probado adversarialmente, accesor
-  de semilla abierto con su guarda; **la persistencia no está implementada en
-  ninguna plataforma todavía**, ni en Windows ni en Android ni en iOS, porque no
-  existe el crate de plataforma que llama a DPAPI
+- Milestone: crate de plataforma DPAPI escrito y `IdentityStore` implementado
+  para Windows; **la persistencia está IMPLEMENTADA solo en Windows y
+  NOT_IMPLEMENTED en Android y en iOS**, y su ejecución en CI está pendiente de
+  confirmarse sobre el commit final
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
