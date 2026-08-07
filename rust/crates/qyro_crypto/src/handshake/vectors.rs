@@ -19,7 +19,7 @@
 use hkdf::Hkdf;
 use qyro_protocol::{SESSION_ID_LEN, SessionId};
 use serde_json::{Value, json};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
 
 use super::schedule::hmac_sha256;
@@ -495,8 +495,21 @@ fn every_recorded_value_verifies_against_the_primitives() {
     // --- transcripts --------------------------------------------------------
     let initiator_hello = unhex(&field(&["messages", "initiator_hello"]));
     let responder_hello_unsigned = unhex(&field(&["messages", "responder_hello_unsigned"]));
-    let base = base_transcript(&initiator_hello, &responder_hello_unsigned);
-    assert_eq!(hex(&base), field(&["transcript", "base_transcript_hash"]));
+    let base = base_transcript_from_primitives(&initiator_hello, &responder_hello_unsigned);
+    assert_eq!(
+        hex(&base),
+        field(&["transcript", "base_transcript_hash"]),
+        "the recorded base transcript is not what ADR-0021 specifies"
+    );
+
+    // The recorded signing inputs are checked against the ADR too, not merely
+    // used. The responder signs the base transcript alone; the initiator signs
+    // it followed by the responder's signature.
+    assert_eq!(
+        field(&["transcript", "responder_signing_input"]),
+        hex(&base),
+        "the responder signs the base transcript and nothing else"
+    );
 
     let responder_signature =
         IdentitySignature::from_slice(&unhex(&field(&["transcript", "responder_signature"])))
@@ -522,12 +535,26 @@ fn every_recorded_value_verifies_against_the_primitives() {
         )
         .expect("the initiator signature verifies over the recorded input");
 
-    let auth = auth_transcript(
+    let mut initiator_signed = Vec::new();
+    initiator_signed.extend_from_slice(&base);
+    initiator_signed.extend_from_slice(responder_signature.as_bytes());
+    assert_eq!(
+        field(&["transcript", "initiator_signing_input"]),
+        hex(&initiator_signed),
+        "the initiator signs the base transcript followed by the responder's \
+         signature, which is what binds its signature to this answer"
+    );
+
+    let auth = auth_transcript_from_primitives(
         &base,
         responder_signature.as_bytes(),
         initiator_signature.as_bytes(),
     );
-    assert_eq!(hex(&auth), field(&["transcript", "auth_transcript_hash"]));
+    assert_eq!(
+        hex(&auth),
+        field(&["transcript", "auth_transcript_hash"]),
+        "the recorded auth transcript is not what ADR-0021 specifies"
+    );
 
     // --- HKDF, run directly -------------------------------------------------
     let hkdf = Hkdf::<Sha256>::new(Some(&base), &shared.to_bytes());
@@ -570,13 +597,44 @@ fn every_recorded_value_verifies_against_the_primitives() {
         "the session id is derived at wire width, not truncated"
     );
 
+    // --- and the schedule this crate actually runs --------------------------
+    //
+    // Everything above re-derives the recorded values with HKDF driven by hand.
+    // That checks the *file* against the specification and says nothing about
+    // `Schedule::derive`, so rerouting its `info` into its salt left this test
+    // green. Pinning the real schedule against the values just verified closes
+    // that: the two now have to agree with each other and with the ADR.
+    let derived = super::schedule::Schedule::derive(&base, &shared.to_bytes(), &auth)
+        .expect("the recorded inputs derive a schedule");
+    assert_eq!(
+        hex(derived.initiator_to_responder.as_bytes()),
+        field(&["schedule", "initiator_to_responder_traffic_secret"]),
+        "the key schedule this crate runs disagrees with the primitives"
+    );
+    assert_eq!(
+        hex(derived.responder_to_initiator.as_bytes()),
+        field(&["schedule", "responder_to_initiator_traffic_secret"])
+    );
+    assert_eq!(
+        hex(derived.initiator_finished.as_ref()),
+        field(&["schedule", "initiator_finished_key"])
+    );
+    assert_eq!(
+        hex(derived.responder_finished.as_ref()),
+        field(&["schedule", "responder_finished_key"])
+    );
+    assert_eq!(
+        hex(&derived.session_id.to_be_bytes()),
+        field(&["schedule", "session_id"])
+    );
+
     // --- HMAC ---------------------------------------------------------------
     assert_eq!(
-        hex(&hmac_sha256(&initiator_finished_key, &auth)),
+        hex(&hmac_sha256_from_primitives(&initiator_finished_key, &auth)),
         field(&["finished", "initiator_finished_mac"])
     );
     assert_eq!(
-        hex(&hmac_sha256(&responder_finished_key, &auth)),
+        hex(&hmac_sha256_from_primitives(&responder_finished_key, &auth)),
         field(&["finished", "responder_finished_mac"])
     );
 
@@ -727,4 +785,74 @@ fn the_x25519_implementation_matches_rfc7748() {
         "the shared secret matches RFC 7748 byte for byte"
     );
     assert!(from_alice.was_contributory());
+}
+
+// -------------------------------------------- the primitives, spelled out
+//
+// QYR-0025. The test below claims to verify every recorded value "against the
+// primitives, without going through the state machine that produced it". It
+// did not: it called `base_transcript`, `auth_transcript` and `hmac_sha256`,
+// which are the very functions whose output was recorded. Rerouting the HKDF
+// `info` into the salt in `schedule.rs` left it passing.
+//
+// These three are written out from ADR-0021 and RFC 2104 with SHA-256 as the
+// only shared ingredient, so a disagreement between the specification and the
+// implementation shows up here instead of cancelling out.
+
+/// `SHA-256( "QYRO-HANDSHAKE-BASE-V1" || 0x00 || len || hello || len || hello )`.
+fn base_transcript_from_primitives(
+    initiator_hello: &[u8],
+    responder_hello_unsigned: &[u8],
+) -> [u8; 32] {
+    let mut input = Vec::new();
+    input.extend_from_slice(b"QYRO-HANDSHAKE-BASE-V1");
+    input.push(0x00);
+    input.extend_from_slice(&(initiator_hello.len() as u32).to_be_bytes());
+    input.extend_from_slice(initiator_hello);
+    input.extend_from_slice(&(responder_hello_unsigned.len() as u32).to_be_bytes());
+    input.extend_from_slice(responder_hello_unsigned);
+    Sha256::digest(&input).into()
+}
+
+/// `SHA-256( "QYRO-HANDSHAKE-AUTH-V1" || 0x00 || base || r_sig || i_sig )`.
+fn auth_transcript_from_primitives(
+    base: &[u8; 32],
+    responder_signature: &[u8; 64],
+    initiator_signature: &[u8; 64],
+) -> [u8; 32] {
+    let mut input = Vec::new();
+    input.extend_from_slice(b"QYRO-HANDSHAKE-AUTH-V1");
+    input.push(0x00);
+    input.extend_from_slice(base);
+    input.extend_from_slice(responder_signature);
+    input.extend_from_slice(initiator_signature);
+    Sha256::digest(&input).into()
+}
+
+/// HMAC-SHA-256 as RFC 2104 defines it, built from SHA-256 alone.
+///
+/// Not `SimpleHmac`, and not the crate's `hmac_sha256`: the point is to reach
+/// the recorded MAC without the code that produced it. This is the
+/// `H((K' ^ opad) || H((K' ^ ipad) || m))` construction, with `K'` the key
+/// padded to the 64-byte block, which is what an implementation in another
+/// language will compute from its own standard library.
+fn hmac_sha256_from_primitives(key: &[u8], message: &[u8]) -> [u8; 32] {
+    const BLOCK_LEN: usize = 64;
+
+    let mut padded_key = [0u8; BLOCK_LEN];
+    if key.len() > BLOCK_LEN {
+        padded_key[..32].copy_from_slice(&Sha256::digest(key));
+    } else {
+        padded_key[..key.len()].copy_from_slice(key);
+    }
+
+    let mut inner = Vec::new();
+    inner.extend(padded_key.iter().map(|byte| byte ^ 0x36));
+    inner.extend_from_slice(message);
+    let inner_digest = Sha256::digest(&inner);
+
+    let mut outer = Vec::new();
+    outer.extend(padded_key.iter().map(|byte| byte ^ 0x5C));
+    outer.extend_from_slice(&inner_digest);
+    Sha256::digest(&outer).into()
 }

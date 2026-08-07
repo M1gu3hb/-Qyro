@@ -780,3 +780,119 @@ fn an_unsigned_peer_cannot_present_another_identity() {
         "signing correctly with the wrong key is still the wrong key"
     );
 }
+
+// ---------------------------------------------------- sprint 4C.2 (QYR-0025)
+
+/// Literal inputs for the transcript test below. TEST ONLY — no structure is
+/// implied; they are the width of a hello and a signature and nothing more.
+const SPEC_INITIATOR_HELLO: &str = "\
+11375f89b5d3cb25790fe7d15d5bd3dd64a0e2be60a4d67fc3d57d1b021af45c\
+a58363fd6c1832bb87512414de83db152ca8ba2b578a440955a31642eb2d48e0\
+01a7c21e8ff9ac41dda40e8f0eae6ba5dce52d60299f0a831f6257c1e8f1943c\
+456c796c";
+const SPEC_RESPONDER_HELLO_UNSIGNED: &str = "\
+22466898a6c224140a3ef0c04eaaecac77b1f58f9395b96ed0c44aea310beb4d\
+d6b294ec7f091dcab4a03305cdb2a4243fb9adda64fb6b1846b2e173983c57f1\
+3256f50f9ce8c3702e95199e1ddf5454cff43a515aaee5920c7360b0dbe08b2d\
+b65d0e7d";
+const SPEC_RESPONDER_SIGNATURE: &str = "\
+335979abd7f535071bd1c1b37fbdfdbf868e849c8282889de1ab5bf9203c1a7e\
+c7ad859f4efe0cd9a58f42363ca5b5370ec69cc975ec9a2b379df06089cb6682";
+const SPEC_INITIATOR_SIGNATURE: &str = "\
+44688abac8e406762cc0d2a2908c8e8e919f976dbdf39b8cf69aa8c84f2d096f\
+f05cb68e51ef7fe8529e512713d486c619d78ff80add893a206cc311a6da7593";
+
+#[test]
+fn the_transcript_is_what_the_specification_says_it_is() {
+    // QYR-0025. The transcript was only ever checked by calling the function
+    // that computes it, including in the file that claims to verify the
+    // committed vectors "independently against the primitives". That proves
+    // `base_transcript` agrees with `base_transcript`.
+    //
+    // Here the expected values are assembled by hand from ADR-0021 and hashed
+    // with `Sha256::digest`. Nothing in `transcript.rs` is called to build
+    // them, so if the module and the specification disagree, this is where it
+    // shows.
+    use sha2::{Digest, Sha256};
+
+    use super::transcript::{auth_transcript, base_transcript};
+
+    let initiator_hello: [u8; super::HELLO_UNSIGNED_LEN] = unhex(SPEC_INITIATOR_HELLO)
+        .try_into()
+        .expect("a hello is HELLO_UNSIGNED_LEN bytes");
+    let responder_unsigned: [u8; super::HELLO_UNSIGNED_LEN] = unhex(SPEC_RESPONDER_HELLO_UNSIGNED)
+        .try_into()
+        .expect("a hello is HELLO_UNSIGNED_LEN bytes");
+    let responder_signature: [u8; 64] = unhex(SPEC_RESPONDER_SIGNATURE)
+        .try_into()
+        .expect("a signature is 64 bytes");
+    let initiator_signature: [u8; 64] = unhex(SPEC_INITIATOR_SIGNATURE)
+        .try_into()
+        .expect("a signature is 64 bytes");
+
+    // ADR-0021:
+    //   SHA-256( "QYRO-HANDSHAKE-BASE-V1" || 0x00
+    //            || len(initiator_hello) u32 BE          || initiator_hello
+    //            || len(responder_hello_unsigned) u32 BE || responder_hello_unsigned )
+    let mut spelled_out = Vec::new();
+    spelled_out.extend_from_slice(b"QYRO-HANDSHAKE-BASE-V1");
+    spelled_out.push(0x00);
+    spelled_out.extend_from_slice(&(initiator_hello.len() as u32).to_be_bytes());
+    spelled_out.extend_from_slice(&initiator_hello);
+    spelled_out.extend_from_slice(&(responder_unsigned.len() as u32).to_be_bytes());
+    spelled_out.extend_from_slice(&responder_unsigned);
+    let expected_base: [u8; 32] = Sha256::digest(&spelled_out).into();
+
+    let base = base_transcript(&initiator_hello, &responder_unsigned);
+    assert_eq!(
+        base, expected_base,
+        "the base transcript does not match ADR-0021. The ADR is the \
+         specification and this module is one implementation of it, so the \
+         code is what has to change — recording any other value would only \
+         record the disagreement"
+    );
+
+    // The two `u32` length prefixes are load-bearing, and this is what they
+    // buy: without them the hash commits to the concatenation of the two
+    // messages rather than to the pair, so no two different splits could ever
+    // be told apart. Deleting them from `update_with_length` makes the
+    // assertion above fail against this value.
+    let mut without_lengths = Vec::new();
+    without_lengths.extend_from_slice(b"QYRO-HANDSHAKE-BASE-V1");
+    without_lengths.push(0x00);
+    without_lengths.extend_from_slice(&initiator_hello);
+    without_lengths.extend_from_slice(&responder_unsigned);
+    let unprefixed: [u8; 32] = Sha256::digest(&without_lengths).into();
+    assert_ne!(
+        base, unprefixed,
+        "the transcript must commit to each message's length, not only to the \
+         bytes; ADR-0021 writes both prefixes"
+    );
+
+    // ADR-0021:
+    //   SHA-256( "QYRO-HANDSHAKE-AUTH-V1" || 0x00
+    //            || base_transcript || responder_signature || initiator_signature )
+    // No lengths: all three inputs are fixed width by construction.
+    let mut spelled_out = Vec::new();
+    spelled_out.extend_from_slice(b"QYRO-HANDSHAKE-AUTH-V1");
+    spelled_out.push(0x00);
+    spelled_out.extend_from_slice(&base);
+    spelled_out.extend_from_slice(&responder_signature);
+    spelled_out.extend_from_slice(&initiator_signature);
+    let expected_auth: [u8; 32] = Sha256::digest(&spelled_out).into();
+
+    assert_eq!(
+        auth_transcript(&base, &responder_signature, &initiator_signature),
+        expected_auth,
+        "the auth transcript does not match ADR-0021; the code is what has to \
+         change"
+    );
+
+    // Order is part of the specification: the responder's signature is hashed
+    // first. Swapping them must not produce the same transcript.
+    assert_ne!(
+        auth_transcript(&base, &responder_signature, &initiator_signature),
+        auth_transcript(&base, &initiator_signature, &responder_signature),
+        "the two signatures enter the auth transcript in a fixed order"
+    );
+}
