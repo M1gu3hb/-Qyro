@@ -196,3 +196,60 @@ La regla vigente:
 
 Nada de esto cambia el layout. La cabecera de 48 bytes de la tabla de arriba es
 la misma que se congeló en el sprint 2.
+
+## Enmienda — sprint 4C.3 (QYR-0024): la cota de coste, no solo la de memoria
+
+**Corrige una omisión de este ADR.** El apartado de límites acota lo que un peer
+puede hacer *reservar* y no dice nada de lo que puede hacer *trabajar*. Con esa
+cota sola, el decoder era cuadrático y cumplía el ADR.
+
+`FrameDecoder::next_frame` reclamaba cada frame entregado con
+`drain(..total)`, que memmovea todo lo que queda detrás. Llenar el búfer de
+frames mínimos y drenarlo cuesta Θ(n²/48): 21 868 heartbeats, 1 049 664 bytes
+empujados, **11 476 501 344 bytes movidos**. Es tráfico perfectamente válido —
+ningún frame mal formado, ningún error, nada que un limitador basado en validez
+pueda ver—, y el peer elige el tamaño del frame, así que elige el cuadrado.
+
+### La propiedad, en una frase comprobable
+
+> Entre que un byte entra al búfer del decoder y sale de él como parte de un
+> frame, puede copiarse **un número acotado de veces**, independiente de cuántos
+> bytes haya en el búfer. La constante es de una copia por byte de media, y el
+> presupuesto que las pruebas afirman es de dos.
+
+Es comprobable porque se cuenta, no se cronometra: `bytes_moved` está
+instrumentado bajo `cfg(test)` en el único sitio que mueve bytes. Un reloj de
+pared en un runner compartido mide el runner, y no dice qué se rompió.
+
+### Cómo se sostiene
+
+Un frame entregado solo avanza un cursor de lectura. El espacio se reclama en
+`compact`, y solo en dos casos: cuando los bytes entrantes no cabrían bajo el
+techo, o cuando al menos la mitad del búfer está ya consumida. La segunda
+condición es la amortización — una compactación mueve como mucho la mitad del
+búfer y no puede repetirse hasta que se haya consumido otro tanto — y la primera
+es lo que mantiene la cota de memoria que este ADR ya tenía.
+
+La reserva se dobla y se recorta al techo. Doblar es lo que hace un `push`
+amortizado O(1); recortar es lo que impide que la capacidad llegue a 2 097 152
+frente a un `MAX_BUFFER_LEN` de 1 049 664, que es lo que hacía (QYR-0027).
+`reserve_exact` a secas habría sido peor que el defecto original: con pushes de
+un byte reasigna en cada byte.
+
+### Medidas
+
+| Forma | Antes | Después |
+|---|---|---|
+| Llenar `MAX_BUFFER_LEN` de frames mínimos y drenar | 11 476 501 344 bytes movidos | 0 |
+| Backlog de 4 096 frames con 50 000 llegadas | ~9,8 GB (50 000 × 196 608) | 2 359 296 sobre 2 596 608 empujados |
+
+El cero del primer caso no es una optimización perfecta: es que esa forma no
+necesita compactar en ningún momento. Por eso la segunda existe, y es la que
+corre la compactación de verdad.
+
+### Lo que no cambia
+
+Ni un byte del cable. El layout de 48 bytes, los límites declarados, el
+envenenamiento estructural y `reset` como única salida son los mismos. Ninguna
+prueba de contrato existente necesitó edición, que es la evidencia de que esto
+es coste y no comportamiento.
