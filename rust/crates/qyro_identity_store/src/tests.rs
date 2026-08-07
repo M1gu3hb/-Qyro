@@ -19,7 +19,9 @@
 )]
 
 use super::*;
-use crate::blob::{ENTROPY_HEADER_LEN, HEADER_LEN, VERSION, WRAP_DPAPI_USER};
+use crate::blob::{
+    ENTROPY_HEADER_LEN, HEADER_LEN, VERSION, WRAP_ANDROID_KEYSTORE, WRAP_DPAPI_USER,
+};
 
 /// A stand-in for a platform wrapper.
 ///
@@ -452,4 +454,93 @@ fn the_committed_framing_vectors_match_the_primitives() {
     expected.extend_from_slice(magic);
     expected.extend_from_slice(&[VERSION, WRAP_DPAPI_USER, 0, 0]);
     assert_eq!(entropy_for(VERSION, WRAP_DPAPI_USER), expected);
+}
+
+/// A second wrapper, claiming a different `wrap` byte and using the same
+/// trivial tag. It stands in for the Android backend on a host that cannot
+/// build it: what matters here is that its `wrap_id` disagrees, not how it
+/// wraps.
+struct SecondPlatform;
+
+impl SecretWrapper for SecondPlatform {
+    fn wrap(&self, secret: &[u8], entropy: &[u8]) -> Result<Vec<u8>, StoreError> {
+        FakeWrapper.wrap(secret, entropy)
+    }
+
+    fn unwrap(&self, wrapped: &[u8], entropy: &[u8]) -> Result<Zeroizing<Vec<u8>>, StoreError> {
+        FakeWrapper.unwrap(wrapped, entropy)
+    }
+
+    fn wrap_id(&self) -> u8 {
+        WRAP_ANDROID_KEYSTORE
+    }
+}
+
+#[test]
+fn a_blob_from_another_platform_is_refused_by_wrap_and_not_by_luck() {
+    // What the `wrap` byte exists to say. A blob sealed on Windows handed to the
+    // Android wrapper must fail *because the wrapper is wrong*, with an error
+    // that says so — not because some tag happened not to verify.
+    //
+    // The distinction is the whole point. "The tag did not verify" is what a
+    // corrupted blob looks like, and it is what a caller retries or reports as
+    // damage. "This blob belongs to another wrapper" is neither: nothing is
+    // damaged and retrying will never help.
+    //
+    // Both wrappers here share a tag function on purpose. If they did not, this
+    // test would pass whether or not the wrap byte were ever consulted, because
+    // the tag would fail either way — an assertion that holds for the wrong
+    // reason, which is the shape this project has now paid for three times.
+    let identity = an_identity();
+    let windows_blob = seal_identity(&identity, &FakeWrapper).unwrap();
+
+    let error = open_identity(&windows_blob, &SecondPlatform).unwrap_err();
+    assert_eq!(
+        error,
+        StoreError::WrapMismatch {
+            blob: WRAP_DPAPI_USER,
+            wrapper: WRAP_ANDROID_KEYSTORE,
+        },
+        "a Windows blob opened with the Android wrapper must name both sides. \
+         Got {error:?}"
+    );
+
+    // And the other direction, so this is not a property of one order.
+    let android_blob = seal_identity(&identity, &SecondPlatform).unwrap();
+    assert_eq!(
+        open_identity(&android_blob, &FakeWrapper).unwrap_err(),
+        StoreError::WrapMismatch {
+            blob: WRAP_ANDROID_KEYSTORE,
+            wrapper: WRAP_DPAPI_USER,
+        }
+    );
+
+    // Neither refusal is "everything fails": each blob still opens with its own
+    // wrapper, and to the same identity.
+    assert_eq!(
+        open_identity(&windows_blob, &FakeWrapper)
+            .unwrap()
+            .fingerprint(),
+        identity.fingerprint()
+    );
+    assert_eq!(
+        open_identity(&android_blob, &SecondPlatform)
+            .unwrap()
+            .fingerprint(),
+        identity.fingerprint()
+    );
+}
+
+#[test]
+fn a_wrap_byte_nobody_implements_is_still_refused_at_parse() {
+    // Adding 0x02 must not turn the wrap check into "anything small is fine".
+    let identity = an_identity();
+    let mut blob = seal_identity(&identity, &FakeWrapper).unwrap();
+    blob[9] = 0x03;
+    assert_eq!(
+        open_identity(&blob, &FakeWrapper).unwrap_err(),
+        StoreError::UnsupportedWrap { found: 0x03 },
+        "an unknown wrap must be refused by name at step 5, before any wrapper \
+         is asked to do anything"
+    );
 }

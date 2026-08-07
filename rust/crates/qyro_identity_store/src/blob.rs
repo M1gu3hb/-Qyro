@@ -28,8 +28,17 @@ pub(crate) const MAGIC: [u8; 8] = *b"QYRO-IDS";
 /// The only format version this build writes or accepts.
 pub(crate) const VERSION: u8 = 1;
 
-/// DPAPI, user scope. The one wrap this build knows.
+/// DPAPI, user scope. ADR-0024.
 pub(crate) const WRAP_DPAPI_USER: u8 = 1;
+
+/// Android Keystore, AES-256-GCM under a non-exportable key. ADR-0025 §5.
+pub(crate) const WRAP_ANDROID_KEYSTORE: u8 = 2;
+
+/// Every wrap byte this build knows how to read.
+///
+/// A list rather than a range: "less than three" would accept a value this
+/// build has no wrapper for, and step 5 exists to refuse exactly that by name.
+pub(crate) const KNOWN_WRAPS: [u8; 2] = [WRAP_DPAPI_USER, WRAP_ANDROID_KEYSTORE];
 
 /// Bytes before `wrapped` begins.
 pub(crate) const HEADER_LEN: usize = 16;
@@ -119,7 +128,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<(BlobHeader, &[u8]), StoreError> {
     let Some(&wrap) = header.get(9) else {
         return Err(StoreError::Truncated { found: bytes.len() });
     };
-    if wrap != WRAP_DPAPI_USER {
+    if !KNOWN_WRAPS.contains(&wrap) {
         return Err(StoreError::UnsupportedWrap { found: wrap });
     }
 

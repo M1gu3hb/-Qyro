@@ -41,6 +41,17 @@ pub enum StoreError {
     ReservedNotZero,
     /// Step 7. The declared length disagrees with the bytes present.
     LengthMismatch { declared: u32, present: usize },
+    /// Step 7b. The blob belongs to a different wrapper than the one asked to
+    /// open it.
+    ///
+    /// Separate from [`Self::Unwrap`] deliberately, and the separation is the
+    /// reason the `wrap` byte exists. "The tag did not verify" is what damage
+    /// looks like, and a caller may retry it or report a corrupt file. "This
+    /// blob is another platform's" is neither damaged nor retryable — it is a
+    /// blob that arrived somewhere it does not belong, most likely through a
+    /// backup or a synced directory. Both sides are named so the report can say
+    /// which two.
+    WrapMismatch { blob: u8, wrapper: u8 },
     /// Step 8. The platform wrapper refused. Carries the platform's own code so
     /// a report can say which failure it was without this crate pretending to
     /// interpret it.
@@ -80,6 +91,10 @@ impl fmt::Display for StoreError {
             Self::UnsupportedWrap { found } => {
                 write!(f, "stored blob declares unsupported wrap algorithm {found}")
             }
+            Self::WrapMismatch { blob, wrapper } => write!(
+                f,
+                "stored blob was wrapped by {blob} and was handed to wrapper {wrapper}"
+            ),
             Self::ReservedNotZero => f.write_str("stored blob has non-zero reserved bytes"),
             Self::LengthMismatch { declared, present } => write!(
                 f,

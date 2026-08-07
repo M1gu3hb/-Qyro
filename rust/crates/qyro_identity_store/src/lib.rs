@@ -160,6 +160,21 @@ pub fn open_identity(
     wrapper: &impl SecretWrapper,
 ) -> Result<DeviceIdentity, StoreError> {
     let (header, body) = blob::parse(bytes)?;
+
+    // 7b. The blob belongs to this wrapper.
+    //
+    // Until sprint 4D.2a nothing compared these, because there was one wrapper
+    // and the question could not arise. With two, handing a Windows blob to the
+    // Android wrapper would have reached `unwrap` and come back as a platform
+    // failure — indistinguishable from a corrupt file, which is the one thing
+    // the `wrap` byte exists to distinguish (ADR-0025 §5).
+    if header.wrap != wrapper.wrap_id() {
+        return Err(StoreError::WrapMismatch {
+            blob: header.wrap,
+            wrapper: wrapper.wrap_id(),
+        });
+    }
+
     let entropy = entropy_for(header.version, header.wrap);
     let seed = wrapper.unwrap(body, &entropy)?;
     let bytes: &[u8; SEED_LEN] = seed
