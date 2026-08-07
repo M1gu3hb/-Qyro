@@ -299,6 +299,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "qyro_identity_store"
+version = "0.0.1"
+dependencies = [
+ "qyro_crypto",
+ "zeroize",
+]
+
+[[package]]
 name = "qyro_manifest"
 version = "0.0.1"
 dependencies = [

@@ -1,0 +1,15 @@
+[package]
+name = "qyro_identity_store"
+description = "Versioned, platform-backed persistence for a Qyro device identity."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+# The seed accessor and IdentitySecret. This crate is the reason those two
+# public paths exist; see ADR-0024 §4.
+qyro_crypto = { path = "../qyro_crypto" }
+# Temporary buffers holding a seed on its way to or from a wrapper.
+zeroize = { version = "1.9.0", default-features = false, features = ["alloc"] }

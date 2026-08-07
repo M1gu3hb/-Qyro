@@ -113,6 +113,13 @@ fn the_ffi_dependency_closure_holds_no_crypto() {
     // arrived rather than only that something did.
     for forbidden in [
         "qyro_crypto",
+        // Sprint 4D.1. The store depends on qyro_crypto and holds the only two
+        // public paths that hand out a seed, so reaching it from the FFI
+        // boundary would reach key material in two hops. Listed before the
+        // platform crate exists so that adding it under any dependency table —
+        // including [target.'cfg(windows)'.dependencies], which is exactly the
+        // shape that slipped past a textual check in 4C.2 — fails here.
+        "qyro_identity_store",
         "ed25519-dalek",
         "x25519-dalek",
         "curve25519-dalek",
