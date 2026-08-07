@@ -343,8 +343,9 @@ fn is_windows_reserved(segment: &str) -> bool {
 }
 
 fn has_drive_prefix(candidate: &str) -> bool {
-    let bytes = candidate.as_bytes();
-    bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
+    // A slice pattern rather than two indexes guarded by a length check: the
+    // pattern is the length check, so there is nothing left to keep in step.
+    matches!(candidate.as_bytes(), [drive, b':', ..] if drive.is_ascii_alphabetic())
 }
 
 /// A key two paths share when a real filesystem would treat them as one file.
@@ -404,6 +405,14 @@ fn fold_segment(segment: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod tests {
     use super::{UNICODE_FORMAT_RANGES, is_unicode_format};
 

@@ -48,6 +48,15 @@
 //! # Ok::<(), Box<dyn core::error::Error>>(())
 //! ```
 
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 

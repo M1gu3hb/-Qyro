@@ -312,8 +312,26 @@ impl<'a> Reader<'a> {
                 required: count,
             });
         }
-        let slice = &self.bytes[self.offset..self.offset + count];
-        self.offset += count;
+        // `get` rather than a slice expression: the length check above already
+        // proves the range is in bounds, and saying so twice — once as a
+        // comparison and once as an index that trusts it — is how the two get
+        // out of step. `checked_add` because `offset + count` is the one part a
+        // peer's declared length reaches.
+        let end = self
+            .offset
+            .checked_add(count)
+            .ok_or(ManifestError::Truncated {
+                available: self.remaining(),
+                required: count,
+            })?;
+        let slice = self
+            .bytes
+            .get(self.offset..end)
+            .ok_or(ManifestError::Truncated {
+                available: self.remaining(),
+                required: count,
+            })?;
+        self.offset = end;
         Ok(slice)
     }
 
@@ -325,7 +343,16 @@ impl<'a> Reader<'a> {
     }
 
     fn take_u8(&mut self) -> Result<u8, ManifestError> {
-        Ok(self.take_exact(1)?[0])
+        match self.take_exact(1)? {
+            [byte] => Ok(*byte),
+            // Unreachable: `take_exact` returns exactly what was asked for or an
+            // error. Written as a refusal rather than an index so the compiler
+            // proves it instead of a comment asserting it.
+            _ => Err(ManifestError::Truncated {
+                available: self.remaining(),
+                required: 1,
+            }),
+        }
     }
 
     /// Reads a presence byte. Only `0` and `1` are canonical.

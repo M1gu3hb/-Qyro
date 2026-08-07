@@ -488,9 +488,11 @@ impl TransferManifest {
 /// produces an error rather than a small, believable total.
 fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
     let mut total: u64 = 0;
+    // The predecessor is carried rather than indexed. `items[index - 1]` is
+    // correct and unprovable; a value threaded through the loop is neither.
+    let mut previous: Option<&ManifestItem> = None;
     for (index, item) in items.iter().enumerate() {
-        if index > 0 {
-            let previous = &items[index - 1];
+        if let Some(previous) = previous {
             match item.path.cmp(&previous.path) {
                 core::cmp::Ordering::Less => {
                     return Err(ManifestError::UnsortedItems { index });
@@ -501,6 +503,7 @@ fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
                 core::cmp::Ordering::Greater => {}
             }
         }
+        previous = Some(item);
         if item.kind == ItemKind::Directory && (item.size != 0 || item.hash.is_present()) {
             return Err(ManifestError::InvalidDirectory { index });
         }
@@ -527,12 +530,14 @@ fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
         .map(|(index, item)| (PortableCollisionKey::of(&item.path), index))
         .collect();
     keys.sort_unstable();
-    for window in keys.windows(2) {
-        if window[0].0 == window[1].0 {
-            let (first, second) = if window[0].1 < window[1].1 {
-                (window[0].1, window[1].1)
+    // Pairwise by iterator rather than by `windows(2)` and two indexes: `zip`
+    // yields the pair as a pair, so there is no length to assume.
+    for (left, right) in keys.iter().zip(keys.iter().skip(1)) {
+        if left.0 == right.0 {
+            let (first, second) = if left.1 < right.1 {
+                (left.1, right.1)
             } else {
-                (window[1].1, window[0].1)
+                (right.1, left.1)
             };
             return Err(ManifestError::PortableCollision {
                 index: second,
@@ -557,13 +562,15 @@ fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
         //
         // Only a *file* ancestor is a conflict. A directory item with children
         // is the ordinary shape of a tree.
-        if let Some(rest) = window[1].0.as_str().strip_prefix(window[0].0.as_str())
+        if let Some(rest) = right.0.as_str().strip_prefix(left.0.as_str())
             && rest.starts_with('\u{0}')
-            && items[window[0].1].kind == ItemKind::File
+            && items
+                .get(left.1)
+                .is_some_and(|item| item.kind == ItemKind::File)
         {
             return Err(ManifestError::FileIsAlsoADirectory {
-                index: window[1].1,
-                ancestor: window[0].1,
+                index: right.1,
+                ancestor: left.1,
             });
         }
     }
@@ -576,9 +583,9 @@ fn validate_items(items: &[ManifestItem]) -> Result<u64, ManifestError> {
         .map(|(index, item)| (item.item_id, index))
         .collect();
     identifiers.sort_unstable();
-    for window in identifiers.windows(2) {
-        if window[0].0 == window[1].0 {
-            return Err(ManifestError::DuplicateItemId { index: window[1].1 });
+    for (left, right) in identifiers.iter().zip(identifiers.iter().skip(1)) {
+        if left.0 == right.0 {
+            return Err(ManifestError::DuplicateItemId { index: right.1 });
         }
     }
 
