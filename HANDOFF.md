@@ -5,9 +5,27 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-secure-storage-4d1`, que continúa
-   `claude/qyro-resource-bounds-4c3` y es el primer sprint desde 4A que **añade
-   función**: persistencia de identidad.
+2. Confirmar la rama `claude/qyro-transfer-engine-5a`, que continúa
+   `claude/qyro-android-keystore-4d2a`.
+
+   **Existe un motor de transferencia y no mueve archivos.** `qyro_transfer`
+   lleva una transferencia completa —varios archivos, varios chunks, digest
+   verificado, ACK con ventana, pausa, reanudación, cancelación y
+   retransmisión— entre dos extremos del **mismo proceso** que sólo intercambian
+   `Vec<u8>` de frames sellados. No hay sockets, no hay disco, y `qyro_ffi` no
+   depende ni de `qyro_crypto` ni de `qyro_transfer`, así que la aplicación no
+   ejercita nada de esto. Los botones siguen deshabilitados.
+
+   Lo que 5B tiene que respetar: `ContentSource` y `ContentSink` son la costura
+   por la que entra el filesystem, y **no deberían cambiar**. Si cambian, estaban
+   mal, y eso es un hallazgo antes que un cambio — igual que `SecretWrapper`
+   aguantó la segunda plataforma sin ensancharse.
+
+   **El sprint 4D.2a está aparcado, no cancelado.** ADR-0025 sigue congelada y
+   sigue siendo buena; lo que la paró es QYR-0064, que no es un defecto suyo.
+
+   El sprint 4D.1 fue el primero desde 4A que añadió función: persistencia de
+   identidad, en Windows.
 
    **La función existe en Windows y no existe en Android ni en iOS.** Una
    identidad generada por un proceso la carga otro proceso distinto, ejecutado
@@ -110,7 +128,9 @@ actualizarse dentro del mismo tramo de trabajo, no al final.
 ## Estado del protocolo y la criptografía
 
 `qyro_protocol`, `qyro_manifest` y `qyro_crypto` están implementados y probados,
-pero **nada los usa todavía**: no hay sockets, transporte ni escritura en disco.
+y desde el sprint 5A **`qyro_transfer` los usa a los tres a la vez**. Lo que
+sigue sin existir es lo de fuera: no hay sockets, ni transporte, ni escritura en
+disco.
 Cifrado sí hay, desde el sprint 4C, y no mueve un solo byte a ninguna parte. Que el framing y el handshake existan no significa que Qyro
 transfiera archivos. Los botones Enviar y Recibir siguen deshabilitados a
 propósito, y el README sigue diciendo que Qyro todavía no transfiere archivos.
@@ -226,3 +246,27 @@ comprobarla**. Dos filas de la tabla de runs de STATUS.md se escribieron desde l
 memoria de la sesión; una contaba un run cancelado como éxito y la otra citaba un
 identificador que no existe (QYR-0061). Las tablas de runs se reconstruyen
 listando los runs de la rama por API, no recordándolos.
+
+## Conectar dos piezas probadas destapa lo que ninguna prueba sola veía
+
+El sprint 5A fue el primero que usó el framing, el manifest, el handshake y el
+AEAD juntos, y encontró dos cosas que cinco sprints de pruebas por separado no
+podían encontrar:
+
+- **QYR-0068**: la cabecera de 48 bytes reserva `transfer_id`, `stream_id` e
+  `item_id` dentro de los datos asociados autenticados, y **no hay forma pública
+  de rellenarlos**. `Frame::new` los pone a cero. Son tres campos autenticados
+  que hoy no dicen nada, y se descubrió al escribir un cuerpo de mensaje que
+  duplicaba uno de ellos sin saberlo.
+- **QYR-0069**: los constructores deterministas del handshake son `pub(crate)`,
+  así que un crate dependiente no puede reproducir una sesión byte a byte.
+
+Ninguno se arregló. Los dos están registrados con la decisión pendiente escrita,
+porque ensanchar una superficie congelada como efecto secundario de otro sprint
+es cómo se pierde el control de un formato.
+
+La lección operativa, para el siguiente que conecte dos piezas: **espera
+desajustes y regístralos antes de arreglarlos.** Añadir la segunda plataforma en
+4D.2a destapó que `open_identity` nunca comparaba el byte `wrap`; conectar el
+protocolo con el sellado destapó estos dos. Es la forma en que este proyecto
+descubre lo que sus pruebas no cubrían.

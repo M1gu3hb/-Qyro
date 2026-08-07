@@ -75,3 +75,14 @@ se repita.
 Su corolario práctico: una retransmisión es un frame **nuevo**, sellado de nuevo.
 Reenviar los mismos bytes sellados lo rechazaría la ventana de replay, y tendría
 razón.
+
+El sprint 5A añade ADR-0026. No cambia ningún formato existente y no añade
+criptografía; conecta por primera vez el framing, el manifest, el handshake y el
+AEAD, y define quién habla cuándo.
+
+Al conectarlos aparecieron dos desajustes que cinco sprints de pruebas por
+separado no podían encontrar, los dos registrados y **no** arreglados: QYR-0068,
+la cabecera de 48 bytes reserva `transfer_id`, `stream_id` e `item_id` dentro de
+los datos asociados autenticados y no hay forma pública de rellenarlos; y
+QYR-0069, los constructores deterministas del handshake son `pub(crate)`, así que
+un crate dependiente no puede reproducir una sesión byte a byte.

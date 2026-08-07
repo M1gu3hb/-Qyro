@@ -23,21 +23,31 @@
      y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
      lo que se está afirmando.
 
-## P0 — siguiente sprint (4D.2)
+## P0 — siguiente sprint (5B: filesystem)
 
-- **Android Keystore e iOS Keychain, detrás del mismo trait.** `IdentityStore` y
-  `SecretWrapper` ya existen y no deberían cambiar; si cambian para acomodar
-  Keystore o Keychain, el trait estaba mal y **eso es el hallazgo**. El mismo
-  barrido de corrupción posición por posición contra la API real de cada
-  plataforma —no contra un doble—, más rotación y borrado, en emulador y
-  simulador según ADR-0023. Ni el emulador ni el simulador son hardware.
-  Las tres preguntas que hay que decidir antes de escribir código, con fuente
-  primaria citada y fechada como hizo ADR-0024, están en «Next task» de
-  STATUS.md.
-- **QYR-0039** ya tiene enunciado y está más abajo en P1; este bullet decía que
-  su contenido no estaba en el repositorio y era falso desde el sprint 4D.1
-  (QYR-0062). El archivo se contradecía a sí mismo con treinta y cuatro líneas
-  de separación.
+- **Que el motor deje de mover búferes y empiece a mover archivos.** Selección de
+  archivos en Android y en Windows; el manifest **construido desde disco**
+  leyendo por partes —el digest de un archivo grande no puede exigir tenerlo
+  entero en RAM, igual que el motor no lo exige—; `.qyro-part`, verificación del
+  digest **al cerrar y antes del rename**, y rename atómico; colisiones contra lo
+  que ya existe en el destino; y los metadatos que hacen posible reanudar
+  **después de cerrar el proceso**, que es lo que 5A deliberadamente no hace.
+- `ContentSource` y `ContentSink` son la costura por la que entra todo eso y
+  **no deberían cambiar**. Si cambian para acomodar el disco, estaban mal y eso
+  es un hallazgo antes que un cambio.
+
+### Aparcado: 4D.2 — Android Keystore e iOS Keychain
+
+**ADR-0025 sigue congelada y no caduca.** Lo que paró el sprint es QYR-0064 y no
+un defecto suyo: `AndroidKeyStore` es un proveedor JCA de Java, no hay API en el
+NDK, y el harness de binario empujado por `adb` corre como el usuario `shell`, no
+como la app, así que no puede alcanzar las claves. Hace falta un test
+instrumentado bajo `am instrument`, con andamiaje Gradle y una dependencia JNI.
+
+Se puede aparcar sin coste porque el contrato ya está demostrado contra una
+plataforma real, que era el objetivo de hacer Windows primero. Cuando vuelva:
+`IdentityStore` y `SecretWrapper` no deberían cambiar; si cambian, **eso es el
+hallazgo**. Y quedan abiertos QYR-0065 y QYR-0066.
 
 ### Sprint 4D.1 — cerrado
 

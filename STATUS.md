@@ -3,14 +3,14 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-08T00:20:00Z
-- Branch: claude/qyro-android-keystore-4d2a
-- Verified commit: bdb2bf8d5a984111a993a12a11d8cb21baa002b7
-- Milestone: **una identidad sobrevive al cierre del proceso en Windows**,
-  ejecutado en CI en dos invocaciones separadas. La persistencia está
-  **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y en iOS**, y nada
-  se ha probado en hardware físico. El sprint 4D.2a está **en curso**: Android
-  tiene decisión congelada (ADR-0025) y **no tiene implementación**
+- Updated UTC: 2026-08-08T02:10:00Z
+- Branch: claude/qyro-transfer-engine-5a
+- Verified commit: b4c782f0ad0ca77c4005ba85c60707d01a977495
+- Milestone: **el motor de transferencia mueve una transferencia completa entre
+  dos valores del mismo proceso**, con sellado real. **No hay red, no hay disco
+  y los botones Enviar y Recibir siguen deshabilitados.** La persistencia de
+  identidad sigue **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y
+  en iOS**; nada se ha probado en hardware físico
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -314,17 +314,24 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **352 tests**, 0 failed, 2 ignored. Eran 350 al
-  empezar el sprint 4D.2a; las dos nuevas son las del byte `wrap`. Eran 323 al
-  empezar el sprint 4D.1: la guarda de caminos públicos, cuatro sobre el accesor
+- `cargo test --workspace`: PASS, **369 tests**, 0 failed, 2 ignored. Eran 352 al
+  empezar el sprint 5A; las diecisiete nuevas son las del motor de transferencia,
+  y cuatro de ellas existen porque el barrido de mutación encontró sin cubrir
+  cuatro negativas de ADR-0026 §4. Eran 350 al empezar 4D.2a, y 323 al empezar
+  4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
   crate de plataforma. **Las nueve pruebas de `qyro_win_dpapi` no están en esa
   cuenta**: el crate entero es `cfg(windows)` y en este host no compila ninguna.
   Corren en CI, y ese es su único sitio
-- `cargo test --workspace --all-features`: PASS, **352 tests**. Ningún crate
+- `cargo test --workspace --all-features`: PASS, **369 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
-- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **59 crates**.
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **60 crates**.
+  La entrada nueva del sprint 5A es **`qyro_transfer`, de primera parte**: el
+  diff de `Cargo.lock` tiene exactamente una línea `name =`. `sha2` pasó a ser
+  dependencia directa suya y ya estaba en el grafo por `qyro_crypto`, así que es
+  una arista nueva y no un paquete nuevo. **El sprint 5A no añadió
+  ninguna dependencia externa.** Antes eran 59:
   Eran 56: las tres entradas nuevas son `qyro_identity_store`, `qyro_win_dpapi` y
   `qyro_store_smoke`, los tres miembros de este workspace. Este sprint **no añadió
   ninguna dependencia externa**, como fija ADR-0024: las tres entradas nuevas del
@@ -755,6 +762,82 @@ Lo que **no** existe, y no debe leerse como progreso:
 - QYR-0065 y QYR-0066 abiertos: falta fuente verbatim sobre invalidación de
   claves, y no está medido qué error da Keystore cuando el alias ya no existe.
 
+## Sprint 5A — el motor existe y no mueve archivos
+
+**`qyro_transfer` mueve una transferencia completa entre dos extremos del mismo
+proceso.** Un emisor y un receptor, cada uno con su estado, intercambiando
+**solo `Vec<u8>` de frames sellados**: ninguno toca al otro. Varios archivos,
+varios chunks, verificación de SHA-256 contra el manifest y un veredicto por
+elemento.
+
+El sellado es **real**: `FrameSealer` y `FrameOpener` derivados de un handshake
+de cuatro mensajes real. **No hay ningún doble criptográfico** en las pruebas del
+motor; el sprint existía para comprobar que las piezas encajan, y un doble
+probaría que encajan con otra cosa.
+
+Lo que el motor hace, con prueba por cada cosa:
+
+- Camino feliz completo sobre frames sellados, y los bytes que llegan son los que
+  salieron —comprobado byte a byte en varias posiciones, no sólo por el veredicto.
+- Un bit volteado en un chunk es `NotAuthenticated` y **envenena la sesión**;
+  nada de ese frame llega al destino.
+- El receptor calcula el digest él mismo y lo compara con el manifest. Un archivo
+  cuyo contenido no case se rechaza al cerrar, con el otro archivo en `Ok` para
+  que la prueba no pase por fallar todo.
+- Control de flujo **medido**: el emisor produce exactamente una ventana y se
+  para; con un ACK vuelve a producir. Que se parara sin volver a arrancar también
+  sería cierto de un motor roto.
+- Un chunk perdido se retransmite y la transferencia termina bien, con
+  **go-back-N**: ACK acumulativo y sin buffer fuera de orden implican que
+  reenviar sólo el que faltaba deja el resto sin llegar.
+- Pausa, reanudación y cancelación **desde los dos lados**, dejando a los dos
+  extremos de acuerdo.
+- Cuatro transiciones ilegales rechazadas por tipo, más las cuatro negativas de
+  ADR-0026 §4 que el barrido de mutación encontró **sin cubrir**.
+- Un chunk repetido lo rechaza la ventana de replay que ya existía: la prueba
+  comprueba que el motor pasa por ella y no por su lado.
+
+**Memoria acotada, medida y no supuesta:** en una transferencia de 8 MiB el
+emisor sostuvo **65 536 bytes** —un búfer de chunk— y el receptor entregó como
+mucho 65 536 bytes de una vez. Contador instrumentado bajo `cfg(test)`, como el
+`bytes_moved` del decoder; un cronómetro en un runner compartido mide el runner.
+La fuente de contenido **genera** los bytes desde una semilla en vez de
+guardarlos, así que lo que se mide es el motor y no el fixture.
+
+Lo que **no** existe, y no debe leerse como progreso:
+
+- **No hay red y no hay sockets.** El «transporte» es un `Vec<u8>` que una prueba
+  pasa de un lado al otro.
+- **No hay filesystem.** La fuente es un `ContentSource` y el destino un
+  `ContentSink`; en 5A los dos son memoria. Nada abre, escribe ni renombra un
+  archivo. Eso es 5B.
+- **Nada del producto llama al motor.** `qyro_ffi` no depende de `qyro_crypto` ni
+  de `qyro_transfer`, y una prueba de cierre transitivo lo mantiene así. Los
+  botones Enviar y Recibir siguen deshabilitados y el README sigue diciendo que
+  Qyro no transfiere archivos.
+- **No hay reanudación entre sesiones.** La pausa de 5A es dentro de una sesión
+  viva; sobrevivir al cierre del proceso necesita disco.
+- **El tamaño de chunk y la ventana no están medidos.** Son cotas argumentadas
+  —64 KiB y 16, es decir 1 MiB en vuelo por dirección—, elegidas desde el límite
+  de memoria. Sin transporte no hay contra qué medir un óptimo, y ADR-0026 §2 lo
+  dice de sí misma.
+
+**Dos desajustes de contrato**, que son el valor principal del sprint aparte del
+motor. Los dos **registrados y no arreglados**:
+
+- **QYR-0068**: la cabecera de 48 bytes reserva `transfer_id`, `stream_id` e
+  `item_id` **dentro de los datos asociados autenticados**, y `Frame::new` los
+  fija en cero sin que exista forma pública de cambiarlos. Hoy son tres campos
+  autenticados que no dicen nada. Se descubrió al implementar ADR-0026 §1, que
+  había decidido repetir `item_id` en el cuerpo sin saber que la cabecera ya lo
+  llevaba. **No se añadieron setters**: ensanchar una superficie congelada como
+  efecto secundario de otro sprint es cómo se pierde el control de un formato.
+- **QYR-0069**: los constructores deterministas del handshake son `pub(crate)`,
+  así que un crate dependiente no puede reproducir una sesión byte a byte.
+  Probablemente correcto —un constructor determinista público acaba usándose en
+  producción— y no cuesta nada aquí. Costará cuando haga falta un vector
+  interoperable de una transferencia completa.
+
 ## Runs de 4D.2a
 
 Todos los `push` de la rama, sin filtrar. **Ninguno falló y ninguno se canceló**,
@@ -933,38 +1016,26 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**Terminar el sprint 4D.2a: que una identidad sobreviva al proceso en Android.**
-La decisión está congelada en ADR-0025 y el código no existe. En este orden, y el
-orden importa porque el primer paso es el que el prompt del sprint no previó:
+**Sprint 5B: el filesystem.** El motor mueve búferes; 5B es donde empieza a mover
+archivos. En orden:
 
-1. **El harness instrumentado** (QYR-0064). Módulo Gradle, manifiesto, runner de
-   instrumentación y empaquetado de la `.so` en `jniLibs`, aislado del producto
-   según ADR-0023. Sin esto no hay forma de ejecutar Keystore, así que no hay
-   forma de probar nada de lo que sigue.
-2. `only_the_listed_crates_may_relax_forbid_unsafe` con una **cuarta entrada
-   argumentada**, y `the_unsafe_blocks_are_the_ones_we_listed` escrita **con la
-   lista vacía antes del primer bloque**, como en `qyro_win_dpapi`.
-3. `jni-sys` añadida, con su licencia en `docs/LICENSE_AUDIT.md` y el recuento de
-   paquetes actualizado de 59 a 61 **antes** de que el crate compile.
-4. El envoltorio: `SecretWrapper` sobre AES-256-GCM en Keystore, con `entropy_for`
-   como AAD y el IV dentro de `wrapped`.
-5. `IdentityStore` para Android con `create`, `load`, `delete` y `rotate`, y las
-   cuatro pruebas que `qyro_win_dpapi` ya tiene.
-6. La persistencia en **dos invocaciones de `am instrument`**, que son dos
-   procesos. Dos llamadas dentro de uno no prueban nada.
-7. El barrido de corrupción **contra Keystore real**, con el conjunto exacto de
-   supervivientes y la aserción de fingerprint dentro del bucle. Si el conjunto
-   difiere de las 128 de Windows —o es vacío— eso es el hallazgo y se mide; no se
-   ajusta la prueba.
-8. El vector para `wrap = 0x02`, verificado desde las primitivas.
-9. QYR-0066 medido o declarado no medido: qué error da Keystore cuando el alias
-   ya no existe.
+1. Selección de archivos en Android y en Windows.
+2. El manifest **construido desde disco**, leyendo por partes. Hoy se construye a
+   mano; el digest de un archivo grande no puede exigir tenerlo entero en RAM,
+   igual que el motor no lo exige.
+3. `.qyro-part`, verificación del digest al cerrar y rename atómico. El orden
+   importa: renombrar antes de verificar publica un archivo que todavía no se
+   sabe si es el que se mandó.
+4. Colisiones de ruta contra lo que ya existe en el destino.
+5. Los metadatos que hacen posible reanudar **después de cerrar el proceso**, que
+   es lo que 5A deliberadamente no hace.
 
-Después: los seis workflows en verde sobre un mismo commit, y `Verified commit`
-movido a él.
+`ContentSource` y `ContentSink` son la costura por la que entra todo eso, y **no
+deberían cambiar**. Si cambian para acomodar el disco, estaban mal y eso es el
+hallazgo, igual que `SecretWrapper` aguantó la segunda plataforma en 4D.2a.
 
-Y **no** empezar iOS. Es 4D.2b, y su pregunta —el Secure Enclave sólo admite
-P-256, no Ed25519— hay que resolverla por ADR antes de escribir código.
+Después: LAN Android↔Windows, UI, y entonces se retoma 4D.2 con ADR-0025 tal como
+quedó.
 
 ## Provisional values
 

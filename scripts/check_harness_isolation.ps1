@@ -35,7 +35,7 @@ function Write-Failure([string] $Message) {
 
 # --- nothing the product builds may name the harness -------------------------
 
-foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'qyro_manifest')) {
+foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'qyro_manifest', 'qyro_transfer')) {
     $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
     foreach ($harness in $harnesses) {
         if ((Get-Content -LiteralPath $manifest -Raw) -match [regex]::Escape($harness)) {

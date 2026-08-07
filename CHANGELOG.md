@@ -4,6 +4,59 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 5A)
+
+**Un motor de transferencia que mueve una transferencia completa entre dos
+extremos del mismo proceso.** Es el primer sprint que conecta el framing, el
+manifest, el handshake y el AEAD entre sí. **No hay red, no hay disco, y los
+botones Enviar y Recibir siguen deshabilitados.**
+
+- `qyro_transfer`: emisor y receptor con estado propio que sólo intercambian
+  `Vec<u8>` de frames sellados. Varios archivos, varios chunks, digest SHA-256
+  verificado contra el manifest y un veredicto **por elemento**.
+- Sellado **real** de punta a punta: `FrameSealer` y `FrameOpener` derivados de un
+  handshake de cuatro mensajes real. **Ningún doble criptográfico** en las
+  pruebas del motor.
+- Control de flujo con ventana, **medido**: el emisor produce una ventana y se
+  detiene; con un ACK vuelve a producir. Que se detuviera y no reanudara también
+  sería cierto de un motor roto, así que la prueba comprueba las dos cosas.
+- Retransmisión **go-back-N**, que es lo que el ACK acumulativo obliga: sin
+  buffer fuera de orden, reenviar sólo el chunk perdido deja el resto sin llegar.
+- Pausa, reanudación y cancelación desde los dos lados, dejando a los dos
+  extremos de acuerdo.
+- Memoria acotada y **medida**: 65 536 bytes sostenidos en una transferencia de
+  8 MiB, con contador instrumentado bajo `cfg(test)` y una fuente que genera los
+  bytes desde una semilla en vez de guardarlos.
+- ADR-0026, congelada antes del código: el cuerpo de cada mensaje byte a byte,
+  chunk de 64 KiB, ventana de 16, ACK acumulativo, y por qué la secuencia del
+  frame y el índice de chunk son dos números que no se pueden unificar.
+- `qyro_transfer` entra en las dos guardas de aislamiento de harness, en Bash y
+  en PowerShell.
+
+**Cero paquetes externos nuevos.** La única entrada nueva de `Cargo.lock` es
+`qyro_transfer`, de primera parte; `sha2` ya estaba en el grafo. 59 a 60.
+
+### Fixed (sprint 5A)
+
+- QYR-0067: `docs/security/identity-storage.md` se había quedado atrás del código
+  en 4D.2a — la tabla no registraba el `wrap 0x02`, el orden de lectura tenía
+  nueve pasos y el código diez, y el paso 8 nombraba `CryptUnprotectData` como si
+  sólo hubiera un envoltorio.
+- Un frame que no autenticaba propagaba su error **sin envenenar la sesión**, así
+  que el receptor seguía en `Transferring` tras rechazar un chunk corrupto.
+  ADR-0026 §4 dice que se envenena; el código decía `?`.
+- Cuatro negativas de ADR-0026 §4 no las cubría ninguna prueba: borrar cada
+  comprobación dejaba la suite entera en verde.
+
+### Encontrado y no arreglado (sprint 5A)
+
+- **QYR-0068**: la cabecera de 48 bytes reserva `transfer_id`, `stream_id` e
+  `item_id` dentro de los datos asociados autenticados, y `Frame::new` los fija
+  en cero sin forma pública de cambiarlos. Tres campos autenticados que no dicen
+  nada.
+- **QYR-0069**: los constructores deterministas del handshake son `pub(crate)`,
+  así que un crate dependiente no puede reproducir una sesión byte a byte.
+
 ### Added (sprint 4D.1)
 
 **Una identidad sobrevive al cierre del proceso, en Windows.** Es el primer
