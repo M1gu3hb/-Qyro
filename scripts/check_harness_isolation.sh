@@ -44,8 +44,14 @@ done
 
 # The FFI boundary itself, checked here too so this script alone answers "can
 # Dart reach a key?" without anyone having to also run the Rust test suite.
+# A comment naming the crate is not a dependency on it. This used to grep the
+# whole manifest, so writing `qyro_crypto` in a comment failed the check and the
+# only way to keep it green was to avoid saying the word — which is the opposite
+# of what a manifest comment is for. Comment lines are dropped first
+# (sprint 4C.2, QYR-0031). A `[target.'cfg(...)'.dependencies]` entry is still
+# caught: it is not a comment.
 for manifest in rust/crates/qyro_ffi/Cargo.toml rust/crates/qyro_core/Cargo.toml; do
-    if grep -q 'qyro_crypto' "$manifest"; then
+    if grep -v '^[[:space:]]*#' "$manifest" | grep -q 'qyro_crypto'; then
         fail "$manifest reaches qyro_crypto; the library Dart loads must not"
     fi
 done

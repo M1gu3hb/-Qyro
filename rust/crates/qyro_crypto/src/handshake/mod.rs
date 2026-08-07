@@ -455,12 +455,14 @@ impl<'identity> InitiatorStart<'identity> {
         self.send_hello_with_entropy(entropy)
     }
 
-    /// Deterministic variant. **Tests only.**
+    /// Deterministic variant. **Tests and fuzz targets only.**
     ///
-    /// Crate-private and `cfg(test)` for the same reason
+    /// Crate-private and `cfg(any(test, fuzzing))` for the same reason
     /// `DeviceIdentity::from_test_seed` is: a handshake whose entropy a caller
     /// chooses is a handshake with no forward secrecy, and a feature flag would
-    /// not keep it out of a release build.
+    /// not keep it out of a release build. The documentation said `cfg(test)`
+    /// alone until sprint 4C.2 (QYR-0031); the attribute has always been the
+    /// wider one, because the fuzz targets need a fixed session.
     #[cfg(any(test, fuzzing))]
     pub(crate) fn send_hello_with_entropy(
         self,
@@ -665,8 +667,10 @@ impl<'identity> ResponderStart<'identity> {
 
     /// Verifies the `InitiatorHello` using supplied entropy.
     ///
-    /// `pub(crate)` outside tests: production callers use
-    /// [`Self::receive_initiator_hello_from_system`], which draws its own.
+    /// `cfg(any(test, fuzzing))` and crate-private; production callers use
+    /// [`Self::receive_initiator_hello_from_system`], which draws its own. The
+    /// previous wording said "outside tests", which read as though the fuzz
+    /// build were an ordinary one (QYR-0031).
     #[cfg(any(test, fuzzing))]
     pub(crate) fn receive_initiator_hello(
         self,

@@ -82,16 +82,26 @@ const WINDOWS_RESERVED: [&str; 28] = [
 
 /// A validated relative path.
 ///
-/// Constructing one is the proof that the path is relative, normalized and free
-/// of traversal. Nothing else in the crate builds a path.
+/// Constructing one is the proof that the path is relative, free of traversal,
+/// and expressible on every platform Qyro targets. Nothing else in the crate
+/// builds a path.
+///
+/// **The stored string is the one that arrived, byte for byte.** The field was
+/// called `normalized` and the documentation said so, which was wrong in a way
+/// that mattered: this module rejects rather than sanitises, precisely because
+/// rewriting a hostile path usually produces a different hostile path. Nothing
+/// here alters a single byte. Corrected in sprint 4C.2 (QYR-0031).
+///
+/// Folding for collision detection happens in [`PortableCollisionKey`], on a
+/// copy, and never changes what will be written to disk.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RelativePath {
-    normalized: String,
+    verbatim: String,
     segment_count: usize,
 }
 
 impl RelativePath {
-    /// Validates and normalizes a candidate path.
+    /// Validates a candidate path, and stores it unchanged.
     ///
     /// # Errors
     ///
@@ -156,7 +166,7 @@ impl RelativePath {
         }
 
         Ok(Self {
-            normalized: candidate.to_owned(),
+            verbatim: candidate.to_owned(),
             segment_count: segments.len(),
         })
     }
@@ -172,16 +182,20 @@ impl RelativePath {
         Self::parse(text)
     }
 
-    /// Returns the normalized path, always separated by `/`.
+    /// Returns the path exactly as it was supplied, always separated by `/`.
+    ///
+    /// Not a normalized form: there is none. A backslash, a `..`, a control or
+    /// format character or a doubled separator makes `parse` fail, so anything
+    /// that reaches this accessor was already acceptable as written.
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.normalized
+        &self.verbatim
     }
 
     /// Returns the path segments.
     #[must_use]
     pub fn segments(&self) -> core::str::Split<'_, char> {
-        self.normalized.split(SEPARATOR)
+        self.verbatim.split(SEPARATOR)
     }
 
     /// Returns the number of segments.
@@ -193,22 +207,22 @@ impl RelativePath {
     /// Returns the final segment, which is the file or directory name.
     #[must_use]
     pub fn file_name(&self) -> &str {
-        self.normalized
+        self.verbatim
             .rsplit(SEPARATOR)
             .next()
-            .unwrap_or(&self.normalized)
+            .unwrap_or(&self.verbatim)
     }
 
     /// Returns the encoded byte length.
     #[must_use]
     pub fn byte_len(&self) -> usize {
-        self.normalized.len()
+        self.verbatim.len()
     }
 }
 
 impl core::fmt::Display for RelativePath {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        formatter.write_str(&self.normalized)
+        formatter.write_str(&self.verbatim)
     }
 }
 

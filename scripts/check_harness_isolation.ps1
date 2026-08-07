@@ -41,9 +41,17 @@ foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'q
 
 # The FFI boundary itself, checked here too so this script alone answers "can
 # Dart reach a key?" without anyone having to also run the Rust test suite.
+#
+# A comment naming the crate is not a dependency on it. This used to match the
+# whole manifest, so writing the crate's name in a comment failed the check and
+# the only way to keep it green was to avoid saying the word. Comment lines are
+# dropped first (sprint 4C.2, QYR-0031). A target-specific dependency table is
+# still caught: it is not a comment.
 foreach ($crate in @('qyro_ffi', 'qyro_core')) {
     $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
-    if ((Get-Content -LiteralPath $manifest -Raw) -match 'qyro_crypto') {
+    $declarations = (Get-Content -LiteralPath $manifest) |
+        Where-Object { $_ -notmatch '^\s*#' }
+    if (($declarations -join "`n") -match 'qyro_crypto') {
         Write-Failure "$manifest reaches qyro_crypto; the library Dart loads must not"
     }
 }

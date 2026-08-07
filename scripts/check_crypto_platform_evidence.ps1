@@ -93,10 +93,17 @@ else {
     }
 }
 
+# A comment naming the crate is not a dependency on it. This used to match the
+# whole manifest, so writing `qyro_crypto` in a comment failed the check and the
+# only way to keep it green was to avoid saying the word. Comment lines are
+# dropped first (sprint 4C.2, QYR-0031). A `[target.'cfg(...)'.dependencies]`
+# entry is still caught: it is not a comment.
 foreach ($manifest in @(
         (Join-Path 'rust' 'crates' 'qyro_ffi' 'Cargo.toml'),
         (Join-Path 'rust' 'crates' 'qyro_core' 'Cargo.toml'))) {
-    if ((Get-Content -LiteralPath $manifest -Raw) -match 'qyro_crypto') {
+    $declarations = (Get-Content -LiteralPath $manifest) |
+        Where-Object { $_ -notmatch '^\s*#' }
+    if (($declarations -join "`n") -match 'qyro_crypto') {
         Write-Failure "$manifest reaches qyro_crypto; the FFI boundary must stay crypto-free"
     }
 }

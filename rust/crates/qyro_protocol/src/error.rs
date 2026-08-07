@@ -105,7 +105,15 @@ pub enum FrameError {
         /// Which identifier was rejected.
         field: IdentifierField,
     },
-    /// QYRO/1.0 accepts no authentication trailer; a non-zero length appeared.
+    /// A **plain** frame declared a trailer.
+    ///
+    /// Corrected in sprint 4C.2 (QYR-0031): this said "QYRO/1.0 accepts no
+    /// authentication trailer", which stopped being true when the AEAD landed.
+    /// A frame carrying the `ENCRYPTED` flag must declare a trailer of
+    /// `1..=MAX_TRAILER_LEN`, and a missing one is
+    /// [`FrameError::EncryptedWithoutTrailer`]. This variant is the other case:
+    /// a frame with no flag, and therefore nothing that authenticates it,
+    /// carrying bytes anyway.
     AuthenticationTrailerInvalid {
         /// Trailer length the peer declared.
         declared: u8,

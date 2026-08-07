@@ -74,8 +74,12 @@ impl DeviceIdentity {
 
     /// Builds an identity from a fixed seed. **Test vectors only.**
     ///
-    /// Crate-private and `cfg(test)`, so it does not exist in any build that is
-    /// not the test build. It used to be `pub` behind a non-default
+    /// Crate-private and `cfg(any(test, fuzzing))`, so it does not exist in an
+    /// ordinary build. The documentation said `cfg(test)` alone until sprint
+    /// 4C.2, which understated the attribute by one condition (QYR-0031): the
+    /// fuzz targets need a deterministic identity, and `--cfg fuzzing` is set on
+    /// the command line by `cargo-fuzz` and by nothing else — see
+    /// [`crate::fuzzing`]. It used to be `pub` behind a non-default
     /// `test-vectors` feature, which still put a deterministic constructor in
     /// the public API: features are additive, so any crate anywhere in a
     /// dependency graph could switch it on for everybody and no release build

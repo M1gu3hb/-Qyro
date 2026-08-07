@@ -17,6 +17,21 @@
 //! it is absent from every ordinary `cargo build`, `cargo test` and `cargo
 //! install`. This module does not exist in any of them.
 //!
+//! # It is still a command-line flag, not a lock
+//!
+//! Worth saying plainly, because "cannot be requested by a dependency" is not
+//! the same as "cannot be turned on": anyone building this workspace can set
+//! `RUSTFLAGS='--cfg fuzzing'` and compile the whole of it with this module
+//! present and the deterministic constructors reachable. That is deliberate —
+//! it is how `cargo-fuzz` works — and it is the reason the flag is the right
+//! mechanism and a Cargo feature is the wrong one. A feature can be switched on
+//! *for you*, by a crate you have never read, and nothing tells you. A
+//! `RUSTFLAGS` entry is a decision the person running the build makes, in their
+//! own shell, for that build.
+//!
+//! No release process here sets it. If one ever does, the deterministic seeds
+//! below are in the binary.
+//!
 //! # What it still refuses to do
 //!
 //! It exposes a session, not key material. There is no accessor here for a

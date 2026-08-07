@@ -3,8 +3,13 @@
 //! A manifest says what is about to be written to disk, and it arrives from a
 //! peer. This crate is deliberately independent of the real filesystem: it never
 //! opens, stats or creates anything. It turns untrusted bytes into a value whose
-//! existence proves the paths are relative, normalized and free of traversal,
-//! and leaves the actual I/O to a layer that can be given a root directory.
+//! existence proves the paths are relative, free of traversal, and expressible
+//! on every platform Qyro targets, and leaves the actual I/O to a layer that can
+//! be given a root directory.
+//!
+//! A validated path is stored **verbatim**. This said "normalized" until sprint
+//! 4C.2, and the field was named that way too, which contradicted the rule
+//! immediately below it (QYR-0031).
 //!
 //! # Safety posture
 //!
@@ -17,8 +22,12 @@
 //! - Sizes are summed with checked arithmetic, so a set of items engineered to
 //!   wrap `u64` is an error rather than a small, believable total.
 //! - The visible name is derived from the path, never sent separately, so
-//!   `invoice.pdf.exe` cannot be presented as `invoice.pdf` (ADR-0019).
-//! - Two paths that a real filesystem would fold onto one file are rejected.
+//!   `invoice.pdf.exe` cannot be presented as `invoice.pdf` (ADR-0019). Since
+//!   sprint 4C.2 the Unicode format characters are refused as well, so
+//!   `invoice<RLO>fdp.exe` cannot be rendered as `invoiceexe.pdf` either
+//!   (QYR-0021).
+//! - Two paths that a real filesystem would fold onto one file are rejected,
+//!   including a file that is also another item's parent directory (QYR-0028).
 //!
 //! # Example
 //!

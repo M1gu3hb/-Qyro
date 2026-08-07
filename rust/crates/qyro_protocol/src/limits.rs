@@ -9,8 +9,15 @@ pub const HEADER_LEN: usize = 48;
 
 /// Largest header a future minor version may declare.
 ///
-/// A peer speaking a newer minor version may append fields to the header. The
-/// extra bytes are skipped, never interpreted, and never unbounded.
+/// **Corrected in sprint 4C.2 (QYR-0031).** This said the extra bytes are
+/// "skipped, never interpreted". They are not skipped: `FrameHeader::decode`
+/// refuses any declared length other than [`HEADER_LEN`] with
+/// `FrameError::UnsupportedHeaderExtension`. ADR-0018 gives the reason —
+/// skipping bytes that are neither stored nor re-serialized breaks byte-exact
+/// re-encoding and leaves the AEAD unable to authenticate them.
+///
+/// What this constant bounds is the *declaration*, before the refusal: a peer
+/// announcing a four-gigabyte header is an error, not an allocation.
 pub const MAX_HEADER_LEN: usize = 1024;
 
 /// Largest payload a single frame may carry.
@@ -21,11 +28,21 @@ pub const MAX_PAYLOAD_LEN: usize = 1024 * 1024;
 
 /// Largest authentication trailer, sized for the AEAD tags in `SECURITY.md`.
 ///
-/// QYRO/1.0 requires a trailer length of zero: accepting a trailer that nothing
-/// verifies yet would mean accepting unauthenticated bytes.
+/// **Corrected in sprint 4C.2 (QYR-0031).** This said "QYRO/1.0 requires a
+/// trailer length of zero". That has not been true since the AEAD landed. The
+/// rule depends on the `ENCRYPTED` flag: a frame carrying it must declare a
+/// trailer of `1..=MAX_TRAILER_LEN`, because a frame claiming to be sealed
+/// without a tag is asserting protection it does not have. A frame without the
+/// flag must declare exactly [`SUPPORTED_TRAILER_LEN`].
 pub const MAX_TRAILER_LEN: usize = 64;
 
-/// Trailer length accepted by QYRO/1.0.
+/// Trailer length a **plain** frame carries: none.
+///
+/// **Corrected in sprint 4C.2 (QYR-0031).** This was documented as "the trailer
+/// length accepted by QYRO/1.0", which now reads as a statement about every
+/// frame. It is the plain-frame rule only; see [`MAX_TRAILER_LEN`] for the
+/// sealed one. Accepting a trailer on a frame nothing authenticates would mean
+/// accepting unauthenticated bytes, which is why this stays zero.
 pub const SUPPORTED_TRAILER_LEN: usize = 0;
 
 /// Largest complete frame: header, payload and trailer.
