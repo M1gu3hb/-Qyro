@@ -245,6 +245,47 @@ if [[ -f "$repo_root/Cargo.lock" ]] && grep -q 'name = "ed25519-dalek"' "$repo_r
   done
 fi
 
+# --------------------------------------------------- workflow branch triggers
+#
+# A workflow whose `branches:` names a branch literally only runs on the branch
+# somebody remembered to write down. QYR-0026 fixed that symptom by writing the
+# then-current branch into six files, which made it a property of one branch
+# rather than of the repository; the next branch inherited the defect. QYR-0040
+# is the rule that stops it recurring: a pattern is the property, a name is a
+# reminder.
+#
+# `main` is exempt because it is not a working branch. Anything containing `*`
+# is a pattern and therefore fine.
+workflow_dir="$repo_root/.github/workflows"
+if [[ -d "$workflow_dir" ]]; then
+  for workflow in "$workflow_dir"/*.yml; do
+    [[ -f "$workflow" ]] || continue
+    workflow_name="$(basename "$workflow")"
+    while IFS= read -r branch_line; do
+      # An inline list is the only form this check can read. A block sequence
+      # makes it fail rather than pass: a guard with a form it silently skips
+      # is the defect it exists to catch.
+      if ! grep -Eq '^[[:space:]]*branches:[[:space:]]*\[.*\]' <<< "$branch_line"; then
+        report "BLOCKER" "Workflow branch trigger" \
+          "$workflow_name uses a branches: form this check cannot read; write an inline list"
+        blockers=$((blockers + 1))
+        continue
+      fi
+      branch_items="$(sed -E 's/^[[:space:]]*branches:[[:space:]]*\[(.*)\].*$/\1/' <<< "$branch_line")"
+      IFS=',' read -ra branch_entries <<< "$branch_items"
+      for entry in "${branch_entries[@]}"; do
+        entry="$(sed -E "s/^[[:space:]]*[\"']?//; s/[\"']?[[:space:]]*$//" <<< "$entry")"
+        [[ -z "$entry" ]] && continue
+        [[ "$entry" == "main" ]] && continue
+        [[ "$entry" == *"*"* ]] && continue
+        report "BLOCKER" "Workflow branch trigger" \
+          "$workflow_name names the branch '$entry' literally; use a pattern such as 'claude/**' so a new working branch needs no YAML edit"
+        blockers=$((blockers + 1))
+      done
+    done < <(grep -E '^[[:space:]]*branches:' "$workflow")
+  done
+fi
+
 # --------------------------------------------------------- platform evidence
 #
 # A platform marked executed must name the run that executed it. "YES (CI)" is

@@ -231,6 +231,33 @@ if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw) -
     }
 }
 
+# --------------------------------------------------- workflow branch triggers
+#
+# See the Bash half for the reasoning. `main` is exempt because it is not a
+# working branch; anything containing `*` is a pattern. A `branches:` form this
+# check cannot read fails rather than passing.
+$workflowDir = Join-Path (Join-Path $RepoRoot '.github') 'workflows'
+if (Test-Path -LiteralPath $workflowDir) {
+    foreach ($workflow in (Get-ChildItem -LiteralPath $workflowDir -Filter '*.yml' -File)) {
+        foreach ($branchLine in (Get-Content -LiteralPath $workflow.FullName)) {
+            if ($branchLine -notmatch '^\s*branches:') { continue }
+            if ($branchLine -notmatch '^\s*branches:\s*\[(.*)\]') {
+                Write-Status 'BLOCKER' 'Workflow branch trigger' "$($workflow.Name) uses a branches: form this check cannot read; write an inline list"
+                $blockers++
+                continue
+            }
+            foreach ($entry in ($Matches[1] -split ',')) {
+                $entry = $entry.Trim().Trim("'").Trim('"')
+                if ([string]::IsNullOrWhiteSpace($entry)) { continue }
+                if ($entry -eq 'main') { continue }
+                if ($entry.Contains('*')) { continue }
+                Write-Status 'BLOCKER' 'Workflow branch trigger' "$($workflow.Name) names the branch '$entry' literally; use a pattern such as 'claude/**' so a new working branch needs no YAML edit"
+                $blockers++
+            }
+        }
+    }
+}
+
 # --------------------------------------------------------- platform evidence
 $platformSection = ($status -split '(?m)^## Platforms executed' | Select-Object -Skip 1 | Select-Object -First 1)
 if ($platformSection) {
