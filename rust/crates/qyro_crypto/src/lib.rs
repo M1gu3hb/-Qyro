@@ -67,6 +67,14 @@ mod identity;
 mod signature;
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "the guard reads files and must fail loudly when it cannot"
+)]
+mod guards;
+#[cfg(test)]
 mod schema;
 #[cfg(test)]
 mod vectors;
