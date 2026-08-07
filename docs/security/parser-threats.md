@@ -27,7 +27,14 @@ que vigilar en esa ruta.
 | Divergencia entre plataformas | Reglas Unix y Windows aplicadas en todas | `backslash_paths_are_rejected_as_ambiguous`, `windows_reserved_device_names_are_rejected` |
 | Truncamiento por NUL | Se rechaza cualquier NUL en la ruta | `nul_bytes_are_rejected` |
 | Colisión por normalización de Windows | Punto o espacio final rechazados | `trailing_dot_or_space_is_rejected` |
-| Desbordamiento de totales | Suma con aritmética `checked` | `summing_item_sizes_cannot_wrap_into_a_believable_total` |
+| Suplantación de extensión por bidi | Toda la categoría Unicode `Cf` rechazada, no solo `Cc` | `a_right_to_left_override_cannot_disguise_an_extension`, `unicode_format_characters_are_rejected` |
+| Dos nombres visualmente idénticos | `U+200B`, `U+FEFF` y el resto de `Cf` rechazados | `a_name_that_differs_only_by_an_invisible_character_is_rejected` |
+| Archivo que es también directorio | Prefijo en frontera NUL rechazado cuando el ancestro es `File` | `a_file_cannot_also_be_a_directory`, `the_collision_is_found_at_any_depth` |
+| Dispositivo Windows con superíndice | `COM¹`…`LPT³` en la tabla de reservados | `windows_superscript_device_names_are_rejected` |
+| Desbordamiento de totales | Suma con aritmética `checked` | `summing_item_sizes_cannot_wrap_into_a_believable_total`, `two_sizes_that_wrap_the_total_are_rejected` |
+| Longitud declarada que reserva memoria | El límite se aplica a la declaración, antes de rebanar | `an_oversize_length_prefix_is_refused_before_it_can_slice`, `a_hostile_length_prefix_costs_nothing` |
+| Total de cabecera que miente | Se compara contra la suma de los items | `a_declared_total_that_does_not_match_the_items_is_rejected` |
+| Orden no canónico | Se rechaza, no se reordena | `items_in_descending_order_are_rejected` |
 | Interpretación divergente | Flags reservados y bytes de presencia no canónicos se rechazan | `unknown_flag_bits_are_rejected_rather_than_ignored`, `a_non_canonical_option_tag_is_rejected` |
 | Contrabando de datos | Bytes sobrantes son error | `trailing_bytes_are_rejected` |
 | Pánico por entrada arbitraria | Property tests y corpus | `arbitrary_bytes_never_panic*` |

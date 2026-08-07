@@ -50,8 +50,10 @@ autenticarse sin normalización previa.
 
 - Campos en orden fijo y tamaño explícito.
 - Los bytes de presencia solo admiten `0` o `1`; cualquier otro valor es error.
-- Los items van ordenados por su ruta normalizada. Un manifest desordenado se
-  **rechaza**, no se reordena: reordenar cambiaría los bytes firmados.
+- Los items van ordenados por su ruta, **tal como llegó**. Un manifest
+  desordenado se **rechaza**, no se reordena: reordenar cambiaría los bytes
+  firmados. Este documento decía «ruta normalizada»; no hay normalización, y el
+  campo que se llamaba así ahora se llama `verbatim` (sprint 4C.2, QYR-0031).
 - Rutas duplicadas e identificadores duplicados son error.
 - Sobrar bytes al final es error.
 
@@ -75,20 +77,29 @@ Se rechaza:
 | UNC | `//server/share` | destino remoto |
 | Barra invertida | `a\b` | separador en Windows, nombre válido en Unix |
 | NUL | `a\0b` | trunca la ruta en APIs estilo C |
-| Carácter de control | `a\nb` | nombres ilegibles o engañosos |
-| Nombre reservado | `CON`, `COM1.txt` | Windows los resuelve como dispositivos |
+| Carácter de control (`Cc`) | `a\nb` | nombres ilegibles o engañosos |
+| Carácter de formato (`Cf`) | `invoice\u{202E}fdp.exe`, `safe\u{200B}.txt` | invisibles: `U+202E` hace que se muestre `invoiceexe.pdf` |
+| Nombre reservado | `CON`, `COM1.txt`, `COM¹.txt` | Windows los resuelve como dispositivos |
 | Punto/espacio final | `evil.`, `evil ` | Windows los elimina y provoca colisiones |
 | Longitud excesiva | >1024 total, >255 por segmento | |
 | Anidamiento excesivo | >64 segmentos | |
 | UTF-8 inválido | | |
 | Carácter ilegal en Windows | `a<b`, `a:b`, `a?b` | `< > : " \| ? *` no son válidos en NTFS |
-| DEL | `a\u{7F}b` | carácter de control |
+| DEL | `a\u{7F}b` | carácter de control (`Cc`, ya cubierto arriba) |
+| Archivo que es también directorio | `a` junto a `a/b` | el receptor no puede crear ambos |
 
 ## Colisiones portables
 
 Dos rutas distintas en Linux pueden ser el mismo archivo en Windows o macOS.
 `PortableCollisionKey` las detecta y el manifest **rechaza** el par en lugar de
 aceptar ambos y sobrescribir uno en silencio tras aceptar la transferencia.
+
+Desde el sprint 4C.2 se rechaza además el par **ancestro/descendiente**: una
+clave que es prefijo de la siguiente en frontera NUL, cuando el elemento dueño
+del prefijo es un `File`. `file("a")` junto a `file("a/b")` obligaría al receptor
+a crear `a` como archivo y como directorio, y lo segundo pierde lo primero. La
+regla exacta está en la enmienda a ADR-0017; un `Directory` con hijos sigue
+siendo la forma normal de un árbol (QYR-0028).
 
 El plegado es Unicode completo, no ASCII ni Latin-1: normalización NFC real
 (`unicode-normalization`) seguida de `str::to_lowercase`, aplicado por segmento.
@@ -104,7 +115,14 @@ falso desde entonces. Lo cubre
 `rust/crates/qyro_manifest/tests/portable_collision_contract.rs`.
 
 Se acepta Unicode, emoji, espacios internos y nombres que solo *parecen*
-reservados (`CONsole.txt`, `COM10.txt`).
+reservados (`CONsole.txt`, `COM10.txt`, `COM0`, `LPT0`).
+
+**Lo invisible no se acepta.** Toda la categoría general Unicode `Cf` se rechaza,
+incluidos `U+200C` y `U+200D`, que UTR #36 exceptúa para contexto índico: un
+nombre de archivo no es un identificador lingüístico, y aceptar un carácter que
+se renderiza como nada permitiría dos nombres visualmente idénticos en un mismo
+manifest. La tabla de rangos está transcrita de Unicode 16.0.0 y citada en
+`path.rs` (QYR-0021, ADR-0019 enmendado).
 
 ## Límites
 
