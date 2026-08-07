@@ -19,10 +19,11 @@ Big-endian, como QYRO/1.
     offset  bytes  campo         valor
     0       8      magic         "QYRO-IDS" (ASCII, sin NUL)
     8       1      version       0x01
-    9       1      wrap          0x01 = DPAPI ámbito de usuario
+    9       1      wrap          0x01 = DPAPI ámbito de usuario (ADR-0024)
+                                  0x02 = Android Keystore AES-GCM (ADR-0025 §5)
     10      2      reserved      0x0000, debe ser cero
     12      4      wrapped_len   u32, longitud de `wrapped`
-    16      N      wrapped       salida opaca de CryptProtectData
+    16      N      wrapped       salida opaca del envoltorio que diga `wrap`
 
 Longitud total: `16 + N`. `N` lo elige DPAPI y no es constante: el blob que
 devuelve incluye su propia cabecera, el GUID de la MasterKey, sal y un MAC. No se
@@ -159,10 +160,21 @@ Es un orden, no una lista, y cada paso decide una variante de error distinta:
 5. ¿`wrap` conocido? Si no: `UnsupportedWrap { found }`.
 6. ¿`reserved == 0`? Si no: `ReservedNotZero`.
 7. ¿`wrapped_len` == bytes restantes? Si no: `LengthMismatch`.
-8. `CryptUnprotectData`. Si falla: `Unwrap { code }`.
-9. ¿La semilla mide 32 bytes? Si no: `MalformedSecret`.
+8. ¿El `wrap` del blob es el del envoltorio que va a abrirlo? Si no:
+   **`WrapMismatch { blob, wrapper }`**.
+9. El desenvoltorio que corresponda —`CryptUnprotectData` para `0x01`,
+   `Cipher.doFinal` sobre la clave de Keystore para `0x02`—. Si falla:
+   `Unwrap { code }`.
+10. ¿La semilla mide 32 bytes? Si no: `MalformedSecret`.
 
-**El paso 1 y los pasos 2–9 son cosas distintas.** El paso 1 es «no hay
+**El paso 8 no estaba en la especificación y sí en el código.** Lo añadió el
+sprint 4D.2a al aparecer el segundo envoltorio, y este documento no lo recogió
+hasta 5A (QYR-0067). Es una comprobación aparte del paso 9 a propósito: «el tag
+no verifica» es lo que parece un archivo dañado, y «este blob es de otra
+plataforma» no es daño ni se arregla reintentando. El byte `wrap` existe para
+decir precisamente eso.
+
+**El paso 1 y los pasos 2–10 son cosas distintas.** El paso 1 es «no hay
 identidad»; los demás son «hay una y no se puede leer». Confundirlos lleva a
 generar una identidad nueva en silencio cuando en realidad había una ilegible, y
 perder en silencio la identidad de un dispositivo es el peor resultado que este

@@ -1299,3 +1299,26 @@
   §QYR-0064, o declarándolo explícitamente como no medido
 - Estado: abierto
 - Fecha: 2026-08-07
+
+## QYR-0067 — La especificación del blob se quedó atrás del código en 4D.2a
+
+- Plataforma: documentación
+- Severidad: P2
+- Esperado: `docs/security/identity-storage.md` es la referencia byte a byte que
+  leería una segunda implementación. Si discrepa del código, la segunda
+  implementación construye algo que la primera no acepta
+- Actual, tres desajustes introducidos por el sprint 4D.2a:
+  - la tabla de la cabecera decía `wrap 0x01 = DPAPI ámbito de usuario` y no
+    registraba el `0x02` que ADR-0025 §5 añadió;
+  - el orden de lectura tenía nueve pasos y **no incluía la comparación de
+    `wrap`** que el código hace entre el 7 y el 8;
+  - el paso 8 decía `CryptUnprotectData` como si sólo hubiera un envoltorio, y
+    la fila `wrapped` decía «salida opaca de CryptProtectData»
+- Causa: 4D.2a añadió el byte y la comprobación en el mismo commit y no tocó
+  este archivo. Es la forma de QYR-0055 y QYR-0060 otra vez: el código avanza y
+  el documento que lo describe se queda
+- Corrección: la tabla lista los dos valores, el orden de lectura tiene diez
+  pasos con `WrapMismatch` como paso 8, y el paso 9 nombra el envoltorio que
+  corresponda en vez de uno concreto
+- Estado: cerrado
+- Fecha: 2026-08-08
