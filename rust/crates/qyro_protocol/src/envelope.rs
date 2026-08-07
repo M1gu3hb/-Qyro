@@ -87,8 +87,14 @@ impl EncryptedEnvelope {
                 expected: MAX_TRAILER_LEN as u8,
             })?;
 
+        // Unreachable after the length check above, and written as a refusal
+        // anyway: this is the sealing path, and a panic here would be a panic
+        // while holding ciphertext.
         let payload_len =
-            u32::try_from(ciphertext.len()).expect("ciphertext fits in u32 after the check");
+            u32::try_from(ciphertext.len()).map_err(|_| FrameError::PayloadTooLarge {
+                declared: u32::MAX,
+                limit: MAX_PAYLOAD_LEN as u32,
+            })?;
         let header = template
             .clone_for_envelope(payload_len)
             .encrypted(tag_len)?;
@@ -170,10 +176,19 @@ impl EncryptedEnvelope {
                 required: payload_len + tag_len,
             });
         }
+        // `split_at` would panic on a bad index; `split_at_checked` reports it.
+        // The comparison above already proves the split is in range, so this is
+        // the same argument made where the compiler can see it.
+        let Some((ciphertext, tag)) = body.split_at_checked(payload_len) else {
+            return Err(FrameError::TruncatedPayload {
+                available: body.len(),
+                required: payload_len + tag_len,
+            });
+        };
         Ok(Self {
             header,
-            ciphertext: body[..payload_len].to_vec(),
-            tag: body[payload_len..].to_vec(),
+            ciphertext: ciphertext.to_vec(),
+            tag: tag.to_vec(),
         })
     }
 }

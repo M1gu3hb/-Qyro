@@ -27,7 +27,15 @@ impl Frame {
                 limit: MAX_PAYLOAD_LEN as u32,
             });
         }
-        let payload_len = u32::try_from(payload.len()).expect("payload fits in u32 after check");
+        // The check above already refused anything past MAX_PAYLOAD_LEN, which
+        // is far below u32::MAX, so this cannot fail. Answering it with the
+        // same error the check raises keeps that argument in the type system
+        // rather than in a panic message.
+        let payload_len =
+            u32::try_from(payload.len()).map_err(|_| FrameError::PayloadTooLarge {
+                declared: u32::MAX,
+                limit: MAX_PAYLOAD_LEN as u32,
+            })?;
         Ok(Self {
             header: FrameHeader::new(message_type, payload_len)?,
             payload,

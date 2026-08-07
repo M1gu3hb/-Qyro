@@ -442,6 +442,14 @@ impl FrameDecoder {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod cost_tests {
     use super::{FrameDecoder, HEADER_LEN, MAX_BUFFER_LEN};
     use crate::error::FrameError;

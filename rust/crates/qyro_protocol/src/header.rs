@@ -34,6 +34,29 @@ pub struct FrameHeader {
     sequence: u64,
 }
 
+/// Copies a fixed-width field out of the fixed-width header.
+///
+/// Offsets and widths are compile-time constants and the input is an array, so
+/// there is no runtime bound to violate. It replaces eight
+/// `try_into().expect("slice is eight bytes")` calls, each of which restated in
+/// a string a fact the type already carried — and each of which was a panic on
+/// a path a peer's bytes reach if the fact ever stopped holding.
+fn field<const OFFSET: usize, const WIDTH: usize>(bytes: &[u8; HEADER_LEN]) -> [u8; WIDTH] {
+    const {
+        assert!(
+            OFFSET + WIDTH <= HEADER_LEN,
+            "a header field must lie inside the header"
+        )
+    };
+    let mut out = [0u8; WIDTH];
+    for (slot, index) in out.iter_mut().zip(OFFSET..OFFSET + WIDTH) {
+        if let Some(byte) = bytes.get(index) {
+            *slot = *byte;
+        }
+    }
+    out
+}
+
 impl FrameHeader {
     /// Builds a plain QYRO/1.0 header: no flags, no trailer.
     ///
@@ -299,12 +322,20 @@ impl FrameHeader {
     /// The decoder needs the Unknown case so a type it does not implement can be
     /// surfaced as a delimited event instead of a framing failure.
     pub(crate) fn parse(bytes: &[u8]) -> Result<ParsedHeader, FrameError> {
-        if bytes.len() < HEADER_LEN {
+        // Narrowed to the fixed width once, here, and read as an array
+        // everywhere below. The length was already compared against
+        // `HEADER_LEN` and then trusted by forty-odd indexes and eight
+        // `expect`s; making it a type means the comparison and the reads cannot
+        // drift apart, and there is nothing left for a peer's length to reach.
+        let Some(bytes) = bytes
+            .get(..HEADER_LEN)
+            .and_then(|prefix| <&[u8; HEADER_LEN]>::try_from(prefix).ok())
+        else {
             return Err(FrameError::TruncatedHeader {
                 available: bytes.len(),
                 required: HEADER_LEN,
             });
-        }
+        };
 
         let mut magic = [0u8; 4];
         magic.copy_from_slice(&bytes[0..4]);
@@ -399,15 +430,9 @@ impl FrameHeader {
                 raw_message_type,
                 payload_len,
                 trailer_len,
-                session_id: u64::from_be_bytes(
-                    bytes[16..24].try_into().expect("slice is eight bytes"),
-                ),
-                transfer_id: u64::from_be_bytes(
-                    bytes[24..32].try_into().expect("slice is eight bytes"),
-                ),
-                sequence: u64::from_be_bytes(
-                    bytes[40..48].try_into().expect("slice is eight bytes"),
-                ),
+                session_id: u64::from_be_bytes(field::<16, 8>(bytes)),
+                transfer_id: u64::from_be_bytes(field::<24, 8>(bytes)),
+                sequence: u64::from_be_bytes(field::<40, 8>(bytes)),
             }));
         };
 
@@ -417,15 +442,11 @@ impl FrameHeader {
             flags,
             trailer_len,
             payload_len,
-            session_id: SessionId::from_be_bytes(
-                bytes[16..24].try_into().expect("slice is eight bytes"),
-            ),
-            transfer_id: u64::from_be_bytes(
-                bytes[24..32].try_into().expect("slice is eight bytes"),
-            ),
-            stream_id: u32::from_be_bytes(bytes[32..36].try_into().expect("slice is four bytes")),
-            item_id: u32::from_be_bytes(bytes[36..40].try_into().expect("slice is four bytes")),
-            sequence: u64::from_be_bytes(bytes[40..48].try_into().expect("slice is eight bytes")),
+            session_id: SessionId::from_be_bytes(field::<16, 8>(bytes)),
+            transfer_id: u64::from_be_bytes(field::<24, 8>(bytes)),
+            stream_id: u32::from_be_bytes(field::<32, 4>(bytes)),
+            item_id: u32::from_be_bytes(field::<36, 4>(bytes)),
+            sequence: u64::from_be_bytes(field::<40, 8>(bytes)),
         };
 
         let total = header.total_len();
