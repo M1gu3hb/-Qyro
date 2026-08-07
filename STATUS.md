@@ -6,9 +6,10 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 - Updated UTC: 2026-08-07T07:10:00Z
 - Branch: claude/qyro-secure-storage-4d1
 - Verified commit: c21dd723ced41f18735cbcaf11d148d155115c11
-- Milestone: ADR-0024 congelada, formato de blob especificado y accesor de
-  semilla abierto con su guarda; **la persistencia no está implementada en
-  ninguna plataforma todavía**, ni en Windows ni en Android ni en iOS
+- Milestone: formato del blob implementado y probado adversarialmente, accesor
+  de semilla abierto con su guarda; **la persistencia no está implementada en
+  ninguna plataforma todavía**, ni en Windows ni en Android ni en iOS, porque no
+  existe el crate de plataforma que llama a DPAPI
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -286,14 +287,16 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **328 tests**, 0 failed, 2 ignored. Eran 323
-  al empezar el sprint 4D.1: cinco pruebas nuevas, la guarda de caminos públicos
-  y cuatro sobre el accesor de semilla
-- `cargo test --workspace --all-features`: PASS, **328 tests**. Ningún crate
+- `cargo test --workspace`: PASS, **346 tests**, 0 failed, 2 ignored. Eran 323
+  al empezar el sprint 4D.1: la guarda de caminos públicos, cuatro sobre el
+  accesor de semilla y dieciocho sobre el formato del blob
+- `cargo test --workspace --all-features`: PASS, **346 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
-- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **56 crates**,
-  el mismo número que antes del sprint. `serde_json` pasó a ser también
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **57 crates**.
+  Eran 56: la entrada nueva es `qyro_identity_store`, un miembro del workspace.
+  Este sprint **no añadió ninguna dependencia externa**, como fija ADR-0024: la
+  única entrada nueva del grafo es de primera parte. `serde_json` pasó a ser también
   dev-dependency de `qyro_ffi` y ya estaba en el lock como dev-dependency de
   `qyro_crypto`, así que el grafo auditado no cambia. Siete entran con
   `chacha20poly1305`; ver `docs/LICENSE_AUDIT.md`
@@ -560,15 +563,42 @@ decisión y especificación, no código:
   `identity.rs::export_secret` e `identity.rs::as_bytes`. Se escribió con la
   lista vacía y pasó; añadir el accesor la puso en rojo con exactamente esos dos.
 
+- **El formato del blob está implementado y probado**: `qyro_identity_store` con
+  `blob.rs`, once variantes de `StoreError` —una por paso del orden de lectura,
+  más las de escritura— y dieciocho pruebas adversariales. Voltear un bit en
+  cualquier posición produce un error tipado, comprobado posición por posición y
+  bit por bit, y **la prueba dice por qué camino espera cada tramo**.
+- **QYR-0048 corregido antes de escribir código**: la entropía congelada era
+  circular. La enmienda va en el commit `df9f574`, anterior al primer commit de
+  implementación.
+
 Lo que **no** existe todavía, y no debe leerse como progreso:
 
-- No hay crate de almacenamiento, ni trait, ni implementación de Windows: **nada
-  llama todavía a `export_secret`**, así que la semilla se puede pedir y no hay
-  dónde guardarla.
-- No hay harness de persistencia ni paso de CI que la ejecute.
+- **No hay crate de plataforma y no hay DPAPI.** Nada persiste nada: el trait
+  `IdentityStore` está declarado y **no tiene implementaciones**. `seal_identity`
+  y `open_identity` funcionan contra un envoltorio que solo existe en `cfg(test)`.
+- No hay harness de dos procesos ni paso de CI que ejecute persistencia.
 - No hay `storage-v1.json`.
-- No hay `unsafe` en ninguna parte: el crate de plataforma que ADR-0024 §1
-  decide todavía no existe, y todos los crates conservan `forbid(unsafe_code)`.
+- No hay `unsafe` en ninguna parte: todos los crates conservan
+  `forbid(unsafe_code)`, incluido el nuevo.
+- QYR-0050 sigue abierto: la ruta del blob depende del nombre de producto, que
+  sigue siendo provisional.
+
+## Runs de 4D.1
+
+| Workflow | Commit | Run | Conclusión |
+|---|---|---|---|
+| CI | `7e272f3` | 31203268535 | **success** |
+| CI | `f5ed985` | 31204272720 | **success** |
+| CI | `8c30304` | 31204477154 | **success** |
+| CI | `e0786ee` | 31205271929 | **success** |
+
+**Solo CI, y no es una omisión.** `ci.yml` no tiene filtro de rutas a propósito:
+es el job que dice si el repositorio sigue en pie, y filtrarlo sería filtrar esa
+pregunta. Los otros cinco sí filtran, y hasta `3f25874` este sprint no había
+tocado ninguna ruta que vigilen. `Verified commit` sigue en `c21dd72` por eso: se
+moverá cuando este sprint tenga sus propios seis en verde sobre un mismo commit,
+y no antes (QYR-0049).
 
 ## Next task
 

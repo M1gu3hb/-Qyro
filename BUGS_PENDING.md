@@ -907,3 +907,47 @@
   ambas fases. Equivalente, con más ceremonia y con un campo que miente
 - Estado: resuelto en la especificación; la implementación llega después
 - Fecha: 2026-08-07
+
+## QYR-0049 — La rama tenía runs en verde y STATUS.md no los nombraba
+
+- Plataforma: documentación, CI
+- Severidad: P3
+- Esperado: STATUS.md registra la evidencia ejecutada de la rama en curso
+- Actual: cuatro runs de CI en verde sobre `claude/qyro-secure-storage-4d1` y
+  ninguna tabla de 4D.1 que los nombrara. `Verified commit` seguía apuntando a
+  `c21dd72`, del sprint anterior, mientras el archivo describía ADR-0024, que
+  allí no existe
+- Causa: los otros cinco workflows filtran por rutas y el sprint empezó por
+  documentación, así que solo corrió CI. Sin tabla, «solo corrió uno» y «no se
+  miró» se leen igual
+- Resolución: tabla de runs de 4D.1 en STATUS.md con la frase que explica por qué
+  los otros cinco no corrieron. `Verified commit` se mueve cuando este sprint
+  tenga sus propios seis en verde sobre un mismo commit, no antes: moverlo a un
+  commit con un solo workflow ejecutado sería exactamente la sustitución que el
+  campo existe para impedir
+- Estado: resuelto en la parte documental; el ancla se mueve al cerrar el sprint
+- Fecha: 2026-08-07
+
+## QYR-0050 — La ruta del blob depende de un nombre de producto provisional
+
+- Plataforma: Windows, producto
+- Severidad: P3
+- Esperado: la ubicación del almacén no depende de un valor que STATUS lista
+  como bloqueante para empaquetar
+- Actual: `docs/security/identity-storage.md` fija
+  `%LOCALAPPDATA%\Qyro\identity.bin`, y STATUS sigue listando el clearance del
+  nombre «Qyro» y la base `com.owner.qyro` entre los valores provisionales. El
+  formato tiene byte de versión para el **contenido** y nada para la
+  **ubicación**
+- Consecuencia si el nombre cambia: los blobs quedan huérfanos y el código nuevo
+  lee «no hay identidad», que es justo el caso que el orden de lectura se
+  esfuerza en separar de «hay una y no se puede leer». La peor forma de fallar de
+  este diseño, alcanzada sin que nadie toque un byte del blob
+- Resolución de este sprint: **ninguna en código**, porque el crate de plataforma
+  todavía no existe. Queda decidido y anotado: la ruta vivirá en una sola
+  constante del crate de plataforma, y un cambio de nombre exige migración
+  explícita —leer con la ruta antigua, escribir con la nueva, borrar la antigua—
+  y no un cambio de literal
+- Estado: **abierto**, con la decisión tomada y la implementación pendiente del
+  crate de plataforma
+- Fecha: 2026-08-07
