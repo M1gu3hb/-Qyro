@@ -5,17 +5,32 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-crypto-platform-hardening`, que continúa
-   `claude/qyro-aead-replay` y endurece el AEAD sin añadirle funcionalidad.
+2. Confirmar la rama `claude/qyro-audit-closure-4c2-9a3v4j`, que continúa
+   `claude/qyro-crypto-platform-hardening` y cierra una auditoría independiente
+   sin añadir funcionalidad.
+
+   El nombre lleva un sufijo de sesión. El prompt del sprint pedía
+   `claude/qyro-audit-closure-4c2`; la rama asignada al agente fue
+   `claude/qyro-audit-closure-4c2-9a3v4j`, y se usó esa, porque empujar a otra
+   rama sin permiso explícito no es una decisión que un agente deba tomar por su
+   cuenta. Los seis workflows nombran esta rama en su `push: branches:`.
 3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
    más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
    (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
    (handshake), ADR-0022 (AEAD de frames, con sus tres enmiendas) y ADR-0023
    (harness de criptografía por plataforma). Las especificaciones están en
    `docs/protocols/` y `docs/security/`; las auditorías de los tres últimos
-   sprints, en `docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md`,
-   `docs/audits/SPRINT4C_AEAD_AUDIT.md` y
-   `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`.
+   sprints, en `docs/audits/SPRINT4C_AEAD_AUDIT.md`,
+   `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md` y
+   `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`. Esta última lleva la tabla de
+   mutación del sprint 4C.2: hallazgo, mutación aplicada, prueba que falló y
+   commit en que estuvo roja. Léela antes de tocar `qyro_manifest` o
+   `qyro_crypto`; explica por qué varias comprobaciones están escritas de una
+   forma que parece rebuscada.
+
+   ADR-0017, ADR-0019 y ADR-0021 llevan enmiendas del sprint 4C.2. Las
+   afirmaciones anteriores que corrigen están marcadas como corregidas, no
+   borradas.
 4. Leer NEXT_STEPS.md y ADR relacionadas.
 5. Ejecutar doctor y tests relevantes.
 6. Continuar con la única “Next task” de STATUS.md.

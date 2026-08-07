@@ -4,6 +4,80 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Security (sprint 4C.2)
+
+- `qyro_manifest` rechaza toda la categoría general Unicode `Cf` en una ruta,
+  con `PathError::FormatCharacter`. `RelativePath::parse("invoice\u{202E}fdp.exe")`
+  devolvía `Ok`, y todo renderizador consciente de bidi muestra ese nombre como
+  `invoiceexe.pdf`: un receptor confirmaba un documento y recibía un ejecutable.
+  El filtro anterior era `char::is_control()`, que es la categoría `Cc` y nada
+  más. La tabla son veintiún rangos transcritos de
+  `DerivedGeneralCategory.txt` de Unicode 16.0.0, 170 puntos de código, citados
+  en el fuente y comprobados contra el archivo; no se añade ninguna dependencia
+  a la ruta que analiza bytes de un peer (QYR-0021, ADR-0019 enmendado).
+- `TransferManifest::new` y el decoder rechazan un elemento que es un archivo y
+  además el directorio padre de otro. Las claves de colisión se comparaban por
+  igualdad, y `"a"` y `"a\0b"` son dos cadenas distintas, así que un receptor
+  habría tenido que crear `a` como archivo y como directorio (QYR-0028,
+  ADR-0017 enmendado).
+- Ninguna ruta de producción de `qyro_crypto` puede terminar el proceso.
+  `handshake/transcript.rs` tenía un `expect` y `handshake/schedule.rs` un
+  `unreachable!`, ambos alcanzables desde bytes elegidos por un peer; con ellos
+  se fueron catorce indexaciones sin comprobar (QYR-0033).
+- `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²` y `LPT³` añadidos a los nombres de
+  dispositivo reservados de Windows, con la fuente citada (QYR-0029, parcial).
+
+### Added (sprint 4C.2)
+
+- `rust/crates/qyro_crypto/src/guards.rs`: guarda estructural sobre los doce
+  archivos de producción del crate. Detecta lo que un `#![deny(...)]` no puede —
+  un módulo al que nadie le puso el atributo, y `assert!`, que no tiene lint— y
+  comprueba además que cada variante de `HandshakeError` tiene un sitio de
+  construcción.
+- Pruebas que fallan al borrar el control que cubren: la autenticación del
+  iniciador (QYR-0022), `verify_strict` frente a `verify` con una firma de `R`
+  de orden pequeño (QYR-0023), el transcript calculado desde SHA-256 sobre
+  concatenación literal (QYR-0025) y los cuatro controles de la ruta de decode
+  del manifest (QYR-0032).
+- `#![deny(...)]` de Clippy en `handshake/`, `identity.rs`, `signature.rs` y
+  `fingerprint.rs`, con la familia de pánico y `indexing_slicing`.
+- Los seis workflows se disparan por `push` sobre la rama de trabajo. Cuatro
+  listaban solo `main` y dos una rama muerta desde hacía cuatro sprints
+  (QYR-0026).
+
+### Changed (sprint 4C.2)
+
+- `c_abi_contract.rs` pide el cierre transitivo a `cargo metadata` en vez de
+  partir `Cargo.toml` por la cadena `"[dependencies]"`. Una tabla
+  `[target.'cfg(target_os = "android")'.dependencies]` es otra sección y no se
+  miraba nunca (QYR-0030).
+- `handshake/vectors.rs` recalcula ambos transcripts y los MAC desde las
+  primitivas —SHA-256 y HMAC escrito desde RFC 2104— en vez de llamar a las
+  funciones que produjeron el archivo, y fija `Schedule::derive` contra los
+  valores ya verificados (QYR-0025).
+- El campo `RelativePath::normalized` pasa a llamarse `verbatim`, que es lo que
+  siempre fue (QYR-0031).
+- Los dos scripts de guarda de la frontera FFI descartan las líneas de
+  comentario antes de buscar, en Bash y en PowerShell.
+
+### Removed (sprint 4C.2)
+
+- `HandshakeError::UnexpectedRole`, `InvalidEphemeralPublicKey`,
+  `TranscriptMismatch` y `SequenceViolation`. Nada las construía, así que
+  ADR-0021 y `handshake-state-machine.md` describían cuatro controles que no
+  existían (QYR-0035, ADR-0021 enmendado).
+- La comprobación redundante de `U+007F` en `validate_segment`: es `Cc`, así que
+  `is_control()` ya la había rechazado.
+
+### Fixed (sprint 4C.2)
+
+- Seis sitios de documentación que contradecían al código: rutas descritas como
+  normalizadas, bytes de cabecera desconocidos descritos como saltados cuando se
+  rechazan, trailer descrito como cero cuando un frame sellado exige `1..=64`,
+  `cfg(test)` donde el atributo es `cfg(any(test, fuzzing))`, y tres filas de
+  THREAT_MODEL.md. Todos marcados como corregidos, no reescritos en silencio
+  (QYR-0031).
+
 ### Added (sprint 4C.1)
 
 - `.github/workflows/crypto-platform.yml`: compila `qyro_crypto` por target

@@ -3,20 +3,31 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-05T23:30:00Z
-- Branch: claude/qyro-crypto-platform-hardening
-- Verified commit: 2c3b3b54aeef5d8d7819332e2e486edab89d0b0b
-- Milestone: AEAD endurecido y ejecutado en las cuatro plataformas donde hay
-  entorno; transporte y almacenamiento seguro NO iniciados
+- Updated UTC: 2026-08-07T04:10:00Z
+- Branch: claude/qyro-audit-closure-4c2-9a3v4j
+- Verified commit: 6fc1b5907ab2966a15333fce90db98e6bda7727d
+- Milestone: auditoría independiente cerrada; transporte y almacenamiento seguro
+  NO iniciados
 
-La rama continúa `claude/qyro-aead-replay`, que continúa
-`claude/qyro-handshake-closure`, que a su vez reconcilió
-`audit/baseline-hardening` con los commits del propietario en `main`. Ninguna
-rama fue reescrita ni fusionada a `main`. Auditoría de este sprint:
-`docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`.
+**Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
+`check_docs_consistency`: el commit hasta el que este archivo describe el estado.
+No es, por sí solo, una afirmación de que se ejecutaron seis workflows sobre él.
+La evidencia ejecutada está en las tablas de runs de más abajo, y **cada fila
+dice sobre qué commit corrió**. Los runs de cierre del sprint 4C.2 se ejecutan
+sobre el commit que lleva los disparadores de CI y se registran en el commit
+siguiente, que es la misma secuencia que usó el sprint 4C.1.
 
-**El sprint 4C.1 no añadió funcionalidad.** Comprobó que lo del 4C corre donde
-el producto dice correr, y cerró lo que esa comprobación destapó.
+La rama continúa `claude/qyro-crypto-platform-hardening`, que continúa
+`claude/qyro-aead-replay`, que continúa `claude/qyro-handshake-closure`, que a su
+vez reconcilió `audit/baseline-hardening` con los commits del propietario en
+`main`. Ninguna rama fue reescrita ni fusionada a `main`. Auditoría de este
+sprint: `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`.
+
+**El sprint 4C.2 no añadió funcionalidad.** Cerró un fallo de seguridad real en
+`qyro_manifest`, convirtió en pruebas tres garantías de `qyro_crypto` que
+sobrevivían a su propio borrado, y corrigió la documentación que contradecía al
+código. Trece hallazgos de una auditoría independiente, QYR-0021 … QYR-0035;
+cuatro quedan abiertos y registrados, no omitidos.
 
 ## Implemented
 
@@ -116,6 +127,40 @@ el producto dice correr, y cerró lo que esa comprobación destapó.
 - iOS staticlib linkage y XCTest en simulador: IMPLEMENTED, EJECUTADO
 - Android runtime ABI en emulador: IMPLEMENTED, EJECUTADO
 
+### Sprint 4C.2 — cierre de la auditoría independiente
+
+- Rechazo de la categoría Unicode `Cf` completa en rutas (ADR-0019 enmendado):
+  IMPLEMENTED. Tabla de veintiún rangos de Unicode 16.0.0 citada en el fuente,
+  170 puntos de código, sin dependencias nuevas. `invoice<RLO>fdp.exe` ya no
+  puede mostrarse como `invoiceexe.pdf`
+- Rechazo de colisión ancestro/descendiente (ADR-0017 enmendado): IMPLEMENTED.
+  Un archivo no puede ser además el directorio padre de otro elemento
+- Nombres de dispositivo de Windows con superíndice: IMPLEMENTED para `COM¹`,
+  `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³`, con la fuente citada. `COM0`, `LPT0`,
+  `CONIN$`, `CONOUT$` y `CLOCK$` **siguen aceptados**: sin fuente, no se añade
+  la regla (QYR-0029 abierto)
+- Autenticación del iniciador con prueba que falla al borrar el control:
+  IMPLEMENTED
+- `verify_strict` con prueba que falla al sustituirlo por `verify`: IMPLEMENTED.
+  Firma de `R` de orden pequeño sobre la clave de RFC 8032 §7.1 TEST 1
+- Transcript verificado contra las primitivas y no contra sí mismo:
+  IMPLEMENTED. SHA-256 sobre concatenación literal y HMAC escrito desde
+  RFC 2104; `Schedule::derive` fijado contra los valores ya verificados
+- Cuatro controles de la ruta de decode con prueba propia: IMPLEMENTED. Cada uno
+  borrado por turno hace fallar su propia prueba
+- Ninguna ruta de producción de `qyro_crypto` puede terminar el proceso:
+  IMPLEMENTED. Doce archivos bajo guarda estructural, `#![deny(...)]` de Clippy
+  extendido a `handshake/`, `identity.rs`, `signature.rs` y `fingerprint.rs`,
+  y catorce indexaciones sin comprobar eliminadas
+- Frontera FFI comprobada sobre el cierre transitivo real (`cargo metadata`):
+  IMPLEMENTED. Igualdad exacta con `{qyro_ffi, qyro_core}`
+- Variantes de `HandshakeError` sin sitio de construcción: ELIMINADAS, con
+  guarda que impide que vuelvan
+- Decisión sobre codificaciones X25519 no canónicas (ADR-0021 enmendado):
+  REGISTRADA. Se aceptan, conforme a RFC 7748 §5; la verificación de
+  libsodium/CryptoKit queda abierta (QYR-0034)
+- Los seis workflows se disparan solos sobre la rama de trabajo: IMPLEMENTED
+
 ## Not implemented
 
 - **Handshake y frames sobre transporte**: NOT_IMPLEMENTED. El handshake existe,
@@ -209,12 +254,17 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **278 tests**
-- `cargo test --workspace --all-features`: PASS, **278 tests**. Ningún crate
+- `cargo test --workspace`: PASS, **307 tests**, 0 failed, 2 ignored. Eran 278
+  al empezar el sprint: 29 pruebas nuevas
+- `cargo test --workspace --all-features`: PASS, **307 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
-- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **56 crates**.
-  Siete entran con `chacha20poly1305`; ver `docs/LICENSE_AUDIT.md`
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **56 crates**,
+  el mismo número que antes del sprint. `serde_json` pasó a ser también
+  dev-dependency de `qyro_ffi` y ya estaba en el lock como dev-dependency de
+  `qyro_crypto`, así que el grafo auditado no cambia. Siete entran con
+  `chacha20poly1305`; ver `docs/LICENSE_AUDIT.md`
+- `cargo tree --workspace -d`: PASS, sin duplicados
 - `cargo run --package qyro_crypto_smoke -- --json`: PASS,
   `{"target":"linux-x86_64-unix","outcome":"success","code":0}`
 - `bash scripts/check_crypto_platform_evidence.sh`: PASS
@@ -230,8 +280,33 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 - `flutter analyze`, `flutter test`, `dart format` y el generador de branding:
   ejecutados solo en CI, run 31041949268
 
-Workflows sobre `2c3b3b5` (este sprint), los seis lanzados con
-`workflow_dispatch` sobre **el mismo commit**:
+### Sprint 4C.2 — línea base sobre `9f79e55`
+
+Antes de tocar una línea, los seis workflows se lanzaron con
+`workflow_dispatch` sobre el HEAD heredado. Eso establece la línea base y cierra
+de paso el hueco de evidencia que ese commit tenía: los tres commits
+documentales del sprint 4C.1 no habían sido ejecutados por nada.
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 31142702190 | **success** |
+| Platform builds | 31142703382 | **success** |
+| Crypto platform | 31142704701 | **success** |
+| Crypto fuzz | 31142705935 | **success** |
+| Android runtime ABI | 31142707020 | **success** |
+| iOS runtime ABI | 31142708306 | **success** |
+
+### Sprint 4C.2 — runs de cierre
+
+<!-- SPRINT_4C2_CLOSING_RUNS -->
+**Pendientes en el momento de escribir esta línea.** Se ejecutan por `push`
+sobre el commit que añade la rama al disparador de los seis workflows, y se
+registran en el commit siguiente con su ID y su conclusión. Nada de este archivo
+debe leerse como si ya existieran.
+
+### Sprint 4C.1 — workflows sobre `2c3b3b5`
+
+Los seis lanzados con `workflow_dispatch` sobre **el mismo commit**:
 
 | Workflow | Run | Conclusión |
 |---|---|---|
@@ -369,6 +444,25 @@ permaneció invisible durante tres sprints.
 - No existe ninguna función de transferencia: el producto no es usable todavía.
 
 ## Next task
+
+**Sprint 4C.3 — cotas de recursos de `qyro_protocol`.** Cerrar QYR-0024 y
+QYR-0027, los dos hallazgos de la auditoría independiente que este sprint dejó
+fuera a propósito para que un fallo de CI siguiera diciendo qué se rompió.
+
+- **QYR-0024**: el decoder hace `drain(..total)` por frame, lo que lo vuelve
+  cuadrático. 1 049 616 bytes de frames mínimos cuestan 3,62 s en `--release`.
+- **QYR-0027**: `buffer_capacity` alcanza 2 097 152 frente a
+  `MAX_BUFFER_LEN = 1 049 664`, y las propias pruebas del repositorio afirman lo
+  contrario sin llenar nunca el búfer.
+
+Aceptación: una prueba que mide y falla con la implementación cuadrática, y otra
+que llena el búfer de verdad en vez de afirmar su capacidad. Ninguna de las dos
+puede pasar con el código actual antes de la corrección.
+
+Después, 4D.1: ADR de almacenamiento seguro y la primera plataforma, cuyo
+enunciado se conserva aquí porque sigue siendo la siguiente pieza de producto.
+
+### Después de 4C.3 — 4D.1
 
 Implementar persistencia **segura y versionada** de `DeviceIdentity` mediante
 Android Keystore, iOS Keychain y Windows DPAPI/CNG, con creación, carga,

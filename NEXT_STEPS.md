@@ -23,6 +23,23 @@
      y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
      lo que se está afirmando.
 
+## P0 — siguiente sprint (4C.3)
+
+- **Cotas de recursos de `qyro_protocol`.** Los dos hallazgos que el sprint 4C.2
+  dejó fuera a propósito, para que un fallo de CI siguiera diciendo qué se
+  rompió.
+  - QYR-0024: el decoder hace `drain(..total)` por frame y es cuadrático.
+    1 049 616 bytes de frames mínimos cuestan 3,62 s en `--release`.
+  - QYR-0027: `buffer_capacity` alcanza 2 097 152 frente a
+    `MAX_BUFFER_LEN = 1 049 664`, y las pruebas del repositorio afirman lo
+    contrario sin llenar nunca el búfer.
+  - Aceptación: una prueba que mide y falla con la implementación cuadrática, y
+    otra que llena el búfer de verdad. Ninguna puede pasar antes de la
+    corrección.
+- **QYR-0036**: denegar `clippy::indexing_slicing` y la familia de pánico en
+  `qyro_protocol` y `qyro_manifest`, que son la primera superficie que toca los
+  bytes de un peer. El sprint 4C.2 lo hizo solo en `qyro_crypto`.
+
 ## P1
 
 - **Persistencia segura de `DeviceIdentity`.** Android Keystore, iOS Keychain y
@@ -55,6 +72,44 @@
 
 - RaptorQ/QR adaptativo.
 - Wi-Fi Direct, Multipeer y Bluetooth experimental.
+
+## Completado el 2026-08-07 (sprint 4C.2, cierre de la auditoría independiente)
+
+No añadió funcionalidad. Cerró trece hallazgos de una auditoría externa, de los
+cuales uno era un fallo de seguridad real y tres eran garantías que sobrevivían
+a su propio borrado.
+
+- **La categoría Unicode `Cf` se rechaza en rutas.**
+  `RelativePath::parse("invoice\u{202E}fdp.exe")` devolvía `Ok` y todo
+  renderizador consciente de bidi mostraba ese nombre como `invoiceexe.pdf`.
+  `char::is_control()` es la categoría `Cc` y nada más. Tabla de veintiún rangos
+  transcrita de Unicode 16.0.0, citada y comprobada contra el archivo, sin
+  dependencias nuevas (QYR-0021).
+- **Un archivo ya no puede ser también el directorio padre de otro elemento.**
+  Las claves de colisión se comparaban por igualdad, y `"a"` y `"a\0b"` son dos
+  cadenas distintas (QYR-0028).
+- **Tres garantías de `qyro_crypto` que sobrevivían a su borrado ahora tienen
+  prueba**: la autenticación del iniciador, `verify_strict` frente a `verify`, y
+  el transcript, que se verificaba llamándose a sí mismo (QYR-0022, QYR-0023,
+  QYR-0025).
+- **Ninguna ruta de producción de `qyro_crypto` puede terminar el proceso.** La
+  guarda leía tres archivos bajo `src/aead/`; ahora lee los doce, y detecta
+  además un módulo al que nadie le puso el `#![deny(...)]`. Dos pánicos
+  eliminados y catorce indexaciones sin comprobar con ellos (QYR-0033).
+- **La frontera FFI se comprueba sobre el cierre transitivo real**, con
+  `cargo metadata` en vez de partiendo el manifest por una cadena (QYR-0030).
+- Cuatro controles de la ruta de decode con prueba propia (QYR-0032), nombres de
+  dispositivo con superíndice rechazados (QYR-0029), variantes de error muertas
+  eliminadas con guarda que impide su vuelta (QYR-0035), decisión sobre
+  codificaciones X25519 no canónicas registrada (QYR-0034), seis sitios de
+  documentación corregidos y marcados como corregidos (QYR-0031), y los seis
+  workflows disparándose solos sobre la rama de trabajo (QYR-0026).
+- 278 → 307 tests. `cargo audit` sigue en 56 crates y `cargo tree -d` sin
+  duplicados.
+
+**Lo que quedó abierto, a propósito y registrado**: QYR-0024 y QYR-0027 (sprint
+4C.3), la mitad sin fuente de QYR-0029, la verificación pendiente de QYR-0034, y
+QYR-0036, nuevo.
 
 ## Completado el 2026-08-05 (sprint 4C.1, endurecimiento del AEAD)
 

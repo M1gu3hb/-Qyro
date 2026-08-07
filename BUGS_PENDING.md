@@ -332,3 +332,266 @@
 - Estado: resuelto
 - Evidencia: run 31049534832 (fallo, job `windows-crypto`)
 - Fecha: 2026-08-05
+
+## QYR-0021 — Categoría Unicode `Cf` aceptada en rutas de manifest
+
+- Plataforma: todas
+- Severidad: P0
+- Esperado: un `.exe` no puede presentarse como `.pdf` (ADR-0019, `lib.rs:20`,
+  THREAT_MODEL.md)
+- Actual: `RelativePath::parse` filtraba con `char::is_control()`, que es la
+  categoría general Unicode `Cc` y nada más. La categoría `Cf` pasaba entera.
+  `RelativePath::parse("invoice\u{202E}fdp.exe")` devolvía `Ok`, `as_str()` lo
+  entregaba tal cual y sobrevivía a `codec::encode`/`codec::decode` byte a byte.
+  Todo renderizador consciente de bidi muestra ese nombre como `invoiceexe.pdf`,
+  incluidos los selectores de archivo donde un receptor confirma la
+  transferencia. Aceptados también `U+202D`, `U+2066`, `U+200B`, `U+200D`,
+  `U+FEFF`, `U+00AD`
+- Resolución: tabla de veintiún rangos transcrita de
+  `extracted/DerivedGeneralCategory.txt` de Unicode 16.0.0, 170 puntos de código,
+  citada en el fuente y comprobada contra el archivo. Variante propia
+  `PathError::FormatCharacter`, que imprime `U+202E` y nunca el carácter. Sin
+  dependencias nuevas. `U+200C`/`U+200D` rechazados como decisión explícita
+- Estado: resuelto
+- Evidencia: rojo en `cff6a1a` (5 pruebas); enmienda a ADR-0019;
+  `tests/unicode_path_contract.rs`
+- Fecha: 2026-08-07
+
+## QYR-0022 — El iniciador no estaba autenticado por ninguna prueba
+
+- Plataforma: todas
+- Severidad: P1
+- Esperado: un peer que presenta la `PublicIdentity` de un tercero y no puede
+  firmar el transcript se rechaza con `SignatureVerificationFailed`
+- Actual: el control existía y ninguna prueba lo cubría. Borrar la llamada a
+  `verify_transcript` en `handshake/mod.rs::receive_initiator_finish` dejaba
+  `cargo test --package qyro_crypto` en 124 passed, 0 failed. Es el único
+  control que autentica al iniciador; el espejo del lado iniciador sí estaba
+  cubierto por tres pruebas
+- Resolución: `an_unsigned_peer_cannot_present_another_identity`, que construye
+  el hello con la identidad de un tercero y también reintenta con una firma
+  real hecha con la clave del atacante
+- Estado: resuelto
+- Evidencia: con el control borrado la prueba falla con
+  `Some(FinishedVerificationFailed)` en vez de
+  `Some(SignatureVerificationFailed)`
+- Fecha: 2026-08-07
+
+## QYR-0023 — `verify_strict` sin prueba que lo distinguiera de `verify`
+
+- Plataforma: todas
+- Severidad: P1
+- Esperado: una firma que `verify` aceptaría y `verify_strict` rechaza no
+  verifica
+- Actual: sustituir `verify_strict` por `verify` en `identity.rs` dejaba la
+  suite en 124 passed, 0 failed. Todas las demás pruebas de firma usan firmas
+  que produjo este crate, y ambos verificadores las aceptan
+- Resolución: `a_non_strict_signature_is_refused`, con una firma de `R` de orden
+  pequeño sobre la clave de RFC 8032 §7.1 TEST 1. Los bytes se derivan en vez de
+  citarse, y el fuente explica por qué: `verify` de este crate firma sobre su
+  propia entrada con separación de dominio, así que ninguna terna publicada
+  puede presentársele
+- Estado: resuelto
+- Evidencia: con `verify` la aserción pasa de `Err(SignatureVerificationFailed)`
+  a `Ok(())`
+- Fecha: 2026-08-07
+
+## QYR-0025 — El transcript se verificaba llamándose a sí mismo
+
+- Plataforma: todas
+- Severidad: P1
+- Esperado: los valores registrados se verifican contra las primitivas, como
+  afirma STATUS.md
+- Actual: `handshake/vectors.rs:498,525` llamaban a `base_transcript` y
+  `auth_transcript`, y `:575` a `hmac_sha256`. Eso demuestra que el código
+  coincide consigo mismo. `every_recorded_value_verifies_against_the_primitives`
+  pasaba además tras reencaminar el `info` de HKDF al salt en `schedule.rs`
+- Resolución: ambos transcripts recalculados con SHA-256 sobre concatenación
+  literal, HMAC escrito desde RFC 2104, las dos entradas de firma registradas
+  comprobadas contra el ADR, y `Schedule::derive` fijado contra los valores ya
+  verificados. Prueba nueva
+  `the_transcript_is_what_the_specification_says_it_is`, que no toca
+  `transcript.rs` para construir lo esperado
+- Estado: resuelto
+- Evidencia: borrar los prefijos `u32` BE hace fallar la prueba nueva;
+  reencaminar el `info` al salt hace fallar la del archivo de vectores con «the
+  key schedule this crate runs disagrees with the primitives»
+- Fecha: 2026-08-07
+
+## QYR-0026 — Ningún workflow se disparaba en la rama de trabajo
+
+- Plataforma: CI
+- Severidad: P1
+- Esperado: los seis workflows corren solos sobre la rama que lleva el trabajo
+- Actual: `ci.yml` y `platform-builds.yml` solo con `main`;
+  `android-runtime.yml` e `ios-runtime.yml` con `audit/baseline-hardening`, que
+  dejó de recibir commits cuatro sprints antes. «CI está en verde» significaba
+  «alguien se acordó de lanzarlo a mano»
+- Resolución: la rama añadida al `push: branches:` de los seis, y las dos
+  referencias muertas corregidas. Se eligió `push` y no una pull request: un run
+  de `pull_request` se ejecuta sobre un commit de fusión que solo existe dentro
+  del run, así que su ID no puede citarse como evidencia de un commit de la rama
+- Estado: resuelto
+- Evidencia: los seis runs finales de STATUS.md son de evento `push`
+- Fecha: 2026-08-07
+
+## QYR-0028 — Un archivo podía ser también un directorio
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `TransferManifest::new` rechaza un par ancestro/descendiente
+- Actual: aceptaba `file("a")` + `file("a/b")` y `file("a")` + `file("A/b")`.
+  Las claves de colisión se comparaban por igualdad, y `"a"` y `"a\0b"` son dos
+  cadenas distintas. Un receptor tendría que crear `a` como archivo y `a` como
+  directorio, y lo segundo pierde lo primero después de haber aceptado
+- Resolución: regla de prefijo en frontera NUL sobre las claves ordenadas,
+  aplicada solo cuando el ancestro es `File`. Formulación exacta en la enmienda
+  a ADR-0017
+- Estado: resuelto
+- Evidencia: rojo en `52391a5` (3 pruebas);
+  `tests/ancestor_collision_contract.rs`
+- Fecha: 2026-08-07
+
+## QYR-0029 — Nombres de dispositivo de Windows no cubiertos
+
+- Plataforma: Windows
+- Severidad: P2
+- Esperado: un manifest no puede nombrar un dispositivo reservado
+- Actual: `RelativePath::parse` aceptaba `COM¹`, `LPT²`, `COM0`, `LPT0`,
+  `CONIN$`, `CONOUT$`, `CLOCK$` y `com0.txt`
+- Resolución **parcial**: añadidos `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²` y
+  `LPT³`, con la página de Microsoft Learn citada en el fuente, incluida la nota
+  de que Windows lee los superíndices ISO/IEC 8859-1 como dígitos dentro de un
+  nombre de dispositivo
+- **Sigue abierto**: `COM0`, `LPT0`, `CONIN$`, `CONOUT$` y `CLOCK$`. Esa página
+  no los lista y no se comprobó ninguna otra fuente. Añadir una regla sin
+  evidencia rechaza nombres legítimos, que es el mismo error en la otra
+  dirección. Una prueba fija que hoy se aceptan, para que la respuesta no cambie
+  por accidente
+- Estado: **abierto** (parcialmente resuelto)
+- Dueño: quien tenga acceso a un Windows real para medirlo
+- Evidencia: rojo en `02e1e44`; `windows_superscript_device_names_are_rejected`
+  y `names_that_merely_resemble_a_device_are_still_accepted`
+- Fecha: 2026-08-07
+
+## QYR-0030 — La frontera FFI se comprobaba partiendo texto
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `qyro_ffi` no puede alcanzar `qyro_crypto`
+- Actual: `c_abi_contract.rs` partía el manifest por la cadena
+  `"[dependencies]"` y buscaba en la sección siguiente. Una tabla
+  `[target.'cfg(target_os = "android")'.dependencies]` con `qyro_crypto` es otra
+  sección y no se miraba nunca, mientras la prueba se anunciaba como estructural
+- Resolución: el cierre transitivo se pide a `cargo metadata`, sin
+  `--filter-platform`, excluyendo dev-dependencies e incluyendo
+  build-dependencies. Dos aserciones: una lista nombrada de crates de cripto, y
+  igualdad exacta con `{qyro_ffi, qyro_core}`. Los dos scripts de guarda en
+  shell descartan además las líneas de comentario antes de buscar
+- Estado: resuelto
+- Evidencia: con `qyro_crypto` bajo una tabla `cfg(target_os)` la prueba falla
+  nombrando el crate; la ventana que leía la prueba anterior contiene con esa
+  misma edición solo `qyro_core = { path = "../qyro_core" }`
+- Fecha: 2026-08-07
+
+## QYR-0031 — Seis sitios de documentación contradecían al código
+
+- Plataforma: todas
+- Severidad: P2
+- Actual: rutas descritas como «normalized» con un campo llamado igual, cuando
+  se guardan verbatim; bytes de cabecera desconocidos descritos como «se
+  saltan», cuando se rechazan (ADR-0018); trailer descrito como cero para
+  QYRO/1.0, cuando un frame sellado exige `1..=64`; `cfg(test)` donde el
+  atributo es `cfg(any(test, fuzzing))`, en tres sitios; y tres filas de
+  THREAT_MODEL.md
+- Resolución: los seis corregidos y marcados como corregidos, no reescritos en
+  silencio. El campo `normalized` pasa a llamarse `verbatim`. `fuzzing.rs` dice
+  ahora que `--cfg fuzzing` es activable por `RUSTFLAGS` en todo el workspace
+- Estado: resuelto
+- Evidencia: `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`, tabla de QYR-0031
+- Fecha: 2026-08-07
+
+## QYR-0032 — Cuatro controles de la ruta de decode sin prueba
+
+- Plataforma: todas
+- Severidad: P2
+- Actual: los cuatro podían borrarse con `cargo test --workspace` en verde: el
+  total declarado contra la suma (`model.rs`), el orden canónico (`model.rs`),
+  la cota del prefijo de longitud (`codec.rs`) y la suma comprobada
+  (`model.rs`). La prueba de desbordamiento existente usaba un solo `u64::MAX`,
+  y el límite total salta antes de alcanzar el desbordamiento
+- Resolución: `tests/decode_guard_contract.rs`, cuatro pruebas construidas byte
+  a byte porque la API de construcción rechaza el manifest antes de codificarlo.
+  La de desbordamiento usa 1 y `u64::MAX`, que suman exactamente `u64::MAX + 1`,
+  con total declarado cero
+- Estado: resuelto
+- Evidencia: cada control borrado por turno hace fallar su propia prueba
+- Fecha: 2026-08-07
+
+## QYR-0033 — La guarda anti-pánico solo leía `src/aead/`
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: ninguna ruta de producción puede terminar el proceso
+- Actual: `aead/guards.rs` recorría `["mod.rs","error.rs","replay.rs"]` bajo
+  `src/aead/`. Fuera de ahí, `handshake/transcript.rs:88` tenía un `expect(...)`
+  y `handshake/schedule.rs:166` un `unreachable!(...)`, ambos alcanzables desde
+  bytes de un peer
+- Resolución: `crate::guards` recorre los doce archivos de producción y falla
+  ante `unwrap`, `expect`, `panic!`, `unreachable!`, `todo!`, `unimplemented!` y
+  la familia `assert!`, con `every_production_file_is_listed` para que un módulo
+  nuevo no quede fuera. Clippy deniega además la familia de pánico y
+  `indexing_slicing` en `handshake/`, `identity.rs`, `signature.rs` y
+  `fingerprint.rs`. Los dos pánicos se eliminaron sin añadir un error muerto
+- Estado: resuelto
+- Evidencia: rojo en `6b02db6`; catorce indexaciones sin comprobar eliminadas
+- Fecha: 2026-08-07
+
+## QYR-0034 — Codificaciones X25519 con `u >= p`
+
+- Plataforma: todas
+- Severidad: P2
+- Actual: este crate las acepta y la aritmética las reduce, conforme a
+  RFC 7748 §5, pero ADR-0021 no registraba la decisión y no había prueba en
+  ninguna dirección
+- Resolución **parcial**: decisión registrada en la enmienda A a ADR-0021 —se
+  aceptan— con `a_non_canonical_x25519_encoding_is_accepted_and_reduced`
+- **Sigue abierto**: la auditoría afirma que libsodium y CryptoKit las rechazan.
+  Eso **no se ha verificado en este repositorio** y no se toma como hecho. Si
+  resulta cierto, la resolución correcta es rechazar también en Rust, porque
+  este proyecto rechaza en todas las plataformas lo que rechaza en una
+- Estado: **abierto** (decisión registrada, verificación pendiente)
+- Dueño: quien escriba el lado Swift
+- Fecha: 2026-08-07
+
+## QYR-0035 — Cuatro variantes de `HandshakeError` que nada construía
+
+- Plataforma: todas
+- Severidad: P3
+- Actual: `UnexpectedRole`, `InvalidEphemeralPublicKey`, `TranscriptMismatch` y
+  `SequenceViolation` declaradas, formateadas y listadas en ADR-0021 y en
+  `docs/security/handshake-state-machine.md` como controles del handshake, sin
+  ningún sitio de construcción. Un llamante podía hacer `match` sobre un control
+  que no existía
+- Resolución: eliminadas, con el motivo de cada una escrito donde está el enum,
+  y `every_handshake_error_has_a_construction_site` para que no vuelva a pasar
+- Estado: resuelto
+- Evidencia: volver a añadir una, con su brazo de `Display`, hace fallar esa
+  guarda por nombre
+- Fecha: 2026-08-07
+
+## QYR-0036 — `indexing_slicing` no denegado en `qyro_protocol` ni `qyro_manifest`
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: ninguna ruta que analice bytes de un peer puede entrar en pánico
+- Actual: el sprint 4C.2 denegó la familia de pánico y `clippy::indexing_slicing`
+  en `qyro_crypto`. `qyro_protocol` y `qyro_manifest` también analizan bytes
+  elegidos por un peer —son, de hecho, la primera superficie que los toca— y no
+  tienen ninguna de las dos denegaciones ni una guarda estructural equivalente.
+  No se ha encontrado ningún pánico concreto; lo que falta es el control que
+  impediría el próximo
+- Workaround: ninguno; los decoders están acotados y con pruebas de corpus
+- Estado: abierto
+- Dueño: el sprint que toque esos dos crates
+- Fecha: 2026-08-07
