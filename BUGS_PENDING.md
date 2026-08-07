@@ -951,3 +951,92 @@
 - Estado: **abierto**, con la decisión tomada y la implementación pendiente del
   crate de plataforma
 - Fecha: 2026-08-07
+
+## QYR-0051 — La rama quedó en rojo por una política que este archivo se inventó
+
+- Plataforma: CI, documentación
+- Severidad: P1
+- Esperado: la rama de trabajo no se deja en rojo
+- Actual: CI #115 (run 31206358256) sobre `940b49d` falló en el job
+  `documentation`: «Stale verified commit: HEAD is 11 commits ahead of the
+  verified commit (limit 10)». `3527db7` estaba a exactamente diez y pasó por un
+  margen de uno
+- Causa: `Verified commit` seguía en `c21dd72`, del sprint 4C.3, sostenido por una
+  política escrita en STATUS.md —«se moverá cuando este sprint tenga sus propios
+  seis en verde sobre un mismo commit»— que **no puede coexistir** con el límite
+  de diez commits en un sprint largo. La política era invención de este sprint;
+  `HANDOFF.md` ya decía lo contrario: «STATUS.md debe actualizarse dentro del
+  mismo tramo de trabajo, no al final»
+- Agravante: la tabla de runs listaba cuatro, todos success, y se detenía en
+  `e0786ee`. Un lector concluía que la rama estaba sana
+- Resolución: ancla movida a un commit de esta rama, política escrita en STATUS.md
+  —se mueve **por tramo**, y no es una afirmación de que seis workflows corrieran
+  sobre él, que es lo que dice la tabla fila por fila—, y el fallo registrado con
+  su run ID y su causa
+- Estado: resuelto
+- Fecha: 2026-08-07
+
+## QYR-0052 — La ligadura de la cabecera a la entropía no la comprobaba nada
+
+- Plataforma: Windows, pruebas
+- Severidad: P2
+- Esperado: la razón que la enmienda de QYR-0048 da para meter la cabecera en la
+  entropía —«liga el envoltorio a ese `version`, ese `wrap` y ese `reserved`»—
+  está cubierta por una prueba
+- Actual: sustituir los doce bytes de cabecera por doce ceros en `entropy_for`
+  —misma longitud, ninguna ligadura— dejaba **toda la suite en verde**
+- Causa: el único test comprobaba (a) la longitud y (b) que
+  `entropy_for(V, W) == entropy_for(V, W)`, que es la misma función pura con los
+  mismos argumentos: una tautología
+- Patrón, no incidente: es la **tercera** vez con esta forma exacta. QYR-0025 (un
+  transcript verificado llamándose a sí mismo) y la aserción tautológica del
+  target `encrypted_envelope` son las otras dos
+- Estado: abierto al inicio de este tramo
+- Fecha: 2026-08-07
+
+## QYR-0053 — La guarda de material de clave no veía la semilla en claro
+
+- Plataforma: criptografía, pruebas
+- Severidad: P2
+- Esperado: un `pub fn` que devuelva la semilla hace fallar la guarda
+- Actual: añadir `pub fn leak_raw(&self) -> Zeroizing<[u8; 32]>` a `identity.rs`
+  dejaba `every_public_path_returning_key_material_is_listed` **en verde**: el
+  retorno no contiene ninguno de los cinco marcadores
+- Causa: `[u8; 32]` se excluyó a propósito porque un fingerprint también mide
+  treinta y dos bytes, y el comentario que lo explica es correcto. La conclusión
+  no: excluirlo sin más deja fuera justo lo que la guarda vigila. Una lista de
+  marcadores es una lista de permitidos disfrazada de prohibidos
+- Estado: abierto al inicio de este tramo
+- Fecha: 2026-08-07
+
+## QYR-0054 — Nada comprobaba `forbid(unsafe_code)`
+
+- Plataforma: workspace, pruebas
+- Severidad: P2
+- Esperado: STATUS afirma «todos los crates conservan `forbid(unsafe_code)`,
+  incluido el nuevo» y algo lo comprueba
+- Actual: quitar `#![forbid(unsafe_code)]` de `qyro_identity_store` no rompía
+  nada. La afirmación descansaba en que nadie lo hubiera hecho
+- Urgencia: la guarda tiene que existir **antes** del crate de plataforma. Si
+  llega después, añadir la excepción es indistinguible de un `forbid` que nunca
+  estuvo
+- Estado: abierto al inicio de este tramo
+- Fecha: 2026-08-07
+
+## QYR-0055 — Tres afirmaciones de STATUS.md que el repositorio contradecía
+
+- Plataforma: documentación
+- Severidad: P3
+- Actual, las tres:
+  1. «la enmienda va en el commit `df9f574`, anterior al primer commit de
+     implementación». Falso: `0ff21bd` —`feat:`, 217 líneas de Rust— es anterior.
+     La intención se cumplió; la frase no era la intención
+  2. El encabezado decía «lo que existe a este commit es decisión y
+     especificación, **no código**» y tres viñetas después listaba el crate
+  3. `Updated UTC` marcaba las 07:10 con el último commit a las 18:18
+- Causa: las tres son del mismo tipo —una frase escrita cuando era cierta y no
+  revisada cuando dejó de serlo—, y ninguna regla las cubre porque las tres son
+  prosa
+- Resolución: corregidas diciendo lo que sí es cierto, no borradas
+- Estado: resuelto
+- Fecha: 2026-08-07

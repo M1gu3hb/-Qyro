@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T07:10:00Z
+- Updated UTC: 2026-08-07T19:05:00Z
 - Branch: claude/qyro-secure-storage-4d1
-- Verified commit: c21dd723ced41f18735cbcaf11d148d155115c11
+- Verified commit: 940b49d6117d99bcfb4de6f821d021f893fee06a
 - Milestone: formato del blob implementado y probado adversarialmente, accesor
   de semilla abierto con su guarda; **la persistencia no está implementada en
   ninguna plataforma todavía**, ni en Windows ni en Android ni en iOS, porque no
@@ -540,8 +540,11 @@ permaneció invisible durante tres sprints.
 
 ## Sprint 4D.1 en curso — qué existe y qué no
 
-**No hay persistencia en ninguna plataforma.** Lo que existe a este commit es
-decisión y especificación, no código:
+**No hay persistencia en ninguna plataforma.** Lo que existe es la decisión, la
+especificación y **el formato del blob en código y probado**; lo que no existe es
+nada que persista. Este encabezado decía «decisión y especificación, no código» y
+tres viñetas más abajo listaba el crate: se quedó atrás cuando el crate entró
+(QYR-0055).
 
 - ADR-0024 congelada, con las cuatro preguntas de diseño resueltas y sus fuentes
   primarias citadas y fechadas: la estrategia de `unsafe`, DPAPI frente a CNG con
@@ -568,9 +571,12 @@ decisión y especificación, no código:
   más las de escritura— y dieciocho pruebas adversariales. Voltear un bit en
   cualquier posición produce un error tipado, comprobado posición por posición y
   bit por bit, y **la prueba dice por qué camino espera cada tramo**.
-- **QYR-0048 corregido antes de escribir código**: la entropía congelada era
-  circular. La enmienda va en el commit `df9f574`, anterior al primer commit de
-  implementación.
+- **QYR-0048 corregido antes de escribir el blob**: la entropía congelada era
+  circular. La enmienda va en `df9f574`, **anterior al primer commit del blob**
+  (`3f25874`). Este párrafo decía «anterior al primer commit de implementación» y
+  eso era falso: `0ff21bd`, el accesor de semilla, son 217 líneas de Rust y es
+  anterior a la enmienda. La intención —especificar antes de implementar lo que
+  la enmienda gobierna— se cumplió; la frase que la describía, no (QYR-0055).
 
 Lo que **no** existe todavía, y no debe leerse como progreso:
 
@@ -592,13 +598,44 @@ Lo que **no** existe todavía, y no debe leerse como progreso:
 | CI | `f5ed985` | 31204272720 | **success** |
 | CI | `8c30304` | 31204477154 | **success** |
 | CI | `e0786ee` | 31205271929 | **success** |
+| CI #112 | `df9f574` | 31205754229 | **success** |
+| CI #113 | `3f25874` | 31206168355 | **success** |
+| CI #114 | `3527db7` | 31206287397 | **success**, 4/4 |
+| **CI #115** | **`940b49d`** | **31206358256** | **FAILURE**, job `documentation` |
+| Crypto platform #14 | `3f25874` | ver §runs | **success** |
+| Platform builds #27 | `3f25874` | ver §runs | **success** |
+| Android runtime ABI #57 | `3f25874` | ver §runs | **success** |
+| iOS runtime ABI #28 | `3f25874` | ver §runs | **success** |
 
-**Solo CI, y no es una omisión.** `ci.yml` no tiene filtro de rutas a propósito:
-es el job que dice si el repositorio sigue en pie, y filtrarlo sería filtrar esa
-pregunta. Los otros cinco sí filtran, y hasta `3f25874` este sprint no había
-tocado ninguna ruta que vigilen. `Verified commit` sigue en `c21dd72` por eso: se
-moverá cuando este sprint tenga sus propios seis en verde sobre un mismo commit,
-y no antes (QYR-0049).
+### La rama estuvo en rojo, y por qué
+
+**CI #115 falló** (run 31206358256) sobre `940b49d`, job `documentation`:
+
+    [BLOCKER] Stale verified commit: HEAD is 11 commits ahead of the verified
+              commit (limit 10)
+
+No fue un fallo de código. Fue **este archivo**: `Verified commit` seguía en
+`c21dd72`, del sprint 4C.3, y `3527db7` estaba a exactamente diez commits —pasó
+por un margen de uno— mientras `940b49d` cruzó el umbral.
+
+La causa raíz es una política que escribí aquí y que no puede ser cierta:
+«`Verified commit` se moverá cuando este sprint tenga sus propios seis en verde
+sobre un mismo commit». Esa regla y el límite de diez commits **no pueden
+sostenerse a la vez en un sprint largo**, y la primera no tenía por qué existir:
+`HANDOFF.md` ya decía «STATUS.md debe actualizarse dentro del mismo tramo de
+trabajo, no al final».
+
+**La política que manda, y queda escrita aquí para que nadie la vuelva a
+inventar:** `Verified commit` es *el commit hasta el que este archivo describe el
+estado*, y se mueve **por tramo de trabajo**, no al cerrar el sprint. No es una
+afirmación de que seis workflows corrieron sobre él —eso lo dice la tabla de
+runs, fila por fila, con su commit—. Confundir las dos cosas es lo que dejó la
+rama en rojo.
+
+**Solo CI hasta `3f25874`, y no es una omisión.** `ci.yml` no tiene filtro de
+rutas a propósito: es el job que dice si el repositorio sigue en pie, y filtrarlo
+sería filtrar esa pregunta. Los otros cinco sí filtran, y hasta `3f25874` este
+sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
