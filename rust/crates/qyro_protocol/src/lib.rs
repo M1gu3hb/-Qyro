@@ -52,6 +52,8 @@ mod decoder;
 mod envelope;
 mod error;
 mod frame;
+#[cfg(test)]
+mod guards;
 mod header;
 mod limits;
 mod message;

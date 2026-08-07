@@ -119,11 +119,13 @@ pub fn encode(manifest: &TransferManifest) -> Result<Vec<u8>, ManifestError> {
         encode_item(item, &mut out);
     }
 
-    debug_assert_eq!(
-        out.len(),
-        expected,
-        "encoded_len must match the bytes actually produced"
-    );
+    // `encoded_len` agreeing with what was produced is pinned by
+    // `encoded_len_matches_the_bytes_actually_produced`, which runs in every
+    // build. A `debug_assert_eq!` here said the same thing in a form that is
+    // absent from a release build and ends the process in a debug one, and no
+    // Clippy lint covers the `debug_assert` family — the structural guard found
+    // it (QYR-0036). A duplicated invariant that only fires in one profile is
+    // worse than the test alone.
     Ok(out)
 }
 

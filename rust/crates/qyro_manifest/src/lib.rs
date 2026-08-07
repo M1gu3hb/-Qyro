@@ -62,6 +62,8 @@
 
 pub mod codec;
 mod error;
+#[cfg(test)]
+mod guards;
 mod limits;
 mod model;
 mod path;
