@@ -755,6 +755,27 @@ Lo que **no** existe, y no debe leerse como progreso:
 - QYR-0065 y QYR-0066 abiertos: falta fuente verbatim sobre invalidación de
   claves, y no está medido qué error da Keystore cuando el alias ya no existe.
 
+## Runs de 4D.2a
+
+Todos los `push` de la rama, sin filtrar. **Ninguno falló y ninguno se canceló**,
+que es una frase que sólo vale escribir cuando la lista es exhaustiva.
+
+| Workflow | Commit | Run | Conclusión |
+|---|---|---|---|
+| CI #132 | `5a2a576` | 31220388132 | **success** |
+| CI #133 | `554f16d` | 31220738271 | **success** |
+| Platform builds #37 | `554f16d` | 31220738191 | **success** |
+| Crypto platform #25 | `554f16d` | 31220738176 | **success** |
+
+Tres de los seis, y no es una omisión: `Crypto fuzz`, `Android runtime ABI` e
+`iOS runtime ABI` filtran por rutas que estos commits no tocan. `Crypto platform`
+y `Platform builds` sí corrieron porque `bdb2bf8` toca
+`rust/crates/qyro_identity_store/**`.
+
+**Estos tres no son la evidencia de cierre de 4D.2a**, porque no hay nada que
+cerrar todavía: no existe el crate de Android. Los seis sobre un mismo commit
+son el requisito del cierre y llegan cuando llegue la persistencia.
+
 ## Runs de 4D.1
 
 **Todos los `push` de la rama, en orden, sin filtrar.** Doce runs de este sprint
