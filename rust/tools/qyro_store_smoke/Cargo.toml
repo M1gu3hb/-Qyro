@@ -1,0 +1,15 @@
+[package]
+name = "qyro_store_smoke"
+description = "Two-process persistence harness for the Qyro identity store. Never shipped."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+qyro_crypto = { path = "../../crates/qyro_crypto" }
+qyro_identity_store = { path = "../../crates/qyro_identity_store" }
+
+[target.'cfg(windows)'.dependencies]
+qyro_win_dpapi = { path = "../../crates/qyro_win_dpapi" }

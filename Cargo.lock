@@ -318,6 +318,24 @@ name = "qyro_protocol"
 version = "0.0.1"
 
 [[package]]
+name = "qyro_store_smoke"
+version = "0.0.1"
+dependencies = [
+ "qyro_crypto",
+ "qyro_identity_store",
+ "qyro_win_dpapi",
+]
+
+[[package]]
+name = "qyro_win_dpapi"
+version = "0.0.1"
+dependencies = [
+ "qyro_crypto",
+ "qyro_identity_store",
+ "zeroize",
+]
+
+[[package]]
 name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

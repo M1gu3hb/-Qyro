@@ -120,6 +120,9 @@ fn the_ffi_dependency_closure_holds_no_crypto() {
         // including [target.'cfg(windows)'.dependencies], which is exactly the
         // shape that slipped past a textual check in 4C.2 — fails here.
         "qyro_identity_store",
+        // The platform crate reaches the store, which reaches qyro_crypto, which
+        // holds the seed accessor. Three hops is still a path.
+        "qyro_win_dpapi",
         "ed25519-dalek",
         "x25519-dalek",
         "curve25519-dalek",

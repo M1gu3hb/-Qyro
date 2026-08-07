@@ -7,8 +7,13 @@ members = [
   "rust/crates/qyro_identity_store",
   "rust/crates/qyro_manifest",
   "rust/crates/qyro_protocol",
+  # Windows only. The one crate in the product that relaxes forbid(unsafe_code);
+  # see ADR-0024 §1.
+  "rust/crates/qyro_win_dpapi",
   # Test harness, never shipped. See docs/adr/ADR-0023-crypto-platform-test-harness.md.
   "rust/tools/qyro_crypto_smoke",
+  # Two-process persistence harness. Never shipped; see ADR-0023.
+  "rust/tools/qyro_store_smoke",
 ]
 
 [workspace.package]

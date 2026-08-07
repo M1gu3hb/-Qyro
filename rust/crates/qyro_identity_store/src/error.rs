@@ -50,6 +50,13 @@ pub enum StoreError {
     /// Write side: the wrapper produced more than `u32::MAX` bytes. Refused
     /// rather than truncated.
     WrappedTooLarge { found: usize },
+    /// `create` found an identity already stored.
+    ///
+    /// Overwriting one silently is data loss: the fingerprint a peer trusted
+    /// would change with nothing reporting it. Replacing on purpose is
+    /// [`crate::IdentityStore::rotate`], which is a different word because it
+    /// is a different intent.
+    AlreadyExists,
     /// The store could not be read or written at all.
     ///
     /// Deliberately distinct from [`Self::IdentityAbsent`]: a permissions
@@ -86,6 +93,9 @@ impl fmt::Display for StoreError {
             }
             Self::WrappedTooLarge { found } => {
                 write!(f, "wrapped output does not fit a u32: {found} bytes")
+            }
+            Self::AlreadyExists => {
+                f.write_str("an identity is already stored; use rotate to replace it")
             }
             Self::Io { code } => write!(f, "the identity store could not be accessed: {code}"),
         }

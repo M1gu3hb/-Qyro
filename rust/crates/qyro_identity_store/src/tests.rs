@@ -354,6 +354,7 @@ fn absence_is_not_any_other_error() {
         },
         StoreError::Unwrap { code: 5 },
         StoreError::MalformedSecret { found: 3 },
+        StoreError::AlreadyExists,
         StoreError::Io { code: 13 },
     ] {
         assert!(

@@ -42,10 +42,29 @@ fn every_production_file_is_listed() {
 /// Two, not one. `qyro_crypto_smoke` said in a comment that it was the only
 /// crate in the repository without the attribute, and that was already untrue
 /// when it was written.
-const CRATES_THAT_MAY_RELAX_FORBID_UNSAFE: [(&str, &str); 2] = [
+/// `qyro_win_dpapi` is the third and, by ADR-0024 §1, the last: it is the crate
+/// the whole hand-written-`extern` argument was built around, and it exists so
+/// that no other crate in the product needs the exception. Its own guard
+/// enumerates the three functions containing an `unsafe` block by name.
+const CRATES_THAT_MAY_RELAX_FORBID_UNSAFE: [(&str, &str); 3] = [
     ("qyro_ffi", "rust/crates/qyro_ffi"),
     ("qyro_crypto_smoke", "rust/tools/qyro_crypto_smoke"),
+    ("qyro_win_dpapi", "rust/crates/qyro_win_dpapi"),
 ];
+
+/// Whether a crate root actually *declares* the attribute.
+///
+/// Line-anchored, not `contains`. A doc comment that mentions
+/// `#![forbid(unsafe_code)]` — which the platform crate's does, while explaining
+/// why it is the exception — is prose, not a declaration, and the first version
+/// of this check could not tell them apart. It is the same shape as the smoke
+/// crate whose comment made a `grep` report an attribute that was not there.
+fn declares_forbid_unsafe(source: &str) -> bool {
+    source
+        .lines()
+        .map(str::trim)
+        .any(|line| line == "#![forbid(unsafe_code)]")
+}
 
 #[test]
 fn only_the_listed_crates_may_relax_forbid_unsafe() {
@@ -96,7 +115,7 @@ fn only_the_listed_crates_may_relax_forbid_unsafe() {
         let Ok(source) = std::fs::read_to_string(&lib) else {
             continue;
         };
-        if !source.contains("#![forbid(unsafe_code)]") {
+        if !declares_forbid_unsafe(&source) {
             missing.push(name.to_owned());
         }
     }
@@ -128,7 +147,7 @@ fn the_relaxation_list_names_only_crates_that_need_it() {
         let source = std::fs::read_to_string(&lib)
             .unwrap_or_else(|_| panic!("{name} is listed as an exception but has no crate root"));
         assert!(
-            !source.contains("#![forbid(unsafe_code)]"),
+            !declares_forbid_unsafe(&source),
             "{name} is listed as needing to relax forbid(unsafe_code) and now \
              carries it. Remove the exception."
         );
