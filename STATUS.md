@@ -3,13 +3,14 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T23:40:00Z
-- Branch: claude/qyro-secure-storage-4d1
-- Verified commit: d20afd7a78566755d1c325c7e4e3226b7cc1fc40
+- Updated UTC: 2026-08-08T00:20:00Z
+- Branch: claude/qyro-android-keystore-4d2a
+- Verified commit: bdb2bf8d5a984111a993a12a11d8cb21baa002b7
 - Milestone: **una identidad sobrevive al cierre del proceso en Windows**,
   ejecutado en CI en dos invocaciones separadas. La persistencia está
   **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y en iOS**, y nada
-  se ha probado en hardware físico
+  se ha probado en hardware físico. El sprint 4D.2a está **en curso**: Android
+  tiene decisión congelada (ADR-0025) y **no tiene implementación**
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -313,13 +314,14 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **350 tests**, 0 failed, 2 ignored. Eran 323 al
+- `cargo test --workspace`: PASS, **352 tests**, 0 failed, 2 ignored. Eran 350 al
+  empezar el sprint 4D.2a; las dos nuevas son las del byte `wrap`. Eran 323 al
   empezar el sprint 4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
   crate de plataforma. **Las nueve pruebas de `qyro_win_dpapi` no están en esa
   cuenta**: el crate entero es `cfg(windows)` y en este host no compila ninguna.
   Corren en CI, y ese es su único sitio
-- `cargo test --workspace --all-features`: PASS, **350 tests**. Ningún crate
+- `cargo test --workspace --all-features`: PASS, **352 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
 - `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **59 crates**.
@@ -704,6 +706,55 @@ Lo que **no** existe todavía, y no debe leerse como progreso:
   misma** identidad, comprobado en el bucle del barrido; es maleabilidad en un
   campo ignorado, no sustitución de identidad.
 
+## Sprint 4D.2a en curso — Android está decidido y no está implementado
+
+**No hay persistencia en Android.** Lo que hay es la decisión congelada y un
+hallazgo que cambia la forma del sprint. Esta sección se escribe con el sprint a
+medias, en vez de esperar al final, porque la alternativa es lo que QYR-0060
+registró en 4D.1: una cabecera que dice una cosa y un cuerpo que dice otra.
+
+Lo que existe:
+
+- **ADR-0025 congelada antes de una sola línea de código de Android.** Envolver,
+  no guardar: Keystore genera una clave AES-256-GCM no exportable y con ella se
+  envuelve la semilla Ed25519, porque «key material never enters the application
+  process» y Keystore no puede guardar una semilla ajena. Con eso Keystore ocupa
+  exactamente el sitio de DPAPI y **`IdentityStore` y `SecretWrapper` no
+  cambian**, que es la comprobación de que la costura estaba bien puesta.
+- Las cuatro sub-decisiones con fuente citada y fechada: TEE sin StrongBox; sin
+  autenticación de usuario; el blob en `getNoBackupFilesDir()`; y backup/restore
+  derivado sólo hasta donde la no exportabilidad obliga, con lo demás abierto.
+- El IV de GCM: lo genera Keystore por operación, viaja dentro de `wrapped` como
+  `iv_len ‖ iv ‖ ciphertext`, y **no se deriva de nada**. Una derivación sobre un
+  valor que se repite —reinstalar, restaurar, rotar dos veces— repite el IV, y un
+  IV repetido bajo la misma clave no es una degradación: es la propiedad rota.
+- **El byte `wrap` `0x02`** registrado como cambio de formato, y con él una
+  comprobación que faltaba: `open_identity` nunca comparaba el `wrap` del blob
+  con el del envoltorio. Con un solo envoltorio la pregunta no podía surgir; con
+  dos, un blob de Windows entregado al envoltorio de Android habría fallado como
+  archivo corrupto. Ahora es `WrapMismatch`, que nombra los dos lados.
+
+Lo que **no** existe, y no debe leerse como progreso:
+
+- **No hay crate de Android, no hay JNI y no hay nada que persista en Android.**
+  Cerrar el proceso en Android sigue perdiendo la identidad.
+- No hay barrido de corrupción contra Keystore, ni vector para `wrap = 0x02`, ni
+  paso de CI que ejecute persistencia en el emulador.
+- **QYR-0064 cambia la forma del sprint.** El harness de 4D.1 —un binario nativo
+  empujado a `/data/local/tmp` y lanzado con `adb shell`— **no puede alcanzar
+  Keystore**: no hay API en el NDK, `AndroidKeyStore` es código Java que corre en
+  el proceso de la app, y las claves se separan por UID del llamante. Hace falta
+  un test instrumentado bajo `am instrument`, con el andamiaje Gradle que eso
+  implica. El prompt del sprint daba por buena la otra forma.
+- **El sprint 4D.1 no añadió ninguna dependencia externa; 4D.2a sí lo hará.**
+  ADR-0025 §1.4 decide `jni-sys` —dos entradas nuevas en el grafo, medidas en
+  este árbol, frente a las once de `jni`— y argumenta por qué aquí la respuesta
+  es la contraria a la de ADR-0024 §1: JNI no se alcanza por símbolos con nombre
+  sino por una tabla de unos 233 punteros cuyo orden es la ABI. **Todavía no está
+  añadida**: hoy el grafo sigue en 59 paquetes.
+- QYR-0065 y QYR-0066 abiertos: falta fuente verbatim sobre invalidación de
+  claves, y no está medido qué error da Keystore cuando el alias ya no existe.
+
 ## Runs de 4D.1
 
 **Todos los `push` de la rama, en orden, sin filtrar.** Doce runs de este sprint
@@ -861,42 +912,38 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**Sprint 4D.2: Android Keystore e iOS Keychain, detrás del mismo trait.** La
-persistencia existe en una plataforma de tres, y ese desequilibrio es el estado
-menos estable posible: una app que guarda la identidad en Windows y la pierde en
-el teléfono se comporta de dos maneras distintas sin decirlo.
+**Terminar el sprint 4D.2a: que una identidad sobreviva al proceso en Android.**
+La decisión está congelada en ADR-0025 y el código no existe. En este orden, y el
+orden importa porque el primer paso es el que el prompt del sprint no previó:
 
-Lo que 4D.2 tiene que reproducir, no reinventar:
+1. **El harness instrumentado** (QYR-0064). Módulo Gradle, manifiesto, runner de
+   instrumentación y empaquetado de la `.so` en `jniLibs`, aislado del producto
+   según ADR-0023. Sin esto no hay forma de ejecutar Keystore, así que no hay
+   forma de probar nada de lo que sigue.
+2. `only_the_listed_crates_may_relax_forbid_unsafe` con una **cuarta entrada
+   argumentada**, y `the_unsafe_blocks_are_the_ones_we_listed` escrita **con la
+   lista vacía antes del primer bloque**, como en `qyro_win_dpapi`.
+3. `jni-sys` añadida, con su licencia en `docs/LICENSE_AUDIT.md` y el recuento de
+   paquetes actualizado de 59 a 61 **antes** de que el crate compile.
+4. El envoltorio: `SecretWrapper` sobre AES-256-GCM en Keystore, con `entropy_for`
+   como AAD y el IV dentro de `wrapped`.
+5. `IdentityStore` para Android con `create`, `load`, `delete` y `rotate`, y las
+   cuatro pruebas que `qyro_win_dpapi` ya tiene.
+6. La persistencia en **dos invocaciones de `am instrument`**, que son dos
+   procesos. Dos llamadas dentro de uno no prueban nada.
+7. El barrido de corrupción **contra Keystore real**, con el conjunto exacto de
+   supervivientes y la aserción de fingerprint dentro del bucle. Si el conjunto
+   difiere de las 128 de Windows —o es vacío— eso es el hallazgo y se mide; no se
+   ajusta la prueba.
+8. El vector para `wrap = 0x02`, verificado desde las primitivas.
+9. QYR-0066 medido o declarado no medido: qué error da Keystore cuando el alias
+   ya no existe.
 
-1. `IdentityStore` y `SecretWrapper` ya existen y no deberían cambiar. Si cambian
-   para acomodar Keystore o Keychain, el trait estaba mal y eso es el hallazgo.
-2. El mismo barrido de corrupción, posición por posición, **contra la API real de
-   cada plataforma** y no contra un doble. Es lo que destapó QYR-0059 en Windows,
-   y no hay razón para esperar que Keystore y Keychain autentiquen todos los
-   bytes de su propio envoltorio solo porque sería cómodo.
-3. Rotación y borrado probados, como en `rotate_replaces_exactly_one_identity` y
-   `delete_leaves_nothing_loadable`.
-4. Emulador y simulador según ADR-0023, con sus runs nombrados. **Ni el emulador
-   ni el simulador son hardware**, y el resultado se registra como lo que es.
+Después: los seis workflows en verde sobre un mismo commit, y `Verified commit`
+movido a él.
 
-Preguntas abiertas que 4D.2 tiene que decidir **antes** de escribir código, con
-fuente primaria citada y fechada, igual que hizo ADR-0024:
-
-- **Secure Enclave solo hace P-256**, no Ed25519. O la identidad de Qyro deja de
-  ser Ed25519 en iOS —lo que rompe el handshake congelado en ADR-0021—, o la
-  semilla se envuelve con una clave del Enclave en vez de vivir en él. Son
-  decisiones distintas con propiedades distintas y hay que argumentar cuál.
-- `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` frente a
-  `…AfterFirstUnlockThisDeviceOnly`: la primera impide leer la identidad con el
-  dispositivo bloqueado, la segunda no. `ThisDeviceOnly` en las dos, porque una
-  identidad de dispositivo que viaja en un respaldo deja de identificar un
-  dispositivo.
-- Respaldo, restauración y migración en Android. Si la identidad viaja en un
-  respaldo, dos teléfonos presentan la misma; si no viaja, cambiar de teléfono la
-  pierde sin aviso. Hay que elegir y decirlo.
-
-Fuera de 4D.2 y sin fecha: atar el blob a un valor propio de la máquina, el paso
-de confianza, y que algo del producto llame al almacén.
+Y **no** empezar iOS. Es 4D.2b, y su pregunta —el Secure Enclave sólo admite
+P-256, no Ed25519— hay que resolverla por ADR antes de escribir código.
 
 ## Provisional values
 
