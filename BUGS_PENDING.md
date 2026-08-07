@@ -1322,3 +1322,55 @@
   corresponda en vez de uno concreto
 - Estado: cerrado
 - Fecha: 2026-08-08
+
+## QYR-0068 — La cabecera QYRO/1 lleva identificadores que nadie puede rellenar
+
+- Plataforma: protocolo
+- Severidad: P2
+- Esperado: la cabecera de 48 bytes reserva `transfer_id` (u64), `stream_id`
+  (u32) e `item_id` (u32), y los tres viajan **dentro de los datos asociados
+  autenticados** de cada frame sellado. Estar en la AAD significa que el peer no
+  los puede alterar sin romper el tag, que es exactamente la propiedad por la
+  que valdría la pena ponerlos ahí
+- Actual: `Frame::new` los fija en `0` y **no hay ninguna forma pública de
+  cambiarlos**. `FrameHeader::within_limits` los pone a cero y
+  `clone_for_envelope` los copia tal cual. Todo frame construido por la API
+  pública los lleva a cero, así que hoy son tres campos autenticados que no
+  dicen nada
+- Cómo se encontró: escribiendo ADR-0026 §1 decidí repetir `item_id` en el
+  cuerpo de `DataChunk`, y al implementarlo descubrí que la cabecera ya lo
+  llevaba. Es el desajuste que el sprint 5A existía para destapar: dos piezas
+  probadas por separado, con un campo que una declara y la otra no puede usar
+- Lo que **no** se hizo: añadir setters a `qyro_protocol` ni mover `item_id` a la
+  cabecera. Ensanchar una superficie congelada como efecto secundario de otro
+  sprint es cómo se pierde el control de un formato. ADR-0026 mantiene el
+  `item_id` en el cuerpo, cuesta cuatro bytes por chunk, y esta entrada dice por
+  qué está duplicado en vez de dejar que parezca un descuido
+- Decisión pendiente: o los campos se pueden rellenar y el motor los usa —y
+  entonces el `item_id` del cuerpo sobra—, o no aportan y hay que decir en
+  ADR-0016 que están reservados. Hoy la cabecera promete algo que la API niega
+- Estado: abierto
+- Fecha: 2026-08-08
+
+## QYR-0069 — Un crate externo no puede construir un handshake determinista
+
+- Plataforma: criptografía
+- Severidad: P3
+- Esperado: `qyro_transfer` necesita un sealer y un opener reales para probarse.
+  Los obtiene de un handshake real, que es lo correcto
+- Actual: `send_hello_with_entropy` y `receive_initiator_hello` son
+  `pub(crate)`, así que desde fuera sólo existen `send_hello` y
+  `receive_initiator_hello_from_system`, que toman entropía del sistema. Un
+  crate dependiente **no puede** fijar la entropía, y por tanto no puede
+  reproducir una sesión byte a byte
+- Por qué probablemente esté bien: un constructor determinista público es un
+  constructor que alguien acaba usando en producción, que es la razón por la que
+  `from_test_seed` también es privado. Las pruebas de 5A no necesitan
+  determinismo —lo que se prueba es el motor, no el handshake—, así que aquí no
+  cuesta nada
+- Cuándo costará: cuando haga falta un vector interoperable de una transferencia
+  completa, como los de `handshake-v1.json`. Ahí sí hace falta reproducir la
+  sesión, y entonces habrá que decidir entre un `cfg(feature)` de pruebas o
+  vectores generados dentro de `qyro_crypto`
+- Estado: abierto
+- Fecha: 2026-08-08

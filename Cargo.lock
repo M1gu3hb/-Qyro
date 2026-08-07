@@ -327,6 +327,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "qyro_transfer"
+version = "0.0.1"
+dependencies = [
+ "qyro_crypto",
+ "qyro_manifest",
+ "qyro_protocol",
+ "sha2",
+ "zeroize",
+]
+
+[[package]]
 name = "qyro_win_dpapi"
 version = "0.0.1"
 dependencies = [
