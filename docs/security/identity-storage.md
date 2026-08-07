@@ -65,10 +65,17 @@ que no distinga cuál esperaba en cada tramo puede pasar comprobando otra cosa:
 |---|---|
 | `0..12` | la entropía cambia y `CryptUnprotectData` no autentica |
 | `12..16` | el paso 7 del orden de lectura, `LengthMismatch` |
-| `16..` | el MAC propio de DPAPI sobre el envoltorio |
+| `16..` | el MAC propio de DPAPI — **pero no en todas las posiciones; ver QYR-0059** |
 
 Por eso la prueba recorre todas las posiciones y su mensaje de fallo dice por qué
 camino se esperaba cada una.
+
+**Corrección (QYR-0059).** La fila `16..` de esa tabla es **falsa tal como está
+escrita**. El barrido contra DPAPI real encontró que el byte 20 —offset 4 dentro
+del envoltorio— se puede voltear y el blob sigue abriendo. El MAC de DPAPI cubre
+los datos cifrados, no cada byte de la estructura que los rodea. Queda abierto
+si la identidad que sale es la misma o es otra, que es lo que decide si esto es
+un detalle o un fallo grave.
 
 ## La constante de entropía no es un secreto
 

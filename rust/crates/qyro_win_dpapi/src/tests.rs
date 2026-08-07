@@ -106,11 +106,23 @@ fn a_single_flipped_byte_is_a_typed_error_against_dpapi() {
         for bit in 0..8u8 {
             let mut corrupted = blob.clone();
             corrupted[position] ^= 1 << bit;
-            let Err(error) = open_identity(&corrupted, &DpapiWrapper) else {
-                panic!(
-                    "byte {position} bit {bit}: a corrupted blob produced an \
-                     identity. Never the same one, never a different one."
-                );
+            let error = match open_identity(&corrupted, &DpapiWrapper) {
+                Err(error) => error,
+                Ok(survivor) => {
+                    // QYR-0059. Which of the two this is decides everything: a
+                    // blob that still yields the *same* identity is malleable
+                    // but not dangerous; one that yields a *different* identity
+                    // would silently swap a device's identity, which is the
+                    // worst outcome this format can produce.
+                    let same = survivor.fingerprint() == identity.fingerprint();
+                    panic!(
+                        "byte {position} bit {bit}: a corrupted blob opened. \
+                         Same identity: {same}. DPAPI did not reject this byte, \
+                         so the claim that every position from {HEADER_LEN} on \
+                         is covered by its MAC is false. Do not relax this \
+                         assertion — the finding is the point."
+                    );
+                }
             };
             checked += 1;
 

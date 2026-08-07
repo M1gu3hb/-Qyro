@@ -1086,3 +1086,32 @@
   regla de `check_docs_consistency` que rechace cualquier otra cosa
 - Estado: abierto
 - Fecha: 2026-08-07
+
+## QYR-0059 — DPAPI no autentica todos los bytes de su propio blob
+
+- Plataforma: Windows
+- Severidad: **P1 hasta saber cuál de los dos casos es**
+- Esperado: voltear un bit en cualquier posición del blob produce un error
+  tipado. Para el tramo `16..` —el envoltorio de DPAPI— se daba por hecho que lo
+  atraparía el MAC que DPAPI documenta: «The function also adds a Message
+  Authentication Code (MAC) (keyed integrity check) to the encrypted data to
+  guard against data tampering»
+- Actual: el barrido de 448 posiciones **contra DPAPI real** falla en el **byte
+  20, bit 0** —offset 4 dentro del envoltorio—: `open_identity` devuelve una
+  identidad. Run 31211959010, job `windows-crypto`, test
+  `a_single_flipped_byte_is_a_typed_error_against_dpapi`
+- Lo que esto invalida: la afirmación de `docs/security/identity-storage.md` de
+  que el tramo `16..` lo cubre «el MAC propio de DPAPI sobre el envoltorio` es
+  **falsa tal como está escrita**. El MAC cubre los datos cifrados, no cada byte
+  de la estructura que los rodea; el blob lleva cabecera propia —versión, GUID
+  del provider, sal— y al menos un byte de esa zona no está autenticado
+- **La pregunta abierta que decide la severidad**: ¿la identidad que sale es la
+  **misma** o **otra**? La misma significa que el blob es maleable en un campo
+  que DPAPI ignora, lo cual es feo y no peligroso. Otra significaría sustituir en
+  silencio la identidad de un dispositivo, que es el peor resultado que este
+  formato puede producir. La prueba se modificó para **decir cuál de las dos
+  es**, en vez de relajarse
+- Lo que **no** se hizo: ajustar la aserción para que pase. El prompt del sprint
+  lo dice y es lo correcto: si un tramo cae por otro camino, eso es el hallazgo
+- Estado: abierto
+- Fecha: 2026-08-07
