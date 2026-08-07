@@ -266,6 +266,21 @@ if [[ -f "$ledger" ]]; then
       blockers=$((blockers + 1))
     fi
   done <<< "$cited"
+
+  # ...and *exactly* one entry, which the rule above cannot see. It builds
+  # `recorded` with `sort -u`, so a second entry for the same identifier is
+  # indistinguishable from the first: the comment said "exactly one entry" and
+  # the code checked "at least one". QYR-0036 had two, one saying `abierto` and
+  # one saying `resuelto`, and whether a reader believed the finding was open
+  # depended on which one they scrolled to first (QYR-0046).
+  duplicates="$(grep -oE '^## QYR-[0-9]{4}' "$ledger" | sed 's/^## //' | sort | uniq -d)"
+  while IFS= read -r finding; do
+    [[ -z "$finding" ]] && continue
+    count="$(grep -cE "^## $finding" "$ledger")"
+    report "BLOCKER" "Finding ledger" \
+      "$finding has $count entries in BUGS_PENDING.md; a finding has one state, not two"
+    blockers=$((blockers + 1))
+  done <<< "$duplicates"
 fi
 
 # --------------------------------------------------- workflow branch triggers

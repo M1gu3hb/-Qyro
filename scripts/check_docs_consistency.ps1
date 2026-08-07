@@ -254,6 +254,25 @@ if (Test-Path -LiteralPath $ledger) {
             $blockers++
         }
     }
+
+    # ...and exactly one. `$recorded` is a HashSet, so it collapses a repeated
+    # identifier exactly as the Bash half's `sort -u` does, and neither could
+    # see that QYR-0036 was in the ledger twice with two different states
+    # (QYR-0046). Counted here from the file rather than from the set.
+    $headingCounts = @{}
+    foreach ($line in (Get-Content -LiteralPath $ledger)) {
+        if ($line -match '^##\s+(QYR-[0-9]{4})') {
+            $id = $Matches[1]
+            if ($headingCounts.ContainsKey($id)) { $headingCounts[$id]++ } else { $headingCounts[$id] = 1 }
+        }
+    }
+    foreach ($id in ($headingCounts.Keys | Sort-Object)) {
+        if ($headingCounts[$id] -gt 1) {
+            Write-Status 'BLOCKER' 'Finding ledger' `
+                "$id has $($headingCounts[$id]) entries in BUGS_PENDING.md; a finding has one state, not two"
+            $blockers++
+        }
+    }
 }
 
 # --------------------------------------------------- workflow branch triggers

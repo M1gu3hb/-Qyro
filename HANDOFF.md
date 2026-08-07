@@ -60,6 +60,22 @@ contratos `.ps1`.
     flutter analyze
     QYRO_FFI_LIBRARY_PATH=<repo>/target/debug/libqyro_ffi.so flutter test
 
+## Auditorías externas: comprometer antes de citar
+
+Una auditoría que no produjo este repositorio se comparte en
+`docs/audits/external/` **antes** de que ningún `QYR-00xx` derivado de ella se
+cite en el ledger o en un prompt.
+
+QYR-0037, QYR-0038 y QYR-0039 se registraron a partir de la descripción de un
+prompt posterior, no del documento original, que nunca entró aquí. QYR-0039 llegó
+a decir en el propio ledger que no se sabía qué describía el hallazgo. Un
+identificador cuyo enunciado no está en ninguna parte no se puede cerrar ni
+evaluar, porque no hay contra qué comprobarlo (QYR-0047).
+
+Si el documento no se puede comprometer, la entrada del ledger tiene que decir
+que está reconstruida. Lo que no vale es reconstruir sin marcarlo: esa entrada se
+lee igual que una verificada.
+
 ## Regla de entrega
 
 Al cerrar una unidad, actualizar STATUS.md con evidencia real y registrar defectos en BUGS_PENDING.md. No declarar transferencia, seguridad o compatibilidad que no hayan sido ejecutadas.

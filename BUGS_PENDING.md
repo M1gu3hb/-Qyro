@@ -580,21 +580,32 @@
   guarda por nombre
 - Fecha: 2026-08-07
 
-## QYR-0036 — `indexing_slicing` no denegado en `qyro_protocol` ni `qyro_manifest`
+## QYR-0036 — Sin denegación de pánico ni de indexado en los dos crates de parsing
 
 - Plataforma: todas
 - Severidad: P2
-- Esperado: ninguna ruta que analice bytes de un peer puede entrar en pánico
+- Esperado: ninguna ruta que analice bytes de un peer puede terminar el proceso
 - Actual: el sprint 4C.2 denegó la familia de pánico y `clippy::indexing_slicing`
-  en `qyro_crypto`. `qyro_protocol` y `qyro_manifest` también analizan bytes
-  elegidos por un peer —son, de hecho, la primera superficie que los toca— y no
-  tienen ninguna de las dos denegaciones ni una guarda estructural equivalente.
-  No se ha encontrado ningún pánico concreto; lo que falta es el control que
-  impediría el próximo
-- Workaround: ninguno; los decoders están acotados y con pruebas de corpus
-- Estado: abierto
-- Dueño: el sprint que toque esos dos crates
-- Fecha: 2026-08-07
+  en `qyro_crypto` y no en `qyro_protocol` ni en `qyro_manifest`, que son la
+  primera superficie que toca esos bytes. No se encontró ningún pánico concreto;
+  lo que faltaba era el control que impediría el próximo
+- Workaround mientras estuvo abierto: ninguno; los decoders ya estaban acotados y
+  con pruebas de corpus
+- Resolución: denegación en los dos, más la guarda estructural. Aparecieron
+  **33 infracciones en `qyro_protocol`** (29 en `header.rs`, 3 en `envelope.rs`,
+  1 en `frame.rs`) y **22 en `qyro_manifest`** (18 en `model.rs`, 2 en
+  `codec.rs`, 2 en `path.rs`). Ninguna se silenció con `allow` salvo los módulos
+  de prueba dentro de cada crate. La guarda encontró además un
+  `debug_assert_eq!` en `codec.rs` que ningún lint de Clippy cubre, duplicando
+  un test que ya corre en todos los perfiles
+- Estado: resuelto en el sprint 4C.3
+- Evidencia: reintroducir `.expect(` en cualquier archivo de producción de
+  cualquiera de los dos hace fallar su guarda por nombre
+- Fecha: registrado 2026-08-07 (4C.2), resuelto 2026-08-07 (4C.3)
+- Nota de procedencia: este hallazgo estuvo en el ledger **dos veces**, una
+  diciendo `abierto` y otra `resuelto`. La primera se registró al detectarlo y
+  nunca se actualizó al corregirlo. Las dos entradas se fusionaron aquí en el
+  sprint 4D.1 (QYR-0046)
 
 ## QYR-0024 — El decoder drenaba cada frame con un memmove del búfer entero
 
@@ -636,25 +647,6 @@
   de verdad, rojo en `9c4a1a2`
 - Fecha: 2026-08-07
 
-## QYR-0036 — Sin denegación de pánico ni de indexado en los dos crates de parsing
-
-- Plataforma: todas
-- Severidad: P2
-- Esperado: ninguna ruta que analice bytes de un peer puede terminar el proceso
-- Actual: el sprint 4C.2 denegó la familia de pánico y `clippy::indexing_slicing`
-  en `qyro_crypto` y no en `qyro_protocol` ni en `qyro_manifest`, que son la
-  primera superficie que toca esos bytes
-- Resolución: denegación en los dos, más la guarda estructural. Aparecieron
-  **33 infracciones en `qyro_protocol`** (29 en `header.rs`, 3 en `envelope.rs`,
-  1 en `frame.rs`) y **22 en `qyro_manifest`** (18 en `model.rs`, 2 en
-  `codec.rs`, 2 en `path.rs`). Ninguna se silenció con `allow` salvo los módulos
-  de prueba dentro de cada crate. La guarda encontró además un
-  `debug_assert_eq!` en `codec.rs` que ningún lint de Clippy cubre, duplicando
-  un test que ya corre en todos los perfiles
-- Estado: resuelto
-- Evidencia: reintroducir `.expect(` en cualquier archivo de producción de
-  cualquiera de los dos hace fallar su guarda por nombre
-- Fecha: 2026-08-07
 
 ## QYR-0037 — Correcciones aplicadas sin numerar
 
@@ -699,21 +691,31 @@
 - Estado: resuelto
 - Fecha: 2026-08-07
 
-## QYR-0039 — Hallazgo sin contenido registrado
+## QYR-0039 — CI compila `cargo-audit` desde fuente en cada run, con pin exacto
 
-- Plataforma: desconocida
-- Severidad: desconocida
-- Actual: los prompts de los sprints 4C.2 y 4C.3 citan `QYR-0039` como no
-  objetivo declarado, y **su contenido no está en ninguna parte de este
-  repositorio**. No se sabe qué describe. Esta entrada existe para que el
-  identificador deje de ser una referencia colgante, no porque el hallazgo se
-  entienda
-- Workaround: ninguno posible sin saber qué es
-- Estado: abierto, **sin descripción**
-- Dueño: quien tenga la auditoría externa original
-- Acción concreta: copiar aquí el enunciado del hallazgo. Hasta entonces no se
-  puede ni cerrar ni evaluar
-- Fecha: 2026-08-07
+- Plataforma: CI
+- Severidad: P3
+- Esperado: la herramienta que vigila el perímetro de dependencias no amplía ese
+  mismo perímetro sin que nadie lo mire
+- Actual: `ci.yml:53` hace `cargo install cargo-audit --locked --version 0.22.2`
+  en cada ejecución. Dos consecuencias: es lento, y mete alrededor de un centenar
+  de crates en el perímetro de confianza de CI que nada audita —la herramienta de
+  auditoría es la parte del sistema que menos se audita a sí misma—
+- Segundo problema, del pin exacto: un pin exacto caduca. La versión 0.21.2 ya no
+  puede parsear el advisory DB actual, que trae entradas CVSS 4.0. Cuando eso
+  pasa, el job **falla cerrado**, que es el comportamiento correcto y no una
+  emergencia; pero falla por obsolescencia de la herramienta y no por una
+  vulnerabilidad, y eso hay que saber leerlo
+- Estado: **abierto y programado**. Este sprint le da contenido; no lo corrige,
+  porque cambiar cómo CI obtiene su herramienta de auditoría no es trabajo de un
+  sprint de almacenamiento seguro
+- Acción concreta cuando se aborde: binario preconstruido con checksum, o una
+  acción cacheada, o un rango de versiones en vez de un pin exacto. Las tres
+  tienen contrapartidas distintas y la decisión merece su propia nota
+- Procedencia: el enunciado lo aporta el prompt del sprint 4D.1. La auditoría
+  externa original **sigue sin estar en este repositorio**; lo comprobable aquí
+  —el pin exacto y su versión— se verificó leyendo `ci.yml`. Ver QYR-0047
+- Fecha: registrado sin contenido 2026-08-07, descrito 2026-08-07
 
 ## QYR-0040 — El disparador de CI llevaba el nombre de la rama escrito a mano
 
@@ -828,4 +830,50 @@
   compruebe la cobertura merece encontrar la respuesta
 - Estado: resuelto
 - Evidencia: los seis runs finales de STATUS.md
+- Fecha: 2026-08-07
+
+## QYR-0046 — QYR-0036 estaba en el ledger dos veces con dos estados
+
+- Plataforma: documentación
+- Severidad: P2
+- Esperado: un identificador, una entrada, un estado
+- Actual: `## QYR-0036` aparecía dos veces. La de arriba decía «Estado: abierto»
+  y era la que registró el hallazgo en el sprint 4C.2; la de abajo decía
+  «Estado: resuelto» y era la del 4C.3. La primera nunca se actualizó al
+  corregirse el defecto, así que si el hallazgo estaba abierto o cerrado dependía
+  de a cuál llegara antes quien lo consultara
+- Causa: la regla del ledger comprueba «todo identificador citado tiene entrada»,
+  no «tiene exactamente una». Construye el conjunto de entradas con `sort -u` en
+  Bash y con un `HashSet` en PowerShell, y las dos estructuras colapsan el
+  duplicado antes de que nada pueda verlo. El comentario sobre la regla decía
+  «exactly one entry» mientras el código comprobaba «al menos una»
+- Resolución: entradas fusionadas en una que conserva las dos mitades de la
+  historia —el hallazgo tal como se registró y su resolución con los recuentos de
+  infracciones—, más una regla nueva que cuenta las cabeceras leyendo el archivo
+  en vez del conjunto deduplicado
+- Prevención: `check_docs_consistency` en Bash y en PowerShell trata como BLOCKER
+  cualquier `## QYR-00xx` repetido, nombrando el identificador y cuántas veces
+  aparece
+- Estado: resuelto
+- Evidencia: la regla se escribió antes de fusionar y disparó sobre el duplicado
+  real en los dos shells: «QYR-0036 has 2 entries in BUGS_PENDING.md»
+- Fecha: 2026-08-07
+
+## QYR-0047 — Tres hallazgos externos se registraron reconstruidos, no leídos
+
+- Plataforma: documentación, CI
+- Severidad: P3
+- Esperado: una auditoría externa citada por identificador está en el
+  repositorio, y su entrada en el ledger se escribe leyéndola
+- Actual: QYR-0037, QYR-0038 y QYR-0039 se registraron a partir de la
+  descripción del prompt de un sprint posterior, no de la auditoría original,
+  que nunca entró aquí. El propio ledger lo dice, y en QYR-0039 admite no saber
+  qué describe el hallazgo
+- Resolución: `docs/audits/external/` existe y HANDOFF.md pide que toda auditoría
+  externa se comprometa ahí antes de citarse. El contenido de QYR-0039 lo aporta
+  el prompt del sprint 4D.1 y queda registrado en su propia entrada; las
+  auditorías de 4C.1 que originaron QYR-0037 y QYR-0038 **siguen sin estar en el
+  repositorio**, así que esas dos permanecen reconstruidas y se marcan como tales
+- Estado: resuelto en lo que este sprint puede resolver; el hueco de procedencia
+  de QYR-0037 y QYR-0038 solo lo cierra quien tenga el documento original
 - Fecha: 2026-08-07
