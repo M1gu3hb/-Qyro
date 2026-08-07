@@ -4,9 +4,13 @@ Especificación: `docs/adr/ADR-0024-secure-identity-storage.md`, donde está
 congelado y donde vive el razonamiento. Este documento es la referencia byte a
 byte. Donde los dos discrepen manda la ADR.
 
-**Estado: formato congelado, implementación no escrita todavía.** Este archivo
-describe lo que la ADR fija; cuando exista el código, los vectores de
-`storage-v1.json` serán lo que decida si coinciden.
+**Estado: formato congelado e implementado.** `qyro_identity_store` coloca los
+bytes y `qyro_win_dpapi` los envuelve; los vectores de `storage-v1.json` deciden
+si el código y este documento coinciden, y una prueba los compara contra las
+primitivas y no contra el módulo que los produce.
+
+Este párrafo decía «implementación no escrita todavía» y se quedó atrás cuando
+el código entró.
 
 ## La forma
 
@@ -88,12 +92,13 @@ La tabla correcta:
 
 Las 128 mutaciones supervivientes devuelven **la misma identidad**: el byte
 alterado descifra a la misma semilla. Es maleabilidad en un campo que DPAPI
-ignora, no un camino para sustituir una identidad en silencio.
+ignora, no un camino para sustituir una identidad en silencio, que habría sido
+el resultado grave. Lo que había que corregir era la afirmación, no el formato.
 
-**Respondido:** la identidad que sale es la **misma** (run 31212494494). El byte
-alterado descifra a la misma semilla, así que esto es maleabilidad en un campo
-que DPAPI ignora y no un camino para sustituir una identidad en silencio. Lo que
-había que corregir era la afirmación, no el formato.
+La comprobación está **dentro del bucle del barrido**, así que se aplica a las
+128 y no a una muestra: run 31213769557 y, ya en verde, run 31215102331. El log
+del run 31212494494 lo mostró primero para una sola posición, y esa muestra de
+uno es de donde salió la cota «≤16» que resultó ser falsa.
 
 ## La constante de entropía no es un secreto
 
@@ -180,9 +185,11 @@ ignora es un campo que dos versiones leen distinto.
   sin respaldo de dominio, o una reinstalación que no conserve el perfil, dejan
   el blob ilegible. La respuesta correcta es un error tipado y que el usuario
   decida, no una identidad nueva en silencio: el blob es caché, no archivo.
-- **No está probado en hardware.** Cuando exista la implementación, correrá en
-  `windows-latest`, que es un runner con un perfil recién creado, sin dominio,
-  sin perfil móvil y sin historial de contraseñas.
+- **No está probado en hardware.** Corre en `windows-latest`, que es un runner
+  con un perfil recién creado, sin dominio, sin perfil móvil y sin historial de
+  contraseñas. Los tres casos que esta página describe como límites reales
+  —cambio administrativo de contraseña, perfil móvil, migración de máquina— son
+  exactamente los que ese entorno **no** puede ejercitar.
 
 [cpd]: https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata
 [wdp]: https://learn.microsoft.com/en-us/previous-versions/ms995355(v=msdn.10)

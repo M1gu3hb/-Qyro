@@ -338,11 +338,16 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 - `python3 -m unittest tools/logo_ascii_generator/…`: PASS, 7 tests
 - `bash`/`pwsh scripts/check_docs_consistency`: PASS
 - `bash`/`pwsh scripts/check_repo_portability`: PASS
-- Contratos de scripts: 5/6 Bash y 6/7 PowerShell PASS aquí.
-  `doctor_contract_test` falla en este contenedor porque `doctor` reporta
-  `BLOCKER` por Flutter y Dart ausentes. **No es una regresión**: es el
-  comportamiento correcto de `doctor` en un entorno sin Flutter, y el contrato
-  pasa en CI, donde Flutter existe
+- Contratos de scripts: **6/7 Bash y 7/8 PowerShell** PASS aquí, contados
+  ejecutando los dieciséis archivos de `scripts/tests/`. Este archivo decía «5/6
+  y 6/7», que era la cuenta de antes de que existiera
+  `crypto_platform_evidence_contract_test`. El único fallo, en los dos shells,
+  es `doctor_contract_test`, porque `doctor` reporta `BLOCKER` por Flutter y Dart
+  ausentes. **No es una regresión**: es el comportamiento correcto de `doctor` en
+  un entorno sin Flutter, y el contrato pasa en CI, donde Flutter existe
+- Los cuatro scripts `check_*` en **Bash y en PowerShell**: PASS los ocho. Este
+  contenedor sí trae `pwsh` 7.4.6, a diferencia del de los sprints 4C.2 y 4C.3,
+  cuyas secciones más abajo dicen lo contrario de sus propios contenedores
 - `flutter analyze`, `flutter test`, `dart format` y el generador de branding:
   ejecutados solo en CI, run 31041949268
 
@@ -397,7 +402,7 @@ tenía que correr» es el hallazgo.
 Ningún run falló en esta rama.
 
 El job `documentation` de CI ejecuta los cuatro scripts `check_*` en Bash **y**
-en PowerShell. Este contenedor no trae `pwsh`, así que las dos reglas nuevas de
+en PowerShell. El contenedor de aquella sesión no traía `pwsh`, así que las dos reglas nuevas de
 `check_docs_consistency` —nombre de rama literal y registro de hallazgos— solo
 tienen esa ejecución como evidencia de su mitad PowerShell.
 
@@ -420,7 +425,7 @@ trabajo ejecuta los seis workflows sin que nadie los invoque.
 | iOS runtime ABI | 31145547805 | `push` | **success** |
 
 El job `documentation` de CI ejecuta los cuatro scripts `check_*` en Bash **y**
-en PowerShell, y los ocho pasos pasaron. Este contenedor no trae `pwsh`, así que
+en PowerShell, y los ocho pasos pasaron. El contenedor de aquella sesión no traía `pwsh`, así que
 las dos ediciones PowerShell de este sprint no pudieron probarse localmente y
 esa ejecución es su única evidencia; se dice aquí en vez de omitirlo.
 
