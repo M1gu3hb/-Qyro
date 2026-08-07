@@ -287,3 +287,86 @@ sesión que sí lo fija.
 
 `docs/security/test-vectors/handshake-v1.json` fija una ejecución completa contra
 esta especificación, con `handshake-v1.schema.json` como schema estricto.
+
+## Enmienda A — sprint 4C.2 (QYR-0034): codificaciones X25519 no canónicas
+
+Una coordenada `u` son 32 bytes en little-endian, y un valor mayor o igual que
+el primo del cuerpo `p = 2^255 - 19` es una **segunda codificación** de un punto
+que ya tenía una. Este ADR no decía nada al respecto, y el código la aceptaba sin
+que nadie lo hubiera decidido.
+
+### Decisión: se aceptan, y la aritmética las reduce
+
+RFC 7748 §5 lo exige en la dirección de aceptar:
+
+> implementations of X25519 … MUST mask the most significant bit in the final
+> byte
+
+El enmascarado deja el valor por debajo de `2^255`; el resto de la reducción
+módulo `p` la hace la aritmética del cuerpo. Una implementación conforme al RFC
+no rechaza estas codificaciones, y rechazarlas sería una desviación del estándar
+con la que tropezaría cualquier otra implementación conforme.
+
+Tres razones más, en orden de peso:
+
+1. **No hay maleabilidad que explotar.** El hello viaja al transcript **tal
+   cual**, así que dos codificaciones del mismo punto producen transcripts
+   distintos y por tanto claves distintas y sesiones distintas. Ninguna puede
+   hacerse pasar por la otra.
+2. **El peligro real ya está cerrado.** Un punto de orden pequeño se rechaza en
+   `EphemeralKeyPair::diffie_hellman` con
+   `HandshakeError::NonContributorySharedSecret`.
+3. **No se añade una regla sin evidencia.** Es el mismo criterio que se aplicó a
+   los nombres reservados de Windows en este sprint.
+
+### Lo que debe saber quien escriba el lado Swift o Kotlin
+
+La auditoría externa que originó esta enmienda afirma que **libsodium y CryptoKit
+rechazan** las codificaciones con `u >= p`. **Ese comportamiento no se ha
+verificado en este repositorio** y no se toma como hecho: aquí no hay ninguna de
+las dos bibliotecas y no existe todavía un lado Swift.
+
+Si resulta ser cierto, la consecuencia es una divergencia entre plataformas y no
+un fallo de seguridad: un peer podría completar un handshake contra el lado Rust
+y no contra el lado Swift. Este proyecto rechaza en todas las plataformas lo que
+rechaza en una —es la regla que gobierna las rutas del manifest—, así que en ese
+caso la resolución correcta es **rechazar también en Rust**, no relajar Swift.
+
+Queda abierto como **QYR-0034** en `BUGS_PENDING.md`, con el cierre condicionado
+a medir qué hace CryptoKit de verdad. Este crate nunca **emite** una codificación
+no canónica: `X25519PublicKey::from(&secret)` produce siempre la forma canónica,
+así que la divergencia solo puede aparecer al recibir.
+
+### Cumplimiento
+
+`a_non_canonical_x25519_encoding_is_accepted_and_reduced`, en
+`handshake/tests.rs`. Afirma la dirección elegida: `u` y `u + p` producen el
+mismo secreto compartido, un responder acepta un hello con la forma reducida, y
+los dos hellos producen transcripts distintos.
+
+## Enmienda B — sprint 4C.2 (QYR-0035): variantes de `HandshakeError` eliminadas
+
+**Corrige una afirmación anterior de este ADR.** El apartado de errores nombraba
+`UnexpectedRole`, `InvalidEphemeralPublicKey`, `TranscriptMismatch` y
+`SequenceViolation` como controles del handshake. **Nada las construía**, en
+ningún punto del crate, así que este documento y
+`docs/security/handshake-state-machine.md` describían cuatro comprobaciones que
+no existían. Un llamante podía hacer `match` sobre ellas y concluir que el
+handshake imponía algo que no imponía.
+
+Las cuatro se eliminan. Cada una tenía un motivo concreto por el que no podía
+dispararse:
+
+| Variante | Por qué era inalcanzable |
+|---|---|
+| `UnexpectedRole` | Imposible por construcción: cada transición consume `self`, así que el compilador rechaza reutilizar o reordenar un estado. |
+| `SequenceViolation` | Lo mismo. No hay campo `step` que pueda quedar fuera de orden. |
+| `InvalidEphemeralPublicKey` | Una clave pública X25519 no tiene codificación inválida: toda cadena de 32 bytes es un punto. El peligro real, un punto de orden pequeño, es `NonContributorySharedSecret`. |
+| `TranscriptMismatch` | Un transcript no se compara nunca. Se firma y se autentica con MAC, así que una discrepancia aparece como `SignatureVerificationFailed` o `FinishedVerificationFailed`. |
+
+Se mantiene el principio que `aead/error.rs` ya enunciaba: **un error que nadie
+puede provocar documenta un control que no está**. `crate::guards` lo comprueba
+sola: `every_handshake_error_has_a_construction_site` analiza el enum y exige que
+cada variante aparezca como `HandshakeError::X` en el fuente de producción del
+crate. Volver a añadir una de las cuatro, con su brazo de `Display` para que el
+build siga compilando, hace fallar esa prueba por nombre.

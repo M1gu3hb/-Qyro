@@ -111,3 +111,49 @@ error y no un total pequeño y falso.
   externa que vigilar en la ruta de parsing.
 - Cambiar el orden o el tipo de un campo es un cambio de formato y exige subir
   la versión del manifest, protegida por tests de bytes congelados.
+
+## Enmienda — sprint 4C.2 (QYR-0028): colisión ancestro/descendiente
+
+**Corrige una afirmación anterior de este ADR.** El apartado de invariantes de
+colección decía que `PortableCollisionKey` impide que dos rutas se materialicen
+sobre el mismo archivo. Solo impedía una de las dos formas.
+
+La clave pliega la ruta completa y une los segmentos con NUL, y `validate_items`
+comparaba esas cadenas por **igualdad**. La igualdad detecta `a/b` contra `A/B`.
+No detecta que `a` y `a/b` son el mismo nombre a distinta profundidad, porque
+`"a"` y `"a\0b"` son sencillamente dos cadenas distintas.
+
+Un receptor que materialice ese manifest tiene que crear `a` como archivo y `a`
+como directorio. Lo que haga en segundo lugar falla o sustituye a lo primero,
+después de haber aceptado la transferencia y sin forma de informar de qué
+elemento se perdió.
+
+### Formulación exacta
+
+Tras el orden canónico de las claves plegadas:
+
+> Una clave `K1` que es prefijo propio de la siguiente clave `K2` **en una
+> frontera NUL** —es decir, `K2 = K1 || 0x00 || resto`— es un ancestro de `K2`.
+> Si el elemento al que pertenece `K1` es de tipo `File`, el manifest se
+> rechaza con `ManifestError::FileIsAlsoADirectory`.
+
+Tres detalles que la regla necesita, y por qué:
+
+- **La frontera NUL es la regla, no un detalle.** `"report"` es prefijo de
+  `"reports\0page.txt"` como cadena y ancestro de nada como ruta. Una prueba de
+  prefijo en crudo rechazaría dos archivos sin relación.
+- **La adyacencia basta.** NUL es el byte más bajo y ninguna ruta válida puede
+  contenerlo, así que todo descendiente de `a` ordena inmediatamente después de
+  `a` y antes de cualquier otra clave que empiece por `a`. Una pasada por
+  `windows(2)` sobre las claves ordenadas ve todos los pares posibles.
+- **Solo un ancestro `File` es conflicto.** Un item `Directory` con hijos es la
+  forma normal de un árbol. Rechazarlo convertiría todo manifest con carpetas en
+  un error, que es el modo de fallo por exceso que este crate ya cometió una vez
+  con la tabla de plegado de diacríticos.
+
+### Cumplimiento
+
+`rust/crates/qyro_manifest/tests/ancestor_collision_contract.rs`. Incluye los
+dos casos que impiden una corrección demasiado agresiva —un directorio con hijos,
+y `a` junto a `ab`— y un caso construido byte a byte para el decoder, porque la
+API de construcción rechaza el manifest antes de poder codificarlo.
