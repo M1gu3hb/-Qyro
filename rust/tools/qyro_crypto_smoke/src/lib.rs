@@ -26,8 +26,8 @@
 
 #![warn(missing_docs)]
 // One deliberate `no_mangle`, so the iOS XCTest target and the Android runner
-// can call in by name. `forbid(unsafe_code)` is not used here — and only here in
-// this repository — because `#[unsafe(no_mangle)]` is itself an unsafe attribute
+// can call in by name. `forbid(unsafe_code)` is not used here because
+// `#[unsafe(no_mangle)]` is itself an unsafe attribute
 // under edition 2024: naming an exported symbol is a promise about the whole
 // link, not just about this crate. `deny` instead, so the exception is this one
 // attribute rather than the whole file.
@@ -116,8 +116,10 @@ const ITEM_ID: u32 = 0x0d0e_0f10;
 ///
 /// # Panics
 ///
-/// It does not. Every step is a `Result` or an `Option`, and this crate builds
-/// with `forbid(unsafe_code)` and no `unwrap`.
+/// It does not. Every step is a `Result` or an `Option`, and this crate has no
+/// `unwrap`. It does **not** build with `forbid(unsafe_code)` — see the note at
+/// the top of this file — and saying otherwise here contradicted that note
+/// sixty lines further down (QYR-0054).
 #[must_use]
 #[expect(
     clippy::too_many_lines,

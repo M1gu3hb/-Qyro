@@ -2,6 +2,7 @@
 //!
 //! This crate deliberately contains no UI or platform-specific code.
 
+#![forbid(unsafe_code)]
 use std::collections::BTreeMap;
 
 /// Wire protocol implemented by this milestone.

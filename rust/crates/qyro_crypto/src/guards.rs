@@ -56,43 +56,61 @@ fn every_test_only_module_is_actually_gated() {
     assert_the_production_list_matches_the_source(&PRODUCTION_FILES);
 }
 
-/// Every public path of this crate that hands out key material.
+/// Public paths that hand out secret bytes.
 ///
-/// Empty until sprint 4D.1, and that emptiness was the property: no caller could
-/// obtain a seed or a private key at all, which is what `identity.rs` said in
-/// prose. Persisting an identity requires exactly one way in and one way out, so
-/// the list stops being empty and starts being *counted* — see ADR-0024 §4.
+/// All egress. `DeviceIdentity::from_secret` is ingress and is not here: it
+/// consumes a secret rather than handing one out.
+///
+/// `into_zeroizing_payload` returns authenticated plaintext rather than a key,
+/// and it belongs here anyway: the question this guard answers is what secret
+/// bytes a dependent crate can obtain, and decrypted payload is secret. The
+/// narrower marker list this replaced never saw it at all (QYR-0053).
 ///
 /// Enumerated by name rather than counted. A count lets one path be swapped for
 /// another without the number moving, and the swap is the change worth catching.
-/// Both are egress. `DeviceIdentity::from_secret` is ingress and is not here:
-/// it consumes a secret rather than handing one out, so it does not widen what
-/// a dependent crate can *obtain*. ADR-0024 §4 lists it as a new path because
-/// it is one; this guard answers a narrower question.
-const PUBLIC_KEY_MATERIAL_PATHS: [&str; 2] =
-    ["identity.rs::as_bytes", "identity.rs::export_secret"];
+const PUBLIC_KEY_MATERIAL_PATHS: [&str; 3] = [
+    "aead/mod.rs::into_zeroizing_payload",
+    "identity.rs::as_bytes",
+    "identity.rs::export_secret",
+];
 
-/// Type names whose appearance in a return position means key material.
+/// Public paths that return byte-shaped values which are **not** key material,
+/// classified deliberately rather than by omission.
 ///
-/// `[u8; 32]` is deliberately absent: a fingerprint is also thirty-two bytes,
-/// and a marker that fires on the public half would get relaxed, and a relaxed
-/// guard stops catching the harmful case.
-const KEY_MATERIAL_MARKERS: [&str; 5] = [
+/// This list is the other half of QYR-0053. The guard used to work off a list of
+/// type-name markers, which is an allow-list wearing a deny-list's clothes:
+/// adding `pub fn leak_raw(&self) -> Zeroizing<[u8; 32]>` — the seed, in the
+/// clear — left it green, because the return type happened to contain none of
+/// the five names it knew. `[u8; 32]` had been excluded on the correct
+/// observation that a fingerprint is also thirty-two bytes, and on the incorrect
+/// conclusion that it could therefore be ignored.
+///
+/// Now every byte-shaped public return must be in one list or the other, and
+/// being in neither fails. A new path forces a decision instead of passing in
+/// silence.
+const PUBLIC_NON_KEY_BYTE_PATHS: [&str; 0] = [];
+
+/// Return shapes that demand classification.
+///
+/// Deliberately broad. A marker that is too narrow fails open, which is the
+/// defect this replaced; a marker that is too broad costs one line in the
+/// not-key-material list.
+const BYTE_RETURN_MARKERS: [&str; 8] = [
+    "[u8; 32]",
+    "[u8; SEED_LEN]",
+    "[u8; PUBLIC_KEY_LEN]",
+    "Zeroizing",
     "IdentitySecret",
     "SigningKey",
     "SessionKey",
     "StaticSecret",
-    "SEED_LEN",
 ];
 
-#[test]
-fn every_public_path_returning_key_material_is_listed() {
+/// Collects every public path whose return type is byte-shaped.
+fn public_byte_returning_paths() -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
-
     for file in PRODUCTION_FILES {
         let source = production_source(file);
-        // A signature can wrap, so join from `pub fn` up to the body or the
-        // `where`, whichever comes first, before looking at the return type.
         for chunk in source.split("pub fn ").skip(1) {
             let signature: String = chunk
                 .chars()
@@ -107,7 +125,7 @@ fn every_public_path_returning_key_material_is_listed() {
             let Some((_, returns)) = signature.split_once("->") else {
                 continue;
             };
-            if KEY_MATERIAL_MARKERS
+            if BYTE_RETURN_MARKERS
                 .iter()
                 .any(|marker| returns.contains(marker))
             {
@@ -116,20 +134,39 @@ fn every_public_path_returning_key_material_is_listed() {
         }
     }
     found.sort();
+    found.dedup();
+    found
+}
 
-    let expected: Vec<String> = PUBLIC_KEY_MATERIAL_PATHS
+#[test]
+fn every_public_path_returning_key_material_is_listed() {
+    let found = public_byte_returning_paths();
+    let key: Vec<&str> = PUBLIC_KEY_MATERIAL_PATHS.to_vec();
+    let not_key: Vec<&str> = PUBLIC_NON_KEY_BYTE_PATHS.to_vec();
+
+    let unclassified: Vec<&String> = found
         .iter()
-        .map(std::string::ToString::to_string)
+        .filter(|path| !key.contains(&path.as_str()) && !not_key.contains(&path.as_str()))
         .collect();
-
-    assert_eq!(
-        found, expected,
-        "the set of public paths returning key material changed.\n\
-         found:    {found:?}\n\
-         expected: {expected:?}\n\
-         Adding one is a deliberate widening of what a dependent crate can ask \
-         for. Update PUBLIC_KEY_MATERIAL_PATHS and say why in ADR-0024."
+    assert!(
+        unclassified.is_empty(),
+        "these public paths return byte-shaped values and are in neither \
+         list: {unclassified:?}\n\
+         Put each in PUBLIC_KEY_MATERIAL_PATHS if it hands out secret bytes, \
+         or in PUBLIC_NON_KEY_BYTE_PATHS if it does not, and say which in \
+         ADR-0024 §4. Being in neither is the failure: it is how a seed \
+         accessor passed this guard unnoticed (QYR-0053). All of them are \
+         reported at once so that classifying one does not just reveal the next."
     );
+
+    // The key-material list must not name something that no longer exists, or
+    // it becomes a record of what used to be true.
+    for path in &key {
+        assert!(
+            found.iter().any(|f| f == path),
+            "{path} is listed as key material but no such public path was found"
+        );
+    }
 }
 
 #[test]

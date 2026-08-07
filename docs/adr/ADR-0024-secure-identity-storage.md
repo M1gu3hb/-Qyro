@@ -26,14 +26,14 @@ simulador.
 
 ## 1. `unsafe` — la decisión estructural
 
-Todos los crates de este repositorio llevan `#![forbid(unsafe_code)]`. DPAPI es
-una API de C. Los tres caminos y por qué se elige el tercero:
+Casi todos los crates de este repositorio llevan `#![forbid(unsafe_code)]`.
+DPAPI es una API de C. Los tres caminos y por qué se elige el tercero:
 
 | Camino | Coste |
 |---|---|
 | Dependencia (`windows-sys`) | ~11 crates al grafo auditado (`windows-targets` más un crate de enlace por arquitectura), entradas en `LICENSE_AUDIT.md` y `THIRD_PARTY_NOTICES.md`, para dos declaraciones de función |
 | `extern "system"` a mano en un crate de producto | Cero dependencias, pero `unsafe` dentro del árbol que hoy lo prohíbe entero |
-| **Crate de plataforma aparte, el único que relaja `forbid`** | Cero dependencias, `unsafe` confinado a un crate que no depende nadie más que el almacén |
+| **Crate de plataforma aparte, el único del producto que relaja `forbid`** | Cero dependencias, `unsafe` confinado a un crate del que no depende nadie más que el almacén |
 
 **Decisión: el tercero, con el `extern` escrito a mano.**
 
@@ -58,12 +58,41 @@ CI: un `DATA_BLOB` mal declarado no sobrevive a un `protect`/`unprotect`.
 —`CryptProtectData` y `CryptUnprotectData`—, `LocalFree`, y una struct
 `#[repr(C)] DATA_BLOB`; nada más, y solo en el crate de plataforma.
 
+### Corrección (QYR-0054, 2026-08-07): «todos» eran cinco de siete
+
+Esta sección abría diciendo «todos los crates de este repositorio llevan
+`#![forbid(unsafe_code)]`». **Era falso al escribirlo.** Al construir la guarda
+que lo comprobara aparecieron tres huecos:
+
+- `qyro_ffi` no lo tenía y **no puede tenerlo**: `#[unsafe(no_mangle)]` es un
+  atributo unsafe en edición 2024 y `forbid` lo rechaza. Comprobado añadiéndolo y
+  viendo fallar la compilación, no supuesto.
+- `qyro_crypto_smoke` tampoco, por la misma razón. Su propio comentario decía que
+  era «el único de este repositorio» sin el atributo, y eso ya era falso; y
+  sesenta líneas más abajo el mismo archivo afirmaba que el crate compila **con**
+  `forbid(unsafe_code)`. Las dos frases están corregidas.
+- `qyro_core` no lo tenía y **sí puede**: no contiene ningún `unsafe`. Se le
+  añadió, que es cerrar el hueco en vez de exceptuarlo.
+
+Así que la lista de excepciones tiene **dos** entradas, no cero ni una, y ambas
+por el mismo motivo técnico. Cuando llegue el crate de plataforma serán tres, y
+esa tercera será una edición visible de una lista existente —que es exactamente
+la razón de escribir la guarda antes que el crate—.
+
+La afirmación que sustituye a la anterior: **ningún crate relaja
+`forbid(unsafe_code)` sin estar en una lista de excepciones argumentada**, y una
+prueba lee las raíces del workspace y falla si aparece uno que no lo esté.
+
 **La guarda que impide que crezca**, dos mitades porque ninguna basta sola:
 
-1. Todo crate del workspace salvo el de plataforma debe conservar
-   `#![forbid(unsafe_code)]`; una prueba lee los manifiestos y las raíces de
-   crate y falla si aparece uno nuevo sin la línea, o si el de plataforma deja
-   de ser el único con la excepción.
+1. Todo crate del workspace debe conservar `#![forbid(unsafe_code)]` **o estar
+   en la lista de excepciones**, que hoy tiene dos entradas —`qyro_ffi` y
+   `qyro_crypto_smoke`, ambas por `#[unsafe(no_mangle)]`— y tendrá tres cuando
+   llegue el de plataforma. Una prueba lee los miembros del workspace y sus
+   raíces de crate, y falla si aparece uno sin la línea que no esté listado. Una
+   segunda comprueba lo contrario: que ninguna excepción siga listada después de
+   dejar de necesitarlo, porque una lista que sobrevive a su motivo deja de
+   significar algo.
 2. En el crate de plataforma, una prueba enumera los bloques `unsafe` **por
    nombre de función contenedora**. Añadir uno hace fallar la lista. Contar no
    basta: sustituir un bloque por otro mantiene el número.

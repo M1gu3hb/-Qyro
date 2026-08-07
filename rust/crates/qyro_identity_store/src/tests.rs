@@ -292,18 +292,50 @@ fn a_blob_read_with_a_different_entropy_constant_is_refused() {
 }
 
 #[test]
-fn the_entropy_covers_twelve_header_bytes_and_not_the_length() {
-    // QYR-0048 stated as an executable fact rather than a comment. If somebody
-    // "restores" the original rule, the entropy would depend on wrapped_len and
-    // this length would change.
-    assert_eq!(entropy_for(VERSION, WRAP_DPAPI_USER).len(), {
-        QYRO_IDENTITY_ENTROPY_V1.len() + ENTROPY_HEADER_LEN
-    });
-    // And it must not vary with the size of what gets wrapped.
-    assert_eq!(
-        entropy_for(VERSION, WRAP_DPAPI_USER),
-        entropy_for(VERSION, WRAP_DPAPI_USER)
-    );
+fn the_entropy_binds_the_header_and_not_only_its_length() {
+    // QYR-0052. The previous test here checked the length and then asserted
+    // `entropy_for(V, W) == entropy_for(V, W)` — the same pure function with the
+    // same arguments, which is true of every function that exists. Replacing the
+    // twelve header bytes with twelve zeroes left the whole suite green, so the
+    // reason the amendment gives for binding the header was covered by nothing.
+    //
+    // This is the third time this exact shape has appeared: QYR-0025 verified a
+    // transcript by calling the thing that produced it, and the
+    // `encrypted_envelope` target carried a tautological assertion.
+    let blob = a_blob();
+    let (_, body) = crate::blob::parse(&blob).unwrap();
+    let ours = entropy_for(VERSION, WRAP_DPAPI_USER);
+
+    for (field, other) in [
+        ("wrap", entropy_for(VERSION, WRAP_DPAPI_USER + 1)),
+        ("version", entropy_for(VERSION + 1, WRAP_DPAPI_USER)),
+    ] {
+        // Same length, so a difference cannot be explained by size alone. This
+        // is what makes the next assertion mean something.
+        assert_eq!(
+            other.len(),
+            ours.len(),
+            "{field}: entropies differ in length, so this test would pass for \
+             the wrong reason"
+        );
+        // The load-bearing one: a header field must change the entropy. Twelve
+        // zeroes in place of the header fails right here.
+        assert_ne!(
+            other, ours,
+            "{field}: the entropy does not depend on it, so a wrapper output \
+             could be relabelled under a different but valid header"
+        );
+        assert!(
+            matches!(
+                FakeWrapper.unwrap(body, &other),
+                Err(StoreError::Unwrap { .. })
+            ),
+            "{field}: a body sealed under our header unwrapped under another"
+        );
+    }
+
+    // And ours still works, so the loop is not passing because nothing does.
+    assert!(FakeWrapper.unwrap(body, &ours).is_ok());
 }
 
 #[test]
