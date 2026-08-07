@@ -385,3 +385,71 @@ fn a_secret_of_the_wrong_length_is_refused() {
         StoreError::MalformedSecret { found: 8 }
     );
 }
+
+/// The committed framing vectors, verified against the primitives.
+///
+/// Built from `MAGIC`, the version and wrap bytes and a big-endian length —
+/// **not** by calling `BlobHeader::encode` or `entropy_for`. Checking a vector
+/// with the function that produced it proves the function agrees with itself,
+/// which is what QYR-0025 recorded about the handshake transcript and what
+/// QYR-0052 recorded about the entropy test in this very file.
+///
+/// What is deliberately absent: a complete sealed blob. The wrapped body is
+/// DPAPI output, bound to a user account and a machine by design, so no other
+/// machine could reproduce it — a committed one would be a vector nobody but its
+/// author could verify.
+#[test]
+fn the_committed_framing_vectors_match_the_primitives() {
+    let raw = include_str!("../../../../docs/security/test-vectors/storage-v1.json");
+
+    let hex_of = |bytes: &[u8]| -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() };
+    // Independent of the module: the magic as ASCII, the constant as ASCII.
+    let magic = b"QYRO-IDS";
+    let constant = b"qyro.identity.store.v1";
+
+    assert!(
+        raw.contains(&format!("\"magic\": \"{}\"", hex_of(magic))),
+        "the committed magic is not the ASCII bytes QYRO-IDS"
+    );
+    assert!(
+        raw.contains(&format!("\"entropy_constant\": \"{}\"", hex_of(constant))),
+        "the committed entropy constant is not QYRO_IDENTITY_ENTROPY_V1"
+    );
+
+    // Rebuild each header the way a second implementation would read the ADR,
+    // and require the file to contain exactly those bytes.
+    for (version, wrap, wrapped_len) in [(1u8, 1u8, 0u32), (1, 1, 256)] {
+        let mut header = Vec::new();
+        header.extend_from_slice(magic);
+        header.extend_from_slice(&[version, wrap, 0, 0]);
+        header.extend_from_slice(&wrapped_len.to_be_bytes());
+        assert_eq!(header.len(), HEADER_LEN);
+
+        assert!(
+            raw.contains(&format!("\"header\": \"{}\"", hex_of(&header))),
+            "no committed vector carries the header for version {version}, wrap \
+             {wrap}, wrapped_len {wrapped_len}.\n\
+             The format changed, or the file did. If the format changed, ADR-0024 \
+             is what has to change first — regenerating this file is not the \
+             remedy, it is how the disagreement gets hidden."
+        );
+
+        let mut entropy = Vec::new();
+        entropy.extend_from_slice(constant);
+        entropy.extend_from_slice(&header[..ENTROPY_HEADER_LEN]);
+        assert!(
+            raw.contains(&format!("\"entropy\": \"{}\"", hex_of(&entropy))),
+            "the committed entropy for version {version}, wrap {wrap} is not \
+             constant || header[0..12] (QYR-0048)"
+        );
+    }
+
+    // And the production path agrees with the independently built bytes. This
+    // assertion is the only one that touches the module, and it comes last: the
+    // vector is the reference, not the output.
+    let mut expected = Vec::new();
+    expected.extend_from_slice(constant);
+    expected.extend_from_slice(magic);
+    expected.extend_from_slice(&[VERSION, WRAP_DPAPI_USER, 0, 0]);
+    assert_eq!(entropy_for(VERSION, WRAP_DPAPI_USER), expected);
+}
