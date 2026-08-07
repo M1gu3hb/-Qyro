@@ -194,6 +194,70 @@ fn windows_reserved_device_names_are_rejected() {
 }
 
 #[test]
+fn windows_superscript_device_names_are_rejected() {
+    // QYR-0029. Windows reads the ISO/IEC 8859-1 superscript digits as digits
+    // inside a device name, so `COM¹` is the same device as `COM1` and
+    // `echo test > COM¹` cannot create a file. The table listed only the ASCII
+    // spellings, so a manifest naming `COM¹.txt` was accepted here and could
+    // not be written on the receiver.
+    //
+    // Source: "Naming Files, Paths, and Namespaces", Microsoft Learn —
+    // https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+    // "Do not use the following reserved names ... COM1 ... COM9, COM¹, COM²,
+    // COM³, LPT1 ... LPT9, LPT¹, LPT², and LPT³."
+    for candidate in [
+        "COM\u{00B9}",
+        "COM\u{00B2}",
+        "COM\u{00B3}",
+        "LPT\u{00B9}",
+        "LPT\u{00B2}",
+        "LPT\u{00B3}",
+        // "Also avoid these names followed immediately by an extension."
+        "COM\u{00B9}.txt",
+        "COM\u{00B2}.log",
+        "COM\u{00B3}.tar.gz",
+        "LPT\u{00B9}.txt",
+        "LPT\u{00B2}.dat",
+        "LPT\u{00B3}.bin",
+        // Reserved in every directory, and case-insensitively.
+        "sub/COM\u{00B9}",
+        "sub/dir/LPT\u{00B3}.txt",
+        "com\u{00B9}",
+        "lpt\u{00B2}.txt",
+    ] {
+        assert_eq!(
+            RelativePath::parse(candidate),
+            Err(PathError::ReservedName),
+            "{candidate:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn names_that_merely_resemble_a_device_are_still_accepted() {
+    // The cited page lists no `COM0`, `LPT0`, `CONIN$`, `CONOUT$` or `CLOCK$`,
+    // and adding a rule without evidence is the same error as omitting one.
+    // These stay accepted, and QYR-0029 stays open in BUGS_PENDING.md until
+    // somebody produces a source. Pinning the current answer here means the
+    // day it changes, it changes deliberately.
+    for candidate in [
+        "COM0",
+        "LPT0",
+        "COM10",
+        "COM\u{00B9}\u{00B9}",
+        "COMA",
+        "CONSOLE.txt",
+        "communication.md",
+    ] {
+        assert!(
+            RelativePath::parse(candidate).is_ok(),
+            "{candidate:?} is not on the Microsoft list and must be accepted \
+             until a source says otherwise"
+        );
+    }
+}
+
+#[test]
 fn trailing_dot_or_space_is_rejected() {
     // Windows strips these on creation, so `evil.` and `evil` would collide
     // after the receiver believed they were distinct entries.
