@@ -3,7 +3,7 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T19:05:00Z
+- Updated UTC: 2026-08-07T19:40:00Z
 - Branch: claude/qyro-secure-storage-4d1
 - Verified commit: 940b49d6117d99bcfb4de6f821d021f893fee06a
 - Milestone: formato del blob implementado y probado adversarialmente, accesor
@@ -287,10 +287,10 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **346 tests**, 0 failed, 2 ignored. Eran 323
+- `cargo test --workspace`: PASS, **348 tests**, 0 failed, 2 ignored. Eran 323
   al empezar el sprint 4D.1: la guarda de caminos públicos, cuatro sobre el
   accesor de semilla y dieciocho sobre el formato del blob
-- `cargo test --workspace --all-features`: PASS, **346 tests**. Ningún crate
+- `cargo test --workspace --all-features`: PASS, **348 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
 - `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **57 crates**.
@@ -571,6 +571,27 @@ tres viñetas más abajo listaba el crate: se quedó atrás cuando el crate entr
   más las de escritura— y dieciocho pruebas adversariales. Voltear un bit en
   cualquier posición produce un error tipado, comprobado posición por posición y
   bit por bit, y **la prueba dice por qué camino espera cada tramo**.
+- **Tres guardas que no guardaban, ahora verificadas por su propia mutación**
+  (QYR-0052, QYR-0053, QYR-0054). Las tres sobrevivían a su propio borrado, que
+  es la definición que este proyecto usa para «no cubierto»:
+  - la ligadura de la cabecera a la entropía: sustituirla por doce ceros dejaba
+    toda la suite en verde, porque el único test comparaba `entropy_for(V, W)`
+    consigo misma. Tercera vez con esta forma exacta, tras QYR-0025 y el target
+    `encrypted_envelope`;
+  - la guarda de material de clave: un `pub fn` que devolvía la semilla en claro
+    pasaba, porque la lista de marcadores era una lista de permitidos disfrazada
+    de prohibidos. Ahora todo retorno público con forma de bytes debe estar
+    clasificado, y ampliarla destapó `into_zeroizing_payload`, que la anterior no
+    veía;
+  - `forbid(unsafe_code)`: no lo comprobaba nada, y escribir la guarda demostró
+    que **la afirmación era falsa**. Ver abajo.
+- **Corrección: `forbid(unsafe_code)` no lo llevaban todos.** Este archivo decía
+  «todos los crates conservan `forbid(unsafe_code)`, incluido el nuevo» y
+  ADR-0024 §1 decía lo mismo. Eran cinco de siete. `qyro_ffi` y
+  `qyro_crypto_smoke` **no pueden** llevarlo —`#[unsafe(no_mangle)]` es un
+  atributo unsafe en edición 2024, comprobado añadiéndolo y viendo fallar la
+  compilación—; `qyro_core` sí podía y no lo llevaba, así que ahora lo lleva. La
+  lista de excepciones tiene **dos** entradas y una prueba la vigila.
 - **QYR-0048 corregido antes de escribir el blob**: la entropía congelada era
   circular. La enmienda va en `df9f574`, **anterior al primer commit del blob**
   (`3f25874`). Este párrafo decía «anterior al primer commit de implementación» y
@@ -585,8 +606,9 @@ Lo que **no** existe todavía, y no debe leerse como progreso:
   y `open_identity` funcionan contra un envoltorio que solo existe en `cfg(test)`.
 - No hay harness de dos procesos ni paso de CI que ejecute persistencia.
 - No hay `storage-v1.json`.
-- No hay `unsafe` en ninguna parte: todos los crates conservan
-  `forbid(unsafe_code)`, incluido el nuevo.
+- **No hay `unsafe` en ninguna parte del producto**, y ahora una prueba lo
+  sostiene en vez de la costumbre. El crate de plataforma que ADR-0024 §1 decide
+  **no existe todavía**.
 - QYR-0050 sigue abierto: la ruta del blob depende del nombre de producto, que
   sigue siendo provisional.
 
@@ -639,33 +661,33 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**Continuar el sprint 4D.1 desde el formato congelado.** ADR-0024 responde las
-cuatro preguntas y el formato está especificado; lo que queda es construirlo, en
-este orden y sin saltarse el primero:
+**El crate de plataforma Windows.** Es lo único que falta para que algo persista;
+todo lo demás del sprint está hecho y verificado. En este orden:
 
-1. Las pruebas rojas de §12, vistas fallar antes de que exista su corrección:
-   persistencia entre **dos invocaciones del proceso** (no dos llamadas),
-   corrupción posición por posición, versión futura rechazada por nombre,
-   truncado, vacío, `rotate`, `delete`, ausencia tipada, cierre transitivo de
-   `qyro_ffi`, y las dos guardas de fuente del crate nuevo.
-2. El accesor de semilla, que es la parte peligrosa: `export_secret` y
-   `from_secret` sobre un `IdentitySecret` que se borra al soltarse, no es
-   `Clone` y tiene `Debug` redactado. Con la prueba que enumera **por nombre**
-   los caminos públicos que devuelven material de clave —hoy la lista está
-   vacía, después tiene exactamente dos entradas—.
-3. El trait `create` / `load` / `delete` / `rotate` con errores tipados que nunca
-   confunden «no hay» con «no se puede leer».
-4. El crate de plataforma con el `extern "system"` a mano, único con `unsafe`, y
-   sus dos guardas: que ningún otro crate pierda `forbid(unsafe_code)`, y que los
-   bloques `unsafe` estén enumerados por nombre de función.
-5. `storage-v1.json` con schema estricto, regeneración byte a byte y verificación
-   **desde las primitivas**, no desde el propio módulo (la lección de QYR-0025).
-6. El harness de dos procesos en `windows-crypto`, y las rutas del crate nuevo
-   añadidas a los filtros de los workflows que lo compilan (QYR-0045 existe
-   porque eso se olvidó dos veces).
+1. `only_the_listed_crates_may_relax_forbid_unsafe` ya existe y la lista de
+   excepciones tiene dos entradas. Añadir el crate de plataforma es **una tercera
+   entrada argumentada**, no un `forbid` que nunca estuvo: eso es exactamente por
+   qué la guarda se escribió antes.
+2. `the_unsafe_blocks_are_the_ones_we_listed`, **antes** de escribir un bloque
+   `unsafe`. Por nombre de función contenedora, no por número: sustituir un bloque
+   por otro deja el número igual.
+3. El `extern "system"` a mano para `CryptProtectData`, `CryptUnprotectData` y
+   `LocalFree`, más `#[repr(C)] DATA_BLOB`. `CRYPTPROTECT_UI_FORBIDDEN`, ámbito de
+   usuario, `pPromptStruct = NULL` (ADR-0024 §2). Borrar el búfer **antes** de
+   `LocalFree`: liberar sin borrar es el defecto que QYR-0018 ya cerró una vez.
+4. `a_data_blob_survives_a_protect_and_unprotect` en `windows-latest`. Es la
+   mitigación que ADR-0024 §1 prometió a cambio de transcribir el `extern` a mano.
+5. La implementación de `IdentityStore` sobre `%LOCALAPPDATA%`, con QYR-0050
+   resuelto o registrado, y `two_creates_do_not_lose_data` decidido y probado.
+6. El barrido de 448 posiciones **contra DPAPI**, no contra el doble. Los tres
+   tramos deben caer por los mismos caminos; si alguno cae por otro, eso es el
+   hallazgo.
+7. El harness de dos procesos (ADR-0023) y su paso en `windows-crypto`.
+8. `storage-v1.json` verificado **desde las primitivas**, no desde el módulo que
+   lo produce (QYR-0025).
 
-Aceptación completa en el prompt del sprint. Lo que no se puede afirmar al
-cerrar: persistencia en Android o iOS, y nada probado en hardware físico.
+Después: los seis workflows en verde sobre un mismo commit, y `Verified commit`
+movido a él.
 
 ## Provisional values
 
