@@ -54,6 +54,18 @@ pub enum PathError {
     TrailingDotOrSpace,
     /// A control character.
     ControlCharacter,
+    /// A Unicode format character: general category `Cf`.
+    ///
+    /// Its own variant rather than a second spelling of
+    /// [`PathError::ControlCharacter`], because it is a different hazard and the
+    /// message has to be able to say so. `Cc` characters break a path at the
+    /// syscall boundary; `Cf` characters are invisible and change how the *rest*
+    /// of the name renders, which is how `invoice<RLO>fdp.exe` is displayed as
+    /// `invoiceexe.pdf`.
+    FormatCharacter {
+        /// The offending code point.
+        found: char,
+    },
     /// The path was not valid UTF-8.
     InvalidUtf8,
     /// A character no Windows filesystem accepts in a name.
@@ -87,6 +99,14 @@ impl fmt::Display for PathError {
             Self::ReservedName => formatter.write_str("path uses a reserved device name"),
             Self::TrailingDotOrSpace => formatter.write_str("segment ends in a dot or space"),
             Self::ControlCharacter => formatter.write_str("path contains a control character"),
+            // Printed as a code point, never as the character itself: rendering
+            // it would reproduce, in the diagnostic, the display attack the
+            // rejection exists to stop.
+            Self::FormatCharacter { found } => write!(
+                formatter,
+                "path contains the Unicode format character U+{:04X}",
+                u32::from(*found)
+            ),
             Self::InvalidUtf8 => formatter.write_str("path is not valid UTF-8"),
             Self::NonPortableCharacter { found } => {
                 write!(
