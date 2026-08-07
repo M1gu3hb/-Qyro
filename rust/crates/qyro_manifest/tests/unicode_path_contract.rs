@@ -96,9 +96,7 @@ fn the_decoder_refuses_a_disguised_extension_too() {
         codec::decode(&bytes),
         Err(ManifestError::InvalidPath {
             index: 0,
-            source: PathError::FormatCharacter {
-                found: '\u{202E}'
-            },
+            source: PathError::FormatCharacter { found: '\u{202E}' },
         }),
         "a hostile path must not survive the decoder"
     );
