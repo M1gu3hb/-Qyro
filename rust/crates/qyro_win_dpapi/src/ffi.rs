@@ -36,6 +36,16 @@ pub(crate) const CRYPTPROTECT_UI_FORBIDDEN: u32 = 0x1;
 // unprotect the data. A constant nobody defines is a constant nobody passes by
 // accident.
 
+// `Crypt32.lib` is **not** linked by default, and nothing in a `cargo check`
+// notices: type-checking does not link, so the omission survived a clean
+// cross-compile check on Linux and surfaced only as LNK2019 on a real Windows
+// linker. The reference names the library in its requirements table — "Library:
+// Crypt32.lib" — and that line is load-bearing rather than informational.
+//
+// `LocalFree` and `GetLastError` are kernel32, which the MSVC target links
+// anyway; they are declared in a separate block so this attribute says exactly
+// which two symbols need it.
+#[link(name = "Crypt32")]
 unsafe extern "system" {
     /// Windows: `Crypt32.dll`.
     pub(crate) fn CryptProtectData(
@@ -57,7 +67,9 @@ unsafe extern "system" {
         dw_flags: u32,
         p_data_out: *mut DataBlob,
     ) -> i32;
+}
 
+unsafe extern "system" {
     /// Kernel32. The reference is explicit that a caller frees `pbData` with it.
     pub(crate) fn LocalFree(h_mem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
 
