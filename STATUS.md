@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T04:10:00Z
+- Updated UTC: 2026-08-07T04:20:00Z
 - Branch: claude/qyro-audit-closure-4c2-9a3v4j
-- Verified commit: 6fc1b5907ab2966a15333fce90db98e6bda7727d
+- Verified commit: 496e066bae2541071bfdd15ee514d873e3e7cecb
 - Milestone: auditoría independiente cerrada; transporte y almacenamiento seguro
   NO iniciados
 
@@ -299,10 +299,30 @@ documentales del sprint 4C.1 no habían sido ejecutados por nada.
 ### Sprint 4C.2 — runs de cierre
 
 <!-- SPRINT_4C2_CLOSING_RUNS -->
-**Pendientes en el momento de escribir esta línea.** Se ejecutan por `push`
-sobre el commit que añade la rama al disparador de los seis workflows, y se
-registran en el commit siguiente con su ID y su conclusión. Nada de este archivo
-debe leerse como si ya existieran.
+Los seis sobre `496e066`, **todos disparados por el `push`** y no a mano. Ese es
+el commit que este archivo nombra como verificado, y que los disparadores hayan
+funcionado solos es a la vez el resultado y la prueba de QYR-0026: es el primer
+commit de la historia de este repositorio en el que empujar a una rama de
+trabajo ejecuta los seis workflows sin que nadie los invoque.
+
+| Workflow | Run | Evento | Conclusión |
+|---|---|---|---|
+| CI | 31145547953 | `push` | **success**, 4/4 jobs |
+| Platform builds | 31145547793 | `push` | **success**, 3/3 jobs |
+| Crypto platform | 31145547809 | `push` | **success** |
+| Crypto fuzz | 31145547827 | `push` | **success** |
+| Android runtime ABI | 31145547798 | `push` | **success** |
+| iOS runtime ABI | 31145547805 | `push` | **success** |
+
+El job `documentation` de CI ejecuta los cuatro scripts `check_*` en Bash **y**
+en PowerShell, y los ocho pasos pasaron. Este contenedor no trae `pwsh`, así que
+las dos ediciones PowerShell de este sprint no pudieron probarse localmente y
+esa ejecución es su única evidencia; se dice aquí en vez de omitirlo.
+
+Ningún run intermedio falló en esta rama. Los dos commits documentales
+posteriores a `496e066` no vuelven a disparar los seis: solo `ci.yml` corre sin
+filtro de rutas, y los otros cinco filtran por rutas que esos commits no tocan.
+Por eso la evidencia se ancla en `496e066` y no en HEAD.
 
 ### Sprint 4C.1 — workflows sobre `2c3b3b5`
 
