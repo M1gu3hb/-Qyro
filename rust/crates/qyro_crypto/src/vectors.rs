@@ -645,3 +645,80 @@ fn a_generated_identity_signs_and_verifies() {
             .is_ok()
     );
 }
+
+// ---------------------------------------------------- sprint 4C.2 (QYR-0023)
+
+/// A signature the permissive verifier accepts and the strict one refuses.
+///
+/// # What makes it different
+///
+/// `ed25519_dalek::VerifyingKey::verify` and `verify_strict` differ in exactly
+/// one way in the pinned 3.0.0: `verify_strict` decompresses `R`, refuses if
+/// `R` or `A` has small order, and only then compares the recomputed `R`. So a
+/// signature that separates them must have a small-order `R` that still
+/// satisfies `[s]B = R + [k]A`. Since `[s]B - [k]A` always lies in the
+/// prime-order subgroup, the only small-order point it can equal is the
+/// identity — which is why `R` here is the identity point, `0x01` followed by
+/// thirty-one zero bytes, the first entry of [`SMALL_ORDER_ENCODINGS`] above.
+///
+/// This is the degenerate small-order-`R` case catalogued by *Taming the Many
+/// EdDSAs* (Chalkias, Garillot and Nikolaenko, 2020) and excluded by ZIP-215;
+/// it is the class of signature `verify_strict` exists to refuse.
+///
+/// # Provenance, and why the bytes are derived rather than quoted
+///
+/// The key is the RFC 8032 §7.1 TEST 1 key this file already uses, and the
+/// signed bytes are this crate's own domain-separated signing input. That is
+/// forced: `PublicIdentity::verify` hashes
+/// `"QYRO-SIGN-V1" || 0x00 || domain || len || message`, so no external vector's
+/// `(A, M)` pair can ever be presented to it — a published triple would test
+/// `ed25519_dalek` rather than this crate's use of it.
+///
+/// So the signature is constructed, and reproducibly. With
+/// `a = clamp(SHA-512(seed)[0..32])`, `R = identity`,
+/// `k = SHA-512(R || A || M) mod L` and `s = k · a mod L`, the verification
+/// equation `[s]B = [k·a]B = [k]A = R + [k]A` holds with `R` the identity, so
+/// the permissive check passes and the strict one refuses the small-order `R`.
+/// `M` is the signing input for `SignatureDomain::TestVector` over `b"qyro"`.
+const SMALL_ORDER_R_SIGNATURE: &str = concat!(
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    "23b9427fe725a5209f4f0f876f2dacaa4a3972f40f255a037a584d151450c50a",
+);
+
+#[test]
+fn a_non_strict_signature_is_refused() {
+    // QYR-0023. `identity.rs` calls `verify_strict`, and swapping it for
+    // `verify` left the suite at 124 passed, 0 failed: every other signature
+    // test uses signatures this crate produced, which both verifiers accept.
+    // Strictness is only observable on a signature built to exploit the
+    // difference.
+    let identity = test_identity();
+    let public = identity.public_identity();
+
+    let raw = unhex(SMALL_ORDER_R_SIGNATURE);
+    assert_eq!(
+        hex(&raw[..32]),
+        SMALL_ORDER_ENCODINGS[0],
+        "the premise of this vector is that R is the identity point"
+    );
+
+    let signature = IdentitySignature::from_slice(&raw).expect("64 bytes");
+    assert_eq!(
+        public.verify(SignatureDomain::TestVector, b"qyro", &signature),
+        Err(IdentityError::SignatureVerificationFailed),
+        "a signature whose R has small order must be refused; accepting it \
+         means this crate is calling the permissive verifier, and two distinct \
+         signatures over one message would both be valid"
+    );
+
+    // The control: an ordinary signature over the same message under the same
+    // key still verifies, so the rejection above is about this signature and
+    // not about the message, the domain or the key.
+    let honest = sign(&identity, SignatureDomain::TestVector, b"qyro");
+    assert!(
+        public
+            .verify(SignatureDomain::TestVector, b"qyro", &honest)
+            .is_ok(),
+        "the strict verifier must still accept what this crate signs"
+    );
+}
