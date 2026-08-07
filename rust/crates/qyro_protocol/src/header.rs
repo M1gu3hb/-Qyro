@@ -69,6 +69,20 @@ fn field<const OFFSET: usize, const WIDTH: usize>(bytes: &[u8; HEADER_LEN]) -> [
 impl FrameHeader {
     /// Builds a plain QYRO/1.0 header: no flags, no trailer.
     ///
+    /// **`transfer_id`, `stream_id` and `item_id` come out as zero and nothing
+    /// public can change them.** They are authenticated — they travel inside the
+    /// 48 bytes an encrypted envelope covers as associated data — so a peer
+    /// cannot alter them without breaking the tag, which is the property that
+    /// would make them worth carrying. Today no caller can populate them, so
+    /// they carry nothing.
+    ///
+    /// Sprint 5A found this by building a transfer engine that needed `item_id`
+    /// and put it in the message body instead. Recorded as QYR-0068 with the
+    /// decision left open: either these become settable and the body field goes,
+    /// or ADR-0016 should say they are reserved. This comment does not decide
+    /// it — widening a frozen surface as a side effect of another sprint is how
+    /// control of a format is lost.
+    ///
     /// # Errors
     ///
     /// Returns [`FrameError::PayloadTooLarge`] when `payload_len` exceeds
