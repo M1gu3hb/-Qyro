@@ -77,6 +77,7 @@ pub use error::IdentityError;
 pub use fingerprint::{FINGERPRINT_LEN, IdentityFingerprint};
 pub use handshake::HandshakeError;
 pub use identity::{
-    DeviceIdentity, IDENTITY_VERSION, PUBLIC_IDENTITY_WIRE_LEN, PUBLIC_KEY_LEN, PublicIdentity,
+    DeviceIdentity, IDENTITY_VERSION, IdentitySecret, PUBLIC_IDENTITY_WIRE_LEN, PUBLIC_KEY_LEN,
+    PublicIdentity, SEED_LEN,
 };
 pub use signature::{IdentitySignature, SIGNATURE_LEN, SignatureDomain};

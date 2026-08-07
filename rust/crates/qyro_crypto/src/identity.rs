@@ -42,14 +42,60 @@ pub const PUBLIC_KEY_LEN: usize = 32;
 pub const PUBLIC_IDENTITY_WIRE_LEN: usize = 1 + PUBLIC_KEY_LEN;
 
 /// Bytes in the seed a signing key is derived from.
-const SEED_LEN: usize = 32;
+pub const SEED_LEN: usize = 32;
+
+/// The secret half of a device identity, in transit to or from a secure store.
+///
+/// Exists so that a seed never travels as a bare `[u8; 32]`. It zeroizes on
+/// drop, is not `Clone` — two copies is one more than anyone can account for —
+/// is not serializable, and its `Debug` is redacted, because the shortest path
+/// from a secret to a log file is a `{:?}` in an error message.
+pub struct IdentitySecret {
+    seed: Zeroizing<[u8; SEED_LEN]>,
+}
+
+impl IdentitySecret {
+    /// Wraps raw seed bytes coming back out of a store.
+    #[must_use]
+    pub fn from_bytes(bytes: &[u8; SEED_LEN]) -> Self {
+        Self {
+            seed: Zeroizing::new(*bytes),
+        }
+    }
+
+    /// Borrows the seed so a store can wrap it.
+    ///
+    /// Borrowed rather than returned by value: handing back an owned array
+    /// would put a copy outside this type's `Drop`, which is the one thing it
+    /// exists to prevent.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8; SEED_LEN] {
+        &self.seed
+    }
+}
+
+impl fmt::Debug for IdentitySecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("IdentitySecret(redacted)")
+    }
+}
 
 /// A device's own identity, including its signing key.
 ///
 /// Deliberately not `Clone`, `Copy` or serializable: a secret that can be copied
-/// freely is a secret that ends up somewhere nobody audited. There is **no
-/// accessor for the seed or the private key**; persisting an identity is the job
-/// of a secure store, which does not exist yet.
+/// freely is a secret that ends up somewhere nobody audited.
+///
+/// Until sprint 4D.1 this paragraph continued "there is **no accessor for the
+/// seed or the private key**", and that was the whole protection. Persisting an
+/// identity makes it impossible to keep: a secure store cannot store what it
+/// cannot read. [`DeviceIdentity::export_secret`] is the one way out and
+/// [`DeviceIdentity::from_secret`] the one way back in, both public because the
+/// store lives in another crate — ADR-0024 §4 argues why an enumerable public
+/// path was preferred to relaxing `forbid(unsafe_code)` in this crate, and does
+/// not pretend the choice was free.
+///
+/// What still contains it is ownership: you must hold a `DeviceIdentity`, and
+/// one only comes from [`DeviceIdentity::generate`] or from a store.
 ///
 /// The signing key zeroizes on drop.
 pub struct DeviceIdentity {
@@ -97,6 +143,32 @@ impl DeviceIdentity {
             signing_key,
             public,
         }
+    }
+
+    /// Hands out the secret half, for a secure store and nothing else.
+    ///
+    /// This is one of exactly two public paths in this crate that return key
+    /// material; `src/guards.rs` enumerates them by name and fails if a third
+    /// appears. See ADR-0024 §4.
+    ///
+    /// The seed is reconstructed from the signing key rather than kept beside
+    /// it, so this type still holds one copy of the secret and not two.
+    #[must_use]
+    pub fn export_secret(&self) -> IdentitySecret {
+        IdentitySecret {
+            seed: Zeroizing::new(self.signing_key.to_bytes()),
+        }
+    }
+
+    /// Rebuilds an identity from a secret a store handed back.
+    ///
+    /// Infallible by construction: every 32-byte string is a valid Ed25519
+    /// seed. That is a property of the algorithm, not an assumption — it is the
+    /// same reason `[0xFF; 32]` turned out to be a perfectly valid key when the
+    /// sprint 4A guard tried to reject it for looking weak.
+    #[must_use]
+    pub fn from_secret(secret: &IdentitySecret) -> Self {
+        Self::from_seed(secret.as_bytes())
     }
 
     /// Returns the public half, which is safe to share.
@@ -302,5 +374,68 @@ impl fmt::Debug for PublicIdentity {
             .field("version", &self.version)
             .field("fingerprint", &self.fingerprint)
             .finish()
+    }
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "a test that cannot fail loudly is not a test"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_exported_secret_rebuilds_the_same_identity() {
+        // The property a store depends on. If this ever stopped holding,
+        // persisting would silently return a *different* identity, which is
+        // worse than failing to persist at all: the fingerprint a peer trusted
+        // would change without anything reporting an error.
+        let original = DeviceIdentity::from_test_seed(&[7u8; SEED_LEN]);
+        let secret = original.export_secret();
+        let restored = DeviceIdentity::from_secret(&secret);
+
+        assert_eq!(original.fingerprint(), restored.fingerprint());
+        assert_eq!(
+            original.public_identity().encode(),
+            restored.public_identity().encode()
+        );
+    }
+
+    #[test]
+    fn an_exported_secret_is_the_seed_the_identity_was_built_from() {
+        // Checked against the seed itself rather than against another export,
+        // so the test cannot pass by agreeing with its own output — the mistake
+        // QYR-0025 recorded about verifying vectors from the module that
+        // produced them.
+        let seed = [0x5Au8; SEED_LEN];
+        let identity = DeviceIdentity::from_test_seed(&seed);
+        assert_eq!(identity.export_secret().as_bytes(), &seed);
+    }
+
+    #[test]
+    fn a_secret_does_not_print_itself() {
+        // The shortest path from a secret to a log file is a `{:?}` inside an
+        // error message somebody added in a hurry.
+        let secret = IdentitySecret::from_bytes(&[0xABu8; SEED_LEN]);
+        let rendered = format!("{secret:?}");
+        assert_eq!(rendered, "IdentitySecret(redacted)");
+        assert!(!rendered.contains("ab"), "{rendered}");
+        assert!(!rendered.contains("171"), "{rendered}");
+    }
+
+    #[test]
+    fn every_thirty_two_byte_string_is_a_usable_seed() {
+        // `from_secret` is infallible by construction. The sprint 4A guard that
+        // tried to reject `[0xFF; 32]` for looking weak is why this is a test
+        // and not a comment: a byte pattern is not a weak key.
+        for pattern in [0x00u8, 0x01, 0x7F, 0x80, 0xFF] {
+            let secret = IdentitySecret::from_bytes(&[pattern; SEED_LEN]);
+            let identity = DeviceIdentity::from_secret(&secret);
+            assert_eq!(identity.export_secret().as_bytes(), &[pattern; SEED_LEN]);
+        }
     }
 }
