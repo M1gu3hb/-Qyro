@@ -295,6 +295,7 @@ name = "qyro_ffi"
 version = "0.0.1"
 dependencies = [
  "qyro_core",
+ "serde_json",
 ]
 
 [[package]]

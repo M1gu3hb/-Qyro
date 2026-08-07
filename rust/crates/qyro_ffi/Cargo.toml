@@ -11,3 +11,11 @@ path = "src/lib.rs"
 
 [dependencies]
 qyro_core = { path = "../qyro_core" }
+
+[dev-dependencies]
+# Reads `cargo metadata` in the C ABI contract test, so the FFI dependency
+# closure is asked of Cargo's resolver instead of scraped out of the manifest
+# text. MIT/Apache-2.0, dev-only: it is not linked into the library Dart loads,
+# and it was already in this workspace's lock file as a dev-dependency of
+# qyro_crypto, so no crate is added to the audited graph.
+serde_json = "1.0.145"
