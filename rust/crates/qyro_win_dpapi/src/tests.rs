@@ -21,6 +21,17 @@ const WRAP: u8 = 1;
 const HEADER_LEN: usize = 16;
 const ENTROPY_HEADER_LEN: usize = 12;
 
+/// Blob positions covering the DPAPI wrapper's provider GUID.
+///
+/// The wrapper begins at [`HEADER_LEN`]; its own layout is a version DWORD then
+/// a sixteen-byte provider GUID, so the GUID lands at blob bytes 20..36. DPAPI
+/// neither authenticates nor consults it, which is QYR-0059.
+///
+/// This is observed, not a contract. The reference says the wrapped format is
+/// opaque and must not be parsed; naming the field here explains *what* was
+/// measured, and the test fails if the measurement stops holding.
+const PROVIDER_GUID_RANGE: core::ops::Range<usize> = 20..36;
+
 /// A scratch store under the runner's temp directory, removed on drop.
 struct Scratch {
     store: WindowsIdentityStore,

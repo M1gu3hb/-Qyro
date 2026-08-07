@@ -71,11 +71,24 @@ Por eso la prueba recorre todas las posiciones y su mensaje de fallo dice por qu
 camino se esperaba cada una.
 
 **Corrección (QYR-0059).** La fila `16..` de esa tabla es **falsa tal como está
-escrita**. El barrido contra DPAPI real encontró que el byte 20 —offset 4 dentro
-del envoltorio— se puede voltear y el blob sigue abriendo. El MAC de DPAPI cubre
-los datos cifrados, no cada byte de la estructura que los rodea. Queda abierto
-si la identidad que sale es la misma o es otra, que es lo que decide si esto es
-un detalle o un fallo grave.
+escrita**. El barrido contra DPAPI real encontró **dieciséis bytes contiguos que
+se pueden voltear sin que el blob deje de abrir**: los bytes 20..36, que son el
+offset 4..20 del envoltorio, es decir **el GUID del provider**. DPAPI ni lo
+autentica ni lo consulta. El MAC cubre los datos cifrados, no la estructura que
+los rodea.
+
+La tabla correcta:
+
+| Tramo | Qué lo atrapa |
+|---|---|
+| `0..12` | la entropía cambia y `CryptUnprotectData` no autentica |
+| `12..16` | `LengthMismatch`, paso 7 del orden de lectura |
+| `20..36` | **nada** — GUID del provider, ignorado por DPAPI (QYR-0059) |
+| el resto de `16..` | el MAC de DPAPI |
+
+Las 128 mutaciones supervivientes devuelven **la misma identidad**: el byte
+alterado descifra a la misma semilla. Es maleabilidad en un campo que DPAPI
+ignora, no un camino para sustituir una identidad en silencio.
 
 **Respondido:** la identidad que sale es la **misma** (run 31212494494). El byte
 alterado descifra a la misma semilla, así que esto es maleabilidad en un campo

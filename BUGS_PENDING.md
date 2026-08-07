@@ -1096,18 +1096,24 @@
   atraparía el MAC que DPAPI documenta: «The function also adds a Message
   Authentication Code (MAC) (keyed integrity check) to the encrypted data to
   guard against data tampering»
-- Actual: el barrido de 448 posiciones **contra DPAPI real** falla en el **byte
-  20, bit 0** —offset 4 dentro del envoltorio—: `open_identity` devuelve una
-  identidad. Run 31211959010, job `windows-crypto`, test
-  `a_single_flipped_byte_is_a_typed_error_against_dpapi`
+- Actual: el barrido de 448 posiciones **contra DPAPI real** encuentra **128
+  posiciones supervivientes: los bytes 20..36 del blob, los ocho bits de cada
+  uno**. Son dieciséis bytes contiguos en el offset 4 del envoltorio, es decir
+  **el GUID del provider**: DPAPI ni lo autentica ni lo consulta al desproteger.
+  Runs 31211959010 y 31213769557, job `windows-crypto`
+- **Corrección de una medición propia:** la primera versión de este hallazgo
+  decía «byte 20, bit 0», en singular. Era cierto y estaba incompleto: la prueba
+  entraba en pánico en la primera superviviente, así que esa era la única que
+  alguien había visto. Al recogerlas todas aparecieron 128. Una cota elegida para
+  encajar con una observación no es una propiedad
 - Lo que esto invalida: la afirmación de `docs/security/identity-storage.md` de
   que el tramo `16..` lo cubre «el MAC propio de DPAPI sobre el envoltorio` es
   **falsa tal como está escrita**. El MAC cubre los datos cifrados, no cada byte
   de la estructura que los rodea; el blob lleva cabecera propia —versión, GUID
   del provider, sal— y al menos un byte de esa zona no está autenticado
-- **Respondido: la identidad que sale es la MISMA.** Run 31212494494, job
-  `windows-crypto`: «byte 20 bit 0: a corrupted blob opened. Same identity:
-  true». El byte alterado descifra a la misma semilla, así que el blob es
+- **Respondido: la identidad que sale es la MISMA, en las 128.** Run 31212494494
+  lo mostró para la primera; el run 31213769557 lo comprueba para todas, porque
+  la aserción de fingerprint corre dentro del bucle y ninguna falló. El byte alterado descifra a la misma semilla, así que el blob es
   **maleable en un campo que DPAPI ignora** y **no** es un camino para sustituir
   en silencio la identidad de un dispositivo, que era el resultado que habría
   sido grave. La prueba se modificó para responder esta pregunta en vez de

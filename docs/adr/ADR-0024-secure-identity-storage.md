@@ -190,9 +190,14 @@ El barrido de las 448 posiciones **contra DPAPI real** demostró que no:
 
     byte 20 bit 0: a corrupted blob opened. Same identity: true.
 
-Run 31212494494, job `windows-crypto`. El byte 20 es el offset 4 dentro del
-envoltorio, en la cabecera propia de DPAPI —versión, GUID del provider, sal—, y
-alterarlo no impide desproteger.
+Runs 31212494494 y 31213769557, job `windows-crypto`. No es un byte: son
+**dieciséis contiguos**, los blob bytes 20..36, que en el envoltorio caen en el
+offset 4..20 — **el GUID del provider**. DPAPI ni lo autentica ni lo consulta al
+desproteger. Las 128 mutaciones devuelven la misma identidad.
+
+La primera medición dijo «byte 20, bit 0» porque la prueba entraba en pánico en
+la primera superviviente y nadie había visto las demás. Se anota porque la
+diferencia entre «un byte» y «un campo entero» cambia qué se está aceptando.
 
 **Qué significa y qué no.** La identidad que sale es la **misma**: el byte
 alterado descifra a la misma semilla. Es maleabilidad en un campo que DPAPI
