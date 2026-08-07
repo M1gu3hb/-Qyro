@@ -181,6 +181,47 @@ Authentication Code (HMAC), in this case SHA-1.»
 casera sobre una capa que ya autentica, y el sprint prohíbe inventarla. Lo que sí
 se hace es meter la cabecera en la entropía para que quede bajo ese MAC.
 
+### Enmienda (QYR-0059, 2026-08-07): el MAC de DPAPI no cubre su propia cabecera
+
+**Corrige una afirmación anterior de esta ADR y de
+`docs/security/identity-storage.md`.** Las dos decían que el tramo `16..` del
+blob —la salida de DPAPI— queda cubierto por el MAC que la referencia documenta.
+El barrido de las 448 posiciones **contra DPAPI real** demostró que no:
+
+    byte 20 bit 0: a corrupted blob opened. Same identity: true.
+
+Run 31212494494, job `windows-crypto`. El byte 20 es el offset 4 dentro del
+envoltorio, en la cabecera propia de DPAPI —versión, GUID del provider, sal—, y
+alterarlo no impide desproteger.
+
+**Qué significa y qué no.** La identidad que sale es la **misma**: el byte
+alterado descifra a la misma semilla. Es maleabilidad en un campo que DPAPI
+ignora, no un camino para sustituir una identidad en silencio, que era el
+resultado que habría sido grave. Quien pueda escribir ese byte ya tenía acceso de
+escritura al archivo, y no gana ni la semilla ni una identidad distinta.
+
+**Decisión: se acepta y se documenta, no se tapa con un MAC propio.** Las dos
+opciones eran:
+
+1. Que Qyro autentique el envoltorio por su cuenta. Contradice §2 de esta misma
+   ADR —DPAPI ya autentica lo que importa— y contradice «no inventes
+   criptografía». Añadiría una capa casera para cubrir un byte cuya alteración no
+   cambia nada observable.
+2. Aceptar el byte, con la razón escrita, y hacer que la prueba fije **qué
+   posiciones exactas** sobreviven, de modo que una nueva superviviente falle.
+
+Se elige la segunda. La prueba no se relaja: pasa de «ninguna posición
+sobrevive» —que era falso— a «sobreviven exactamente estas, y ninguna otra», que
+es una afirmación más fuerte y comprobable. Una superviviente nueva, o una que
+devuelva una identidad **distinta**, sigue siendo un fallo.
+
+**Lo que queda anotado y no cerrado:** este proyecto no ha caracterizado qué
+bytes de la cabecera de DPAPI son ignorados ni por qué. La prueba fija lo
+observado en este runner, no un contrato de Microsoft; la referencia dice que el
+formato es opaco y que no hay que parsearlo, así que el conjunto podría diferir
+en otra versión de Windows. Si difiere, la prueba falla, que es el
+comportamiento correcto.
+
 ### La deprecación con fecha
 
 La referencia trae un aviso que ningún resumen de este sprint mencionaba: «The

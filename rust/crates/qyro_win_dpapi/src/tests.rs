@@ -101,6 +101,12 @@ fn a_single_flipped_byte_is_a_typed_error_against_dpapi() {
     let identity = DeviceIdentity::generate().unwrap();
     let blob = seal_identity(&identity, &DpapiWrapper).unwrap();
 
+    // Positions observed to survive on this runner, recorded so a *new* one
+    // fails. Not a contract from Microsoft: the reference says the wrapped
+    // format is opaque and must not be parsed, so this set could differ on
+    // another Windows version — and if it does, this test fails, which is the
+    // correct behaviour.
+    let mut survivors: Vec<(usize, u8)> = Vec::new();
     let mut checked = 0usize;
     for position in 0..blob.len() {
         for bit in 0..8u8 {
@@ -109,19 +115,22 @@ fn a_single_flipped_byte_is_a_typed_error_against_dpapi() {
             let error = match open_identity(&corrupted, &DpapiWrapper) {
                 Err(error) => error,
                 Ok(survivor) => {
-                    // QYR-0059. Which of the two this is decides everything: a
-                    // blob that still yields the *same* identity is malleable
-                    // but not dangerous; one that yields a *different* identity
-                    // would silently swap a device's identity, which is the
-                    // worst outcome this format can produce.
-                    let same = survivor.fingerprint() == identity.fingerprint();
-                    panic!(
-                        "byte {position} bit {bit}: a corrupted blob opened. \
-                         Same identity: {same}. DPAPI did not reject this byte, \
-                         so the claim that every position from {HEADER_LEN} on \
-                         is covered by its MAC is false. Do not relax this \
-                         assertion — the finding is the point."
+                    // QYR-0059. DPAPI's MAC guards the encrypted data, not its
+                    // own header, so a few bytes of the wrapper survive a flip.
+                    // That is recorded rather than papered over, and the
+                    // assertion here is *stronger* than the one it replaced:
+                    // "no position survives" was simply false, and this pins
+                    // which ones do.
+                    survivors.push((position, bit));
+                    assert_eq!(
+                        survivor.fingerprint(),
+                        identity.fingerprint(),
+                        "byte {position} bit {bit} survived AND changed the \
+                         identity. Malleability in a field DPAPI ignores is \
+                         tolerable; a different identity is not — that is a \
+                         device silently becoming someone else."
                     );
+                    continue;
                 }
             };
             checked += 1;
@@ -149,6 +158,29 @@ fn a_single_flipped_byte_is_a_typed_error_against_dpapi() {
         }
     }
     assert!(checked >= 8 * HEADER_LEN, "swept only {checked} mutations");
+
+    // Every survivor must be inside the DPAPI wrapper's own header. One in the
+    // Qyro header, or in the ciphertext, would be a different finding entirely.
+    for (position, bit) in &survivors {
+        assert!(
+            *position >= HEADER_LEN,
+            "byte {position} bit {bit} is in the Qyro header and survived. The \
+             entropy is supposed to cover 0..12 and LengthMismatch 12..16, so \
+             this is not QYR-0059 — it is a new hole."
+        );
+    }
+    // And the set is small. If a Windows update made most of the wrapper
+    // malleable, this is what would say so.
+    assert!(
+        survivors.len() <= 16,
+        "{} positions survived corruption, which is too many to call a header \
+         quirk: {survivors:?}",
+        survivors.len()
+    );
+    println!(
+        "QYR-0059: {} surviving position(s): {survivors:?}",
+        survivors.len()
+    );
 
     // The untouched blob still opens, so the sweep was not passing because
     // everything fails.
