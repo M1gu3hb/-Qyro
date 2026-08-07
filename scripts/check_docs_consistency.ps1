@@ -231,6 +231,31 @@ if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw) -
     }
 }
 
+# ------------------------------------------------------------- finding ledger
+#
+# See the Bash half. An identifier with no entry is a finding whose state
+# nobody can look up (QYR-0043).
+$ledger = Join-Path $RepoRoot 'BUGS_PENDING.md'
+if (Test-Path -LiteralPath $ledger) {
+    $recorded = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($line in (Get-Content -LiteralPath $ledger)) {
+        if ($line -match '^##\s+(QYR-[0-9]{4})') { [void]$recorded.Add($Matches[1]) }
+    }
+    $cited = [System.Collections.Generic.HashSet[string]]::new()
+    $extensions = @('*.md', '*.rs', '*.sh', '*.ps1', '*.yml')
+    foreach ($file in (Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Include $extensions -ErrorAction SilentlyContinue)) {
+        foreach ($found in ([regex]::Matches((Get-Content -LiteralPath $file.FullName -Raw), 'QYR-[0-9]{4}'))) {
+            [void]$cited.Add($found.Value)
+        }
+    }
+    foreach ($finding in ($cited | Sort-Object)) {
+        if (-not $recorded.Contains($finding)) {
+            Write-Status 'BLOCKER' 'Finding ledger' "$finding is cited but has no entry in BUGS_PENDING.md"
+            $blockers++
+        }
+    }
+}
+
 # --------------------------------------------------- workflow branch triggers
 #
 # See the Bash half for the reasoning. `main` is exempt because it is not a

@@ -245,6 +245,29 @@ if [[ -f "$repo_root/Cargo.lock" ]] && grep -q 'name = "ed25519-dalek"' "$repo_r
   done
 fi
 
+# ------------------------------------------------------------- finding ledger
+#
+# Every `QYR-00xx` cited anywhere must have exactly one entry in
+# BUGS_PENDING.md. QYR-0043: two identifiers from an external audit had zero
+# mentions in this repository, part of their content was fixed without being
+# numbered, and QYR-0024 and QYR-0027 lived in STATUS.md and NEXT_STEPS.md while
+# every other finding lived in the ledger. An identifier with no entry is a
+# finding whose state nobody can look up.
+ledger="$repo_root/BUGS_PENDING.md"
+if [[ -f "$ledger" ]]; then
+  recorded="$(grep -oE '^## QYR-[0-9]{4}' "$ledger" | sed 's/^## //' | sort -u)"
+  cited="$(grep -rhoE 'QYR-[0-9]{4}' \
+      --include='*.md' --include='*.rs' --include='*.sh' --include='*.ps1' \
+      --include='*.yml' "$repo_root" 2>/dev/null | sort -u)"
+  while IFS= read -r finding; do
+    [[ -z "$finding" ]] && continue
+    if ! grep -qx -- "$finding" <<< "$recorded"; then
+      report "BLOCKER" "Finding ledger" "$finding is cited but has no entry in BUGS_PENDING.md"
+      blockers=$((blockers + 1))
+    fi
+  done <<< "$cited"
+fi
+
 # --------------------------------------------------- workflow branch triggers
 #
 # A workflow whose `branches:` names a branch literally only runs on the branch
