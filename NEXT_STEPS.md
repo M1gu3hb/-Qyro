@@ -34,9 +34,10 @@
   Las tres preguntas que hay que decidir antes de escribir código, con fuente
   primaria citada y fechada como hizo ADR-0024, están en «Next task» de
   STATUS.md.
-- **QYR-0039**: recuperar el enunciado del hallazgo. Está citado como no
-  objetivo por dos prompts de sprint y su contenido no está en este repositorio,
-  así que no se puede ni cerrar ni evaluar.
+- **QYR-0039** ya tiene enunciado y está más abajo en P1; este bullet decía que
+  su contenido no estaba en el repositorio y era falso desde el sprint 4D.1
+  (QYR-0062). El archivo se contradecía a sí mismo con treinta y cuatro líneas
+  de separación.
 
 ### Sprint 4D.1 — cerrado
 

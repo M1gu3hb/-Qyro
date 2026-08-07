@@ -1205,3 +1205,97 @@
   `actions_list` sobre la rama, no desde lo que uno recuerda
 - Estado: cerrado
 - Fecha: 2026-08-07
+
+## QYR-0062 — `NEXT_STEPS.md` dice que QYR-0039 no tiene contenido, y sí lo tiene
+
+- Plataforma: documentación
+- Severidad: P3
+- Esperado: un archivo canónico no contradice al ledger sobre si un hallazgo
+  tiene enunciado
+- Actual: `NEXT_STEPS.md` decía «**QYR-0039**: recuperar el enunciado del
+  hallazgo … su contenido no está en este repositorio, así que no se puede ni
+  cerrar ni evaluar», mientras `BUGS_PENDING.md:694` lleva el enunciado completo
+  desde el sprint 4D.1 —`cargo-audit` compilado desde fuente en cada run, con
+  pin exacto— y **el propio `NEXT_STEPS.md`, treinta y cuatro líneas más abajo,
+  lo describe bien**. El archivo se contradecía a sí mismo
+- Causa: al reescribir la sección de sprint en 4D.1 arrastré el bullet viejo
+  literal en vez de leerlo. Copiar un párrafo es más rápido que comprobarlo, y
+  ésa es exactamente la diferencia
+- Corrección: el bullet obsoleto se sustituye por lo que el ledger dice
+- Estado: cerrado
+- Fecha: 2026-08-07
+
+## QYR-0064 — El harness de binario empujado no puede alcanzar Android Keystore
+
+- Plataforma: Android
+- Severidad: **P1** para el sprint 4D.2a; es un hallazgo de especificación, no
+  un defecto del código
+- Esperado: el prompt de 4D.2a §8.4 pide demostrar la persistencia en Android
+  «empujado por `adb` como hace `android_crypto_smoke.sh`», es decir con la
+  misma forma de harness que 4D.1 usó en Windows
+- Actual: **no se puede.** `android_crypto_smoke.sh` empuja un ejecutable nativo
+  a `/data/local/tmp` y lo lanza con `adb shell`. Ese proceso no tiene runtime
+  ART con las clases del framework y no corre con un UID de aplicación
+- Fuentes, consultadas 2026-08-07:
+  - La lista de APIs nativas estables del NDK **no incluye keystore, keychain ni
+    gestión de claves** (comprobado como ausencia en la lista, no como cita)
+  - «`AndroidKeyStore` … consists of Java code that runs in the app's own process
+    space» y «fulfills app requests for Keystore behavior by forwarding them to
+    the keystore daemon» (AOSP, Hardware-backed Keystore)
+  - «the UID of the caller is also included to disambiguate keys from different
+    apps» (AOSP, Hardware-backed Keystore)
+- Consecuencia: la evidencia de persistencia en Android exige un **test
+  instrumentado** ejecutado con `am instrument` dentro de un proceso de
+  aplicación. Dos invocaciones son dos procesos, que es lo que la propiedad
+  pide. Sigue siendo `adb`, sigue siendo el emulador y sigue siendo un harness
+  aislado según ADR-0023; lo que cambia es que el proceso es una app
+- Coste real, dicho antes de empezarlo y no descubierto a mitad: andamiaje
+  Gradle nuevo —módulo, manifiesto, runner de instrumentación, empaquetado de la
+  `.so` en `jniLibs`— más la capa JNI en Rust
+- Alternativa descartada: cliente AIDL escrito a mano contra `keystore2` sobre
+  binder del NDK. Más superficie `unsafe` que todo el sprint 4D.1 junto, contra
+  una interfaz de sistema versionada que no promete estabilidad a las apps
+- Registrado en: ADR-0025 §1.2
+- Estado: abierto
+- Fecha: 2026-08-07
+
+## QYR-0065 — Sin fuente verbatim sobre la invalidación de claves sin autenticación
+
+- Plataforma: Android
+- Severidad: P2
+- Esperado: ADR-0025 §3.2 decide **no** exigir autenticación de usuario para la
+  clave que envuelve la identidad. Esa decisión debería apoyarse en la página de
+  referencia de `KeyGenParameterSpec.Builder`
+- Actual: esa página, la de `KeyPermanentlyInvalidatedException` y la de
+  `KeyProtection.Builder` **se renderizan con JavaScript y no se pudieron
+  obtener** en esta sesión. Lo que hay de `setInvalidatedByBiometricEnrollment`
+  y de la invalidación al quitar el bloqueo de pantalla viene de resúmenes de
+  buscador **sobre** esas páginas, no de su texto
+- Lo que **no** se hizo: citar el resumen como si fuera la página. ADR-0025 lo
+  marca como fuente secundaria y **no apoya ninguna decisión en él**; se eligió
+  deliberadamente el camino que no necesita el dato que falta
+- Lo que falta confirmar: que una clave **sin** `setUserAuthenticationRequired`
+  sobrevive a quitar y volver a poner el bloqueo de pantalla. Si no sobreviviera,
+  la identidad de Qyro se perdería en un cambio de PIN y ADR-0025 cambia
+- Estado: abierto
+- Fecha: 2026-08-07
+
+## QYR-0066 — No está medido qué error da Keystore cuando el alias ya no existe
+
+- Plataforma: Android
+- Severidad: P2
+- Esperado: el paso 1 del orden de lectura distingue «no hay identidad» de «hay
+  una y no se puede leer». Confundirlos genera una identidad nueva en silencio
+  sobre una que seguía ahí, que es el peor resultado que este formato puede
+  producir (ADR-0024 §3)
+- Actual: tras un restore en un dispositivo nuevo, el blob envuelto puede llegar
+  y la clave de Keystore no —es no exportable y ligada al dispositivo—. **No
+  está medido** qué observa la aplicación en ese caso: ausencia del alias,
+  `KeyPermanentlyInvalidatedException`, o un fallo de tag en `Cipher.doFinal`.
+  Cada uno mapea a una variante distinta de `StoreError`
+- Lo que **no** se hizo: suponerlo. La página de Keystore no cubre backup ni
+  restore y la de Auto Backup no menciona Keystore; las dos se comprobaron
+- Cómo se cierra: midiéndolo contra el emulador cuando exista el harness de
+  §QYR-0064, o declarándolo explícitamente como no medido
+- Estado: abierto
+- Fecha: 2026-08-07

@@ -41,3 +41,20 @@ cuatro sprints afirmando dos reglas que ADR-0018 y ADR-0022 ya habían revertido
 No existe ADR-0011.
 
 Consulta docs/adr/.
+
+El sprint 4D.2a añade ADR-0025: persistencia de identidad en Android. No cambia
+`IdentityStore` ni `SecretWrapper` —que es la prueba de que la costura de
+ADR-0024 estaba bien puesta— y añade un solo valor al byte `wrap`, `0x02`, que
+es un cambio de formato y está registrado como tal.
+
+Su decisión estructural es la contraria a la de ADR-0024 §1 y por la misma
+razón. Allí se escribieron dos declaraciones de función a mano para no traer
+once crates; aquí JNI no se alcanza por símbolos con nombre sino por una tabla
+de unos 233 punteros en orden fijo, donde un índice equivocado llama a otra
+función en silencio. Se trae `jni-sys`, dos entradas nuevas en el grafo, y con
+ello **termina la racha de cero dependencias externas** que 4D.1 mantuvo.
+
+ADR-0025 §1.2 registra QYR-0064: el harness de binario empujado por `adb` que
+4D.1 usó en Windows **no puede alcanzar Android Keystore**, porque no hay API
+nativa y el proceso del shell no tiene ni runtime de framework ni UID de
+aplicación.
