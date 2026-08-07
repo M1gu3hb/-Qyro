@@ -5,9 +5,14 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-resource-bounds-4c3`, que continúa
-   `claude/qyro-audit-closure-4c2-9a3v4j` y acota el coste de los dos parsers
-   sin añadir funcionalidad.
+2. Confirmar la rama `claude/qyro-secure-storage-4d1`, que continúa
+   `claude/qyro-resource-bounds-4c3` y es el primer sprint desde 4A que **añade
+   función**: persistencia de identidad.
+
+   A este commit la función todavía no existe. Lo que hay es ADR-0024 congelada
+   y el formato del blob especificado; el código va después, y el orden importa
+   porque el accesor de semilla es el cambio más arriesgado del proyecto desde
+   que existe `qyro_crypto`. Ver «Next task» en STATUS.md.
 
    **Los workflows ya no nombran ninguna rama.** Disparan sobre
    `[main, 'claude/**']`, así que una rama nueva con ese prefijo tiene CI sin
@@ -19,8 +24,9 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
    más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
    (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
    (handshake), ADR-0022 (AEAD de frames, con sus tres enmiendas) y ADR-0023
-   (harness de criptografía por plataforma). Las especificaciones están en
-   `docs/protocols/` y `docs/security/`; las auditorías de los tres últimos
+   (harness de criptografía por plataforma) y ADR-0024 (almacenamiento seguro de
+   identidad, congelada antes de su implementación). Las especificaciones están
+   en `docs/protocols/` y `docs/security/`; las auditorías de los tres últimos
    sprints, en `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`,
    `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md` y
    `docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md`. La última lleva los números de

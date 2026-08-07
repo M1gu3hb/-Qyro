@@ -3,11 +3,12 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T05:50:00Z
-- Branch: claude/qyro-resource-bounds-4c3
+- Updated UTC: 2026-08-07T07:10:00Z
+- Branch: claude/qyro-secure-storage-4d1
 - Verified commit: c21dd723ced41f18735cbcaf11d148d155115c11
-- Milestone: cotas de recursos de los dos parsers cerradas; transporte y
-  almacenamiento seguro NO iniciados
+- Milestone: ADR-0024 congelada y formato de blob especificado; **la
+  persistencia no está implementada en ninguna plataforma todavía**, ni en
+  Windows ni en Android ni en iOS
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -533,56 +534,56 @@ permaneció invisible durante tres sprints.
 - Autoría y licencia del logo siguen sin registrar.
 - No existe ninguna función de transferencia: el producto no es usable todavía.
 
+## Sprint 4D.1 en curso — qué existe y qué no
+
+**No hay persistencia en ninguna plataforma.** Lo que existe a este commit es
+decisión y especificación, no código:
+
+- ADR-0024 congelada, con las cuatro preguntas de diseño resueltas y sus fuentes
+  primarias citadas y fechadas: la estrategia de `unsafe`, DPAPI frente a CNG con
+  sus parámetros, el formato del blob byte a byte, y el accesor de semilla.
+- `docs/security/identity-storage.md` con el formato.
+- Filas nuevas en `THREAT_MODEL.md`, incluida la que dice qué **no** protege
+  DPAPI: un atacante que ya ejecuta código como ese usuario descifra el blob
+  llamando a la misma API.
+
+Lo que **no** existe todavía, y no debe leerse como progreso:
+
+- `DeviceIdentity` sigue **sin accesor de semilla**. `identity.rs` sigue diciendo
+  «There is no accessor for the seed or the private key», y sigue siendo cierto.
+- No hay crate de almacenamiento, ni trait, ni implementación de Windows.
+- No hay harness de persistencia ni paso de CI que la ejecute.
+- No hay `storage-v1.json`.
+
 ## Next task
 
-**Sprint 4D.1 — almacenamiento seguro, primera plataforma.** Una ADR que
-resuelva las cuatro preguntas todavía abiertas del research backlog, más el
-trait de almacenamiento y **una sola** plataforma implementada tras él.
+**Continuar el sprint 4D.1 desde el formato congelado.** ADR-0024 responde las
+cuatro preguntas y el formato está especificado; lo que queda es construirlo, en
+este orden y sin saltarse el primero:
 
-Las cuatro preguntas, porque son la razón de que esto sea una ADR y no una
-tarea:
+1. Las pruebas rojas de §12, vistas fallar antes de que exista su corrección:
+   persistencia entre **dos invocaciones del proceso** (no dos llamadas),
+   corrupción posición por posición, versión futura rechazada por nombre,
+   truncado, vacío, `rotate`, `delete`, ausencia tipada, cierre transitivo de
+   `qyro_ffi`, y las dos guardas de fuente del crate nuevo.
+2. El accesor de semilla, que es la parte peligrosa: `export_secret` y
+   `from_secret` sobre un `IdentitySecret` que se borra al soltarse, no es
+   `Clone` y tiene `Debug` redactado. Con la prueba que enumera **por nombre**
+   los caminos públicos que devuelven material de clave —hoy la lista está
+   vacía, después tiene exactamente dos entradas—.
+3. El trait `create` / `load` / `delete` / `rotate` con errores tipados que nunca
+   confunden «no hay» con «no se puede leer».
+4. El crate de plataforma con el `extern "system"` a mano, único con `unsafe`, y
+   sus dos guardas: que ningún otro crate pierda `forbid(unsafe_code)`, y que los
+   bloques `unsafe` estén enumerados por nombre de función.
+5. `storage-v1.json` con schema estricto, regeneración byte a byte y verificación
+   **desde las primitivas**, no desde el propio módulo (la lección de QYR-0025).
+6. El harness de dos procesos en `windows-crypto`, y las rutas del crate nuevo
+   añadidas a los filtros de los workflows que lo compilan (QYR-0045 existe
+   porque eso se olvidó dos veces).
 
-1. Android Keystore: qué ocurre con backup/restore y con la migración.
-2. iOS: `WhenUnlockedThisDeviceOnly` frente a
-   `AfterFirstUnlockThisDeviceOnly`, y si el Secure Enclave entra — solo admite
-   P-256, no Ed25519, así que hay que decidir si la identidad persistida es la
-   misma clave envuelta o una distinta.
-3. Windows: DPAPI frente a CNG, y qué pasa tras un cambio de contraseña de
-   dominio.
-4. El formato del blob: versión, AAD y detección de corrupción.
-
-Keystore, Keychain y DPAPI en la misma sesión es el error que la sección de
-control de alcance prohíbe.
-
-### Cerrado en 4C.3 — cotas de recursos de `qyro_protocol` Cerrar QYR-0024 y
-QYR-0027, los dos hallazgos de la auditoría independiente que este sprint dejó
-fuera a propósito para que un fallo de CI siguiera diciendo qué se rompió.
-
-- **QYR-0024**: el decoder hace `drain(..total)` por frame, lo que lo vuelve
-  cuadrático. 1 049 616 bytes de frames mínimos cuestan 3,62 s en `--release`.
-- **QYR-0027**: `buffer_capacity` alcanza 2 097 152 frente a
-  `MAX_BUFFER_LEN = 1 049 664`, y las propias pruebas del repositorio afirman lo
-  contrario sin llenar nunca el búfer.
-
-Aceptación: una prueba que mide y falla con la implementación cuadrática, y otra
-que llena el búfer de verdad en vez de afirmar su capacidad. Ninguna de las dos
-puede pasar con el código actual antes de la corrección.
-
-### Después de 4D.1
-
-Implementar persistencia **segura y versionada** de `DeviceIdentity` mediante
-Android Keystore, iOS Keychain y Windows DPAPI/CNG, con creación, carga,
-rotación, borrado, corrupción detectada y pruebas en runtime. **Todavía sin**
-conectar sockets ni transferencia.
-
-Aceptación: una identidad generada sobrevive al cierre del proceso en las tres
-plataformas, con evidencia de **ejecución** real y no solo de compilación —la
-distinción que este sprint tuvo que aprender a la fuerza—; la clave privada nunca
-sale del almacén en claro hacia Dart; rotación y borrado son operaciones
-explícitas y probadas; un blob corrupto se detecta y se reporta como error
-tipado, no como una identidad silenciosamente nueva; y el formato lleva versión,
-para que el siguiente cambio no obligue a adivinar qué escribió la versión
-anterior.
+Aceptación completa en el prompt del sprint. Lo que no se puede afirmar al
+cerrar: persistencia en Android o iOS, y nada probado en hardware físico.
 
 ## Provisional values
 

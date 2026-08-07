@@ -39,6 +39,26 @@
 
 ## P1
 
+- **Terminar el sprint 4D.1: implementar lo que ADR-0024 congela.** La decisión y
+  el formato existen; el código no. Orden en «Next task» de STATUS.md. El paso
+  que hay que revisar dos veces es el accesor de semilla: después de él,
+  cualquier crate que dependa de `qyro_crypto` puede pedir la semilla de una
+  identidad que tenga en la mano, y lo único que lo contiene es que haya que
+  poseer el `DeviceIdentity`.
+- **Sprint 4D.2: Android Keystore e iOS Keychain tras el mismo trait**, medidos
+  contra el mismo conjunto de pruebas de corrupción, rotación y borrado. Las
+  preguntas que ese sprint tendrá que resolver y 4D.1 no: si la identidad va al
+  Secure Enclave —que solo admite P-256, no Ed25519, lo que obliga a decidir si
+  lo persistido es la clave Ed25519 envuelta por una del Enclave o algo
+  distinto—; `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` frente a
+  `…AfterFirstUnlockThisDeviceOnly`; y qué ocurre en Android con backup/restore
+  y migración de dispositivo, que la documentación oficial de Keystore no cubre.
+- **QYR-0039: cómo obtiene CI su `cargo-audit`.** Hoy lo compila desde fuente con
+  pin exacto en cada run, lo que mete un centenar de crates sin auditar en el
+  perímetro de confianza de CI y caduca cuando el advisory DB avanza. Binario con
+  checksum, acción cacheada, o rango de versiones: las tres tienen contrapartidas
+  distintas.
+
 - **Persistencia segura de `DeviceIdentity`.** Android Keystore, iOS Keychain y
   DPAPI/CNG en Windows, con rotación, borrado y pruebas en runtime. Hoy generar
   una identidad y cerrar el proceso la pierde, así que ninguna decisión de

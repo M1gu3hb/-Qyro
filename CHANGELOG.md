@@ -4,6 +4,34 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 4D.1, en curso)
+
+- ADR-0024: persistencia segura de `DeviceIdentity`, congelada **antes** de
+  implementarla. Resuelve la estrategia de `unsafe` —crate de plataforma aparte,
+  `extern` a mano, sin `windows-sys`—, DPAPI en ámbito de usuario con sus
+  parámetros, el formato del blob byte a byte, y el accesor de semilla, que pasa
+  a ser público y es la decisión que cuesta.
+- `docs/security/identity-storage.md`: el formato, el orden de lectura, y por qué
+  «no hay identidad» y «hay una y no se puede leer» son variantes distintas.
+- Filas de `THREAT_MODEL.md` para robo del blob, otro usuario del equipo, otra
+  aplicación del mismo usuario, perfil móvil e identidad nueva en silencio, más
+  un apartado que dice qué **no** protege DPAPI.
+- `docs/audits/external/` para auditorías que no produjo este repositorio
+  (QYR-0047).
+
+### Fixed (sprint 4D.1, en curso)
+
+- QYR-0046: `QYR-0036` estaba en el ledger dos veces, una diciendo abierto y otra
+  resuelto. La regla del ledger no podía verlo porque deduplica con `sort -u` en
+  Bash y con un `HashSet` en PowerShell; comprobaba «al menos una entrada»
+  mientras su comentario decía «exactamente una». Entradas fusionadas y regla
+  nueva que cuenta cabeceras leyendo el archivo.
+- QYR-0039 deja de ser un identificador sin contenido: `ci.yml:53` compila
+  `cargo-audit` desde fuente con pin exacto en cada run, lo que mete un centenar
+  de crates sin auditar en el perímetro de CI, y un pin exacto caduca. Queda
+  **abierto y programado**, no cerrado.
+
+
 ### Security (sprint 4C.3)
 
 - El decoder de `qyro_protocol` ya no es cuadrático. `next_frame` reclamaba cada
