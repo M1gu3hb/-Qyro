@@ -58,3 +58,20 @@ ADR-0025 §1.2 registra QYR-0064: el harness de binario empujado por `adb` que
 4D.1 usó en Windows **no puede alcanzar Android Keystore**, porque no hay API
 nativa y el proceso del shell no tiene ni runtime de framework ni UID de
 aplicación.
+
+El sprint 5A añade ADR-0026: `TransferSession`, el primer sprint que conecta el
+framing, el manifest, el handshake y el AEAD entre sí. No añade criptografía: fija
+quién habla cuándo, con qué cuerpo, y qué ocurre cuando no.
+
+Tres decisiones que conviene no volver a discutir sin datos nuevos: ACK
+**acumulativo** y no selectivo, porque dos conjuntos que pueden divergir exigen un
+protocolo de reconciliación propio; chunk de 64 KiB y ventana de 16, elegidos
+**desde la cota de memoria** —1 MiB en vuelo por dirección— y no al revés; y dos
+numeraciones separadas, la secuencia del frame que asigna el sealer y el
+`chunk_index` que elige el motor, porque unificarlas exigiría que el motor
+eligiera la secuencia y eso es justo lo que ADR-0022 prohíbe para que un nonce no
+se repita.
+
+Su corolario práctico: una retransmisión es un frame **nuevo**, sellado de nuevo.
+Reenviar los mismos bytes sellados lo rechazaría la ventana de replay, y tendría
+razón.
