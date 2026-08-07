@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T05:05:00Z
+- Updated UTC: 2026-08-07T05:50:00Z
 - Branch: claude/qyro-resource-bounds-4c3
-- Verified commit: 507699b6b8208ccf1283f8f65a90b74b9a3c9262
+- Verified commit: c21dd723ced41f18735cbcaf11d148d155115c11
 - Milestone: cotas de recursos de los dos parsers cerradas; transporte y
   almacenamiento seguro NO iniciados
 
@@ -330,13 +330,41 @@ documentales del sprint 4C.1 no habían sido ejecutados por nada.
 ### Sprint 4C.3 — runs de cierre
 
 <!-- SPRINT_4C3_CLOSING_RUNS -->
-**Pendientes en el momento de escribir esta línea.** Se ejecutan por `push`
-sobre el commit que cierra el sprint y se registran en el commit siguiente con
-su ID y su conclusión. Nada de este archivo debe leerse como si ya existieran.
+Los seis sobre `c21dd72`, **todos disparados por el `push`**.
 
-Un primer push sobre esta rama, en `a579673`, ya disparó los seis
-automáticamente sin que ningún YAML mencione el nombre de la rama: esa es la
-evidencia de QYR-0040, y sus IDs se registran junto a los de cierre.
+| Workflow | Run | Evento | Conclusión |
+|---|---|---|---|
+| CI | 31150759605 | `push` | **success** |
+| Platform builds | 31150759609 | `push` | **success** |
+| Crypto platform | 31150759608 | `push` | **success** |
+| Crypto fuzz | 31150759628 | `push` | **success** |
+| Android runtime ABI | 31150759604 | `push` | **success** |
+| iOS runtime ABI | 31150759597 | `push` | **success** |
+
+**Ningún YAML menciona el nombre de esta rama.** El disparador es
+`[main, 'claude/**']`, así que los seis corrieron sobre
+`claude/qyro-resource-bounds-4c3` sin que nadie editara un archivo de workflow
+para permitirlo. Esa es la evidencia de QYR-0040, y no un efecto secundario de
+ella: en el sprint anterior este mismo enunciado era cierto de una rama cuyo
+nombre estaba escrito a mano en los seis archivos.
+
+El primer push de la rama, en `a579673`, ya lo había demostrado: runs
+31148575003 (CI), 31148574819 (Platform builds), 31148574804 (Crypto platform),
+31148574796 (Crypto fuzz), 31148574815 (Android runtime ABI) y 31148574808
+(iOS runtime ABI), los seis **success**.
+
+Un push documental intermedio, `3b45705`, disparó **cuatro** de los seis. Eso es
+correcto —los filtros de rutas existen para eso— y mirar por qué destapó
+QYR-0045: dos filtros que no cubrían el código que su workflow construye. Se
+registra aquí en vez de omitirse, porque la diferencia entre «no corrió» y «no
+tenía que correr» es el hallazgo.
+
+Ningún run falló en esta rama.
+
+El job `documentation` de CI ejecuta los cuatro scripts `check_*` en Bash **y**
+en PowerShell. Este contenedor no trae `pwsh`, así que las dos reglas nuevas de
+`check_docs_consistency` —nombre de rama literal y registro de hallazgos— solo
+tienen esa ejecución como evidencia de su mitad PowerShell.
 
 ### Sprint 4C.2 — runs de cierre
 
