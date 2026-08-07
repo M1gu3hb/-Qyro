@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T19:40:00Z
+- Updated UTC: 2026-08-07T20:20:00Z
 - Branch: claude/qyro-secure-storage-4d1
-- Verified commit: 940b49d6117d99bcfb4de6f821d021f893fee06a
+- Verified commit: 3b2cf613baa006545b6509c59ba8fd416694d0a8
 - Milestone: formato del blob implementado y probado adversarialmente, accesor
   de semilla abierto con su guarda; **la persistencia no está implementada en
   ninguna plataforma todavía**, ni en Windows ni en Android ni en iOS, porque no
@@ -624,6 +624,20 @@ Lo que **no** existe todavía, y no debe leerse como progreso:
 | CI #113 | `3f25874` | 31206168355 | **success** |
 | CI #114 | `3527db7` | 31206287397 | **success**, 4/4 |
 | **CI #115** | **`940b49d`** | **31206358256** | **FAILURE**, job `documentation` |
+| CI | `0cb18ec` | 31207659962 | **success** — la rama vuelve al verde |
+| **CI** | **`3b2cf61`** | **31208710992** | **success** |
+| **Platform builds** | **`3b2cf61`** | **31208710511** | **success** |
+| **Android runtime ABI** | **`3b2cf61`** | **31208710528** | **success** |
+| **iOS runtime ABI** | **`3b2cf61`** | **31208711030** | **success** |
+| **Crypto platform** | **`3b2cf61`** | **31208710546** | **success** |
+| **Crypto fuzz** | **`3b2cf61`** | **31208710539** | **success** |
+| CI | `0a37573` | 31208802150 | **success** |
+
+**Los seis sobre `3b2cf61`, por `push`, y los seis en success.** Es el primer
+commit de este sprint con evidencia de los seis, y por eso el ancla apunta ahí.
+Corrieron los seis porque ese commit tocó `rust/crates/**`, incluido el filtro de
+rutas que `940b49d` añadió para que `crypto-platform.yml` vigile el crate nuevo
+(QYR-0045).
 | Crypto platform #14 | `3f25874` | ver §runs | **success** |
 | Platform builds #27 | `3f25874` | ver §runs | **success** |
 | Android runtime ABI #57 | `3f25874` | ver §runs | **success** |
