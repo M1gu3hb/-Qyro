@@ -9,7 +9,19 @@ on:
       - "rust/crates/qyro_ffi/**"
       - "Cargo.*"
   push:
-    branches: [audit/baseline-hardening]
+    # The branch that carries the work, so a push to it runs this workflow.
+    #
+    # Sprint 4C.2, QYR-0026: none of the six workflows fired automatically on a
+    # working branch. Four listed only `main`, and two listed
+    # `audit/baseline-hardening`, which stopped receiving commits four sprints
+    # ago — so "CI is green" meant "somebody remembered to dispatch it by hand".
+    #
+    # Push rather than a pull request, deliberately. A `pull_request` run
+    # executes against a merge commit that exists only inside the Actions run,
+    # so its run ID cannot be cited as evidence for a commit in this branch. A
+    # push run executes on exactly the commit that was pushed, which is the
+    # thing STATUS.md has to name.
+    branches: [main, claude/qyro-audit-closure-4c2-9a3v4j]
     paths:
       - ".github/workflows/android-runtime.yml"
       - "apps/qyro/**"
