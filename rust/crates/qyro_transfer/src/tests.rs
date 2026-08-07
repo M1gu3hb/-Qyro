@@ -654,3 +654,186 @@ fn a_large_transfer_does_not_hold_the_whole_payload_in_memory() {
         "the in-flight bound is not meaningfully smaller than the payload"
     );
 }
+
+// ------------------------------------------------- the refusals of ADR-0026 §4
+//
+// These four exist because the mutation sweep found them uncovered: deleting
+// each check left the whole suite green. A refusal nothing exercises is a
+// refusal that can be deleted by accident.
+
+/// Seals `body` as `message_type` with `sealer`, for tests that need to say
+/// something the honest engine would never say.
+fn hostile(
+    sealer: &mut FrameSealer,
+    message_type: qyro_protocol::MessageType,
+    body: Vec<u8>,
+) -> Vec<u8> {
+    let frame = qyro_protocol::Frame::new(message_type, body).expect("frame");
+    sealer.seal(&frame).expect("seals").encode()
+}
+
+#[test]
+fn a_window_grant_larger_than_the_offer_is_refused() {
+    use qyro_protocol::MessageType;
+    let ends = established();
+    let source = small_transfer();
+    let manifest = manifest_for(&source);
+    let mut sender = Sender::new(ends.sender_sealer, ends.sender_opener, manifest);
+    let mut peer = ends.receiver_sealer;
+
+    sender.open().expect("open");
+    let greedy = crate::wire::Accept {
+        window_chunks: crate::session::WINDOW_CHUNKS + 1,
+    };
+    let frame = hostile(&mut peer, MessageType::TransferAccept, greedy.encode());
+
+    assert_eq!(
+        sender.deliver(&frame).unwrap_err(),
+        TransferError::WindowGrantTooLarge {
+            offered: crate::session::WINDOW_CHUNKS,
+            granted: crate::session::WINDOW_CHUNKS + 1,
+        },
+        "a grant larger than the offer was taken"
+    );
+    assert_eq!(sender.phase(), Phase::Poisoned);
+}
+
+#[test]
+fn an_item_start_that_disagrees_with_the_manifest_is_refused() {
+    use qyro_protocol::MessageType;
+    let ends = established();
+    let source = small_transfer();
+    let manifest = manifest_for(&source);
+    let mut receiver = Receiver::new(ends.receiver_sealer, ends.receiver_opener);
+    let mut peer = ends.sender_sealer;
+    let mut sink = CountingSink::default();
+
+    let offer = crate::wire::Offer {
+        item_count: 2,
+        total_bytes: 0,
+        chunk_size: CHUNK_SIZE as u32,
+        window_chunks: crate::session::WINDOW_CHUNKS,
+    };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::TransferOffer, offer.encode()),
+            &mut sink,
+        )
+        .expect("offer");
+    let encoded = qyro_manifest::codec::encode(&manifest).expect("manifest");
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::Manifest, encoded),
+            &mut sink,
+        )
+        .expect("manifest");
+
+    let lying = crate::wire::ItemStart {
+        item_id: 1,
+        item_bytes: 5,
+    };
+    let outcome = receiver.deliver(
+        &hostile(&mut peer, MessageType::ItemStart, lying.encode()),
+        &mut sink,
+    );
+    assert_eq!(
+        outcome.unwrap_err(),
+        TransferError::ItemSizeMismatch {
+            item_id: 1,
+            declared: 5,
+            manifest: (CHUNK_SIZE * 2 + 1234) as u64,
+        },
+        "an ItemStart that contradicts the manifest was accepted"
+    );
+    assert_eq!(receiver.phase(), Phase::Poisoned);
+}
+
+#[test]
+fn complete_before_every_item_arrived_is_refused() {
+    use qyro_protocol::MessageType;
+    let ends = established();
+    let source = small_transfer();
+    let manifest = manifest_for(&source);
+    let mut receiver = Receiver::new(ends.receiver_sealer, ends.receiver_opener);
+    let mut peer = ends.sender_sealer;
+    let mut sink = CountingSink::default();
+
+    let offer = crate::wire::Offer {
+        item_count: 2,
+        total_bytes: 0,
+        chunk_size: CHUNK_SIZE as u32,
+        window_chunks: crate::session::WINDOW_CHUNKS,
+    };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::TransferOffer, offer.encode()),
+            &mut sink,
+        )
+        .expect("offer");
+    let encoded = qyro_manifest::codec::encode(&manifest).expect("manifest");
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::Manifest, encoded),
+            &mut sink,
+        )
+        .expect("manifest");
+
+    let complete = crate::wire::Complete { total_bytes: 0 };
+    let outcome = receiver.deliver(
+        &hostile(&mut peer, MessageType::Complete, complete.encode()),
+        &mut sink,
+    );
+    assert_eq!(
+        outcome.unwrap_err(),
+        TransferError::CompleteBeforeAllItems {
+            delivered: 0,
+            expected: 2,
+        },
+        "the receiver closed and judged a transfer that never arrived"
+    );
+    assert_eq!(
+        receiver.phase(),
+        Phase::Poisoned,
+        "verifying nothing produced a verdict"
+    );
+}
+
+#[test]
+fn an_ack_for_something_never_sent_is_refused() {
+    use qyro_protocol::MessageType;
+    let ends = established();
+    let source = small_transfer();
+    let manifest = manifest_for(&source);
+    let mut sender = Sender::new(ends.sender_sealer, ends.sender_opener, manifest);
+    let mut peer = ends.receiver_sealer;
+
+    sender.open().expect("open");
+    let accept = crate::wire::Accept {
+        window_chunks: crate::session::WINDOW_CHUNKS,
+    };
+    sender
+        .deliver(&hostile(
+            &mut peer,
+            MessageType::TransferAccept,
+            accept.encode(),
+        ))
+        .expect("accept");
+
+    // Nothing has been pumped, so nothing is in flight.
+    let ack = crate::wire::Ack {
+        item_id: 1,
+        through_index: 0,
+    };
+    assert_eq!(
+        sender
+            .deliver(&hostile(&mut peer, MessageType::ChunkAck, ack.encode()))
+            .unwrap_err(),
+        TransferError::AckAheadOfSender {
+            item_id: 1,
+            through: 0,
+            sent: 0,
+        },
+        "an acknowledgement of an unsent chunk was believed"
+    );
+    assert_eq!(sender.phase(), Phase::Poisoned);
+}
