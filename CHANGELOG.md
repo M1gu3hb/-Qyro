@@ -4,23 +4,74 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
-### Added (sprint 4D.1, en curso)
+### Added (sprint 4D.1)
 
-- ADR-0024: persistencia segura de `DeviceIdentity`, congelada **antes** de
-  implementarla. Resuelve la estrategia de `unsafe` —crate de plataforma aparte,
-  `extern` a mano, sin `windows-sys`—, DPAPI en ámbito de usuario con sus
-  parámetros, el formato del blob byte a byte, y el accesor de semilla, que pasa
-  a ser público y es la decisión que cuesta.
+**Una identidad sobrevive al cierre del proceso, en Windows.** Es el primer
+sprint desde 4A que añade función. Persistencia **IMPLEMENTED solo en Windows** y
+**NOT_IMPLEMENTED en Android y en iOS**; nada probado en hardware físico.
+
+- `qyro_win_dpapi`: el crate de plataforma. `CryptProtectData`,
+  `CryptUnprotectData`, `LocalFree` y `GetLastError` declaradas a mano con
+  `#[repr(C)] DATA_BLOB`, `CRYPTPROTECT_UI_FORBIDDEN` y ámbito de usuario.
+  `WindowsIdentityStore` sobre `%LOCALAPPDATA%\Qyro\identity.bin`: `create`
+  rechaza sobrescribir, `delete` es idempotente, `rotate` deja exactamente una
+  identidad. Nueve pruebas contra la API real, solo en Windows.
+- `qyro_identity_store`: los traits `IdentityStore` y `SecretWrapper`, el formato
+  del blob y doce variantes de `StoreError`, una por paso del orden de lectura.
+  **No hace criptografía**: coloca bytes y rechaza los que no encajan.
+- `DeviceIdentity::export_secret` y `from_secret`, sobre un `IdentitySecret` que
+  se borra al soltarse, no es `Clone` y tiene `Debug` redactado. Es la superficie
+  que el sprint tenía que revisar dos veces: un almacén no puede guardar lo que
+  no puede leer.
+- `qyro_store_smoke`: el harness de dos procesos. `create` imprime un fingerprint
+  y termina; `load`, en **otra** invocación, lo compara. Aislado del producto por
+  las mismas dos guardas que `qyro_crypto_smoke` (QYR-0058).
+- Paso «Persist an identity across two separate process invocations» en el job
+  `windows-crypto`, con informe JSON y checksum SHA-256.
+- `docs/security/test-vectors/storage-v1.json` y su schema. Congela la cabecera y
+  la construcción de la entropía, y dice de sí mismo por qué **no** puede llevar
+  un blob sellado completo: la salida de DPAPI está atada a la máquina.
+- Tres guardas nuevas: `only_the_listed_crates_may_relax_forbid_unsafe`,
+  `the_unsafe_blocks_are_the_ones_we_listed` —escrita con la lista vacía, antes
+  de que existiera un solo bloque— y la inversión de
+  `every_public_path_returning_key_material_is_listed`.
+- ADR-0024: congelada **antes** de implementarla, y enmendada tres veces después
+  con lo que la implementación encontró (QYR-0048, QYR-0054, QYR-0059).
 - `docs/security/identity-storage.md`: el formato, el orden de lectura, y por qué
   «no hay identidad» y «hay una y no se puede leer» son variantes distintas.
+- `docs/audits/SPRINT4D1_SECURE_STORAGE.md`: diez mutaciones aplicadas y
+  ejecutadas, y los caminos públicos con material de clave antes y después.
 - Filas de `THREAT_MODEL.md` para robo del blob, otro usuario del equipo, otra
   aplicación del mismo usuario, perfil móvil e identidad nueva en silencio, más
   un apartado que dice qué **no** protege DPAPI.
 - `docs/audits/external/` para auditorías que no produjo este repositorio
   (QYR-0047).
 
-### Fixed (sprint 4D.1, en curso)
+**Cero dependencias externas añadidas.** Las tres entradas nuevas del grafo
+auditado son miembros de este workspace.
 
+### Fixed (sprint 4D.1)
+
+- QYR-0048: la entropía congelada era **circular** y no se podía implementar
+  —componerla exigía `wrapped_len`, que exige haber llamado ya a
+  `CryptProtectData`, que exige la entropía—. Corregida a `cabecera[0..12]` con
+  un orden de escritura numerado, en un commit anterior a todo el código del
+  blob. La causa: solo se había especificado un orden de **lectura**.
+- QYR-0052, QYR-0053 y QYR-0054: tres guardas que sobrevivían a su propio
+  borrado. La de material de clave fallaba **abierta** —un `pub fn` que devolvía
+  la semilla en claro pasaba—, y arreglarla destapó un cuarto camino que llevaba
+  dos sprints sin vigilancia.
+- QYR-0054, corrección de una afirmación: `forbid(unsafe_code)` no lo llevaban
+  todos los crates. Eran cinco de siete. `qyro_core` ahora lo lleva; `qyro_ffi` y
+  `qyro_crypto_smoke` no pueden.
+- QYR-0058: las dos guardas de aislamiento nombraban un solo harness, así que
+  dejaron de cubrir la categoría en cuanto apareció el segundo.
+- QYR-0059: DPAPI **no autentica** el GUID de provider de su propio envoltorio.
+  128 mutaciones del blob abren igual, y devuelven la misma identidad. La
+  aserción se cambió para fijar el conjunto exacto, no para relajarse.
+- QYR-0060 y QYR-0061: STATUS.md afirmaba la persistencia arriba y la negaba
+  abajo, y dos filas de su tabla de runs no resistían una comprobación —un run
+  cancelado contado como éxito, y un identificador que no existe—.
 - QYR-0046: `QYR-0036` estaba en el ledger dos veces, una diciendo abierto y otra
   resuelto. La regla del ledger no podía verlo porque deduplica con `sort -u` en
   Bash y con un `HashSet` en PowerShell; comprobaba «al menos una entrada»
@@ -30,7 +81,6 @@ Basado en Keep a Changelog y Semantic Versioning.
   `cargo-audit` desde fuente con pin exacto en cada run, lo que mete un centenar
   de crates sin auditar en el perímetro de CI, y un pin exacto caduca. Queda
   **abierto y programado**, no cerrado.
-
 
 ### Security (sprint 4C.3)
 

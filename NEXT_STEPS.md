@@ -23,36 +23,51 @@
      y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
      lo que se está afirmando.
 
-## P0 — siguiente sprint (4D.1)
+## P0 — siguiente sprint (4D.2)
 
-- **Almacenamiento seguro, primera plataforma.** Una ADR que resuelva las cuatro
-  preguntas abiertas —backup/restore y migración en Android Keystore;
-  `WhenUnlockedThisDeviceOnly` frente a `AfterFirstUnlockThisDeviceOnly` en iOS
-  y si el Secure Enclave entra, que al admitir solo P-256 obliga a decidir si la
-  identidad persistida es la misma clave envuelta o una distinta; DPAPI frente a
-  CNG en Windows y qué pasa tras un cambio de contraseña de dominio; y el
-  formato del blob, con versión, AAD y detección de corrupción—, más el trait de
-  almacenamiento y **una sola** plataforma detrás de él.
+- **Android Keystore e iOS Keychain, detrás del mismo trait.** `IdentityStore` y
+  `SecretWrapper` ya existen y no deberían cambiar; si cambian para acomodar
+  Keystore o Keychain, el trait estaba mal y **eso es el hallazgo**. El mismo
+  barrido de corrupción posición por posición contra la API real de cada
+  plataforma —no contra un doble—, más rotación y borrado, en emulador y
+  simulador según ADR-0023. Ni el emulador ni el simulador son hardware.
+  Las tres preguntas que hay que decidir antes de escribir código, con fuente
+  primaria citada y fechada como hizo ADR-0024, están en «Next task» de
+  STATUS.md.
 - **QYR-0039**: recuperar el enunciado del hallazgo. Está citado como no
   objetivo por dos prompts de sprint y su contenido no está en este repositorio,
   así que no se puede ni cerrar ni evaluar.
 
+### Sprint 4D.1 — cerrado
+
+Almacenamiento seguro, primera plataforma. ADR-0024 congelada antes del código y
+enmendada tres veces después con lo que la implementación encontró; el accesor de
+semilla con su guarda; el formato del blob con 448 posiciones de barrido; el
+crate `qyro_win_dpapi` con `unsafe` en tres funciones enumeradas; el harness de
+dos procesos y su paso en CI. **Una identidad sobrevive al cierre del proceso en
+Windows, y no en Android ni en iOS.** Auditoría:
+`docs/audits/SPRINT4D1_SECURE_STORAGE.md`.
+
 ## P1
 
-- **Terminar el sprint 4D.1: implementar lo que ADR-0024 congela.** La decisión y
-  el formato existen; el código no. Orden en «Next task» de STATUS.md. El paso
-  que hay que revisar dos veces es el accesor de semilla: después de él,
-  cualquier crate que dependa de `qyro_crypto` puede pedir la semilla de una
-  identidad que tenga en la mano, y lo único que lo contiene es que haya que
-  poseer el `DeviceIdentity`.
-- **Sprint 4D.2: Android Keystore e iOS Keychain tras el mismo trait**, medidos
-  contra el mismo conjunto de pruebas de corrupción, rotación y borrado. Las
-  preguntas que ese sprint tendrá que resolver y 4D.1 no: si la identidad va al
-  Secure Enclave —que solo admite P-256, no Ed25519, lo que obliga a decidir si
-  lo persistido es la clave Ed25519 envuelta por una del Enclave o algo
-  distinto—; `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` frente a
-  `…AfterFirstUnlockThisDeviceOnly`; y qué ocurre en Android con backup/restore
-  y migración de dispositivo, que la documentación oficial de Keystore no cubre.
+- **QYR-0056: la guarda de material de clave no ve `Vec<u8>` ni `String`.**
+  Razona sobre el tipo de retorno escrito en el fuente, así que un `pub fn` que
+  devuelva bytes de clave dentro de un `Vec<u8>` no dispara ningún marcador. La
+  corrección barata está identificada —congelar los sitios de origen;
+  `signing_key.to_` aparece una sola vez en todo el crate— y quedó fuera del
+  alcance de 4D.1.
+- **QYR-0050: la ruta del blob depende de un nombre de producto provisional.**
+  `%LOCALAPPDATA%\Qyro\identity.bin` deja de encontrar la identidad si Qyro pasa
+  a llamarse otra cosa. Es un problema de migración, no de seguridad, y hay que
+  decidirlo antes de que exista un usuario con una identidad guardada.
+- **Atar el blob a un valor propio de la máquina.** `LOCALAPPDATA` evita que
+  viaje con un perfil móvil; la MasterKey sí viaja, así que copiar el archivo a
+  mano a otra máquina del mismo usuario de dominio lo abre. Cerrarlo estaba
+  fuera del alcance de 4D.1 y sigue abierto.
+- **Que algo del producto llame al almacén.** Hoy `qyro_ffi` no depende de
+  `qyro_identity_store` y una prueba lo mantiene así, de modo que la aplicación
+  Flutter no guarda ni carga identidad alguna. Conectarlo exige decidir primero
+  qué cruza la frontera FFI, y **no puede ser la semilla**.
 - **QYR-0039: cómo obtiene CI su `cargo-audit`.** Hoy lo compila desde fuente con
   pin exacto en cada run, lo que mete un centenar de crates sin auditar en el
   perímetro de confianza de CI y caduca cuando el advisory DB avanza. Binario con

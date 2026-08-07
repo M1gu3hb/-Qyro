@@ -9,10 +9,23 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
    `claude/qyro-resource-bounds-4c3` y es el primer sprint desde 4A que **añade
    función**: persistencia de identidad.
 
-   A este commit la función todavía no existe. Lo que hay es ADR-0024 congelada
-   y el formato del blob especificado; el código va después, y el orden importa
-   porque el accesor de semilla es el cambio más arriesgado del proyecto desde
-   que existe `qyro_crypto`. Ver «Next task» en STATUS.md.
+   **La función existe en Windows y no existe en Android ni en iOS.** Una
+   identidad generada por un proceso la carga otro proceso distinto, ejecutado
+   en CI sobre `windows-latest` con DPAPI de ámbito de usuario. En las otras dos
+   plataformas no hay nada, y cerrar el proceso sigue perdiendo la identidad.
+   Nada del producto llama al almacén todavía: lo que persiste en CI es un
+   harness aislado, no la aplicación.
+
+   Lo que abrió el sprint y hay que tratar con cuidado es el **accesor de
+   semilla**. Hasta 4D.1, `identity.rs` decía «there is no accessor for the seed
+   or the private key» y esa frase era toda la protección. Ahora existe
+   `DeviceIdentity::export_secret`, así que cualquier crate que dependa de
+   `qyro_crypto` puede pedir la semilla de una identidad que tenga en la mano, y
+   lo único que lo contiene es que haya que poseer el `DeviceIdentity`. La
+   guarda `every_public_path_returning_key_material_is_listed` enumera los
+   caminos por nombre y falla si aparece un cuarto. Su historia —una versión que
+   fallaba abierta— está en `docs/audits/SPRINT4D1_SECURE_STORAGE.md`, y merece
+   leerse antes de tocar la frontera. Ver «Next task» en STATUS.md.
 
    **Los workflows ya no nombran ninguna rama.** Disparan sobre
    `[main, 'claude/**']`, así que una rama nueva con ese prefijo tiene CI sin
@@ -25,18 +38,22 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
    (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
    (handshake), ADR-0022 (AEAD de frames, con sus tres enmiendas) y ADR-0023
    (harness de criptografía por plataforma) y ADR-0024 (almacenamiento seguro de
-   identidad, congelada antes de su implementación). Las especificaciones están
-   en `docs/protocols/` y `docs/security/`; las auditorías de los tres últimos
-   sprints, en `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`,
-   `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md` y
-   `docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md`. La última lleva los números de
+   identidad, congelada antes de su implementación y enmendada tres veces
+   después: QYR-0048, QYR-0054 y QYR-0059). Las especificaciones están
+   en `docs/protocols/` y `docs/security/` —el formato del blob, byte a byte, en
+   `docs/security/identity-storage.md`—; las auditorías de los últimos sprints,
+   en `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`,
+   `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`,
+   `docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md` y
+   `docs/audits/SPRINT4D1_SECURE_STORAGE.md`. La de 4C.3 lleva los números de
    coste del decoder antes y después, medidos con el mismo método, y la
    advertencia que costó descubrir: una mutación que no toca el camino que la
-   prueba recorre sale verde y no prueba nada. Esta última lleva la tabla de
-   mutación del sprint 4C.2: hallazgo, mutación aplicada, prueba que falló y
-   commit en que estuvo roja. Léela antes de tocar `qyro_manifest` o
-   `qyro_crypto`; explica por qué varias comprobaciones están escritas de una
-   forma que parece rebuscada.
+   prueba recorre sale verde y no prueba nada. La de 4C.2 lleva su propia tabla
+   de mutación —hallazgo, mutación aplicada, prueba que falló, commit en que
+   estuvo roja—, y la de 4D.1 la suya, más los caminos públicos que devuelven
+   material de clave antes y después. Léelas antes de tocar `qyro_manifest`,
+   `qyro_crypto` o la frontera de identidad; explican por qué varias
+   comprobaciones están escritas de una forma que parece rebuscada.
 
    ADR-0016 lleva la enmienda de coste del sprint 4C.3, y ADR-0017, ADR-0019 y
    ADR-0021 las del 4C.2 —con la fecha de Unicode corregida en 4C.3. Las
@@ -110,8 +127,12 @@ Concretamente, después del sprint 4C.1:
 - `EncryptedEnvelope` sigue siendo una forma de cable que no afirma nada, y eso
   es deliberado: los tipos que afirman son `SealedFrame` y `AuthenticatedFrame`,
   en `qyro_crypto`, con constructores privados.
-- La identidad y las claves viven **solo en memoria**. No hay almacenamiento
-  seguro en ninguna plataforma.
+- Las claves de sesión viven **solo en memoria**, en las tres plataformas, y así
+  debe seguir: son efímeras por diseño.
+- La **identidad** persiste en Windows desde el sprint 4D.1 —`qyro_win_dpapi`,
+  `%LOCALAPPDATA%\Qyro\identity.bin`, DPAPI de ámbito de usuario— y **no**
+  persiste en Android ni en iOS. Ese desequilibrio es el estado actual, no una
+  simplificación de esta nota.
 - `qyro_crypto` **se ejecuta** en Linux, Windows, emulador Android y simulador
   iOS, y se compila además para Android arm64 e iOS device. Antes del sprint
   4C.1 no había evidencia de ninguna de las tres plataformas: los workflows en
@@ -142,6 +163,31 @@ depende ningún crate del producto, y dos guardas lo mantienen fuera: uno busca 
 símbolo en los bundles que CI construye, y otro rechaza que cualquier workflow
 que no sea `crypto-platform.yml` lo compile y suba como artefacto. Ver ADR-0023.
 
+## Dónde vive el `unsafe`, y por qué hay
+
+Hasta el sprint 4D.1 no había ninguno. Ahora hay **tres funciones en un solo
+crate**, `qyro_win_dpapi`: `ffi.rs::take_and_free`, `store.rs::wrap` y
+`store.rs::unwrap`. Están enumeradas por nombre en `src/guards.rs` de ese crate,
+y añadir un bloque en cualquier otra función pone la guarda en rojo con el nombre
+de la función en el mensaje.
+
+Dos cosas que hay que saber antes de tocarlo:
+
+- **`cargo check` no enlaza.** Se añadió el target de Windows en local para que
+  el `extern` se comprobara de tipos, salió limpio, y CI falló con `LNK2019`
+  porque faltaba `#[link(name = "Crypt32")]`. Comprobar tipos no es comprobar
+  que el símbolo existe.
+- La lista de crates que pueden relajar `#![forbid(unsafe_code)]` tiene **tres**
+  entradas y una prueba la vigila desde `qyro_identity_store`. `qyro_ffi` y
+  `qyro_crypto_smoke` no pueden llevar el atributo —`#[unsafe(no_mangle)]` es un
+  atributo unsafe en edición 2024— y `qyro_win_dpapi` es la excepción argumentada
+  en ADR-0024 §1. Cualquier otro crate del workspace tiene que llevarlo.
+
+`qyro_win_dpapi` no lleva `#![cfg(windows)]` en la raíz sino en cada módulo, a
+propósito: así su guarda —que lee los archivos como texto— se ejecuta también en
+Linux y en macOS. Una guarda que solo corre en una plataforma está apagada en la
+mayoría de CI.
+
 ## Cómo se comprueba una invariante en este repositorio
 
 Las últimas sesiones encontraron varios defectos que un razonamiento cuidadoso
@@ -160,3 +206,23 @@ documental, y encontró dos que no comprobaban lo que decían: una búsqueda de
 de entropía fallaba contra el comentario que explica por qué ese constructor se
 rechaza. Ninguna era un defecto del producto; las dos habrían quedado como
 reglas que parecen estrictas y no lo son.
+
+El sprint 4D.1 añadió dos formas más, las dos caras:
+
+- **Una guarda escrita antes de que exista lo que vigila se puede comprobar
+  gratis.** `the_unsafe_blocks_are_the_ones_we_listed` se escribió con la lista
+  vacía cuando no había ni un bloque `unsafe`; el primero la puso en rojo. Igual
+  con la de material de clave: lista vacía, verde, y el accesor de semilla la
+  puso en rojo con exactamente los dos caminos esperados. Escribirla después
+  habría sido escribirla contra el resultado.
+- **Una edición que no se aplica se ve igual que una que sí.** `str.replace`
+  devuelve la cadena sin cambios cuando el ancla no coincide, y en este sprint
+  eso produjo un commit vacío de contenido seguido de una lectura del error
+  anterior de CI como si fuera nuevo. Toda edición programática de un fuente
+  lleva ahora `assert` sobre el ancla, y se lee el archivo después.
+
+Y una tercera que no es sobre pruebas: **una tabla de evidencia también hay que
+comprobarla**. Dos filas de la tabla de runs de STATUS.md se escribieron desde la
+memoria de la sesión; una contaba un run cancelado como éxito y la otra citaba un
+identificador que no existe (QYR-0061). Las tablas de runs se reconstruyen
+listando los runs de la rama por API, no recordándolos.
