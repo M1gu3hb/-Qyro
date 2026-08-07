@@ -3,13 +3,13 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-07T21:20:00Z
+- Updated UTC: 2026-08-07T22:30:00Z
 - Branch: claude/qyro-secure-storage-4d1
-- Verified commit: 3b2cf613baa006545b6509c59ba8fd416694d0a8
-- Milestone: crate de plataforma DPAPI escrito y `IdentityStore` implementado
-  para Windows; **la persistencia está IMPLEMENTADA solo en Windows y
-  NOT_IMPLEMENTED en Android y en iOS**, y su ejecución en CI está pendiente de
-  confirmarse sobre el commit final
+- Verified commit: b73127606b6bc2873930799b01b8317dab21a172
+- Milestone: **una identidad sobrevive al cierre del proceso en Windows**,
+  ejecutado en CI en dos invocaciones separadas. La persistencia está
+  **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y en iOS**, y nada
+  se ha probado en hardware físico
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -624,6 +624,12 @@ Lo que **no** existe todavía, y no debe leerse como progreso:
 | CI #113 | `3f25874` | 31206168355 | **success** |
 | CI #114 | `3527db7` | 31206287397 | **success**, 4/4 |
 | **CI #115** | **`940b49d`** | **31206358256** | **FAILURE**, job `documentation` |
+| **Crypto platform** | **`b731276`** | **31215102331** | **success**, 4/4 jobs — **persistencia ejecutada** |
+| Platform builds | `b731276` | 31215102388 | **success** |
+| **CI** | **`b731276`** | **31215102373** | **FAILURE**, job `documentation`, misma regla de deriva |
+| Crypto platform | `89022c6` | 31211959010 | **failure**, QYR-0059 |
+| Crypto platform | `5d44ec8` | 31211402008 | **failure**, `LNK2019`: `Crypt32.lib` sin enlazar |
+| Crypto platform | `97756ad` | 31211250812 | **cancelled** por concurrencia; no es evidencia |
 | CI | `0cb18ec` | 31207659962 | **success** — la rama vuelve al verde |
 | **CI** | **`3b2cf61`** | **31208710992** | **success** |
 | **Platform builds** | **`3b2cf61`** | **31208710511** | **success** |
@@ -660,6 +666,11 @@ sobre un mismo commit». Esa regla y el límite de diez commits **no pueden
 sostenerse a la vez en un sprint largo**, y la primera no tenía por qué existir:
 `HANDOFF.md` ya decía «STATUS.md debe actualizarse dentro del mismo tramo de
 trabajo, no al final».
+
+**Y volvió a pasar en `b731276`** (CI 31215102373), por la misma razón y con el
+ancla en `3b2cf61`: doce commits de deriva. La política de abajo es correcta y
+**mover el ancla hay que hacerlo, no solo escribirlo**. Esta vez el ancla se
+mueve en el mismo commit que registra la evidencia.
 
 **La política que manda, y queda escrita aquí para que nadie la vuelva a
 inventar:** `Verified commit` es *el commit hasta el que este archivo describe el
