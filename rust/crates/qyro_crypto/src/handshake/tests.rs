@@ -697,3 +697,86 @@ fn debug_never_prints_key_material() {
         assert!(rendered.contains("redacted"));
     }
 }
+
+// ---------------------------------------------------- sprint 4C.2 (QYR-0022)
+
+#[test]
+fn an_unsigned_peer_cannot_present_another_identity() {
+    // QYR-0022. `receive_initiator_finish` is the only place that authenticates
+    // the initiator, and deleting its `verify_transcript` call left
+    // `cargo test --package qyro_crypto` at 124 passed, 0 failed. The mirror
+    // control on the initiator's side is covered by three tests; this one had
+    // none, so the property "the peer that finishes is the peer whose identity
+    // is in the hello" was documented and not held.
+    //
+    // Nothing in an `InitiatorHello` is signed — it cannot be, since the
+    // transcript it would sign does not exist until the responder answers. So
+    // anyone can put anyone's `PublicIdentity` in one. What must be impossible
+    // is *finishing*: that requires a signature over the transcript under the
+    // key that identity names.
+    use super::{
+        EphemeralKeyPair, PREFIX_LEN, TYPE_INITIATOR_FINISH, TYPE_INITIATOR_HELLO,
+        write_hello_unsigned,
+    };
+    use crate::signature::SIGNATURE_LEN;
+
+    let responder = DeviceIdentity::from_test_seed(&[0x22; 32]);
+    let victim = DeviceIdentity::from_test_seed(&[0x33; 32]);
+    let attacker = DeviceIdentity::from_test_seed(&[0x44; 32]);
+
+    // The attacker's own ephemeral key and nonce, and somebody else's identity.
+    let ephemeral = EphemeralKeyPair::from_secret_bytes([0x55; 32]);
+    let hello = write_hello_unsigned(
+        TYPE_INITIATOR_HELLO,
+        ephemeral.public(),
+        &[0x66; NONCE_LEN],
+        victim.public_identity(),
+    );
+
+    let (_responder_hello, awaiting) = ResponderStart::new(&responder)
+        .receive_initiator_hello(&hello, entropy(0xB0))
+        .expect("the hello is well formed, and nothing in it is signed yet");
+
+    // Arbitrary bytes where the signature belongs, and arbitrary bytes where
+    // the confirmation MAC belongs. The signature is checked first, so the MAC
+    // never gets a say.
+    let mut finish = [0u8; INITIATOR_FINISH_LEN];
+    finish[0] = HANDSHAKE_VERSION;
+    finish[1] = CRYPTO_SUITE_ID;
+    finish[2] = TYPE_INITIATOR_FINISH;
+    finish[PREFIX_LEN..PREFIX_LEN + SIGNATURE_LEN].copy_from_slice(&[0x5A; SIGNATURE_LEN]);
+    finish[PREFIX_LEN + SIGNATURE_LEN..].copy_from_slice(&[0x6B; FINISHED_MAC_LEN]);
+
+    assert_eq!(
+        awaiting.receive_initiator_finish(&finish).err(),
+        Some(HandshakeError::SignatureVerificationFailed),
+        "a peer that cannot sign for the identity it presented must be refused \
+         as a signature failure, before any key is derived"
+    );
+
+    // And it is not merely that *those* bytes are wrong: a real signature, made
+    // correctly by the attacker's own key, is refused just the same, because
+    // the identity in the hello is not the attacker's.
+    let (_responder_hello, awaiting) = ResponderStart::new(&responder)
+        .receive_initiator_hello(&hello, entropy(0xB0))
+        .expect("same hello, same answer");
+
+    let genuine = attacker
+        .try_sign(
+            crate::signature::SignatureDomain::HandshakeTranscript,
+            &[0x77; 96],
+        )
+        .expect("the attacker can sign for itself");
+    let mut finish = [0u8; INITIATOR_FINISH_LEN];
+    finish[0] = HANDSHAKE_VERSION;
+    finish[1] = CRYPTO_SUITE_ID;
+    finish[2] = TYPE_INITIATOR_FINISH;
+    finish[PREFIX_LEN..PREFIX_LEN + SIGNATURE_LEN].copy_from_slice(genuine.as_bytes());
+    finish[PREFIX_LEN + SIGNATURE_LEN..].copy_from_slice(&[0x6B; FINISHED_MAC_LEN]);
+
+    assert_eq!(
+        awaiting.receive_initiator_finish(&finish).err(),
+        Some(HandshakeError::SignatureVerificationFailed),
+        "signing correctly with the wrong key is still the wrong key"
+    );
+}
