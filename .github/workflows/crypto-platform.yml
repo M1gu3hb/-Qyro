@@ -21,6 +21,8 @@ on:
       # the moment it broke: QYR-0045 is the record of that being forgotten
       # twice, and a path filter is only ever wrong in the silent direction.
       - "rust/crates/qyro_identity_store/**"
+      - "rust/crates/qyro_win_dpapi/**"
+      - "rust/tools/qyro_store_smoke/**"
       - "rust/crates/qyro_protocol/**"
       - "rust/tools/qyro_crypto_smoke/**"
       # `rust/guards/source_guard.rs` is `include!`d into the test build of
@@ -58,6 +60,8 @@ on:
       # the moment it broke: QYR-0045 is the record of that being forgotten
       # twice, and a path filter is only ever wrong in the silent direction.
       - "rust/crates/qyro_identity_store/**"
+      - "rust/crates/qyro_win_dpapi/**"
+      - "rust/tools/qyro_store_smoke/**"
       - "rust/crates/qyro_protocol/**"
       - "rust/tools/qyro_crypto_smoke/**"
       - "Cargo.toml"
@@ -121,10 +125,45 @@ jobs:
           mkdir -p reports
           cargo run --locked --package qyro_crypto_smoke -- --json | tee reports/windows.json
           cargo run --locked --package qyro_crypto_smoke
+      - name: Test the DPAPI backend against the real API
+        run: cargo test --locked --package qyro_win_dpapi
+      - name: Persist an identity across two separate process invocations
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The point of this step is the process boundary. Two calls inside one
+          # process share address space and demonstrate nothing about a blob
+          # surviving a process, which is the claim STATUS.md gets to make only
+          # because of what happens here.
+          store="$RUNNER_TEMP/qyro-persistence/identity.bin"
+          rm -rf "$RUNNER_TEMP/qyro-persistence"
+          cargo build --locked --package qyro_store_smoke
+          smoke="target/debug/qyro_store_smoke.exe"
+
+          echo "--- process 1: create, then exit ---"
+          created="$("$smoke" create "$store")"
+          echo "created fingerprint: $created"
+          test -f "$store"
+
+          echo "--- process 2: a new process loads what the first one left ---"
+          loaded="$("$smoke" load "$store" "$created")"
+          echo "loaded  fingerprint: $loaded"
+
+          test "$created" = "$loaded"
+          {
+            echo "{\"target\":\"windows-x86_64-dpapi\",\"outcome\":\"success\","
+            echo " \"created_fingerprint\":\"$created\","
+            echo " \"loaded_fingerprint\":\"$loaded\","
+            echo " \"process_invocations\":2}"
+          } > reports/windows-persistence.json
+          cat reports/windows-persistence.json
       - name: Record the toolchain and checksum the report
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $pdigest = (Get-FileHash -Algorithm SHA256 reports/windows-persistence.json).Hash.ToLower()
+          "$pdigest  windows-persistence.json" | Out-File -FilePath reports/windows-persistence.json.sha256 -Encoding utf8
+          Write-Host "persistence report sha256: $pdigest"
           "commit=$env:GITHUB_SHA"     | Out-File -FilePath reports/windows-toolchain.txt -Encoding utf8
           "runner=$env:RUNNER_OS-$env:RUNNER_ARCH" | Out-File -FilePath reports/windows-toolchain.txt -Append -Encoding utf8
           (rustc --version)            | Out-File -FilePath reports/windows-toolchain.txt -Append -Encoding utf8

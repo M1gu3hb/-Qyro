@@ -22,7 +22,11 @@ cd "$repo_root"
 
 status=0
 symbol="qyro_crypto_smoke_run"
-harness="qyro_crypto_smoke"
+# Both harnesses, not one. `qyro_store_smoke` arrived in sprint 4D.1 and this
+# script would have kept passing without noticing it existed — a guard that
+# names one instance of a category stops covering the category the moment a
+# second appears.
+harnesses=("qyro_crypto_smoke" "qyro_store_smoke")
 
 fail() {
     printf '[FAIL] %s\n' "$1" >&2
@@ -37,9 +41,11 @@ for manifest in \
     rust/crates/qyro_crypto/Cargo.toml \
     rust/crates/qyro_protocol/Cargo.toml \
     rust/crates/qyro_manifest/Cargo.toml; do
-    if grep -q "$harness" "$manifest"; then
-        fail "$manifest depends on the test harness"
-    fi
+    for harness in "${harnesses[@]}"; do
+        if grep -q "$harness" "$manifest"; then
+            fail "$manifest depends on the test harness $harness"
+        fi
+    done
 done
 
 # The FFI boundary itself, checked here too so this script alone answers "can
@@ -60,8 +66,9 @@ done
 
 if [[ -d apps/qyro ]]; then
     if grep -rIl --exclude-dir=build --exclude-dir=.dart_tool \
-        -e "$symbol" -e "$harness" apps/qyro 2>/dev/null | grep -q .; then
-        fail "the Flutter application references the test harness"
+        -e "$symbol" -e "${harnesses[0]}" -e "${harnesses[1]}" apps/qyro 2>/dev/null \
+        | grep -q .; then
+        fail "the Flutter application references a test harness"
     fi
 fi
 

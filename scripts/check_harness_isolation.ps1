@@ -23,7 +23,10 @@ Set-Location $repoRoot
 
 $script:status = 0
 $symbol = 'qyro_crypto_smoke_run'
-$harness = 'qyro_crypto_smoke'
+# Both harnesses. See the Bash half: naming one instance of a category stops
+# covering the category the moment a second appears, and `qyro_store_smoke`
+# arrived in sprint 4D.1.
+$harnesses = @('qyro_crypto_smoke', 'qyro_store_smoke')
 
 function Write-Failure([string] $Message) {
     Write-Error -Message "[FAIL] $Message" -ErrorAction Continue
@@ -34,8 +37,10 @@ function Write-Failure([string] $Message) {
 
 foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'qyro_manifest')) {
     $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
-    if ((Get-Content -LiteralPath $manifest -Raw) -match [regex]::Escape($harness)) {
-        Write-Failure "$manifest depends on the test harness"
+    foreach ($harness in $harnesses) {
+        if ((Get-Content -LiteralPath $manifest -Raw) -match [regex]::Escape($harness)) {
+            Write-Failure "$manifest depends on the test harness $harness"
+        }
     }
 }
 
@@ -64,10 +69,11 @@ if (Test-Path -LiteralPath $appRoot) {
         Where-Object { $_.FullName -notmatch '[\\/](build|\.dart_tool)[\\/]' } |
         Where-Object {
             $text = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
-            $text -and ($text -match [regex]::Escape($symbol) -or $text -match [regex]::Escape($harness))
+            $text -and ($text -match [regex]::Escape($symbol) -or
+                ($harnesses | Where-Object { $text -match [regex]::Escape($_) }))
         }
     if ($offenders) {
-        Write-Failure 'the Flutter application references the test harness'
+        Write-Failure 'the Flutter application references a test harness'
     }
 }
 
@@ -81,8 +87,8 @@ foreach ($staged in @(
         (Join-Path 'apps' 'qyro' 'ios' 'Native'))) {
     if (-not (Test-Path -LiteralPath $staged)) { continue }
     foreach ($library in Get-ChildItem -LiteralPath $staged -Recurse -File) {
-        if ($library.Name -match [regex]::Escape($harness)) {
-            Write-Failure "$($library.FullName) stages the test harness into a product bundle"
+        if ($harnesses | Where-Object { $library.Name -match [regex]::Escape($_) }) {
+            Write-Failure "$($library.FullName) stages a test harness into a product bundle"
             continue
         }
         $bytes = [System.IO.File]::ReadAllBytes($library.FullName)
@@ -95,12 +101,14 @@ foreach ($staged in @(
 
 # --- the harness must declare itself unshippable -----------------------------
 
-$harnessManifest = Join-Path 'rust' 'tools' $harness 'Cargo.toml'
-if (-not (Test-Path -LiteralPath $harnessManifest)) {
-    Write-Failure 'the harness manifest is missing'
-}
-elseif ((Get-Content -LiteralPath $harnessManifest -Raw) -notmatch '(?m)^publish = false') {
-    Write-Failure "$harnessManifest must set publish = false"
+foreach ($harness in $harnesses) {
+    $harnessManifest = Join-Path 'rust' 'tools' $harness 'Cargo.toml'
+    if (-not (Test-Path -LiteralPath $harnessManifest)) {
+        Write-Failure "the manifest for $harness is missing"
+    }
+    elseif ((Get-Content -LiteralPath $harnessManifest -Raw) -notmatch '(?m)^publish = false') {
+        Write-Failure "$harnessManifest must set publish = false"
+    }
 }
 
 # --- and it must never be built in release for distribution ------------------
@@ -114,9 +122,11 @@ foreach ($workflow in Get-ChildItem -LiteralPath (Join-Path '.github' 'workflows
     # Naming the harness is not the offence — `platform-builds.yml` names it
     # precisely to search the APK, the ZIP and Runner.app for it, which is the
     # opposite of shipping it. What matters is *building* it next to an upload.
-    if ($text -match "(--package|-p) $([regex]::Escape($harness))" -and $text -match 'upload-artifact') {
-        if ($workflow.Name -ne 'crypto-platform.yml') {
-            Write-Failure "$($workflow.Name) both builds the harness and uploads an artifact"
+    foreach ($harness in $harnesses) {
+        if ($text -match "(--package|-p) $([regex]::Escape($harness))" -and $text -match 'upload-artifact') {
+            if ($workflow.Name -ne 'crypto-platform.yml') {
+                Write-Failure "$($workflow.Name) both builds $harness and uploads an artifact"
+            }
         }
     }
 }
