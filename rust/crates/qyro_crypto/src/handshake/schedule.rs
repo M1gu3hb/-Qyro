@@ -155,28 +155,43 @@ fn expand_exact<const N: usize>(
     Ok(out)
 }
 
-/// Computes HMAC-SHA-256 over `message`.
+/// The HMAC block length for SHA-256, in bytes. RFC 2104 calls this `B`.
+const HMAC_BLOCK_LEN: usize = 64;
+
+/// Computes HMAC-SHA-256 over `message`, with a key of the derived width.
 ///
 /// `SimpleHmac` rather than `Hmac`: it is the variable-key-length form, which
 /// is what RFC 2104 specifies and therefore what an implementation in another
 /// language will produce from its standard HMAC-SHA-256. Conformance is checked
 /// against the RFC 4231 vectors rather than assumed.
-pub(crate) fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; FINISHED_MAC_LEN] {
-    let mut mac = <SimpleHmac<Sha256> as KeyInit>::new_from_slice(key)
-        .unwrap_or_else(|_| unreachable!("RFC 2104 HMAC accepts a key of any length"));
-    mac.update(message);
-    let tag = mac.finalize().into_bytes();
-    let mut out = [0u8; FINISHED_MAC_LEN];
-    out.copy_from_slice(&tag);
-    out
-}
-
-/// Computes a confirmation MAC over the auth transcript.
+///
+/// Infallible by construction. `new_from_slice` is the fallible form and used
+/// to be called here, with the key length argued to be acceptable in a comment
+/// and enforced by an `unreachable!` — a crash, in a function that holds a
+/// traffic secret, on a path a peer's bytes reach. `KeyInit::new` takes an
+/// array of exactly the block length, so there is no failure branch left to get
+/// wrong. This is the same move `aead::mod` made for `ChaCha20Poly1305`.
+///
+/// Padding the key to the block here is not a deviation: RFC 2104 defines `K'`
+/// as the key zero-padded to `B`, which is exactly what `new_from_slice` does
+/// internally for a 32-byte key. [`the_padded_key_agrees_with_the_variable_length_form`]
+/// pins that the two produce the same tag.
 pub(crate) fn finished_mac(
     key: &[u8; DERIVED_KEY_LEN],
     auth_transcript: &[u8; TRANSCRIPT_LEN],
 ) -> [u8; FINISHED_MAC_LEN] {
-    hmac_sha256(key, auth_transcript)
+    let mut padded = Zeroizing::new([0u8; HMAC_BLOCK_LEN]);
+    for (slot, byte) in padded.iter_mut().zip(key) {
+        *slot = *byte;
+    }
+
+    let mut mac = <SimpleHmac<Sha256> as KeyInit>::new(&(*padded).into());
+    mac.update(auth_transcript);
+    let tag = mac.finalize().into_bytes();
+
+    let mut out = [0u8; FINISHED_MAC_LEN];
+    out.copy_from_slice(&tag);
+    out
 }
 
 /// Compares a received MAC against the expected one in constant time.
@@ -196,5 +211,48 @@ pub(crate) fn verify_finished_mac(
         Ok(())
     } else {
         Err(HandshakeError::FinishedVerificationFailed)
+    }
+}
+
+/// Variable-key-length HMAC-SHA-256. **Tests only.**
+///
+/// Production signs a fixed 32-byte traffic secret and goes through
+/// [`finished_mac`]. This exists so the RFC 4231 vectors, whose keys run from
+/// 4 bytes to 131, can be checked against the same primitive.
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "a test helper that cannot assert reports failures worse"
+)]
+pub(crate) fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; FINISHED_MAC_LEN] {
+    let mut mac = <SimpleHmac<Sha256> as KeyInit>::new_from_slice(key)
+        .expect("RFC 2104 HMAC accepts a key of any length");
+    mac.update(message);
+    let tag = mac.finalize().into_bytes();
+    let mut out = [0u8; FINISHED_MAC_LEN];
+    out.copy_from_slice(&tag);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DERIVED_KEY_LEN, finished_mac, hmac_sha256};
+
+    #[test]
+    fn the_padded_key_agrees_with_the_variable_length_form() {
+        // `finished_mac` pads the key to the HMAC block so it can use the
+        // infallible constructor. That is only correct if it computes the same
+        // tag as the variable-length form the RFC 4231 vectors check, for the
+        // one key width production ever uses.
+        for fill in [0x00u8, 0x01, 0x7F, 0xFF, 0xA5] {
+            let key = [fill; DERIVED_KEY_LEN];
+            let transcript = [fill ^ 0x5A; 32];
+            assert_eq!(
+                finished_mac(&key, &transcript),
+                hmac_sha256(&key, &transcript),
+                "zero-padding the key to the block is RFC 2104's own rule, not \
+                 a different MAC"
+            );
+        }
     }
 }

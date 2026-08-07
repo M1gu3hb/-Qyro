@@ -177,7 +177,10 @@ fn build_document() -> Value {
     let responder_nonce = &responder_entropy[32..];
 
     // --- transcripts --------------------------------------------------------
-    let responder_hello_unsigned = &recorded.responder_hello[..HELLO_UNSIGNED_LEN];
+    let responder_hello_unsigned: &[u8; HELLO_UNSIGNED_LEN] = recorded.responder_hello
+        [..HELLO_UNSIGNED_LEN]
+        .try_into()
+        .expect("a hello's unsigned prefix is HELLO_UNSIGNED_LEN bytes");
     let base = base_transcript(&recorded.initiator_hello, responder_hello_unsigned);
 
     let responder_signing_input = responder_signing_message(&base);

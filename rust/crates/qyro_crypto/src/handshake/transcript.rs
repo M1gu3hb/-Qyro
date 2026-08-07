@@ -5,6 +5,8 @@
 
 use sha2::{Digest, Sha256};
 
+use super::HELLO_UNSIGNED_LEN;
+
 /// Domain string for the pre-authentication transcript.
 const BASE_PREFIX: &[u8] = b"QYRO-HANDSHAKE-BASE-V1";
 
@@ -27,8 +29,8 @@ pub(crate) const TRANSCRIPT_LEN: usize = 32;
 /// same, which stops being free the moment a later version makes any part
 /// variable — and by then the omission would be invisible.
 pub(crate) fn base_transcript(
-    initiator_hello: &[u8],
-    responder_hello_unsigned: &[u8],
+    initiator_hello: &[u8; HELLO_UNSIGNED_LEN],
+    responder_hello_unsigned: &[u8; HELLO_UNSIGNED_LEN],
 ) -> [u8; TRANSCRIPT_LEN] {
     let mut hasher = Sha256::new();
     hasher.update(BASE_PREFIX);
@@ -84,9 +86,21 @@ pub(crate) fn initiator_signing_message(
     out
 }
 
-fn update_with_length(hasher: &mut Sha256, bytes: &[u8]) {
-    let length = u32::try_from(bytes.len()).expect("handshake messages are under 4 GiB");
-    hasher.update(length.to_be_bytes());
+/// The `u32` big-endian length prefix a hello carries into the transcript.
+///
+/// A constant, not a measurement. Both hellos are `HELLO_UNSIGNED_LEN` bytes by
+/// type, so there is nothing to convert at runtime and nothing that can fail to
+/// fit. This used to be `u32::try_from(bytes.len()).expect(...)` on a slice: an
+/// argument made in a comment and enforced by ending the process, on a path
+/// driven by bytes a peer chose.
+const HELLO_LEN_PREFIX: [u8; 4] = (HELLO_UNSIGNED_LEN as u32).to_be_bytes();
+
+/// The width the cast above relies on, checked during const evaluation. A hello
+/// that outgrew a `u32` would stop the build, not the process.
+const _: () = assert!(HELLO_UNSIGNED_LEN <= u32::MAX as usize);
+
+fn update_with_length(hasher: &mut Sha256, bytes: &[u8; HELLO_UNSIGNED_LEN]) {
+    hasher.update(HELLO_LEN_PREFIX);
     hasher.update(bytes);
 }
 

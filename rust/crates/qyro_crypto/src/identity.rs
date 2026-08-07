@@ -1,5 +1,24 @@
 //! Device identity: the signing key and its public half.
 
+// Nothing on these paths may end the process. Every byte that reaches this
+// module was chosen by a peer — a hello, a finish message, a public key — so a
+// panic here is a remote denial of service, and in code that holds keys it is
+// also an abort in the middle of something that was about to zeroize.
+//
+// The compiler enforces it rather than a regular expression, because a regular
+// expression cannot tell a `panic!` in a doc comment from one in a match arm.
+// `src/guards.rs` covers what the lint cannot: a module nobody added this
+// attribute to, and `assert!`, which has no lint at all.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+
 use core::fmt;
 
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
@@ -193,13 +212,17 @@ impl PublicIdentity {
     /// exactly [`PUBLIC_IDENTITY_WIRE_LEN`] long, plus the errors of
     /// [`PublicIdentity::from_versioned_bytes`].
     pub fn decode(bytes: &[u8]) -> Result<Self, IdentityError> {
-        if bytes.len() != PUBLIC_IDENTITY_WIRE_LEN {
-            return Err(IdentityError::InvalidPublicKeyLength {
-                found: bytes.len(),
-                expected: PUBLIC_IDENTITY_WIRE_LEN,
-            });
-        }
-        Self::from_versioned_bytes(bytes[0], &bytes[1..])
+        let encoded: &[u8; PUBLIC_IDENTITY_WIRE_LEN] =
+            bytes
+                .try_into()
+                .map_err(|_| IdentityError::InvalidPublicKeyLength {
+                    found: bytes.len(),
+                    expected: PUBLIC_IDENTITY_WIRE_LEN,
+                })?;
+        // Irrefutable on a fixed-width array: the version byte and the key are
+        // split by the type, not by an index that has to stay right.
+        let [version, key @ ..] = encoded;
+        Self::from_versioned_bytes(*version, key)
     }
 
     /// Parses a versioned public identity.

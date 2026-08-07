@@ -30,15 +30,58 @@
 //! permits exactly the mistakes a reviewer does not see while reading the happy
 //! path; here they do not compile.
 
+// Nothing on these paths may end the process. Every byte that reaches this
+// module was chosen by a peer — a hello, a finish message, a public key — so a
+// panic here is a remote denial of service, and in code that holds keys it is
+// also an abort in the middle of something that was about to zeroize.
+//
+// The compiler enforces it rather than a regular expression, because a regular
+// expression cannot tell a `panic!` in a doc comment from one in a match arm.
+// `src/guards.rs` covers what the lint cannot: a module nobody added this
+// attribute to, and `assert!`, which has no lint at all.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+
 mod error;
 mod schedule;
 mod transcript;
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod closure_tests;
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod tests;
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::indexing_slicing,
+    reason = "a test that cannot assert or index reports failures worse"
+)]
 mod vectors;
 
 use qyro_protocol::SessionId;
@@ -236,41 +279,86 @@ fn check_prefix(
             expected: expected_len,
         });
     }
-    if message[0] != HANDSHAKE_VERSION {
+    // One pattern rather than three indexings. The two comparisons above
+    // already fix the length, so the `else` cannot be reached today; writing it
+    // as a refusal instead of an index is what keeps that true when a later
+    // caller forgets one of them.
+    let &[version, suite, message_type, ..] = message else {
+        return Err(HandshakeError::InvalidMessageLength {
+            found: message.len(),
+            expected: expected_len,
+        });
+    };
+
+    if version != HANDSHAKE_VERSION {
         return Err(HandshakeError::UnsupportedHandshakeVersion {
-            found: message[0],
+            found: version,
             supported: HANDSHAKE_VERSION,
         });
     }
-    if message[1] != CRYPTO_SUITE_ID {
+    if suite != CRYPTO_SUITE_ID {
         return Err(HandshakeError::UnsupportedCryptoSuite {
-            found: message[1],
+            found: suite,
             supported: CRYPTO_SUITE_ID,
         });
     }
-    if message[2] != expected_type {
+    if message_type != expected_type {
         return Err(HandshakeError::UnexpectedMessage {
-            found: message[2],
+            found: message_type,
             expected: expected_type,
         });
     }
     Ok(())
 }
 
+/// Copies a fixed-width field out of a message, or reports the message is too
+/// short for it.
+///
+/// The widths and offsets are compile-time constants and every caller has
+/// already been through `check_prefix`, so no current call can take the error
+/// branch. It exists so that none of them has to index: an index that is right
+/// today is a panic the day a length check moves, and every byte here came from
+/// a peer.
+fn fixed_field<const WIDTH: usize>(
+    message: &[u8],
+    offset: usize,
+) -> Result<[u8; WIDTH], HandshakeError> {
+    message
+        .get(offset..)
+        .and_then(|tail| tail.get(..WIDTH))
+        .and_then(|field| <[u8; WIDTH]>::try_from(field).ok())
+        .ok_or(HandshakeError::InvalidMessageLength {
+            found: message.len(),
+            expected: offset.saturating_add(WIDTH),
+        })
+}
+
+/// Views a length-checked message as the fixed-width hello it is.
+///
+/// `check_prefix` has already compared the length exactly, so this cannot fail
+/// in any current caller. Stating it as a conversion with an error rather than
+/// as an `expect` is the point: the width then belongs to the type system, and
+/// a future caller that forgets the length check gets a typed refusal instead
+/// of a panic on a peer-supplied message.
+fn hello_unsigned(message: &[u8]) -> Result<&[u8; HELLO_UNSIGNED_LEN], HandshakeError> {
+    message
+        .get(..HELLO_UNSIGNED_LEN)
+        .and_then(|prefix| <&[u8; HELLO_UNSIGNED_LEN]>::try_from(prefix).ok())
+        .ok_or(HandshakeError::InvalidMessageLength {
+            found: message.len(),
+            expected: HELLO_UNSIGNED_LEN,
+        })
+}
+
 /// Reads the ephemeral key and identity out of a hello's unsigned part.
 fn parse_hello_body(
-    message: &[u8],
+    message: &[u8; HELLO_UNSIGNED_LEN],
 ) -> Result<(X25519PublicKey, [u8; NONCE_LEN], PublicIdentity), HandshakeError> {
-    let mut ephemeral = [0u8; X25519_PUBLIC_LEN];
-    ephemeral.copy_from_slice(&message[OFFSET_EPHEMERAL..OFFSET_EPHEMERAL + X25519_PUBLIC_LEN]);
+    let ephemeral: [u8; X25519_PUBLIC_LEN] = fixed_field(message, OFFSET_EPHEMERAL)?;
+    let nonce: [u8; NONCE_LEN] = fixed_field(message, OFFSET_NONCE)?;
+    let encoded_identity: [u8; PUBLIC_IDENTITY_WIRE_LEN] = fixed_field(message, OFFSET_IDENTITY)?;
 
-    let mut nonce = [0u8; NONCE_LEN];
-    nonce.copy_from_slice(&message[OFFSET_NONCE..OFFSET_NONCE + NONCE_LEN]);
-
-    let identity = PublicIdentity::decode(
-        &message[OFFSET_IDENTITY..OFFSET_IDENTITY + PUBLIC_IDENTITY_WIRE_LEN],
-    )
-    .map_err(|error| match error {
+    let identity = PublicIdentity::decode(&encoded_identity).map_err(|error| match error {
         // A low-order identity is its own answer: it is well-formed, and that
         // is exactly the problem.
         IdentityError::WeakPublicKey => HandshakeError::WeakPublicIdentity,
@@ -299,16 +387,12 @@ fn write_hello_unsigned(
     out
 }
 
-fn signature_at(message: &[u8], offset: usize) -> IdentitySignature {
-    let mut bytes = [0u8; SIGNATURE_LEN];
-    bytes.copy_from_slice(&message[offset..offset + SIGNATURE_LEN]);
-    IdentitySignature::from_bytes(bytes)
+fn signature_at(message: &[u8], offset: usize) -> Result<IdentitySignature, HandshakeError> {
+    Ok(IdentitySignature::from_bytes(fixed_field(message, offset)?))
 }
 
-fn mac_at(message: &[u8], offset: usize) -> [u8; FINISHED_MAC_LEN] {
-    let mut bytes = [0u8; FINISHED_MAC_LEN];
-    bytes.copy_from_slice(&message[offset..offset + FINISHED_MAC_LEN]);
-    bytes
+fn mac_at(message: &[u8], offset: usize) -> Result<[u8; FINISHED_MAC_LEN], HandshakeError> {
+    fixed_field(message, offset)
 }
 
 fn sign_transcript(
@@ -455,9 +539,9 @@ impl InitiatorAwaitResponder<'_> {
     ) -> Result<([u8; INITIATOR_FINISH_LEN], InitiatorAwaitResponderFinish), HandshakeError> {
         check_prefix(message, TYPE_RESPONDER_HELLO, RESPONDER_HELLO_LEN)?;
 
-        let unsigned = &message[..HELLO_UNSIGNED_LEN];
+        let unsigned = hello_unsigned(message)?;
         let (peer_ephemeral, _peer_nonce, peer_identity) = parse_hello_body(unsigned)?;
-        let responder_signature = signature_at(message, HELLO_UNSIGNED_LEN);
+        let responder_signature = signature_at(message, HELLO_UNSIGNED_LEN)?;
 
         let base = base_transcript(&self.hello, unsigned);
         verify_transcript(
@@ -534,7 +618,7 @@ impl InitiatorAwaitResponderFinish {
     ) -> Result<EstablishedInitiator, HandshakeError> {
         check_prefix(message, TYPE_RESPONDER_FINISH, RESPONDER_FINISH_LEN)?;
 
-        let received = mac_at(message, PREFIX_LEN);
+        let received = mac_at(message, PREFIX_LEN)?;
         let expected = finished_mac(&self.derived.responder_finished, &self.auth);
         verify_finished_mac(&expected, &received)?;
 
@@ -607,7 +691,8 @@ impl<'identity> ResponderStart<'identity> {
         entropy: [u8; HANDSHAKE_ENTROPY_LEN],
     ) -> Result<([u8; RESPONDER_HELLO_LEN], ResponderAwaitInitiatorFinish), HandshakeError> {
         check_prefix(message, TYPE_INITIATOR_HELLO, INITIATOR_HELLO_LEN)?;
-        let (peer_ephemeral, _peer_nonce, peer_identity) = parse_hello_body(message)?;
+        let initiator_hello = hello_unsigned(message)?;
+        let (peer_ephemeral, _peer_nonce, peer_identity) = parse_hello_body(initiator_hello)?;
 
         let (secret, nonce) = split_entropy(entropy);
         let unsigned = write_hello_unsigned(
@@ -619,7 +704,7 @@ impl<'identity> ResponderStart<'identity> {
 
         let shared = secret.diffie_hellman(&peer_ephemeral)?;
 
-        let base = base_transcript(message, &unsigned);
+        let base = base_transcript(initiator_hello, &unsigned);
         let responder_signature =
             sign_transcript(self.identity, &responder_signing_message(&base))?;
 
@@ -669,7 +754,7 @@ impl ResponderAwaitInitiatorFinish {
     ) -> Result<ResponderFinishPending, HandshakeError> {
         check_prefix(message, TYPE_INITIATOR_FINISH, INITIATOR_FINISH_LEN)?;
 
-        let initiator_signature = signature_at(message, PREFIX_LEN);
+        let initiator_signature = signature_at(message, PREFIX_LEN)?;
         verify_transcript(
             &self.peer_identity,
             &initiator_signing_message(&self.base, self.responder_signature.as_bytes()),
@@ -683,7 +768,7 @@ impl ResponderAwaitInitiatorFinish {
         );
         let derived = Schedule::derive(&self.base, &self.shared, &auth)?;
 
-        let received = mac_at(message, PREFIX_LEN + SIGNATURE_LEN);
+        let received = mac_at(message, PREFIX_LEN + SIGNATURE_LEN)?;
         let expected = finished_mac(&derived.initiator_finished, &auth);
         verify_finished_mac(&expected, &received)?;
 

@@ -1,5 +1,24 @@
 //! Domain-separated signatures.
 
+// Nothing on these paths may end the process. Every byte that reaches this
+// module was chosen by a peer — a hello, a finish message, a public key — so a
+// panic here is a remote denial of service, and in code that holds keys it is
+// also an abort in the middle of something that was about to zeroize.
+//
+// The compiler enforces it rather than a regular expression, because a regular
+// expression cannot tell a `panic!` in a doc comment from one in a match arm.
+// `src/guards.rs` covers what the lint cannot: a module nobody added this
+// attribute to, and `assert!`, which has no lint at all.
+#![deny(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable,
+    clippy::todo,
+    clippy::unimplemented,
+    clippy::indexing_slicing
+)]
+
 use core::fmt;
 
 use crate::error::IdentityError;

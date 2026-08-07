@@ -1,13 +1,9 @@
 //! Structural guards over the AEAD module's own production source.
 //!
-//! Three properties here cannot be expressed as ordinary tests.
-//!
-//! *No `assert!` on the production path.* Clippy denies `unwrap`, `expect`,
-//! `panic!`, `unreachable!` and indexing at the top of `mod.rs`, and the
-//! compiler is a far better judge of those than a regular expression. But there
-//! is no Clippy lint for `assert!`, and `assert!` ends the process exactly as
-//! `panic!` does — in a module that holds keys, in the middle of code that was
-//! about to zeroize something.
+//! Two properties here cannot be expressed as ordinary tests. A third — that no
+//! production path can end the process — moved to `crate::guards`, which now
+//! makes the same assertion over every production file in the crate rather than
+//! over the three in this directory.
 //!
 //! *Plaintext lives in a zeroizing container.* A test can check that a byte
 //! slice compares equal; it cannot check that the allocation behind it is wiped
@@ -19,106 +15,20 @@
 //! Vec<u8>` would silently drop the guarantee at the one call that matters.
 //!
 //! The analysis is deliberately narrow. It reads only this module's production
-//! files, strips comments and `#[cfg(test)]` items by brace matching, and never
-//! guesses: an expression it cannot account for makes it fail rather than pass.
+//! files, with `crate::guards` doing the stripping, and never guesses: anything
+//! it cannot account for makes it fail rather than pass.
 
-use std::fs;
-
-/// The production source files of this module.
+/// Reads one of this module's production files with everything non-production
+/// removed.
 ///
-/// `tests.rs`, `vectors.rs` and `corpus.rs` are absent on purpose: they are
-/// `cfg(test)` in their entirety and may assert freely.
-const PRODUCTION_FILES: [&str; 3] = ["mod.rs", "error.rs", "replay.rs"];
-
+/// The stripping lives in `crate::guards`, which owns the crate-wide anti-panic
+/// guard. It used to be duplicated here, and a duplicated analysis is two
+/// analyses that can disagree about what counts as production code.
+///
+/// `tests.rs`, `vectors.rs` and `corpus.rs` never appear below: they are
+/// `#[cfg(test)]` in their entirety and may assert freely.
 fn production_source(file: &str) -> String {
-    let path = format!("{}/src/aead/{file}", env!("CARGO_MANIFEST_DIR"));
-    let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path}: {error}"));
-    strip_comments(&strip_cfg_test_items(&source))
-}
-
-/// Removes every `#[cfg(test)]` item, including inline modules with a body.
-///
-/// Brace matching rather than "everything after the first `#[cfg(test)]`",
-/// because `replay.rs` puts its test module last today and nothing guarantees
-/// the next file will.
-fn strip_cfg_test_items(source: &str) -> String {
-    const MARKER: &str = "#[cfg(test)]";
-    let mut out = String::with_capacity(source.len());
-    let mut rest = source;
-
-    while let Some(position) = rest.find(MARKER) {
-        out.push_str(&rest[..position]);
-        let after = &rest[position + MARKER.len()..];
-
-        // Either `mod name;` (nothing to strip beyond the declaration) or
-        // `mod name { ... }` / `fn ... { ... }` (strip the whole body).
-        let semicolon = after.find(';');
-        let brace = after.find('{');
-        rest = match (semicolon, brace) {
-            (Some(end), None) => &after[end + 1..],
-            (Some(end), Some(open)) if end < open => &after[end + 1..],
-            (_, Some(open)) => {
-                let mut depth = 0usize;
-                let mut close = None;
-                for (index, byte) in after.bytes().enumerate().skip(open) {
-                    match byte {
-                        b'{' => depth += 1,
-                        b'}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                close = Some(index);
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                match close {
-                    Some(index) => &after[index + 1..],
-                    None => panic!("unbalanced braces after a #[cfg(test)] item"),
-                }
-            }
-            (None, None) => panic!("a #[cfg(test)] item with neither a body nor a semicolon"),
-        };
-    }
-    out.push_str(rest);
-    out
-}
-
-/// Removes line comments, so prose about `panic!` is not mistaken for one.
-fn strip_comments(source: &str) -> String {
-    source
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-#[test]
-fn the_stripper_actually_strips() {
-    // Without this, every assertion below could be passing because the analysis
-    // silently produced an empty string.
-    let stripped = strip_cfg_test_items(
-        "fn kept() {}\n#[cfg(test)]\nmod tests {\n    fn inner() { assert!(true); }\n}\nfn also_kept() {}\n",
-    );
-    assert!(stripped.contains("fn kept"), "production code survives");
-    assert!(
-        stripped.contains("fn also_kept"),
-        "and so does what follows"
-    );
-    assert!(!stripped.contains("assert!"), "the test body is gone");
-
-    let declaration = strip_cfg_test_items("#[cfg(test)]\nmod tests;\nfn kept() {}\n");
-    assert!(declaration.contains("fn kept"));
-
-    assert_eq!(strip_comments("// panic!\nlet x = 1;"), "let x = 1;");
-
-    for file in PRODUCTION_FILES {
-        assert!(
-            production_source(file).contains("pub"),
-            "{file} still has production code after stripping"
-        );
-    }
+    crate::guards::production_source(&format!("aead/{file}"))
 }
 
 #[test]
@@ -150,29 +60,6 @@ fn every_committed_vector_arrives_with_the_bytes_that_were_committed() {
             "{name} was checked out with CRLF; the committed vectors are \
              byte-exact and .gitattributes must pin eol=lf"
         );
-    }
-}
-
-#[test]
-fn the_production_aead_path_contains_no_assertions() {
-    // `assert!` is `panic!` under another name, and Clippy has no lint for it.
-    // A frame the peer controls must never be able to end this process.
-    for file in PRODUCTION_FILES {
-        let source = production_source(file);
-        for forbidden in [
-            "assert!(",
-            "assert_eq!(",
-            "assert_ne!(",
-            "debug_assert!(",
-            "debug_assert_eq!(",
-            "debug_assert_ne!(",
-        ] {
-            assert!(
-                !source.contains(forbidden),
-                "src/aead/{file} uses {forbidden} on the production path; \
-                 an invariant that can fail must return a typed error"
-            );
-        }
     }
 }
 
