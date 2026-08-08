@@ -86,3 +86,17 @@ la cabecera de 48 bytes reserva `transfer_id`, `stream_id` e `item_id` dentro de
 los datos asociados autenticados y no hay forma pública de rellenarlos; y
 QYR-0069, los constructores deterministas del handshake son `pub(crate)`, así que
 un crate dependiente no puede reproducir una sesión byte a byte.
+
+El sprint 5B.1 añade ADR-0027: leer y escribir archivos de verdad, sin selector y
+sin FFI. No cambia `ContentSource` ni `ContentSink` —que era la comprobación de
+que la costura de ADR-0026 estaba bien puesta— y no toca el motor.
+
+Cuatro decisiones que conviene no rediscutir sin datos nuevos: ningún componente
+de la ruta materializada puede ser un enlace simbólico, con `O_NOFOLLOW` cerrando
+la carrera del último componente y QYR-0072 registrando que la de los
+intermedios sigue abierta; una colisión en el destino **se rechaza**, porque
+sobrescribir es pérdida de datos ajenos y renombrar inventa nombres que el
+emisor no mandó; el `.qyro-part` vive **junto al destino** porque `rename` no
+funciona entre volúmenes; y los metadatos de reanudación **no guardan el estado
+del hasher** —`sha2` no lo expone— sino que releen el prefijo, que cuesta E/S y
+no cuesta correcciones cuando esa biblioteca cambie por dentro.

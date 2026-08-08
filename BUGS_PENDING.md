@@ -1437,3 +1437,25 @@
   fallo no estaba en la guarda sino **en el análisis que comparten todas**
 - Estado: cerrado
 - Fecha: 2026-08-08
+
+## QYR-0072 — La carrera de los componentes intermedios de la ruta sigue abierta
+
+- Plataforma: filesystem
+- Severidad: P2
+- Esperado: ningún componente de la ruta materializada es un enlace simbólico, y
+  la comprobación no tiene ventana
+- Actual: ADR-0027 §1 comprueba cada componente con `symlink_metadata` y abre el
+  `.qyro-part` con `O_NOFOLLOW`. Eso cierra por completo la carrera del **último**
+  componente —comprobar y abrir son la misma llamada— y **no** la de los
+  intermedios: entre comprobar que `fotos/` no es un enlace y abrir
+  `fotos/x.qyro-part` hay una ventana
+- Cerrarla exige abrir cada directorio por descriptor y resolver relativo a él
+  —`openat` con `O_NOFOLLOW`, o `dirfd`—, que no está en `std` y que en Windows
+  es otro mecanismo. Traerlo significaría una dependencia nueva o `unsafe`, y las
+  dos merecen su propia decisión
+- A quién afecta, dicho con precisión: un atacante con escritura en el directorio
+  de destino **ya puede escribir lo que quiera ahí**. Lo que las comprobaciones
+  impiden es que use Qyro para escribir **fuera** de ahí. La ventana devuelve
+  parte de ese privilegio durante un instante
+- Estado: abierto
+- Fecha: 2026-08-08
