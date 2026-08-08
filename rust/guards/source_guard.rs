@@ -412,6 +412,18 @@ fn assert_every_variant_has_a_construction_site(
     }
 }
 
+/// Whether `analysed` still carries the last non-empty line of `raw`.
+///
+/// Split out from the assertion so it can be tested directly. A check that only
+/// exists inside an `assert!` can only be exercised by breaking the thing it
+/// watches, and then it is covered by accident rather than on purpose.
+fn analysis_reached_the_end(raw: &str, analysed: &str) -> bool {
+    raw.lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .is_none_or(|last| analysed.contains(last.trim()))
+}
+
 /// Fails if stripping ran off the end of the file.
 ///
 /// The gate-stripper walks item by item, and an item shape it does not know
@@ -423,11 +435,8 @@ fn assert_every_variant_has_a_construction_site(
 /// Written because it happened (QYR-0071) and nothing noticed for a sprint.
 fn assert_analysis_reached_the_end(file: &str, analysed: &str) {
     let raw = production_source_raw(file);
-    let Some(last) = raw.lines().rev().find(|line| !line.trim().is_empty()) else {
-        return;
-    };
     assert!(
-        analysed.contains(last.trim()),
+        analysis_reached_the_end(&raw, analysed),
         "the gate analysis of src/{file} does not reach its last line. It read \
          {} of {} bytes, so the stripper met an item shape it does not know and \
          consumed the rest. Every guard built on this was covering less than it \
@@ -559,6 +568,31 @@ fn the_analysis_actually_strips() {
         gated_child_modules("mod schema;\n").is_empty(),
         "removing the gate removes the exemption"
     );
+    // A `#[cfg(test)]` struct field ends at a comma and has neither a body nor
+    // a semicolon. Before QYR-0071 the scan ran past the struct and consumed
+    // the rest of the file.
+    let field = strip_test_only_items(
+        "struct S {\n    a: u8,\n    #[cfg(test)]\n    gated: usize,\n    b: u8,\n}\nfn after() {}\n",
+    );
+    assert!(!field.contains("gated"), "a gated field is stripped");
+    assert!(
+        field.contains("fn after"),
+        "stripping a gated field ate what followed it, which is QYR-0071"
+    );
+    assert!(field.contains("b: u8"), "it ate the rest of the struct too");
+
+    // And the overrun check itself, tested directly rather than by breaking the
+    // stripper and hoping something notices.
+    assert!(analysis_reached_the_end("one\ntwo\n", "one\ntwo\n"));
+    assert!(
+        !analysis_reached_the_end("one\ntwo\n", "one\n"),
+        "an analysis missing the file's last line must be reported"
+    );
+    assert!(
+        analysis_reached_the_end("one\ntwo\n\n\n", "one\ntwo\n"),
+        "trailing blank lines are not the last line"
+    );
+
     assert_eq!(module_directory("lib.rs"), "");
     assert_eq!(module_directory("aead/mod.rs"), "aead");
     assert_eq!(module_directory("identity.rs"), "identity");
