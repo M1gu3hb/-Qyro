@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-08T03:40:00Z
 - Branch: claude/qyro-filesystem-5b1
-- Verified commit: a3fb226e39b4bd63a9d76637f5bda66c844a0497
+- Verified commit: e3fbaf10073faef91c21350937356be5d861c666
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
@@ -908,6 +908,29 @@ Llevar la guarda de sitios de construcción al análisis compartido también des
 dos variantes de 5A que nadie construía, `TransferError::UnsupportedMessage` y
 `WindowExhausted`; las dos **borradas**, y la segunda tenía además un comentario
 que afirmaba que se reportaba, y era falso.
+
+## Runs de 5B.1
+
+Todos los `push` de la rama, sin filtrar. **Ninguno falló y ninguno se canceló.**
+
+| Workflow | Commit | Run | Conclusión |
+|---|---|---|---|
+| **CI #137** | **`e3fbaf1`** | **31232028441** | **success**, 4/4 jobs |
+| **Platform builds #39** | **`e3fbaf1`** | **31232028378** | **success** |
+| **Crypto platform #27** | **`e3fbaf1`** | **31232028429** | **success**, 4/4 jobs |
+| **Crypto fuzz #14** | **`e3fbaf1`** | **31232028435** | **success**, 6 targets |
+| **Android runtime ABI #62** | **`e3fbaf1`** | **31232028405** | **success**, emulador |
+| **iOS runtime ABI #33** | **`e3fbaf1`** | **31232028433** | **success**, XCTest en simulador |
+
+**Los seis sobre `e3fbaf1`, por `push`, y los seis en success al primer intento.**
+Corrieron los seis porque ese push toca `rust/guards/**` —que vigilan `Crypto
+fuzz` y `Crypto platform`—, `rust/**` para `Platform builds`, y `Cargo.toml` y
+`Cargo.lock` para las dos ABI nativas. `ci.yml` no filtra.
+
+A diferencia del sprint 5A, **el emulador de Android no necesitó un segundo
+intento**: el paso arrancó a la primera. Se dice porque allí se registró la
+cancelación, y una racha sin incidentes sólo significa algo si la anterior con
+incidente también está escrita.
 
 ## Runs de 5A
 
