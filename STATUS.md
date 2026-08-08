@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-08T02:10:00Z
 - Branch: claude/qyro-transfer-engine-5a
-- Verified commit: b4c782f0ad0ca77c4005ba85c60707d01a977495
+- Verified commit: 94fe996478ab5a74c88be85463716f68fc4b760f
 - Milestone: **el motor de transferencia mueve una transferencia completa entre
   dos valores del mismo proceso**, con sellado real. **No hay red, no hay disco
   y los botones Enviar y Recibir siguen deshabilitados.** La persistencia de
@@ -837,6 +837,41 @@ motor. Los dos **registrados y no arreglados**:
   Probablemente correcto —un constructor determinista público acaba usándose en
   producción— y no cuesta nada aquí. Costará cuando haga falta un vector
   interoperable de una transferencia completa.
+
+## Runs de 5A
+
+Todos los `push` de la rama, sin filtrar.
+
+| Workflow | Commit | Run | Conclusión |
+|---|---|---|---|
+| **CI #135** | **`94fe996`** | **31228301326** | **success**, 4/4 jobs |
+| **Platform builds #38** | **`94fe996`** | **31228301291** | **success** |
+| **Crypto platform #26** | **`94fe996`** | **31228301287** | **success**, 4/4 jobs |
+| **Crypto fuzz #13** | **`94fe996`** | **31228301314** | **success**, 6 targets |
+| **iOS runtime ABI #32** | **`94fe996`** | **31228301343** | **success**, XCTest en simulador |
+| **Android runtime ABI #61** | **`94fe996`** | **31228301331** | **cancelled** en el intento 1, **success** en el 2 |
+
+**Los seis sobre `94fe996`, por `push`, y los seis en success.** Corrieron los
+seis porque ese push toca `rust/crates/qyro_protocol/**` —que vigilan `Crypto
+fuzz` y `Crypto platform`—, `rust/**` para `Platform builds`, y `Cargo.toml` y
+`Cargo.lock` para las dos ABI nativas. `ci.yml` no filtra.
+
+### El primer intento de Android se canceló, y por qué
+
+El **intento 1** de `Android runtime ABI #61` (job 93026874026) se quedó
+**veintinueve minutos** en el paso «Execute native ABI smoke test in an Android
+emulator» y lo canceló el `timeout-minutes` del job. No es un fallo del código y
+tampoco es un éxito: **un run cancelado no es evidencia**, y se registra aquí en
+vez de dejar sólo el intento que salió bien.
+
+El **intento 2** (job 93031793097, mismo run y mismo commit, `run_attempt: 2`)
+completó ese paso en **cinco minutos y medio** y salió en verde. La diferencia
+entre veintinueve minutos y cinco y medio, con el mismo árbol, apunta al arranque
+del emulador en el runner y no al cambio: este sprint no toca `apps/qyro/**` ni
+`qyro_ffi`, y lo único que lo hizo recompilar fue `Cargo.lock`.
+
+Se re-ejecutó el run, no se lanzó uno nuevo, para que la evidencia siguiera
+siendo del evento `push` sobre `94fe996`.
 
 ## Runs de 4D.2a
 
