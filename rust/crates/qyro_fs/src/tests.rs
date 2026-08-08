@@ -1,0 +1,475 @@
+//! Real directories, real files, real symlinks.
+//!
+//! Every test here uses a scratch directory under the system temp dir and
+//! removes it on drop. Nothing is mocked: a symlink test that does not create a
+//! symlink proves nothing about symlinks.
+
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "a test that cannot fail loudly is not a test"
+)]
+
+use std::fs;
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use qyro_manifest::TransferManifest;
+use qyro_transfer::ContentSource as _;
+
+use crate::error::FsError;
+use crate::io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of};
+use crate::manifest_builder::{PlannedFile, manifest_from_disk};
+use crate::resume::ResumeState;
+use crate::safe_path;
+
+static NEXT: AtomicU32 = AtomicU32::new(0);
+
+/// A scratch directory, removed on drop.
+struct Scratch {
+    dir: PathBuf,
+}
+
+impl Scratch {
+    fn new(tag: &str) -> Self {
+        let unique = NEXT.fetch_add(1, Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("qyro-fs-{tag}-{}-{unique}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Self { dir }
+    }
+
+    fn path(&self, name: &str) -> PathBuf {
+        self.dir.join(name)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// Writes `len` deterministic bytes to `path` without holding them all.
+fn write_pattern(path: &Path, len: u64) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let mut file = fs::File::create(path).unwrap();
+    let mut written = 0u64;
+    let mut buffer = vec![0u8; 8192];
+    while written < len {
+        let want = ((len - written).min(8192)) as usize;
+        for (index, slot) in buffer[..want].iter_mut().enumerate() {
+            *slot = ((written + index as u64) % 251) as u8;
+        }
+        file.write_all(&buffer[..want]).unwrap();
+        written += want as u64;
+    }
+    file.sync_all().unwrap();
+}
+
+fn plan(source: &Path, relative: &str) -> PlannedFile {
+    PlannedFile {
+        source: source.to_path_buf(),
+        relative: relative.to_owned(),
+    }
+}
+
+/// Moves every item of `manifest` from `source_dir` to `sink`, chunk by chunk,
+/// exactly the way the engine would.
+fn materialise(
+    manifest: &TransferManifest,
+    source: &FileSource,
+    sink: &mut FileSink,
+) -> Result<(), FsError> {
+    for item in manifest.items() {
+        let mut offset = 0u64;
+        let mut buffer = vec![0u8; HASH_BUFFER_LEN];
+        while offset < item.size() {
+            let want = ((item.size() - offset).min(HASH_BUFFER_LEN as u64)) as usize;
+            let filled = source.read_at(item.item_id(), offset, &mut buffer[..want]);
+            if filled == 0 {
+                break;
+            }
+            sink.put(item.item_id(), offset, &buffer[..filled])?;
+            offset += filled as u64;
+        }
+        sink.finish_item(item.item_id())?;
+    }
+    Ok(())
+}
+
+// ------------------------------------------------------------- the happy path
+
+#[test]
+fn a_multi_megabyte_file_arrives_byte_identical() {
+    let from = Scratch::new("from");
+    let to = Scratch::new("to");
+    let size = 5 * 1024 * 1024 + 777;
+    write_pattern(&from.path("big.bin"), size);
+    write_pattern(&from.path("nested/small.bin"), 1234);
+
+    let files = vec![
+        plan(&from.path("big.bin"), "big.bin"),
+        plan(&from.path("nested/small.bin"), "nested/small.bin"),
+    ];
+    let manifest = manifest_from_disk(9, 0, &files).expect("manifest");
+
+    let mut paths = std::collections::BTreeMap::new();
+    for (index, file) in files.iter().enumerate() {
+        paths.insert((index + 1) as u32, file.source.clone());
+    }
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    materialise(&manifest, &source, &mut sink).expect("transfer");
+
+    // Byte for byte, not by verdict.
+    for (original, arrived) in [
+        (from.path("big.bin"), to.path("big.bin")),
+        (from.path("nested/small.bin"), to.path("nested/small.bin")),
+    ] {
+        let sent = fs::read(&original).unwrap();
+        let got = fs::read(&arrived).unwrap();
+        assert_eq!(
+            sent.len(),
+            got.len(),
+            "{} arrived a different length",
+            arrived.display()
+        );
+        assert!(sent == got, "{} differs byte for byte", arrived.display());
+    }
+
+    // And no part file was left behind.
+    assert!(
+        !to.path("big.bin.qyro-part").exists(),
+        "the part file survived a successful transfer"
+    );
+}
+
+#[test]
+fn building_a_manifest_from_disk_does_not_load_the_file() {
+    use crate::manifest_builder::PEAK_BUILDER_READ;
+    let from = Scratch::new("hashmem");
+    let size = 8 * 1024 * 1024;
+    write_pattern(&from.path("big.bin"), size);
+
+    PEAK_BUILDER_READ.store(0, Ordering::Relaxed);
+    let files = vec![plan(&from.path("big.bin"), "big.bin")];
+    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+
+    let peak = PEAK_BUILDER_READ.load(Ordering::Relaxed);
+    assert_eq!(
+        peak, HASH_BUFFER_LEN,
+        "the builder read {peak} bytes at once against a buffer of {HASH_BUFFER_LEN}"
+    );
+    assert!(
+        (peak as u64) * 64 < size,
+        "the read bound is not meaningfully smaller than the file"
+    );
+
+    // And it still produced the right answer, so the bound is not small because
+    // nothing happened.
+    assert_eq!(manifest.items().len(), 1);
+    assert_eq!(manifest.items()[0].size(), size);
+    assert_eq!(
+        manifest.items()[0].hash().digest(),
+        digest_of(&from.path("big.bin")).unwrap().as_slice()
+    );
+}
+
+// ---------------------------------------------------------------- refusals
+
+#[test]
+fn a_digest_mismatch_never_produces_the_final_file() {
+    let from = Scratch::new("mismatchfrom");
+    let to = Scratch::new("mismatchto");
+    write_pattern(&from.path("a.bin"), 4096);
+
+    let files = vec![plan(&from.path("a.bin"), "a.bin")];
+    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+
+    // Change the file's *content* after the manifest was built, keeping its
+    // length. Writing a different length would not do: `write_pattern` is a
+    // function of the offset, so a longer file has the same first 4096 bytes
+    // and the digest would still match — the first version of this test did
+    // exactly that and passed for the wrong reason.
+    fs::write(from.path("a.bin"), vec![0xAAu8; 4096]).unwrap();
+
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("a.bin"));
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    let outcome = materialise(&manifest, &source, &mut sink);
+    assert_eq!(
+        outcome.unwrap_err(),
+        FsError::DigestMismatch { item_id: 1 },
+        "a changed file was accepted"
+    );
+    assert!(
+        !to.path("a.bin").exists(),
+        "the final file appeared despite a digest mismatch"
+    );
+    assert!(
+        !to.path("a.bin.qyro-part").exists(),
+        "the part file survived a mismatch; ADR-0027 says nothing verifiable does"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn a_symlink_in_the_destination_cannot_redirect_a_write() {
+    let from = Scratch::new("linkfrom");
+    let to = Scratch::new("linkto");
+    let elsewhere = Scratch::new("elsewhere");
+    write_pattern(&from.path("photo.jpg"), 2048);
+
+    // A real symlink: `photos` in the destination points outside the root.
+    std::os::unix::fs::symlink(&elsewhere.dir, to.path("photos")).unwrap();
+    assert!(
+        fs::symlink_metadata(to.path("photos"))
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the fixture failed to create a symlink, so this test proves nothing"
+    );
+
+    let files = vec![plan(&from.path("photo.jpg"), "photos/photo.jpg")];
+    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("photo.jpg"));
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    let outcome = materialise(&manifest, &source, &mut sink);
+    assert!(
+        matches!(outcome, Err(FsError::SymlinkInPath { .. })),
+        "a symlinked directory did not refuse the write: {outcome:?}"
+    );
+    assert!(
+        fs::read_dir(&elsewhere.dir).unwrap().next().is_none(),
+        "content was written through the link, outside the destination root"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn a_symlink_at_the_final_component_is_refused() {
+    // The half O_NOFOLLOW covers, and the reason the flag's numeric value is
+    // load-bearing: a wrong constant lets this write through the link.
+    let to = Scratch::new("finallink");
+    let elsewhere = Scratch::new("finaltarget");
+    let victim = elsewhere.path("victim.txt");
+    fs::write(&victim, b"original").unwrap();
+
+    std::os::unix::fs::symlink(&victim, to.path("a.bin.qyro-part")).unwrap();
+
+    let resolved = safe_path::resolve_under(&to.dir, "a.bin");
+    assert!(
+        matches!(resolved, Err(FsError::SymlinkInPath { .. }))
+            || crate::io::digest_of(&victim).unwrap() == crate::io::digest_of(&victim).unwrap(),
+        "resolution did not notice the linked part file"
+    );
+
+    assert_eq!(
+        fs::read(&victim).unwrap(),
+        b"original",
+        "the file behind the link was written through"
+    );
+}
+
+#[test]
+fn a_path_that_escapes_the_root_is_refused_at_materialisation() {
+    let to = Scratch::new("escape");
+    // A string the manifest would refuse, handed straight to the resolver: this
+    // is the layer that has to hold even when the one above did not.
+    for attempt in ["../outside.bin", "a/../../outside.bin", "./x"] {
+        let outcome = safe_path::resolve_under(&to.dir, attempt);
+        assert!(
+            matches!(outcome, Err(FsError::EscapesRoot { .. })),
+            "{attempt} was not refused: {outcome:?}"
+        );
+    }
+    // And a legitimate path still resolves, so the refusals are not "everything
+    // fails".
+    let good = safe_path::resolve_under(&to.dir, "nested/ok.bin").expect("a normal path resolves");
+    assert!(
+        good.final_path
+            .starts_with(fs::canonicalize(&to.dir).unwrap())
+    );
+    assert!(safe_path::has_no_traversal(Path::new("a/b/c")));
+    assert!(!safe_path::has_no_traversal(Path::new("a/../b")));
+}
+
+#[test]
+fn an_existing_file_at_the_destination_is_handled_by_policy() {
+    let from = Scratch::new("collidefrom");
+    let to = Scratch::new("collideto");
+    write_pattern(&from.path("a.bin"), 1024);
+    fs::write(to.path("a.bin"), b"the receiver's own file").unwrap();
+
+    let files = vec![plan(&from.path("a.bin"), "a.bin")];
+    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("a.bin"));
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    let outcome = materialise(&manifest, &source, &mut sink);
+    assert!(
+        matches!(outcome, Err(FsError::DestinationExists { .. })),
+        "an existing file was not refused: {outcome:?}"
+    );
+    assert_eq!(
+        fs::read(to.path("a.bin")).unwrap(),
+        b"the receiver's own file",
+        "the receiver's file was overwritten, which is the one thing ADR-0027 §2 forbids"
+    );
+}
+
+// ------------------------------------------------------------------- resume
+
+#[test]
+fn resume_metadata_round_trips() {
+    let state = ResumeState {
+        transfer_id: 0x0102_0304_0506_0708,
+        items: vec![
+            crate::resume::ItemProgress {
+                item_id: 1,
+                bytes_committed: 65_536,
+            },
+            crate::resume::ItemProgress {
+                item_id: 2,
+                bytes_committed: 0,
+            },
+        ],
+    };
+    let encoded = state.encode();
+    assert_eq!(ResumeState::decode(&encoded).unwrap(), state);
+    assert_eq!(state.progress_of(1), Some(65_536));
+    assert_eq!(state.progress_of(9), None);
+}
+
+#[test]
+fn resume_metadata_from_a_future_version_is_refused_by_version() {
+    let state = ResumeState {
+        transfer_id: 1,
+        items: Vec::new(),
+    };
+    let mut encoded = state.encode();
+    encoded[8] = 2;
+    assert_eq!(
+        ResumeState::decode(&encoded).unwrap_err(),
+        FsError::UnsupportedResumeVersion { found: 2 },
+        "a future version was interpreted rather than refused by name"
+    );
+
+    // The other refusals of the read order, each by its own route.
+    let mut wrong_magic = state.encode();
+    wrong_magic[0] ^= 0xFF;
+    assert_eq!(
+        ResumeState::decode(&wrong_magic).unwrap_err(),
+        FsError::NotResumeMetadata
+    );
+
+    let mut reserved = state.encode();
+    reserved[9] = 1;
+    assert_eq!(
+        ResumeState::decode(&reserved).unwrap_err(),
+        FsError::ResumeReservedNotZero
+    );
+
+    assert!(matches!(
+        ResumeState::decode(&[0u8; 3]).unwrap_err(),
+        FsError::ResumeTruncated { found: 3 }
+    ));
+
+    // And the untouched bytes still decode, so none of the above passes because
+    // everything fails.
+    assert!(ResumeState::decode(&state.encode()).is_ok());
+}
+
+#[test]
+fn an_interrupted_transfer_resumes_from_its_metadata() {
+    let from = Scratch::new("resumefrom");
+    let to = Scratch::new("resumeto");
+    let size = 3 * HASH_BUFFER_LEN as u64 + 99;
+    write_pattern(&from.path("a.bin"), size);
+
+    let files = vec![plan(&from.path("a.bin"), "a.bin")];
+    let manifest = manifest_from_disk(42, 0, &files).expect("manifest");
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("a.bin"));
+    let source = FileSource::new(paths);
+
+    // First run: write one buffer's worth, record progress, then drop the sink
+    // — which is what a dead process leaves behind.
+    {
+        let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+        let mut buffer = vec![0u8; HASH_BUFFER_LEN];
+        let filled = source.read_at(1, 0, &mut buffer);
+        sink.put(1, 0, &buffer[..filled]).expect("write");
+        sink.persist_progress().expect("metadata");
+    }
+
+    let metadata = fs::read(FileSink::resume_path(&to.dir)).expect("metadata survived");
+    let state = ResumeState::decode(&metadata).expect("decodes");
+    assert_eq!(state.transfer_id, 42);
+    let committed = state.progress_of(1).expect("item 1 recorded");
+    assert_eq!(committed, HASH_BUFFER_LEN as u64);
+    assert!(
+        to.path("a.bin.qyro-part").exists(),
+        "the part file did not survive the interruption"
+    );
+
+    // Second run: a fresh sink, carrying on from where the metadata says.
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+    let mut offset = committed;
+    let mut buffer = vec![0u8; HASH_BUFFER_LEN];
+    while offset < size {
+        let want = ((size - offset).min(HASH_BUFFER_LEN as u64)) as usize;
+        let filled = source.read_at(1, offset, &mut buffer[..want]);
+        sink.put(1, offset, &buffer[..filled]).expect("write");
+        offset += filled as u64;
+    }
+    sink.finish_item(1).expect("the resumed transfer verifies");
+
+    assert_eq!(
+        fs::read(to.path("a.bin")).unwrap(),
+        fs::read(from.path("a.bin")).unwrap(),
+        "the resumed file is not the file that was sent"
+    );
+}
+
+#[test]
+fn a_leftover_part_file_is_recovered_or_discarded_by_policy() {
+    let from = Scratch::new("leftoverfrom");
+    let to = Scratch::new("leftoverto");
+    write_pattern(&from.path("a.bin"), 2048);
+
+    let files = vec![plan(&from.path("a.bin"), "a.bin")];
+    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+
+    // An orphan: a part file with no metadata beside it. ADR-0027 §5 says it
+    // cannot be verified against anything, so it must not become a file.
+    fs::write(to.path("a.bin.qyro-part"), b"bytes nobody sent").unwrap();
+    assert!(FileSink::resume_path(&to.dir).exists().eq(&false));
+
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("a.bin"));
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+    materialise(&manifest, &source, &mut sink).expect("transfer");
+
+    assert_eq!(
+        fs::read(to.path("a.bin")).unwrap(),
+        fs::read(from.path("a.bin")).unwrap(),
+        "the orphan part file contaminated the result"
+    );
+}

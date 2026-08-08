@@ -299,6 +299,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qyro_fs"
+version = "0.0.1"
+dependencies = [
+ "qyro_manifest",
+ "qyro_transfer",
+ "sha2",
+]
+
+[[package]]
 name = "qyro_identity_store"
 version = "0.0.1"
 dependencies = [

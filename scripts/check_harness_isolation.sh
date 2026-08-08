@@ -41,7 +41,8 @@ for manifest in \
     rust/crates/qyro_crypto/Cargo.toml \
     rust/crates/qyro_protocol/Cargo.toml \
     rust/crates/qyro_manifest/Cargo.toml \
-    rust/crates/qyro_transfer/Cargo.toml; do
+    rust/crates/qyro_transfer/Cargo.toml \
+    rust/crates/qyro_fs/Cargo.toml; do
     for harness in "${harnesses[@]}"; do
         if grep -q "$harness" "$manifest"; then
             fail "$manifest depends on the test harness $harness"
