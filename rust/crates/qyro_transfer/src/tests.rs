@@ -837,3 +837,124 @@ fn an_ack_for_something_never_sent_is_refused() {
     );
     assert_eq!(sender.phase(), Phase::Poisoned);
 }
+
+// ------------------------------------------------------- QYR-0070: the verdicts
+//
+// SizeMismatch and Incomplete appeared in no test, and deleting either control
+// left the suite green. That was tolerable while a truncated file simply fell to
+// DigestMismatch. It stops being tolerable in 5B.1, where resume has to tell
+// "carry on from where you stopped" apart from "start again".
+
+#[test]
+fn a_truncated_item_is_refused_before_any_verdict_is_reached() {
+    use qyro_protocol::MessageType;
+    let ends = established();
+    let source = small_transfer();
+    let manifest = manifest_for(&source);
+    let mut receiver = Receiver::new(ends.receiver_sealer, ends.receiver_opener);
+    let mut peer = ends.sender_sealer;
+    let mut sink = CountingSink::default();
+
+    let offer = crate::wire::Offer {
+        item_count: 2,
+        total_bytes: 0,
+        chunk_size: CHUNK_SIZE as u32,
+        window_chunks: crate::session::WINDOW_CHUNKS,
+    };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::TransferOffer, offer.encode()),
+            &mut sink,
+        )
+        .expect("offer");
+    let encoded = qyro_manifest::codec::encode(&manifest).expect("manifest");
+    receiver
+        .deliver(&hostile(&mut peer, MessageType::Manifest, encoded), &mut sink)
+        .expect("manifest");
+
+    // One chunk of the first item, then Complete. The item is short.
+    let chunk = crate::wire::ChunkRef {
+        item_id: 1,
+        chunk_index: 0,
+        content: &[7u8; 32],
+    };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::DataChunk, chunk.encode()),
+            &mut sink,
+        )
+        .expect("chunk");
+
+    let complete = crate::wire::Complete { total_bytes: 32 };
+    let outcome = receiver.deliver(
+        &hostile(&mut peer, MessageType::Complete, complete.encode()),
+        &mut sink,
+    );
+    assert_eq!(
+        outcome.unwrap_err(),
+        TransferError::CompleteBeforeAllItems {
+            delivered: 0,
+            expected: 2,
+        },
+        "a truncated item reached the verdict stage instead of being refused"
+    );
+}
+
+#[test]
+fn an_over_delivered_item_is_a_size_mismatch() {
+    use qyro_protocol::MessageType;
+    // The one route that reaches ItemVerdict::SizeMismatch: a peer that sends
+    // *more* content than the manifest declared. Under-delivery never gets here
+    // — the Complete gate above refuses it first — which is why this test looks
+    // like the opposite of what the variant's name suggests.
+    let ends = established();
+    let generated = Generated {
+        sizes: vec![(1, 10)],
+    };
+    let manifest = manifest_for(&generated);
+    let mut receiver = Receiver::new(ends.receiver_sealer, ends.receiver_opener);
+    let mut peer = ends.sender_sealer;
+    let mut sink = CountingSink::default();
+
+    let offer = crate::wire::Offer {
+        item_count: 1,
+        total_bytes: 10,
+        chunk_size: CHUNK_SIZE as u32,
+        window_chunks: crate::session::WINDOW_CHUNKS,
+    };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::TransferOffer, offer.encode()),
+            &mut sink,
+        )
+        .expect("offer");
+    let encoded = qyro_manifest::codec::encode(&manifest).expect("manifest");
+    receiver
+        .deliver(&hostile(&mut peer, MessageType::Manifest, encoded), &mut sink)
+        .expect("manifest");
+
+    let chunk = crate::wire::ChunkRef {
+        item_id: 1,
+        chunk_index: 0,
+        content: &[3u8; 40],
+    };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::DataChunk, chunk.encode()),
+            &mut sink,
+        )
+        .expect("chunk");
+    let complete = crate::wire::Complete { total_bytes: 40 };
+    receiver
+        .deliver(
+            &hostile(&mut peer, MessageType::Complete, complete.encode()),
+            &mut sink,
+        )
+        .expect("complete");
+
+    assert_eq!(
+        receiver.verdicts(),
+        vec![(1, ItemVerdict::SizeMismatch)],
+        "forty bytes for a ten-byte item was not reported as a size mismatch"
+    );
+}
