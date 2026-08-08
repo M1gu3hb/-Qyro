@@ -1374,3 +1374,66 @@
   vectores generados dentro de `qyro_crypto`
 - Estado: abierto
 - Fecha: 2026-08-08
+
+## QYR-0070 — Dos veredictos de integridad sin una sola prueba que los produjera
+
+- Plataforma: transferencia
+- Severidad: P2
+- Esperado: cada variante de `ItemVerdict` la produce alguna entrada, y borrar el
+  control que la produce rompe alguna prueba
+- Actual: `SizeMismatch` e `Incomplete` no aparecían en ninguna prueba y borrar
+  sus dos controles dejaba la suite entera en verde. No era un agujero —un
+  archivo truncado caía a `DigestMismatch` y se rechazaba igual— pero 5B.1
+  construye reanudación encima de la distinción entre «incompleto» y «corrupto»
+- **Lo que las pruebas descubrieron al escribirse:** la infra-entrega **nunca
+  llega a la fase de veredicto**. El control de `Complete` la rechaza antes con
+  `CompleteBeforeAllItems`, así que el único camino a `SizeMismatch` es un peer
+  que envía **más** de lo que el manifest declara. La prueba se llama
+  `an_over_delivered_item_is_a_size_mismatch` y parece lo contrario de lo que su
+  nombre sugiere, por eso
+- **`Incomplete` es inalcanzable, y se puede demostrar.** Con `k` chunks
+  contiguos el receptor ha tomado como mucho `k · CHUNK_SIZE` bytes, y
+  `k < ceil(size / CHUNK_SIZE)` acota eso por debajo de `size`. Las dos
+  condiciones que exige —`received >= size` y `next_expected < expected_chunks`—
+  no pueden darse a la vez
+- Resolución: `SizeMismatch` tiene prueba y su mutación la rompe. `Incomplete`
+  queda **exento por nombre y con el argumento escrito** en
+  `VERDICTS_WITH_NO_CONSTRUCTION_SITE`, no borrado: el byte `3` de
+  `IntegrityResult` está congelado en ADR-0026 §1 y quitar un valor de un formato
+  congelado es un cambio de formato que este sprint no tiene mandato para hacer
+- Efecto colateral, y el motivo de que se encontrara: la guarda de sitios de
+  construcción se llevó al análisis compartido y destapó **dos variantes más**
+  que 5A había declarado y nadie construía, `TransferError::UnsupportedMessage` y
+  `TransferError::WindowExhausted`. Las dos **borradas**; la segunda además tenía
+  un comentario que afirmaba que se reportaba, y era falso
+- Estado: cerrado
+- Fecha: 2026-08-08
+
+## QYR-0071 — El análisis de guardas leía la mitad de un archivo y nadie lo notaba
+
+- Plataforma: guardas
+- Severidad: **P1**
+- Esperado: `production_source` devuelve el archivo entero menos lo que está
+  detrás de un `#[cfg(test)]`. Todas las guardas estructurales del proyecto
+  —anti-pánico, completitud, sitios de construcción— se construyen encima
+- Actual: `item_end` sabía terminar un item en `;` o en el `}` de un cuerpo, y
+  **no en la coma de un campo**. `#[cfg(test)] peak_content_held: usize,` en
+  `qyro_transfer` no tiene ni cuerpo ni punto y coma, así que el escaneo pasó de
+  largo, desincronizó el conteo de llaves y **se comió el resto del archivo**
+- Medido: **13 401 bytes analizados de 30 861**. Menos de la mitad. Desde el
+  sprint 5A, `no_production_path_can_panic` sobre `session.rs` cubría el 43 % del
+  archivo mientras decía cubrirlo entero
+- Cómo se encontró: la guarda de sitios de construcción, recién llevada al
+  análisis compartido, dijo que `WindowGrantTooLarge` no se construía en ninguna
+  parte — y sí se construye, en `session.rs:441`. La contradicción entre lo que
+  la guarda decía y lo que el `grep` mostraba es lo que destapó el truncamiento
+- Corrección, en dos partes porque una sola no basta: `item_end` termina también
+  en una coma a profundidad cero; y `assert_analysis_reached_the_end` compara la
+  última línea no vacía del archivo con lo que sobrevivió al análisis. Lo segundo
+  es lo que importa: atrapa **cualquier** forma de item futura que el stripper no
+  conozca, no sólo ésta
+- Es la cuarta vez que este proyecto encuentra una guarda que dejó de guardar,
+  tras QYR-0025, QYR-0036 y QYR-0052/0053/0054. La diferencia es que esta vez el
+  fallo no estaba en la guarda sino **en el análisis que comparten todas**
+- Estado: cerrado
+- Fecha: 2026-08-08

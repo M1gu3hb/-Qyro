@@ -72,6 +72,16 @@ pub(crate) fn production_source(relative_path: &str) -> String {
     strip_test_only_items(&source)
 }
 
+/// Reads one production file with only comments removed.
+///
+/// The reference the overrun check compares against: comments go because the
+/// stripped source has none either, and nothing else is touched.
+fn production_source_raw(relative_path: &str) -> String {
+    let path = format!("{}/{relative_path}", source_root());
+    let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path}: {error}"));
+    strip_comments(&source)
+}
+
 /// Removes line comments, so prose about `panic!` is not mistaken for one.
 fn strip_comments(source: &str) -> String {
     source
@@ -197,6 +207,16 @@ fn item_end(source: &str) -> Option<usize> {
                 }
             }
             b';' if round == 0 && square == 0 && curly == 0 => return Some(index + 1),
+            // A struct field or enum variant ends at a comma and has neither a
+            // body nor a semicolon. Without this the scan runs past the closing
+            // brace of the enclosing type — `}` cannot return, because no body
+            // was opened at depth zero — and swallows whatever follows.
+            //
+            // `#[cfg(test)] peak_content_held: usize,` in `qyro_transfer` did
+            // exactly that: the analysis saw 13 401 bytes of a 30 861-byte file
+            // and the panic guard had been reading less than half of it since
+            // sprint 5A (QYR-0071).
+            b',' if round == 0 && square == 0 && curly == 0 => return Some(index + 1),
             _ => {}
         }
         index += 1;
@@ -314,9 +334,113 @@ fn gated_files() -> BTreeSet<String> {
 }
 
 /// Fails if any listed production file can end the process.
+/// Fails if a variant of `enum_name` is declared and never constructed.
+///
+/// Lifted out of `qyro_crypto` in sprint 5B.1. It was written there in 4C.2,
+/// after `HandshakeError` declared four variants nothing produced, and then it
+/// stayed there: `qyro_transfer` arrived in 5A with unconstructed variants and
+/// no guard to say so (QYR-0070). A check that lives in one crate protects one
+/// crate, and this is the file every crate already includes.
+///
+/// `exempt` is the escape hatch, and it is deliberately noisy: a variant listed
+/// there has to be argued at the call site. Being unconstructed and unlisted is
+/// the failure.
+fn assert_every_variant_has_a_construction_site(
+    production: &[&str],
+    declared_in: &str,
+    enum_name: &str,
+    minimum_variants: usize,
+    exempt: &[&str],
+) {
+    let declaration = production_source(declared_in);
+    let body = declaration
+        .split(&format!("pub enum {enum_name} {{"))
+        .nth(1)
+        .unwrap_or_else(|| panic!("{enum_name} is declared in {declared_in}"));
+
+    let variants: Vec<String> = body
+        .lines()
+        .take_while(|line| !line.starts_with('}'))
+        .filter(|line| line.starts_with("    ") && !line.starts_with("     "))
+        .map(str::trim)
+        .filter(|line| line.chars().next().is_some_and(char::is_uppercase))
+        .map(|line| {
+            line.trim_end_matches(',')
+                .split([' ', '{', '(', '='])
+                .next()
+                .unwrap_or(line)
+                .to_owned()
+        })
+        .collect();
+
+    // The parse has to have worked. Without this, an enum that stopped being
+    // found would report zero variants and pass — the failure mode this whole
+    // family of guards exists to avoid.
+    assert!(
+        variants.len() >= minimum_variants,
+        "the parse of {enum_name} found {} variants against a floor of \
+         {minimum_variants}, which means it stopped reading the enum rather \
+         than that the enum shrank",
+        variants.len()
+    );
+
+    let elsewhere: String = production
+        .iter()
+        .filter(|file| **file != declared_in)
+        .map(|file| production_source(file))
+        .collect();
+
+    for variant in &variants {
+        if exempt.contains(&variant.as_str()) {
+            continue;
+        }
+        assert!(
+            elsewhere.contains(&format!("{enum_name}::{variant}")),
+            "{enum_name}::{variant} is declared and nothing constructs it. A \
+             variant a peer can never see is a check that is not there, and a \
+             caller matching on it believes otherwise. Either produce it, \
+             delete it, or list it as exempt with the argument written down."
+        );
+    }
+
+    // And the exemption list must not name something that no longer exists.
+    for name in exempt {
+        assert!(
+            variants.iter().any(|variant| variant == name),
+            "{enum_name} has no variant {name}, but it is listed as exempt"
+        );
+    }
+}
+
+/// Fails if stripping ran off the end of the file.
+///
+/// The gate-stripper walks item by item, and an item shape it does not know
+/// makes it consume everything after. The result still looks like source, still
+/// passes every `contains` check, and quietly covers half of what it claims to.
+/// This compares the last non-empty line of the raw file with what survived: if
+/// the scan overran, that line is gone.
+///
+/// Written because it happened (QYR-0071) and nothing noticed for a sprint.
+fn assert_analysis_reached_the_end(file: &str, analysed: &str) {
+    let raw = production_source_raw(file);
+    let Some(last) = raw.lines().rev().find(|line| !line.trim().is_empty()) else {
+        return;
+    };
+    assert!(
+        analysed.contains(last.trim()),
+        "the gate analysis of src/{file} does not reach its last line. It read \
+         {} of {} bytes, so the stripper met an item shape it does not know and \
+         consumed the rest. Every guard built on this was covering less than it \
+         claimed.",
+        analysed.len(),
+        raw.len()
+    );
+}
+
 fn assert_no_production_path_can_panic(production: &[&str]) {
     for file in production {
         let source = production_source(file);
+        assert_analysis_reached_the_end(file, &source);
         for forbidden in PROCESS_ENDING {
             assert!(
                 !source.contains(forbidden),

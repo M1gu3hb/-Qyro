@@ -869,7 +869,10 @@ fn a_truncated_item_is_refused_before_any_verdict_is_reached() {
         .expect("offer");
     let encoded = qyro_manifest::codec::encode(&manifest).expect("manifest");
     receiver
-        .deliver(&hostile(&mut peer, MessageType::Manifest, encoded), &mut sink)
+        .deliver(
+            &hostile(&mut peer, MessageType::Manifest, encoded),
+            &mut sink,
+        )
         .expect("manifest");
 
     // One chunk of the first item, then Complete. The item is short.
@@ -930,7 +933,10 @@ fn an_over_delivered_item_is_a_size_mismatch() {
         .expect("offer");
     let encoded = qyro_manifest::codec::encode(&manifest).expect("manifest");
     receiver
-        .deliver(&hostile(&mut peer, MessageType::Manifest, encoded), &mut sink)
+        .deliver(
+            &hostile(&mut peer, MessageType::Manifest, encoded),
+            &mut sink,
+        )
         .expect("manifest");
 
     let chunk = crate::wire::ChunkRef {

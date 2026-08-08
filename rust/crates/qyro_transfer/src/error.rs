@@ -31,8 +31,6 @@ pub enum TransferError {
     /// The state machine's whole point: ADR-0026 §4 says an unexpected message
     /// is refused by type rather than tolerated.
     UnexpectedMessage { got: MessageType },
-    /// A message type that 5A defines no body for.
-    UnsupportedMessage { got: MessageType },
     /// The receiver granted a larger window than the sender offered.
     ///
     /// Refused rather than clamped. Clamping silently is how two ends end up
@@ -61,11 +59,6 @@ pub enum TransferError {
     },
     /// `Complete` arrived before every item had been delivered.
     CompleteBeforeAllItems { delivered: usize, expected: usize },
-    /// The sender tried to exceed the agreed window.
-    ///
-    /// Reported rather than silently blocking, so a caller that ignores the
-    /// window learns it did.
-    WindowExhausted { in_flight: u32, window: u32 },
     /// The session already ended, or refused something earlier.
     ///
     /// Poisoned like `FrameSealer`: after an error nothing more is accepted.
@@ -91,9 +84,6 @@ impl fmt::Display for TransferError {
             }
             Self::UnexpectedMessage { got } => {
                 write!(f, "{got:?} is not expected in this state")
-            }
-            Self::UnsupportedMessage { got } => {
-                write!(f, "{got:?} has no body defined in this milestone")
             }
             Self::WindowGrantTooLarge { offered, granted } => write!(
                 f,
@@ -129,12 +119,6 @@ impl fmt::Display for TransferError {
                 f,
                 "Complete arrived with {delivered} of {expected} items delivered"
             ),
-            Self::WindowExhausted { in_flight, window } => {
-                write!(
-                    f,
-                    "{in_flight} chunks in flight against a window of {window}"
-                )
-            }
             Self::SessionPoisoned => f.write_str("the session refused something earlier"),
             Self::Cancelled => f.write_str("the transfer was cancelled"),
             Self::NotAuthenticated => f.write_str("the frame did not authenticate"),
