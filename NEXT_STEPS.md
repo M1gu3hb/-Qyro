@@ -23,18 +23,23 @@
      y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
      lo que se está afirmando.
 
-## P0 — siguiente sprint (5B: filesystem)
+## P0 — siguiente sprint (5B.2: los selectores de archivo)
 
-- **Que el motor deje de mover búferes y empiece a mover archivos.** Selección de
-  archivos en Android y en Windows; el manifest **construido desde disco**
-  leyendo por partes —el digest de un archivo grande no puede exigir tenerlo
-  entero en RAM, igual que el motor no lo exige—; `.qyro-part`, verificación del
-  digest **al cerrar y antes del rename**, y rename atómico; colisiones contra lo
-  que ya existe en el destino; y los metadatos que hacen posible reanudar
-  **después de cerrar el proceso**, que es lo que 5A deliberadamente no hace.
-- `ContentSource` y `ContentSink` son la costura por la que entra todo eso y
-  **no deberían cambiar**. Si cambian para acomodar el disco, estaban mal y eso
-  es un hallazgo antes que un cambio.
+- **Storage Access Framework en Android y el picker de Windows**, cruzando el FFI
+  hasta el motor. Es integración de plataforma y necesita su propia ADR: SAF
+  entrega **URIs con permisos delegados, no rutas**, y eso cambia lo que
+  `FileSource` recibe.
+- Las preguntas a resolver **antes** de escribir código: qué cruza el FFI —¿un
+  descriptor de archivo, una ruta, un identificador opaco?—, cómo se mantiene
+  vivo el permiso durante una transferencia larga, y qué pasa si el usuario
+  revoca el acceso a mitad.
+
+### Sprint 5B.1 — cerrado
+
+El disco de verdad, sin selector. Un archivo de cinco megabytes cruza dos
+directorios y llega byte a byte idéntico; el manifest se construye por streaming;
+un digest que no coincide no produce nada; un symlink en el destino no redirige
+una escritura. ADR-0027 congelada antes del código. Queda abierto QYR-0072.
 
 ### Aparcado: 4D.2 — Android Keystore e iOS Keychain
 

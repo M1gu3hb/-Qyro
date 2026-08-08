@@ -3,14 +3,15 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-08T02:10:00Z
-- Branch: claude/qyro-transfer-engine-5a
-- Verified commit: 94fe996478ab5a74c88be85463716f68fc4b760f
-- Milestone: **el motor de transferencia mueve una transferencia completa entre
-  dos valores del mismo proceso**, con sellado real. **No hay red, no hay disco
-  y los botones Enviar y Recibir siguen deshabilitados.** La persistencia de
-  identidad sigue **IMPLEMENTED solo en Windows y NOT_IMPLEMENTED en Android y
-  en iOS**; nada se ha probado en hardware físico
+- Updated UTC: 2026-08-08T03:40:00Z
+- Branch: claude/qyro-filesystem-5b1
+- Verified commit: a3fb226e39b4bd63a9d76637f5bda66c844a0497
+- Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
+  byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
+  de archivos, no hay red, y los botones Enviar y Recibir siguen
+  deshabilitados.** La persistencia de identidad sigue **IMPLEMENTED solo en
+  Windows y NOT_IMPLEMENTED en Android y en iOS**; nada se ha probado en hardware
+  físico
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
@@ -314,8 +315,9 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **369 tests**, 0 failed, 2 ignored. Eran 352 al
-  empezar el sprint 5A; las diecisiete nuevas son las del motor de transferencia,
+- `cargo test --workspace`: PASS, **388 tests**, 0 failed, 2 ignored. Eran 369 al
+  empezar el sprint 5B.1: quince del filesystem y cuatro de las guardas y los
+  veredictos. Eran 352 al empezar el sprint 5A; las diecisiete nuevas son las del motor de transferencia,
   y cuatro de ellas existen porque el barrido de mutación encontró sin cubrir
   cuatro negativas de ADR-0026 §4. Eran 350 al empezar 4D.2a, y 323 al empezar
   4D.1: la guarda de caminos públicos, cuatro sobre el accesor
@@ -323,10 +325,14 @@ Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aqu�
   crate de plataforma. **Las nueve pruebas de `qyro_win_dpapi` no están en esa
   cuenta**: el crate entero es `cfg(windows)` y en este host no compila ninguna.
   Corren en CI, y ese es su único sitio
-- `cargo test --workspace --all-features`: PASS, **369 tests**. Ningún crate
+- `cargo test --workspace --all-features`: PASS, **388 tests**. Ningún crate
   declara features, así que los dos conjuntos no pueden divergir
 - `cargo test --doc --workspace`: PASS
-- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **60 crates**.
+- `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **61 crates**.
+  La entrada nueva del sprint 5B.1 es **`qyro_fs`, de primera parte**: el diff de
+  `Cargo.lock` tiene exactamente una línea `name =`. `O_NOFOLLOW` sale de
+  `std::os::unix` y `FILE_FLAG_OPEN_REPARSE_POINT` de `std::os::windows`, así que
+  la política de symlinks no costó ninguna dependencia. Antes eran 60:
   La entrada nueva del sprint 5A es **`qyro_transfer`, de primera parte**: el
   diff de `Cargo.lock` tiene exactamente una línea `name =`. `sha2` pasó a ser
   dependencia directa suya y ya estaba en el grafo por `qyro_crypto`, así que es
@@ -808,9 +814,9 @@ Lo que **no** existe, y no debe leerse como progreso:
 
 - **No hay red y no hay sockets.** El «transporte» es un `Vec<u8>` que una prueba
   pasa de un lado al otro.
-- **No hay filesystem.** La fuente es un `ContentSource` y el destino un
-  `ContentSink`; en 5A los dos son memoria. Nada abre, escribe ni renombra un
-  archivo. Eso es 5B.
+- **No había filesystem en 5A**: la fuente y el destino eran memoria. El sprint
+  5B.1 puso disco detrás de esas dos costuras **sin cambiarlas**; ver la sección
+  de 5B.1 más arriba.
 - **Nada del producto llama al motor.** `qyro_ffi` no depende de `qyro_crypto` ni
   de `qyro_transfer`, y una prueba de cierre transitivo lo mantiene así. Los
   botones Enviar y Recibir siguen deshabilitados y el README sigue diciendo que
@@ -837,6 +843,71 @@ motor. Los dos **registrados y no arreglados**:
   Probablemente correcto —un constructor determinista público acaba usándose en
   producción— y no cuesta nada aquí. Costará cuando haga falta un vector
   interoperable de una transferencia completa.
+
+## Sprint 5B.1 — el disco de verdad, sin selector
+
+**`qyro_fs` lee y escribe archivos reales detrás de las dos costuras que ya
+existían.** `ContentSource` y `ContentSink` **no cambiaron**, que era la
+comprobación de que ADR-0026 las puso en el sitio correcto: una costura que hay
+que ensanchar para su segunda implementación era la costura equivocada.
+
+Lo que existe, con prueba por cada cosa:
+
+- Un archivo de **5 MiB + 777 bytes** y otro anidado viajan entre dos directorios
+  y llegan **byte a byte idénticos** — comparados byte a byte, no por veredicto —
+  y no queda ningún `.qyro-part` detrás.
+- El manifest se construye **desde el disco** por streaming: **65 536 bytes** de
+  lectura máxima sobre un archivo de 8 MiB, con contador instrumentado bajo
+  `cfg(test)`. Y el digest resultante se compara contra un cálculo independiente,
+  así que la cota no es pequeña porque no pasara nada.
+- Un digest que no coincide **no produce el archivo final ni deja el
+  `.qyro-part`**: nada verificable sobrevive a un desajuste.
+- Un **symlink real** en el destino no redirige una escritura fuera de la raíz, y
+  la prueba comprueba primero que el symlink existe: una prueba de symlinks que
+  no crea uno no prueba nada de symlinks.
+- Una ruta que se escapa de la raíz se rechaza **al materializar**, aunque el
+  manifest la hubiera aceptado, y una ruta legítima sigue resolviendo.
+- Una colisión en el destino se **rechaza**, y la prueba comprueba que el archivo
+  del receptor sigue intacto.
+- Una transferencia interrumpida **se reanuda desde sus metadatos**, con el sink
+  soltado en medio para simular el proceso muerto.
+- Metadatos de una versión futura se rechazan **nombrando la versión**, y las
+  otras tres negativas del orden de lectura por su propio camino.
+
+Lo que **no** existe, y no debe leerse como progreso:
+
+- **No hay selector de archivos.** La lista de archivos se la pasa el llamante;
+  SAF de Android y el picker de Windows cruzan el FFI y son 5B.2.
+- **No hay red y no hay sockets.** El transporte sigue siendo un `Vec<u8>`.
+- **Nada del producto llama a esto.** `qyro_ffi` no alcanza `qyro_crypto`,
+  `qyro_transfer` ni `qyro_fs`. Los botones siguen deshabilitados.
+- **Las garantías de `fsync` no se han comprobado cortando la corriente.** Lo que
+  CI ejerce es la caída del proceso, que es un fallo distinto con garantías
+  distintas, y ADR-0027 §4 separa los dos en vez de mezclarlos.
+- **La carrera de los componentes intermedios sigue abierta** (QYR-0072).
+  `O_NOFOLLOW` cierra por completo el último componente —comprobar y abrir son la
+  misma llamada— y no los de en medio.
+
+**Dos hallazgos, y el segundo es el que importa:**
+
+- **QYR-0070**: `SizeMismatch` e `Incomplete` no los producía ninguna prueba.
+  Escribirlas destapó que la **infra-entrega nunca llega a la fase de veredicto**
+  —el control de `Complete` la rechaza antes—, así que el único camino a
+  `SizeMismatch` es la **sobre-entrega**. E `Incomplete` es **inalcanzable y se
+  puede demostrar**; queda exento por nombre con el argumento escrito, no
+  borrado, porque su byte está congelado en ADR-0026 §1.
+- **QYR-0071, P1**: el análisis compartido de guardas **leía 13 401 bytes de un
+  archivo de 30 861**. `item_end` no sabía terminar un item en la coma de un
+  campo, y `#[cfg(test)] peak_content_held: usize,` lo hizo comerse el resto del
+  archivo. Desde el sprint 5A, `no_production_path_can_panic` sobre `session.rs`
+  cubría el 43 % mientras decía cubrirlo entero. Corregido dos veces: la coma, y
+  una comprobación que compara la última línea del archivo con lo que sobrevivió
+  al análisis — que es la que atrapa **cualquier** forma futura, no sólo ésta.
+
+Llevar la guarda de sitios de construcción al análisis compartido también destapó
+dos variantes de 5A que nadie construía, `TransferError::UnsupportedMessage` y
+`WindowExhausted`; las dos **borradas**, y la segunda tenía además un comentario
+que afirmaba que se reportaba, y era falso.
 
 ## Runs de 5A
 

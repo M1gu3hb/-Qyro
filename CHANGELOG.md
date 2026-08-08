@@ -4,6 +4,47 @@ Basado en Keep a Changelog y Semantic Versioning.
 
 ## [Unreleased]
 
+### Added (sprint 5B.1)
+
+**El motor lee y escribe archivos reales.** `ContentSource` y `ContentSink` no
+cambiaron. **No hay selector de archivos, no hay red, y los botones siguen
+deshabilitados.**
+
+- `qyro_fs`: `FileSource` lee por partes, `FileSink` escribe en un `.qyro-part` y
+  renombra sólo con el digest verificado. Quince pruebas sobre directorios,
+  archivos y symlinks **reales**.
+- Manifest construido desde el disco por streaming: 65 536 bytes de lectura
+  máxima sobre un archivo de 8 MiB, medido con contador.
+- Política de symlinks de ADR-0027 §1: cada componente comprobado con
+  `symlink_metadata` y nunca seguido para juzgarlo, `create_dir` en vez de
+  `create_dir_all`, y `O_NOFOLLOW` / `FILE_FLAG_OPEN_REPARSE_POINT` — los dos de
+  `std::os`, **sin dependencia nueva**.
+- Colisión en el destino **rechazada**, nunca sobrescrita.
+- Metadatos de reanudación versionados, con la versión futura rechazada por
+  nombre.
+- ADR-0027, congelada antes del código, con lo que `fsync` garantiza ante una
+  caída del proceso y ante un corte de energía dicho por separado.
+
+**Cero paquetes externos nuevos.** La única entrada nueva de `Cargo.lock` es
+`qyro_fs`. 60 a 61.
+
+### Fixed (sprint 5B.1)
+
+- **QYR-0071 (P1)**: el análisis compartido de guardas leía **13 401 bytes de un
+  archivo de 30 861**. `item_end` no terminaba un item en la coma de un campo, y
+  desde 5A la guarda anti-pánico cubría el 43 % de `session.rs` diciendo cubrirlo
+  entero. Corregido en la coma **y** con una comprobación de que el análisis
+  llega a la última línea del archivo.
+- QYR-0070: `SizeMismatch` ya tiene prueba; `Incomplete` es inalcanzable y queda
+  exento con el argumento escrito.
+- `TransferError::UnsupportedMessage` y `WindowExhausted`, declaradas en 5A y
+  construidas por nada: **borradas**.
+
+### Encontrado y no arreglado (sprint 5B.1)
+
+- **QYR-0072**: la carrera de los componentes intermedios de la ruta. Cerrarla
+  exige `openat` con descriptor de directorio, que no está en `std`.
+
 ### Added (sprint 5A)
 
 **Un motor de transferencia que mueve una transferencia completa entre dos

@@ -5,21 +5,32 @@ El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no dupli
 ## Reanudación
 
 1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-transfer-engine-5a`, que continúa
-   `claude/qyro-android-keystore-4d2a`.
+2. Confirmar la rama `claude/qyro-filesystem-5b1`, que continúa
+   `claude/qyro-transfer-engine-5a`.
 
-   **Existe un motor de transferencia y no mueve archivos.** `qyro_transfer`
-   lleva una transferencia completa —varios archivos, varios chunks, digest
-   verificado, ACK con ventana, pausa, reanudación, cancelación y
-   retransmisión— entre dos extremos del **mismo proceso** que sólo intercambian
-   `Vec<u8>` de frames sellados. No hay sockets, no hay disco, y `qyro_ffi` no
-   depende ni de `qyro_crypto` ni de `qyro_transfer`, así que la aplicación no
-   ejercita nada de esto. Los botones siguen deshabilitados.
+   **El motor mueve archivos de verdad, y no hay selector.** `qyro_fs` lee del
+   disco por partes, escribe en un `.qyro-part` y renombra sólo con el digest
+   verificado; un archivo de cinco megabytes cruza dos directorios y llega byte a
+   byte idéntico. Elegir los archivos en Android y en Windows cruza el FFI y es
+   5B.2.
 
-   Lo que 5B tiene que respetar: `ContentSource` y `ContentSink` son la costura
-   por la que entra el filesystem, y **no deberían cambiar**. Si cambian, estaban
-   mal, y eso es un hallazgo antes que un cambio — igual que `SecretWrapper`
-   aguantó la segunda plataforma sin ensancharse.
+   Lo que hay que leer antes de tocarlo es ADR-0027 §1, la política de symlinks:
+   `RelativePath` valida una cadena, y la travesía muerde al unir esa cadena a
+   una raíz y abrir. `O_NOFOLLOW` cierra el último componente por completo y no
+   los de en medio (QYR-0072).
+
+   El motor de debajo es de 5A: `qyro_transfer` lleva una transferencia completa
+   —varios archivos, varios chunks, digest verificado, ACK con ventana, pausa,
+   reanudación en sesión, cancelación y retransmisión go-back-N— entre dos
+   extremos del **mismo proceso** que sólo intercambian `Vec<u8>` de frames
+   sellados. **Sigue sin haber sockets**, y `qyro_ffi` no depende de
+   `qyro_crypto`, `qyro_transfer` ni `qyro_fs`, así que la aplicación no ejercita
+   nada de esto.
+
+   `ContentSource` y `ContentSink` aguantaron el disco **sin cambiar**, que es la
+   misma comprobación que `SecretWrapper` pasó con la segunda plataforma en
+   4D.2a. Si 5B.2 tiene que ensancharlas para los URIs de SAF, eso es un hallazgo
+   antes que un cambio.
 
    **El sprint 4D.2a está aparcado, no cancelado.** ADR-0025 sigue congelada y
    sigue siendo buena; lo que la paró es QYR-0064, que no es un defecto suyo.

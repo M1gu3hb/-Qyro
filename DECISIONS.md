@@ -100,3 +100,15 @@ emisor no mandó; el `.qyro-part` vive **junto al destino** porque `rename` no
 funciona entre volúmenes; y los metadatos de reanudación **no guardan el estado
 del hasher** —`sha2` no lo expone— sino que releen el prefijo, que cuesta E/S y
 no cuesta correcciones cuando esa biblioteca cambie por dentro.
+
+El sprint 5B.1 añade ADR-0027: leer y escribir archivos de verdad, sin selector y
+sin FFI. `ContentSource` y `ContentSink` **no cambiaron** —segunda vez que una
+costura de este proyecto aguanta su segunda implementación sin ensancharse, tras
+`SecretWrapper` en 4D.2a—, y el motor no se tocó.
+
+Su hallazgo más serio no es de filesystem: QYR-0071. El análisis compartido de
+guardas leía 13 401 bytes de un archivo de 30 861 porque `item_end` no sabía
+terminar un item en la coma de un campo. Desde 5A, la guarda anti-pánico cubría
+el 43 % de `session.rs` mientras decía cubrirlo entero. Cuarta guarda que dejó de
+guardar en este proyecto, y la primera cuyo fallo estaba en el análisis que todas
+comparten.
