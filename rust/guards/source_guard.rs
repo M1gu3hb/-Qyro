@@ -446,9 +446,10 @@ fn strip_test_only_items(source: &str) -> String {
 /// `#[cfg(not(any(test, fuzzing)))]` is production and must not match: every
 /// literal here begins `#[cfg(` followed by the condition itself, so a negated
 /// form never matches any of them.
-const GATE_MARKERS: [&str; 3] = [
+const GATE_MARKERS: [&str; 4] = [
     "#[cfg(test)]",
     "#[cfg(any(test, fuzzing))]",
+    "#[cfg(all(windows, test))]",
     "#[cfg(fuzzing)]",
 ];
 
@@ -578,11 +579,11 @@ fn gated_child_modules(source: &str) -> Vec<String> {
 
 /// The directory a module's children live in, for a file relative to `src`.
 ///
-/// `lib.rs` owns the crate root, `aead/mod.rs` owns `aead/`, and `identity.rs`
-/// owns `identity/`.
+/// `lib.rs` and `main.rs` own a crate root, `aead/mod.rs` owns `aead/`, and
+/// `identity.rs` owns `identity/`.
 fn module_directory(file: &str) -> String {
     let stem = file.strip_suffix(".rs").unwrap_or(file);
-    if stem == "lib" {
+    if matches!(stem, "lib" | "main") {
         return String::new();
     }
     stem.strip_suffix("/mod").unwrap_or(stem).to_owned()

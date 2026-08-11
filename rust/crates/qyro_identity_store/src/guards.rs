@@ -28,6 +28,24 @@ fn every_production_file_is_listed() {
     assert_the_production_list_matches_the_source(&PRODUCTION_FILES);
 }
 
+/// Variants constructed by a platform backend or its `PlatformWrapper`, not by
+/// this platform-neutral crate. Each remains externally reachable by design:
+/// absence, duplicate-create and I/O belong to the store implementation, while
+/// `Unwrap` carries a wrapper's native refusal code.
+const STORE_ERRORS_CONSTRUCTED_BY_PLATFORM_IMPLEMENTATIONS: [&str; 4] =
+    ["IdentityAbsent", "Unwrap", "AlreadyExists", "Io"];
+
+#[test]
+fn every_store_error_has_a_construction_site_or_a_platform_argument() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "error.rs",
+        "StoreError",
+        13,
+        &STORE_ERRORS_CONSTRUCTED_BY_PLATFORM_IMPLEMENTATIONS,
+    );
+}
+
 /// Crates allowed to go without `#![forbid(unsafe_code)]`, and why.
 ///
 /// Written before the Windows platform crate exists, deliberately. If this guard
@@ -64,6 +82,145 @@ fn declares_forbid_unsafe(source: &str) -> bool {
         .lines()
         .map(str::trim)
         .any(|line| line == "#![forbid(unsafe_code)]")
+}
+
+/// Workspace members that do not yet carry the shared minimum, and why.
+///
+/// The two absent network crates are named because they arrive from the
+/// coordinated `claude/qyro-net-6a` branch with their own guards. Their entries
+/// expire as soon as those members exist here: a merge must inspect their real
+/// guard set rather than inheriting an exemption written before the files did.
+const MINIMUM_GUARD_SET_EXCEPTIONS: [(&str, &str); 3] = [
+    (
+        "qyro_ffi",
+        "reserved to the claude/qyro-net-6a branch; its C ABI has dedicated contract tests",
+    ),
+    (
+        "qyro_net",
+        "absent here; arrives with guards from the claude/qyro-net-6a branch",
+    ),
+    (
+        "qyro_net_smoke",
+        "absent here; arrives with guards from the claude/qyro-net-6a branch",
+    ),
+];
+
+#[test]
+fn every_workspace_crate_has_the_minimum_structural_guards_or_an_exact_exception() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .and_then(std::path::Path::parent)
+        .expect("the workspace root is three levels above this crate");
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml"))
+        .expect("the workspace manifest is readable");
+    let members: Vec<&str> = manifest
+        .split("members = [")
+        .nth(1)
+        .expect("the workspace declares members")
+        .split(']')
+        .next()
+        .expect("the members list is closed")
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix('"'))
+        .filter_map(|line| line.split('"').next())
+        .collect();
+
+    let mut missing = Vec::new();
+    for member in &members {
+        let name = member.rsplit('/').next().unwrap_or(member);
+        let exception = MINIMUM_GUARD_SET_EXCEPTIONS
+            .iter()
+            .find(|(excepted, _)| *excepted == name);
+        let guard_path = root.join(member).join("src/guards.rs");
+        let guard = std::fs::read_to_string(&guard_path).unwrap_or_default();
+        let has_minimum = guard.contains("/../../guards/source_guard.rs")
+            && guard.contains("assert_no_production_path_can_panic(&PRODUCTION_FILES)")
+            && guard.contains("assert_the_production_list_matches_the_source(&PRODUCTION_FILES)");
+
+        if let Some((_, reason)) = exception {
+            assert!(
+                !reason.trim().is_empty(),
+                "{name} has an unargued guard exception"
+            );
+            if has_minimum {
+                panic!("{name} now has the minimum guard set; remove its stale exception");
+            }
+        } else if !has_minimum {
+            missing.push(name.to_owned());
+        }
+
+        if has_minimum {
+            let listed = guard
+                .split("const PRODUCTION_FILES")
+                .nth(1)
+                .and_then(|rest| rest.split("= [").nth(1))
+                .and_then(|rest| rest.split("];").next())
+                .unwrap_or_else(|| panic!("{name} has no parseable PRODUCTION_FILES list"));
+            let files: Vec<&str> = listed
+                .split('"')
+                .enumerate()
+                .filter_map(|(index, part)| (index % 2 == 1).then_some(part))
+                .collect();
+            assert!(!files.is_empty(), "{name} has an empty production list");
+
+            let mut error_like_enums = Vec::new();
+            for file in files {
+                let source = std::fs::read_to_string(root.join(member).join("src").join(file))
+                    .unwrap_or_else(|error| panic!("{member}/src/{file}: {error}"));
+                for rest in source.split("pub enum ").skip(1) {
+                    let enum_name: String = rest
+                        .chars()
+                        .take_while(|character| character.is_alphanumeric() || *character == '_')
+                        .collect();
+                    if enum_name.ends_with("Error") || enum_name.ends_with("Verdict") {
+                        error_like_enums.push(enum_name);
+                    }
+                }
+            }
+            error_like_enums.sort();
+            error_like_enums.dedup();
+            for enum_name in error_like_enums {
+                assert!(
+                    guard.contains("assert_every_variant_has_a_construction_site(")
+                        && guard.contains(&format!("\"{enum_name}\"")),
+                    "{name} declares {enum_name} but its structural guards do not check every variant for a construction site"
+                );
+            }
+        }
+    }
+
+    for (name, reason) in MINIMUM_GUARD_SET_EXCEPTIONS {
+        if !members
+            .iter()
+            .any(|member| member.rsplit('/').next() == Some(name))
+        {
+            assert!(
+                matches!(name, "qyro_net" | "qyro_net_smoke")
+                    && reason.contains("claude/qyro-net-6a"),
+                "{name} is absent from the workspace; only the two coordinated network crates may have a pre-merge exception"
+            );
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "workspace crates missing the shared minimum (production list, no-panic analysis, end-of-analysis check and anti-tautology guard): {missing:?}"
+    );
+
+    let crypto_guards = std::fs::read_to_string(root.join("rust/crates/qyro_crypto/src/guards.rs"))
+        .expect("qyro_crypto guards are readable");
+    assert!(
+        crypto_guards.contains("every_public_path_returning_key_material_is_listed"),
+        "qyro_crypto lost the public key-material egress guard"
+    );
+    let own_guards =
+        std::fs::read_to_string(root.join("rust/crates/qyro_identity_store/src/guards.rs"))
+            .expect("workspace policy guards are readable");
+    assert!(
+        own_guards.contains("only_the_listed_crates_may_relax_forbid_unsafe"),
+        "the workspace lost the exact unsafe-relaxation guard"
+    );
 }
 
 #[test]

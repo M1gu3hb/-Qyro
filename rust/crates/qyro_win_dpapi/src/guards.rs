@@ -9,6 +9,23 @@
     reason = "the analysis reads files and must fail loudly when it cannot"
 )]
 
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../guards/source_guard.rs"
+));
+
+const PRODUCTION_FILES: [&str; 3] = ["lib.rs", "ffi.rs", "store.rs"];
+
+#[test]
+fn no_production_path_can_panic() {
+    assert_no_production_path_can_panic(&PRODUCTION_FILES);
+}
+
+#[test]
+fn every_production_file_is_listed() {
+    assert_the_production_list_matches_the_source(&PRODUCTION_FILES);
+}
+
 /// Every function in this crate permitted to contain an `unsafe` block.
 ///
 /// **By containing function, not by count.** A count lets one block be swapped
@@ -34,7 +51,7 @@ const FUNCTIONS_ALLOWED_UNSAFE: [&str; 3] = [
 ];
 
 /// Reads this crate's production sources.
-fn production_source() -> Vec<(String, String)> {
+fn all_production_source() -> Vec<(String, String)> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut out = Vec::new();
     for name in ["lib.rs", "ffi.rs", "store.rs"] {
@@ -56,7 +73,7 @@ fn production_source() -> Vec<(String, String)> {
 /// about a thing it never checked.
 fn functions_containing_unsafe_blocks() -> Vec<String> {
     let mut found = Vec::new();
-    for (file, source) in production_source() {
+    for (file, source) in all_production_source() {
         for (offset, _) in source.match_indices("unsafe {") {
             let before = &source[..offset];
             let name = before

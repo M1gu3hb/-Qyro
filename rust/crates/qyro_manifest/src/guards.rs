@@ -42,3 +42,25 @@ fn no_production_path_can_panic() {
 fn every_production_file_is_listed() {
     assert_the_production_list_matches_the_source(&PRODUCTION_FILES);
 }
+
+#[test]
+fn every_path_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "error.rs",
+        "PathError",
+        18,
+        &[],
+    );
+}
+
+#[test]
+fn every_manifest_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "error.rs",
+        "ManifestError",
+        21,
+        &[],
+    );
+}

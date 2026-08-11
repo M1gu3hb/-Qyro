@@ -19,6 +19,9 @@
 
 use std::process::ExitCode;
 
+#[cfg(test)]
+mod guards;
+
 /// Stable exit codes, so a runner reads a process status rather than a string.
 ///
 /// Most are only read on Windows, where a backend exists. Every value stays an

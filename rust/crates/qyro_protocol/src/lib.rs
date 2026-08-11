@@ -62,7 +62,7 @@ mod version;
 
 pub use decoder::{DecodedFrame, FrameDecoder, UnsupportedFrame};
 pub use envelope::EncryptedEnvelope;
-pub use error::{FrameError, IdentifierField};
+pub use error::FrameError;
 pub use frame::Frame;
 pub use header::FrameHeader;
 pub use limits::{
