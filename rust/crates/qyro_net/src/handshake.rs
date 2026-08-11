@@ -87,6 +87,16 @@ impl Session {
         &self.stream
     }
 
+    /// The underlying connection, mutably.
+    ///
+    /// For the settings a caller owns rather than the session does — the idle
+    /// deadline, principally. It cannot be used to write around the sealer:
+    /// `FrameStream::write_frame` takes bytes, and the only thing that produces
+    /// bytes worth writing here is [`Self::seal`].
+    pub const fn stream_mut(&mut self) -> &mut FrameStream {
+        &mut self.stream
+    }
+
     /// Seals a frame and returns the bytes, without writing them.
     ///
     /// Split from [`Self::send`] because the two halves belong to different
