@@ -30,14 +30,15 @@ pub struct PlannedFile {
     pub relative: String,
 }
 
-/// Largest single read the builder performed, for the memory test.
-///
-/// A counter and not a clock: a wall clock on a shared runner measures the
-/// runner. Sits beside the builder rather than inside the manifest so nothing
-/// in the product carries it.
 #[cfg(test)]
-pub(crate) static PEAK_BUILDER_READ: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+std::thread_local! {
+    /// Largest single read the builder performed, for the memory test.
+    ///
+    /// Thread-local so parallel tests hashing unrelated files cannot inflate
+    /// one another's measurement.
+    pub(crate) static PEAK_BUILDER_READ: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 
 /// Builds a manifest by streaming each file's digest.
 ///
@@ -58,11 +59,6 @@ pub fn manifest_from_disk(
     for (index, file) in files.iter().enumerate() {
         let size = file_size(&file.source)?;
         let digest = digest_of(&file.source)?;
-        #[cfg(test)]
-        PEAK_BUILDER_READ.fetch_max(
-            crate::io::HASH_BUFFER_LEN,
-            std::sync::atomic::Ordering::Relaxed,
-        );
 
         let path = RelativePath::parse(&file.relative).map_err(|_| FsError::EscapesRoot {
             resolved: file.relative.clone(),

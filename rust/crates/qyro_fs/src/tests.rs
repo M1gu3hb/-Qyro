@@ -156,30 +156,105 @@ fn a_multi_megabyte_file_arrives_byte_identical() {
 fn building_a_manifest_from_disk_does_not_load_the_file() {
     use crate::manifest_builder::PEAK_BUILDER_READ;
     let from = Scratch::new("hashmem");
-    let size = 8 * 1024 * 1024;
-    write_pattern(&from.path("big.bin"), size);
+    let small_size = 1024u64;
+    let large_size = 2 * HASH_BUFFER_LEN as u64 + 17;
+    write_pattern(&from.path("small.bin"), small_size);
+    write_pattern(&from.path("large.bin"), large_size);
 
-    PEAK_BUILDER_READ.store(0, Ordering::Relaxed);
-    let files = vec![plan(&from.path("big.bin"), "big.bin")];
-    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+    let measure = |source: &Path, relative: &str| {
+        PEAK_BUILDER_READ.with(|peak| peak.set(0));
+        let files = vec![plan(source, relative)];
+        let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+        (PEAK_BUILDER_READ.with(std::cell::Cell::get), manifest)
+    };
+    let (small_peak, small_manifest) = measure(&from.path("small.bin"), "small.bin");
+    let (large_peak, large_manifest) = measure(&from.path("large.bin"), "large.bin");
 
-    let peak = PEAK_BUILDER_READ.load(Ordering::Relaxed);
     assert_eq!(
-        peak, HASH_BUFFER_LEN,
-        "the builder read {peak} bytes at once against a buffer of {HASH_BUFFER_LEN}"
+        small_peak, small_size as usize,
+        "the small file recorded a read that did not happen"
+    );
+    assert_eq!(
+        large_peak, HASH_BUFFER_LEN,
+        "the large file did not use the bounded hash buffer"
     );
     assert!(
-        (peak as u64) * 64 < size,
-        "the read bound is not meaningfully smaller than the file"
+        small_peak < large_peak,
+        "the counter is a constant rather than the largest completed read"
     );
 
-    // And it still produced the right answer, so the bound is not small because
-    // nothing happened.
-    assert_eq!(manifest.items().len(), 1);
-    assert_eq!(manifest.items()[0].size(), size);
+    // Both builds still produced the right answer, so zero reads or an early
+    // return cannot satisfy the measurement.
+    assert_eq!(small_manifest.items()[0].size(), small_size);
+    assert_eq!(large_manifest.items()[0].size(), large_size);
     assert_eq!(
-        manifest.items()[0].hash().digest(),
-        digest_of(&from.path("big.bin")).unwrap().as_slice()
+        large_manifest.items()[0].hash().digest(),
+        digest_of(&from.path("large.bin")).unwrap().as_slice()
+    );
+}
+
+#[test]
+fn file_source_peak_is_the_largest_completed_read_not_the_request() {
+    let from = Scratch::new("sourcemem");
+    let small_size = 1024usize;
+    let large_size = 2 * HASH_BUFFER_LEN;
+    write_pattern(&from.path("small.bin"), small_size as u64);
+    write_pattern(&from.path("large.bin"), large_size as u64);
+
+    let measure = |item_id: u32, path: PathBuf| {
+        let mut paths = std::collections::BTreeMap::new();
+        paths.insert(item_id, path);
+        let source = FileSource::new(paths);
+        let mut output = vec![0u8; HASH_BUFFER_LEN];
+        let filled = source.read_at(item_id, 0, &mut output);
+        (filled, source.peak_read.get())
+    };
+    let (small_read, small_peak) = measure(1, from.path("small.bin"));
+    let (large_read, large_peak) = measure(2, from.path("large.bin"));
+
+    assert_eq!(small_read, small_size);
+    assert_eq!(small_peak, small_read);
+    assert_eq!(large_read, HASH_BUFFER_LEN);
+    assert_eq!(large_peak, large_read);
+    assert!(
+        small_peak < large_peak,
+        "the source counter recorded the request or a constant, not the read"
+    );
+}
+
+#[test]
+fn file_sink_peak_is_the_largest_successful_write_not_a_constant() {
+    let measure = |tag: &str, size: usize| {
+        let from = Scratch::new(&format!("sinkmemfrom-{tag}"));
+        let to = Scratch::new(&format!("sinkmemto-{tag}"));
+        write_pattern(&from.path("a.bin"), size as u64);
+        let files = vec![plan(&from.path("a.bin"), "a.bin")];
+        let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+        let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+        let refused = vec![0u8; HASH_BUFFER_LEN];
+        assert_eq!(
+            sink.put(99, 0, &refused).unwrap_err(),
+            FsError::DigestMismatch { item_id: 99 }
+        );
+        assert_eq!(
+            sink.peak_write, 0,
+            "a refused write was counted as accepted"
+        );
+
+        let bytes = fs::read(from.path("a.bin")).unwrap();
+        sink.put(1, 0, &bytes).expect("write");
+        sink.finish_item(1).expect("finish");
+        sink.peak_write
+    };
+
+    let small_peak = measure("small", 1024);
+    let large_peak = measure("large", HASH_BUFFER_LEN);
+    assert_eq!(small_peak, 1024);
+    assert_eq!(large_peak, HASH_BUFFER_LEN);
+    assert!(
+        small_peak < large_peak,
+        "the sink counter is a constant rather than the largest accepted write"
     );
 }
 

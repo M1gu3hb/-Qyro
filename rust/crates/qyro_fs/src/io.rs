@@ -187,7 +187,7 @@ impl ContentSource for FileSource {
     fn read_at(&self, item_id: u32, offset: u64, out: &mut [u8]) -> usize {
         let filled = self.try_read(item_id, offset, out).unwrap_or(0);
         #[cfg(test)]
-        self.peak_read.set(self.peak_read.get().max(out.len()));
+        self.peak_read.set(self.peak_read.get().max(filled));
         filled
     }
 }
@@ -290,15 +290,17 @@ impl FileSink {
     ///
     /// Whatever the path resolution or the filesystem reports.
     pub fn put(&mut self, item_id: u32, offset: u64, bytes: &[u8]) -> Result<(), FsError> {
+        {
+            let part = self.part_for(item_id)?;
+            part.handle.seek(SeekFrom::Start(offset))?;
+            part.handle.write_all(bytes)?;
+            let end = offset.saturating_add(bytes.len() as u64);
+            part.written = part.written.max(end);
+        }
         #[cfg(test)]
         {
             self.peak_write = self.peak_write.max(bytes.len());
         }
-        let part = self.part_for(item_id)?;
-        part.handle.seek(SeekFrom::Start(offset))?;
-        part.handle.write_all(bytes)?;
-        let end = offset.saturating_add(bytes.len() as u64);
-        part.written = part.written.max(end);
         Ok(())
     }
 
@@ -398,6 +400,10 @@ pub fn digest_of(path: &Path) -> Result<Vec<u8>, FsError> {
     let mut buffer = vec![0u8; HASH_BUFFER_LEN];
     loop {
         let count = file.read(&mut buffer)?;
+        #[cfg(test)]
+        crate::manifest_builder::PEAK_BUILDER_READ.with(|peak| {
+            peak.set(peak.get().max(count));
+        });
         if count == 0 {
             break;
         }
