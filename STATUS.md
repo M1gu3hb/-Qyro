@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-11T19:49:00Z
+- Updated UTC: 2026-08-11T20:46:39Z
 - Branch: codex/qyro-gap-closure-5c
-- Verified commit: d6701a149fc3a3249c446cf65ffe01b7fc62e986
+- Verified commit: 62c82b8b4fdb3695790975367fee075e173c8c0b
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
