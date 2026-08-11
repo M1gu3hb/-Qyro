@@ -1459,3 +1459,80 @@
   parte de ese privilegio durante un instante
 - Estado: abierto
 - Fecha: 2026-08-08
+
+## QYR-0073 — `O_NOFOLLOW` no tiene una prueba que ejerza el enlace final
+
+- Plataforma: Linux/Android; equivalencia pendiente de comprobar en Windows,
+  macOS e iOS
+- Severidad: P1
+- Esperado: una transferencia real mediante `FileSink` rechaza un
+  `<destino>/<nombre>.qyro-part` que sea un enlace simbólico, no modifica el
+  objetivo externo y devuelve el error tipado correspondiente
+- Actual: la prueba existente compara dos veces el digest del mismo archivo y
+  no construye el enlace en la ruta que abre producción. Sustituir
+  temporalmente `O_NOFOLLOW` por `0` dejó las 388 pruebas Linux en verde
+- Resolución: pendiente; reemplazar la tautología por una prueba de transferencia
+  real y demostrar que la mutación `O_NOFOLLOW = 0` rompe esa prueba
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: CI 31521002851, job `rust`, commit mutante `a1c7398`; 388 pruebas
+  pasaron con el control retirado
+
+## QYR-0074 — La prueba de memoria del manifest mide una constante
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: el contador de lectura del constructor registra los bytes que cada
+  llamada real a `Read::read` devuelve, y la prueba distingue entradas pequeñas
+  de grandes sin cargar el archivo completo
+- Actual: `PEAK_BUILDER_READ` registra `HASH_BUFFER_LEN`, la misma constante que
+  después comprueba la prueba. Reemplazar el bucle acotado de `digest_of` por
+  `read_to_end` no hizo fallar
+  `tests::building_a_manifest_from_disk_does_not_load_the_file`
+- Resolución: pendiente; mover la medición al resultado de `read`, comparar dos
+  tamaños y demostrar que tanto `read_to_end` como un contador constante rompen
+  la prueba nominal
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: mutación local M2 reproducida sobre `983ca71`; la prueba nominal
+  pasó 1/1 después de retirar la lectura acotada
+
+## QYR-0075 — La política de recuperación congelada en ADR-0027 no se lee
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `FileSink` lee `.qyro-resume`, reanuda sólo el `transfer_id`
+  coincidente truncando el parcial a `bytes_committed`, y elimina un parcial
+  huérfano antes de empezar una transferencia nueva
+- Actual: producción escribe y codifica `ResumeState`, pero no llama a
+  `ResumeState::decode`. Un parcial huérfano más largo que el payload contamina
+  la transferencia y termina en `DigestMismatch { item_id: 1 }`
+- Resolución: pendiente; implementar ADR-0027 §5 en `part_for`, cubrir huérfanos
+  largos/cortos y reanudación válida, y demostrar que retirar la lectura de los
+  metadatos rompe la prueba nominal
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: búsqueda M4 con cero llamantes productivos de
+  `ResumeState::decode`; mutación local M3 de 8192 bytes frente a 2048 falló por
+  digest en lugar de descartar el huérfano
+
+## QYR-0100 — El checker confunde límites de rangos reservados con hallazgos
+
+- Plataforma: documentación; Bash y PowerShell
+- Severidad: P2
+- Esperado: `check_docs_consistency` exige una ficha para cada cita concreta de
+  un hallazgo, pero acepta declaraciones de propiedad como
+  `QYR-0076–QYR-0099` o `QYR-0100 en adelante` sin inventar fichas para los
+  extremos
+- Actual: el escaneo extrae cualquier texto con forma `QYR-NNNN`; el segundo
+  prompt verbatim produjo tres bloqueos por 0076, 0099 y 0100 aunque sólo
+  describían rangos reservados y 0076–0099 pertenecen a otro agente
+- Resolución: ambos checkers eliminan del texto los rangos cerrados y los
+  límites `onward`/`en adelante`/`+` antes de extraer citas. Las pruebas de
+  contrato fijan que una reserva pasa y una cita concreta sin ficha sigue
+  fallando
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el contrato Bash falló antes del cambio en el fixture de rangos y
+  pasó después; la mitad PowerShell queda pendiente de ejecución con PowerShell
+  7 en CI

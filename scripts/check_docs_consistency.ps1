@@ -233,8 +233,10 @@ if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw) -
 
 # ------------------------------------------------------------- finding ledger
 #
-# See the Bash half. An identifier with no entry is a finding whose state
-# nobody can look up (QYR-0043).
+# See the Bash half. A concrete identifier with no entry is a finding whose
+# state nobody can look up (QYR-0043). Ownership ranges are not findings: their
+# endpoints must not require placeholder records in somebody else's allocation
+# (QYR-0100).
 $ledger = Join-Path $RepoRoot 'BUGS_PENDING.md'
 if (Test-Path -LiteralPath $ledger) {
     $recorded = [System.Collections.Generic.HashSet[string]]::new()
@@ -244,7 +246,11 @@ if (Test-Path -LiteralPath $ledger) {
     $cited = [System.Collections.Generic.HashSet[string]]::new()
     $extensions = @('*.md', '*.rs', '*.sh', '*.ps1', '*.yml')
     foreach ($file in (Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Include $extensions -ErrorAction SilentlyContinue)) {
-        foreach ($found in ([regex]::Matches((Get-Content -LiteralPath $file.FullName -Raw), 'QYR-[0-9]{4}'))) {
+        $content = Get-Content -LiteralPath $file.FullName -Raw
+        $content = [regex]::Replace($content, 'QYR-[0-9]{4}\s*[-–—]\s*QYR-[0-9]{4}', '')
+        $content = [regex]::Replace($content, 'QYR-[0-9]{4}\s+(?:onward|onwards|en adelante)', '')
+        $content = [regex]::Replace($content, 'QYR-[0-9]{4}\+', '')
+        foreach ($found in ([regex]::Matches($content, 'QYR-[0-9]{4}'))) {
             [void]$cited.Add($found.Value)
         }
     }

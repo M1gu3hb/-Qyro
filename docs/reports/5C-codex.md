@@ -424,6 +424,309 @@ Prohibido: tocar cualquier archivo de la lista prohibida de §4, añadir una dep
 Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con NativeCallable.listener de dart:ffi para el progreso Rust→Dart —cero dependencias, ~30 líneas—, el selector de archivos por Storage Access Framework en Android, y QYR-0072 cuando alguien decida qué cuesta menos: openat con una dependencia, o unsafe acotado.
 ```
 
+### Prompt de continuación recibido, verbatim y completo
+
+```text
+Continúa en codex/qyro-gap-closure-5c. Si empiezas sesión nueva, la §0 del prompt anterior sigue siendo válida como contexto; lo esencial se repite aquí.
+
+0. Hiciste lo correcto. El bloqueo era mío. Queda levantado.
+
+Auditado tu trabajo. Paraste bien.
+
+Encontraste que tres reglas de mi prompt no se pueden cumplir a la vez:
+
+§13.1 exige el prompt verbatim en el informe.
+El prompt cita QYR-0073, QYR-0074 y QYR-0075.
+check_docs_consistency bloquea todo identificador citado sin ficha en BUGS_PENDING.md.
+§4 prohíbe tocar BUGS_PENDING.md.
+
+Es un error mío y es real. El otro agente lo encontró por su cuenta el mismo día. Y era peor de lo que viste: check_docs_consistency tiene además una regla de que STATUS.md no puede nombrar un Verified commit a más de diez commits de HEAD — así que mi prohibición de tocar STATUS.md garantizaba que ci.yml se pusiera rojo por antigüedad, pasara lo que pasara con el código.
+
+También tenías razón en lo segundo: git diff --name-only origin/main...HEAD devuelve 353 rutas porque la rama base nunca se fusionó a main. Ese criterio era imposible por diseño. La base correcta es 15934aa y ése es el criterio a partir de ahora.
+
+Y no te disculpes por parar. En este proyecto, una fase declarada cerrada que no lo está envenena todo lo que viene detrás — es exactamente lo que pasó con QYR-0071. Parar y reportar era la respuesta correcta y la tomaste.
+
+Lo que queda autorizado, sin ambigüedad
+
+Tienes permiso para tocar todo lo que necesites. BUGS_PENDING.md, STATUS.md, HANDOFF.md, NEXT_STEPS.md, CHANGELOG.md, DECISIONS.md, .github/workflows/**, los scripts de scripts/, y cualquier crate salvo los tres de §3. No vuelvas a pedir autorización para editar un .md. Hazlo.
+
+La única condición es la coherencia: que check_docs_consistency pase en Bash y en PowerShell, que cada identificador que cites tenga su ficha, y que STATUS.md diga la verdad sobre lo que existe y lo que no.
+
+Tu rango de identificadores es QYR-0100 en adelante. El otro agente tiene QYR-0076–QYR-0099. No uses fuera de tu rango, y no edites ninguna ficha ajena. Añade siempre al final del archivo. Los dos vais a tocar BUGS_PENDING.md a la vez; con rangos disjuntos, el peor caso es un conflicto de fusión trivial que resuelvo yo — infinitamente más barato que un agente bloqueado.
+
+Y QYR-0073, QYR-0074, QYR-0075 son tuyos: créales su ficha en BUGS_PENDING.md en la Fase 1bis. Eso desbloquea el checker y cierra el conflicto de raíz.
+
+1. Lo que también encontraste, y vale más de lo que crees
+
+Tres cosas de tu Fase 0 que registré como hallazgos reales del proyecto, no como ruido de entorno:
+
+El baseline de Windows no está limpio. cargo clippy --workspace --all-targets -- -D warnings falla allí por qyro_store_smoke::UNSUPPORTED_PLATFORM sin usar. Nadie lo sabía porque el workspace sólo se prueba en ubuntu-latest — lo verifiqué: ci.yml:33 es runs-on: ubuntu-latest y el trabajo de Windows de platform-builds.yml:103 sólo hace cargo build --package qyro_ffi y Flutter.
+Windows corre 394 tests y Linux 388. STATUS.md declara un número como si fuera el número. No lo es: es el de una plataforma.
+Los scripts declaran #requires -Version 7.0 y el host trae PowerShell 5. Y check_repo_portability.sh agota 120 s en Windows por su coste de procesos.
+
+Las tres son deuda real y las tres entran en tu alcance. Es la Fase 8.
+
+Y una nota de método: ejecutaste M1 en CI sobre Linux para tener semántica Unix de verdad, en vez de aproximarla en Windows. Eso es exactamente el rigor que este proyecto pide y es más de lo que yo hice.
+
+2. La regla que gobierna este prompt
+
+No confíes en tu memoria. Confía en el código.
+
+Vas a hacer diez fases. Lo que era cierto en la Fase 2 puede dejar de serlo en la Fase 8. Por tanto:
+
+Antes de afirmar algo en el informe, vuelve a mirarlo en el código o ejecútalo. No lo recuerdes.
+Antes de cerrar cada puerta, relee las secciones del informe que la fase pudiera haber invalidado y corrígelas. El informe entero tiene que ser cierto en el momento del último commit.
+Cuando digas un número, di el comando con el que lo obtuviste, y vuelve a obtenerlo si han pasado fases. Al otro agente le acaba de pasar: su §4 dice 63 paquetes y su §12 dice 62, porque §12 se escribió en la puerta 2 y nadie la actualizó.
+3. Reparto de archivos — actualizado
+
+Tuyos, exclusivos:
+
+rust/crates/qyro_fs/**
+rust/crates/qyro_protocol/**
+rust/guards/source_guard.rs — eres el único que puede modificarlo
+rust/crates/qyro_identity_store/**, qyro_win_dpapi/**, qyro_crypto/**, qyro_manifest/**
+rust/tools/qyro_store_smoke/**, qyro_crypto_smoke/**
+scripts/**
+docs/adr/ADR-0027-* (enmiendas fechadas), ADR-0029-* (nueva), docs/reports/5C-codex.md
+
+Compartidos, con regla:
+
+BUGS_PENDING.md, DECISIONS.md — ambos escriben. Sólo añades, en tu rango, al final. No editas fichas ajenas.
+.github/workflows/** — el otro agente va a añadir un trabajo de Windows para su crate nuevo. Tú puedes tocarlos también (Fase 8), pero avisa en el informe exactamente qué líneas cambiaste, porque ahí sí puede haber conflicto de fusión.
+STATUS.md, HANDOFF.md, NEXT_STEPS.md, CHANGELOG.md — el otro agente los consolida en su Fase 10. Tú escribe lo tuyo en tu informe, y toca STATUS.md sólo lo mínimo para que check_docs_consistency pase en tu rama: el Verified commit y los números. No reescribas secciones enteras.
+
+De Claude Code, no los toques:
+
+rust/crates/qyro_net/**, rust/tools/qyro_net_smoke/**
+rust/crates/qyro_ffi/**, apps/qyro/**
+rust/crates/qyro_transfer/** — lo está tocando de forma aditiva
+Cargo.toml raíz y Cargo.lock — él añade dos crates; tú no creas ninguno
+
+Nunca: main. Sin commits, merge, PR, rebase ni force-push.
+
+4. Estado del otro agente, para que sepas con qué te vas a fusionar
+
+Va por la Puerta 4 de 6, con 408 tests en verde y un crate qyro_net completo hasta mover un archivo entre dos procesos reales por un socket TCP. Añadió Receiver::manifest() a qyro_transfer de forma aditiva —el receptor guardaba el manifest y lo tiraba, y sobre un socket eso hacía imposible materializar nada—. Encontró que nada comprobaba que un frame sin sellar llegado después del handshake se rechace, y que la mitad de Windows del mapeo de timeouts no la defendía nadie.
+
+Tu Fase 5 le importa directamente: en cuanto haya dos transferencias o dos archivos en vuelo, transfer_id e item_id dejan de ser decorativos. Hazla aditiva y avísale en el informe.
+
+5. Las diez fases
+Fase 1bis — Desbloquear la Puerta 1
+Crea las fichas de QYR-0073, QYR-0074 y QYR-0075 en BUGS_PENDING.md, con el formato del archivo —plataforma, severidad, esperado, actual, resolución, estado, fecha— y con la evidencia de mutación que ya reprodujiste. Estado: abierto, porque todavía no los has arreglado. Los cerrarás en las fases 2, 3 y 4.
+Devuelve el prompt verbatim al informe si lo habías movido, y añade éste.
+check_docs_consistency en Bash y en PowerShell: PASS.
+Cambia el criterio de git diff a base 15934aa en tu informe §13.
+Cierra la Puerta 1.
+
+Y una cosa más, que es tuya y es importante: QYR-0068 lo vas a cerrar en la Fase 5, así que su ficha existe y hay que actualizarla, no duplicarla. Lo mismo con QYR-0072 en la Fase 7.
+
+Puerta 1 (reintento).
+
+Fase 2 — QYR-0073, el P1: darle una prueba de verdad a O_NOFOLLOW
+Borra la prueba tautológica a_symlink_at_the_final_component_is_refused y escribe una que ejerza el control. Tiene que:
+crear una víctima fuera de la raíz de destino, con contenido conocido;
+crear un symlink real en <destino>/<nombre>.qyro-part apuntando a la víctima;
+ejecutar una transferencia real a través de FileSink, no sólo resolve_under;
+afirmar tres cosas: la víctima intacta byte a byte, el archivo final ausente, y el error tipado correcto.
+Comprueba que falla con O_NOFOLLOW = 0 y pasa con el valor correcto. Es la única evidencia que vale, y ya sabes cómo hacerlo bien: en Linux, no en Windows.
+Corrige el comentario de io.rs:69-75 para que diga la verdad sobre qué prueba qué y sobre qué plataformas no está probado.
+Windows y macOS/iOS. Ahora que puedes tocar workflows, la opción buena está disponible: escribe la prueba equivalente con un reparse point en Windows y haz que corra. Si al intentarlo descubres que no se puede —permisos de symlink en Windows sin modo desarrollador, por ejemplo—, regístralo con ficha y di que ADR-0027 §1.4 afirma una garantía verificada sólo en Linux.
+Barre el resto de qyro_fs/src/tests.rs en busca de más tautologías. La guarda de la Fase 6 las va a encontrar; adelántate.
+
+Puerta 2.
+
+Fase 3 — QYR-0074: que los contadores cuenten lo que pasó
+Mueve el contador dentro de digest_of, registrando el count que devuelve file.read(). El modelo correcto está en qyro_transfer/src/session.rs, donde 5A midió buffer.len(). Ve a leerlo antes de escribir el tuyo — pero no lo modifiques, es del otro agente.
+Comprueba que la prueba falla con read_to_end y pasa sin él.
+Revisa los tres contadores de qyro_fs: PEAK_BUILDER_READ, FileSource::peak_read, FileSink::peak_write. Por cada uno, aplica la mutación que debería moverlo y comprueba que se mueve. peak_write es especialmente sospechoso: mira dónde se registra respecto a dónde se escribe.
+Y la lección que el otro agente aprendió con su hallazgo 6A-11, que aplica aquí: no basta con que el contador mida bien. La prueba tiene que distinguir un contador medido de uno constante. Si una constante satisface tus aserciones, la forma de la prueba está mal aunque el contador esté bien. La forma que sí distingue: dos tamaños de archivo, y una aserción de que el pico del pequeño es estrictamente menor que el del grande — una constante falla esa desigualdad.
+
+Puerta 3.
+
+Fase 4 — QYR-0075: reconciliar ADR-0027 §5 con el código
+
+Dos salidas legítimas. La A es la correcta y es barata.
+
+Salida A — implementar §5. En part_for:
+
+leer .qyro-resume si existe y corresponde a este transfer_id;
+si hay entrada para el item, truncar el .qyro-part a bytes_committed con set_len;
+si no hay metadatos que lo describan, borrar el huérfano antes de empezar;
+si el transfer_id no coincide, tratarlo como huérfano. Este caso no está en la ADR y es un hallazgo si lo encuentras tú.
+
+Salida B — degradar §5 a pendiente, con enmienda fechada, ficha, y las dos pruebas renombradas.
+
+Sea cual sea:
+
+an_interrupted_transfer_resumes_from_its_metadata — el código de producción tiene que leer los metadatos, no el test.
+a_leftover_part_file_is_recovered_or_discarded_by_policy — el huérfano más largo que el contenido, más el caso simétrico con huérfano más corto.
+Y el caso que ninguna cubre: un .qyro-part con .qyro-resume válido y bytes correctos — la reanudación que sí funciona, para que los rechazos no pasen por rechazarlo todo.
+
+Puerta 4, con una comprobación extra: borra la lectura de .qyro-resume que acabas de escribir y comprueba que falla una prueba con nombre.
+
+Fase 5 — QYR-0068 y ADR-0029: los identificadores de la cabecera
+
+No pongas setters sin ADR. docs/adr/ADR-0029-header-identifiers.md, congelada antes del código. Decide:
+
+Qué API pública se añade y su superficie mínima. Constructor, setter, o un tipo FrameIdentifiers. Y por qué ése.
+Qué es un valor válido. ¿Cero es «sin identificador» o es válido? Si es válido, todos los frames existentes dicen algo. Decide y prueba la elección.
+Qué garantiza que estén en el AAD y qué no. Un peer no puede alterarlos sin romper el tag. Eso no significa que sean correctos: significa que son los que el emisor puso. Escríbelo así.
+Qué pasa si un receptor ve un transfer_id que no reconoce, o un item_id que no está en el manifest. Errores tipados, no Io.
+Que el formato de 48 bytes NO cambia. Es ensanchar la API, no el formato. Dilo explícitamente.
+Lo que esta decisión no promete.
+
+Pruebas:
+
+identifiers_survive_a_seal_and_open_round_trip
+altering_an_identifier_in_flight_breaks_the_tag — voltea un bit de transfer_id en el frame sellado y comprueba que el open falla, no que devuelve otro valor.
+the_forty_eight_byte_layout_is_unchanged — un vector de bytes fijo y esperado, no header.len() == 48.
+
+Y actualiza la nota de header.rs. Hoy dice que la decisión queda abierta. Ya no lo está. Y avisa en el informe al agente de la red, que va a querer usarla.
+
+Puerta 5.
+
+Fase 6 — La guarda que mata el anti-patrón para siempre
+
+Esto es lo que hace que el sprint valga más que sus arreglos. La aserción tautológica ha aparecido cinco veces en este repositorio.
+
+En rust/guards/source_guard.rs, añade assert_no_assertion_compares_a_call_to_itself: recorre los archivos de prueba, encuentra cada assert!/assert_eq!/assert_ne!, y falla si los dos lados de una comparación son textualmente idénticos tras normalizar espacios.
+Empieza por X == X y assert_eq!(X, X). No resuelvas el caso general; resuelve el que ha ocurrido cinco veces.
+Prueba la guarda con una tautología introducida a propósito y comprueba que falla. Una guarda que no se ha visto fallar no es una guarda.
+Falsos positivos legítimos: exímelos por nombre y con el argumento escrito, como VERDICTS_WITH_NO_CONSTRUCTION_SITE. Nunca un allow global.
+Actívala en todos los crates que usan el análisis compartido. Si alguno falla, has encontrado una tautología más: arréglala y regístrala.
+cargo test --workspace en verde, no sólo -p qyro_fs. El otro agente depende de este archivo.
+
+Puerta 6.
+
+Fase 7 — QYR-0072: la carrera de los componentes intermedios
+
+Es el último P2 abierto de qyro_fs y lleva un sprint esperando una decisión.
+
+ADR-0027 §1 dice que O_NOFOLLOW cierra la carrera del último componente por completo, y no la de los intermedios: entre comprobar que fotos/ no es un enlace y abrir fotos/x.qyro-part hay una ventana.
+
+Toma la decisión. Las tres opciones, y evalúalas de verdad:
+
+(a) openat con O_NOFOLLOW por descriptor de directorio. No está en std. Requiere libc (una dependencia, 2 crates transitivos medidos) o unsafe con extern a mano —y este proyecto ya escribió a mano las tres funciones de DPAPI, así que hay precedente—. En Windows es otro mecanismo (NtCreateFile con OBJ_DONT_REPARSE, o abrir el directorio y usar rutas relativas al handle).
+(b) Aceptar la ventana y documentarla mejor, con el argumento de que un atacante con escritura en el directorio de destino ya puede escribir lo que quiera ahí, y lo que las comprobaciones impiden es que use Qyro para escribir fuera.
+(c) Una mitigación parcial sin dependencias: por ejemplo, canonicalizar el padre después de abrir y comprobar que sigue dentro de la raíz, y abortar si cambió. No cierra la carrera pero la detecta a posteriori.
+
+Elige, argumenta, y si eliges (b) o (c), di exactamente qué queda sin cubrir. Si eliges (a) con unsafe, tiene que ir acotado, con SAFETY: escrito, y la lista de crates exentos de forbid(unsafe_code) pasa de tres a cuatro — lo cual hay que registrar y justificar, porque ese número es una guarda.
+
+Sea cual sea la decisión, escríbela como enmienda fechada a ADR-0027 y actualiza la ficha QYR-0072.
+
+Puerta 7.
+
+Fase 8 — El baseline de Windows, que descubriste tú
+
+Los tres hallazgos de tu Fase 0, cada uno con ficha en tu rango:
+
+cargo clippy falla en Windows por qyro_store_smoke::UNSUPPORTED_PLATFORM sin usar. Arréglalo. Y la causa de fondo es que el workspace sólo se prueba en Linux: ci.yml:33 es runs-on: ubuntu-latest. Decide si ci.yml debe correr clippy y tests del workspace en Windows también, argumenta el coste contra el beneficio, y si dices que sí, hazlo. Avisa en el informe, porque el otro agente está añadiendo un trabajo de Windows para su crate y podéis chocar en el mismo archivo.
+394 tests en Windows contra 388 en Linux. STATUS.md declara un número como si fuera el número. Arregla la afirmación: o dice los dos, o dice de qué plataforma es. Y comprueba que la diferencia son de verdad los cfg de plataforma y no un test que no corre donde debería. Cuéntalos y dilo.
+#requires -Version 7.0 en los scripts, y check_repo_portability.sh agotando 120 s en Windows. Decide: ¿bajar el requisito a PowerShell 5, o documentar que hace falta 7? Y el timeout: ¿es coste real o hay un bucle que se puede arreglar? Mídelo antes de decidir.
+
+Puerta 8.
+
+Fase 9 — La deuda estructural: que ninguna guarda vuelva a perderse
+
+El patrón: qyro_crypto tiene desde 4C.2 una guarda que qyro_transfer no tenía (QYR-0070) y qyro_fs tampoco (QYR-0073). Una guarda que existe en un crate y no se lleva al siguiente es una guarda que se pierde.
+
+Haz el inventario. Por cada crate del workspace, qué guardas estructurales tiene y cuáles le faltan: no_production_path_can_panic, every_production_file_is_listed, every_*_has_a_construction_site, only_the_listed_crates_may_relax_forbid_unsafe, every_public_path_returning_key_material_is_listed, assert_analysis_reached_the_end, y la nueva de la Fase 6. Tabla completa en el informe.
+Lleva las que falten a los crates que las necesiten.
+Y la guarda meta que impide que vuelva a pasar: una comprobación que falle si un crate del workspace no tiene el conjunto mínimo de guardas. Excepciones por nombre y con argumento escrito.
+Coordinación: el otro agente está creando qyro_net y qyro_net_smoke y va a escribirles guardas en su Fase 6. Si tu guarda meta los exige y todavía no existen en tu rama, exímelos por nombre con la nota de que llegan en la rama claude/qyro-net-6a. No los inventes.
+El barrido de mutación de todo lo que sea tuyo. No sólo lo que tocaste: qyro_fs, qyro_protocol, qyro_manifest, qyro_identity_store, qyro_crypto. Por cada control de producción que gobierne una propiedad de seguridad o de integridad, bórralo y mira si algo falla. Es la primera vez que este proyecto lo haría de forma exhaustiva.
+Prioriza: primero lo que valida entrada de un peer, luego lo que decide rechazar, luego lo demás.
+Cada superviviente es una ficha. No los arregles todos si son muchos: regístralos con severidad y di cuáles arreglaste y cuáles no.
+Y di cuántos controles barriste de cuántos, para que se sepa la cobertura del propio barrido. Un barrido que no dice su alcance se lee como exhaustivo sin serlo.
+
+Puerta 9.
+
+Fase 10 — Dejar la documentación diciendo la verdad
+BUGS_PENDING.md: todas tus fichas, en tu rango, ninguna ajena tocada. QYR-0073, 0074, 0075 cerradas. QYR-0068 cerrada. QYR-0072 resuelta o con la decisión escrita.
+DECISIONS.md: ADR-0029 y la enmienda a ADR-0027 registradas.
+STATUS.md: lo mínimo para coherencia — Verified commit, los números de test con su plataforma, y una sección del sprint 5C. No reescribas secciones que el otro agente va a consolidar.
+check_docs_consistency en Bash y en PowerShell: PASS.
+Relee tu informe entero y corrige toda afirmación que las fases 2 a 9 hayan invalidado. Especialmente §11 («Después: pendiente») y §12.
+
+Puerta 10 + los workflows que dispare tu rama en verde sobre el commit final.
+
+6. No objetivos — estrictos
+Los archivos de Claude Code (§3): qyro_net, qyro_net_smoke, qyro_ffi, apps/qyro, qyro_transfer, Cargo.toml, Cargo.lock.
+Red, sockets, descubrimiento, FFI, UI, selector de archivos.
+Crates nuevos. No creas ninguno: Cargo.toml es del otro agente.
+Android Keystore, iOS Keychain, historial, emparejamiento, release.
+Dependencias externas. Cero, con una excepción posible: si la Fase 7 concluye que libc es la respuesta correcta a QYR-0072, para, escríbelo, y espera confirmación. Es la única dependencia que este prompt contempla y no la añades sin decirlo.
+7. Criterios de aceptación
+Las diez puertas pasadas y escritas en el informe con su resultado.
+check_docs_consistency PASS en Bash y en PowerShell, con el prompt verbatim dentro del .md.
+O_NOFOLLOW = 0 hace fallar una prueba con nombre. Es el criterio del P1.
+La prueba de O_NOFOLLOW ejecuta una transferencia real por FileSink.
+Las constantes de Windows y macOS/iOS están probadas o están registradas como no probadas con ficha.
+read_to_end en digest_of hace fallar building_a_manifest_from_disk_does_not_load_the_file.
+Los tres contadores de qyro_fs registran valores derivados de la operación, y la prueba de cada uno distingue un contador medido de una constante.
+ADR-0027 §5 implementada o degradada con enmienda fechada y pruebas renombradas. Y borrar la lectura de .qyro-resume hace fallar una prueba.
+ADR-0029 congelada antes del código de la Fase 5. Alterar un identificador en vuelo rompe el tag, con prueba. El layout de 48 bytes comprobado contra un vector fijo.
+assert_no_assertion_compares_a_call_to_itself existe, se ha visto fallar, y está activa en todos los crates que usan el análisis compartido.
+QYR-0072 decidida, con la opción argumentada y lo que queda sin cubrir dicho explícitamente.
+cargo clippy --workspace --all-targets -- -D warnings pasa en Windows.
+La diferencia 394/388 explicada test por test, y STATUS.md corregido.
+Inventario de guardas por crate, guardas que faltaban llevadas, y la guarda meta activa.
+Barrido de mutación con su alcance declarado: cuántos controles de cuántos, cuántos supervivientes, cuántos arreglados, cuántos con ficha.
+Cargo.lock idéntico: 61 paquetes en tu rama. Cero dependencias nuevas — o la excepción de §6 con confirmación previa.
+cargo fmt --all --check, cargo clippy, cargo test --workspace, cargo test --doc, cargo audit --deny warnings: PASS. Tests antes (388 Linux / 394 Windows) y después, con la plataforma de cada número.
+git diff --name-only 15934aa..HEAD no contiene ni un archivo de Claude Code (§3). Pega la salida literal. La base es 15934aa, no origin/main.
+El informe entero es cierto en el momento del último commit. Ninguna sección contradice a otra, ninguna dice «pendiente» de algo que ya hiciste.
+git status --short limpio. Sin commits en main, sin merge, sin PR, sin force-push.
+8. Lo que no vale como «arreglado»
+Un test que pasa. Un test que pasa y que falla cuando borras el control.
+Cambiar el nombre de una prueba sin cambiar lo que ejerce.
+Un assert! más en la misma prueba tautológica. Bórrala y escribe otra.
+«No pude probar Windows» sin registrar que la garantía de Windows queda sin verificar.
+Marcar la Fase 4 con la salida B sin haber intentado la A.
+Un #[allow(...)] para que la guarda nueva no se queje.
+Una guarda nueva que nunca se ha visto fallar.
+Un barrido de mutación que no dice cuántos controles cubrió de cuántos.
+9. El protocolo de puerta — ampliado con dos comprobaciones
+
+No pasas de fase hasta que las once pasan.
+
+cargo fmt --all --check — PASS, por código de salida del proceso, no por la salida de texto.
+cargo clippy --workspace --all-targets -- -D warnings — PASS, por código de salida. En Linux siempre; en Windows a partir de la Fase 8.
+cargo test --workspace — PASS. El workspace entero, no sólo tu crate.
+Barrido de mutación de la fase. Por cada propiedad nueva o arreglada: aplica la mutación, confirma que falla un test con nombre, restaura. Si sobrevive, no has terminado.
+Lectura de aserciones: los dos lados de cada assert! nuevo pueden diferir.
+Lectura de contadores: registran un valor derivado de la operación, y la prueba distingue un contador medido de una constante.
+Lectura de nombres: cada test ejerce lo que su nombre dice.
+git diff --name-only 15934aa..HEAD — ni un archivo de Claude Code.
+check_docs_consistency en Bash. Ahora que tocas documentos raíz, es parte de la puerta y no algo que se descubre al final.
+NUEVO — coherencia del informe. Relee las secciones que esta fase pudiera haber invalidado —conteos, tablas, «pendiente», clases de evidencia— y corrígelas contra el código actual, no contra tu memoria.
+Escribe el resultado de la puerta en el informe antes de empezar la fase siguiente.
+
+Si una comprobación falla: arréglalo y repite la puerta entera.
+
+Si no puedes arreglarlo: ahora tienes permiso para casi todo, así que la situación anterior no debería repetirse. Pero si vuelve a pasar —y sobre todo si descubres que este prompt se contradice a sí mismo otra vez—, para, escríbelo, y reporta. Lo hiciste bien la primera vez.
+
+10. El informe — docs/reports/5C-codex.md
+
+Las mismas dieciséis secciones. Y ahora:
+
+§1 con los dos prompts verbatim, el primero y éste, en el .md.
+§9 con las diez puertas.
+§10 con la tabla de mutación completa, incluidas las cuatro de la Fase 1 y el barrido exhaustivo de la Fase 9, con su alcance declarado.
+§11 con tests antes y después, y la plataforma de cada número.
+§13 con base 15934aa.
+§8 con la clase de evidencia por plataforma: qué corre en Linux, qué corre en Windows tras la Fase 8, y qué sigue sin correr en ningún sitio.
+§15 — qué NO debe leerse como progreso. Como mínimo: esto no mueve el producto, es cierre de deuda y endurecimiento; no hay red en esta rama, no hay FFI, no hay selector, los botones siguen deshabilitados, no hay persistencia de identidad en Android ni iOS, y nada se ha probado en hardware físico.
+§16 — qué necesita saber el otro agente. En particular, la API nueva de header.rs de la Fase 5, cualquier cambio en source_guard.rs, y cualquier línea que hayas tocado en .github/workflows/**.
+11. Si te quedas sin contexto
+
+Para después de una puerta, nunca a mitad de una fase. Escribe en el informe en qué puerta estás y qué falta. Deja la rama en verde y check_docs_consistency pasando.
+
+Prohibido: tocar los archivos de Claude Code, usar identificadores fuera de tu rango, editar una ficha ajena del ledger, crear un crate, añadir una dependencia sin pararte a explicar y esperar confirmación, silenciar una guarda con un allow, dejar la rama en rojo, omitir un run fallido, declarar una fase cerrada sin su puerta, o commitear en main.
+
+Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier .md, editar BUGS_PENDING.md, editar STATUS.md, editar los workflows, editar los scripts. Tienes permiso. Úsalo.
+```
+
 ## 2. Qué hice, punto por punto
 
 - Fase 0: verifiqué el SHA base, leí íntegros los documentos y fuentes exigidos y reproduje la línea base en Windows y en CI Linux.
@@ -431,24 +734,42 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 - Fase 1/M2: sustituí temporalmente el bucle de `digest_of` por `read_to_end`; `tests::building_a_manifest_from_disk_does_not_load_the_file` siguió pasando.
 - Fase 1/M3: hice el huérfano de 8192 bytes frente a un payload de 2048; `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy` falló con `DigestMismatch { item_id: 1 }`.
 - Fase 1/M4: busqué llamantes productivos de `ResumeState::decode`; el recuento fue cero.
+- Fase 1bis: registré QYR-0073, QYR-0074 y QYR-0075 al final del ledger,
+  incorporé íntegro el prompt de continuación y cambié el criterio de diff a la
+  base exacta `15934aa`.
+- Fase 1bis: el nuevo prompt destapó QYR-0100. Añadí un contrato que primero
+  falló y corregí los checkers Bash y PowerShell para no confundir límites de
+  rangos reservados con hallazgos concretos.
 
 ## 3. Cómo lo hice y decisiones
 
 - Las mutaciones se aplicaron una por una y se restauraron antes de la siguiente. M1 necesitaba semántica Unix, así que se ejecutó en el job `rust` de CI sobre el commit mutante; M2–M4 se reprodujeron localmente.
 - No se modificó ningún archivo prohibido, no se añadió ninguna dependencia y Cargo.lock permaneció intacto.
+- QYR-0100 conserva la regla estricta para citas concretas. Sólo elimina antes
+  del escaneo las formas de reserva `QYR-NNNN–QYR-NNNN`, `QYR-NNNN onward`,
+  `QYR-NNNN en adelante` y `QYR-NNNN+`.
 
 ## 4. Errores detectados fuera del prompt
 
 - Fase 0: el host local Windows ejecuta 394 pruebas/2 ignoradas, no 388/2, por la selección `cfg` de plataforma. El mismo árbol en Linux (CI 31520332918) ejecuta 388/2.
 - Fase 0: `cargo clippy --workspace --all-targets -- -D warnings` falla en Windows por `qyro_store_smoke::UNSUPPORTED_PLATFORM` sin uso; el mismo comando pasa en Linux. El archivo está fuera del alcance permitido de 5C.
 - Fase 0: el host trae Windows PowerShell 5, no PowerShell 7; los scripts declaran `#requires -Version 7.0`. Git Bash ejecutó tres checks; `check_repo_portability.sh` agotó 120 s por su coste de procesos en Windows. Los ocho checks pasaron en CI Linux con Bash y PowerShell 7.
-- Fase 1: conflicto de requisitos. Esta sección 1 debe contener el prompt verbatim, que cita QYR-0073, QYR-0074 y QYR-0075. `check_docs_consistency` exige una entrada en `BUGS_PENDING.md` para todo ID citado. El mismo prompt prohíbe modificar `BUGS_PENDING.md`. Al versionar el reporte, el check falla por esos tres IDs; no hay forma de satisfacer a la vez los tres requisitos sin cambiar alcance.
-- Fase 1: `git diff --name-only origin/main...HEAD` contiene 353 rutas, incluidos todos los documentos raíz y workflows prohibidos, porque la rama base exigida todavía no está integrada en `main`. El delta propio contra `origin/claude/qyro-filesystem-5b1` es únicamente este reporte. Por tanto, el criterio literal contra `origin/main` tampoco puede pasar sin reescribir historia, fusionar o cambiar la base, tres acciones prohibidas.
+- Fase 1, histórico: el prompt inicial exigía citar QYR-0073/74/75 y a la vez
+  prohibía registrarlos; la continuación reconoce el conflicto y autoriza el
+  ledger. Quedó resuelto en Fase 1bis.
+- Fase 1, histórico: el criterio contra `origin/main` atribuía 353 rutas
+  heredadas a este trabajo. La continuación fija la base correcta en
+  `15934aa`; §13 usa ya ese criterio.
+- Fase 1bis: el checker trataba los límites de rangos de propiedad del segundo
+  prompt como hallazgos sin ficha. QYR-0100 registra y corrige el defecto sin
+  crear entradas en el rango ajeno 0076–0099.
 
 ## 5. Errores arreglados y no arreglados
 
-- Fase 1 sólo reprodujo: no arregló todavía QYR-0073/74/75 ni QYR-0068.
-- El conflicto reporte/ledger no se arregló porque las dos correcciones posibles violan una orden expresa: quitar o alterar el prompt deja de ser verbatim; añadir las entradas toca un archivo prohibido.
+- Fase 1 sólo reprodujo; QYR-0073/74/75 y QYR-0068 siguen abiertos hasta sus
+  fases funcionales.
+- Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
+  cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
 ## 6. Impacto de cada defecto
 
@@ -456,13 +777,17 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 - M2 demuestra que la prueba de memoria no medía la lectura real y aceptaba cargar el archivo completo.
 - M3 demuestra que un huérfano más largo contamina la nueva transferencia y la hace fallar por digest.
 - M4 demuestra que los metadatos escritos por producción no tenían lector productivo.
-- El conflicto documental vuelve rojo el job `documentation` en cuanto el reporte obligatorio se versiona, impidiendo pasar cualquier puerta posterior aun con el código intacto.
+- QYR-0100 hacía que una declaración de coordinación exigiera fichas falsas en
+  un rango ajeno y volvía rojo `documentation` aun después de registrar los
+  tres hallazgos reales.
 
 ## 7. Resultado contra cada objetivo
 
 - Reproducir M1–M4 antes de arreglar: **cumplido**.
-- Pasar Puerta 1: **no hecho/bloqueado** por el conflicto reporte/ledger descrito arriba.
-- Fases 2–6: **no empezadas**, conforme a la orden de no avanzar con una puerta fallida.
+- Resolver el bloqueo documental de Puerta 1: **cumplido localmente en Bash**;
+  la ejecución PowerShell 7 y el gate Linux completo están pendientes del run
+  de CI de la Fase 1bis.
+- Fases 2–10: **no empezadas** mientras termina esa revalidación.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -472,7 +797,7 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 - M1: probado en integración en Linux, CI run 31521002851, job `rust`; `cargo test --workspace` pasó con `O_NOFOLLOW = 0`.
 - M2/M3/M4: probado en unidad o inspección estructural en Windows host. M3 falló por el motivo esperado, no por compilación ni fixture.
 
-## 9. Las seis puertas
+## 9. Las diez puertas de trabajo y la línea base
 
 ### Puerta 0 — 2026-08-11 — PASS con diferencias de plataforma registradas
 
@@ -489,7 +814,7 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 - Lectura de aserciones/contadores/nombres: sin aserciones, contadores ni tests nuevos.
 - `git diff --name-only`: sólo `docs/reports/5C-codex.md` al iniciar Fase 1; ningún archivo prohibido.
 
-### Puerta 1 — 2026-08-11 — BLOCKED
+### Puerta 1 — 2026-08-11 — REABIERTA, VALIDACIÓN EN CURSO
 
 - M1–M4: reproducidas y restauradas.
 - `cargo fmt --all --check`: PASS.
@@ -497,9 +822,13 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 - `cargo test -p qyro_fs`: PASS tras restaurar las mutaciones.
 - Lectura de aserciones/contadores/nombres: sin código de producción ni tests nuevos en Fase 1.
 - Archivos de código al terminar: idénticos a la base; sólo el reporte cambia respecto a la base.
-- `check_docs_consistency.sh`: FAIL por QYR-0073, QYR-0074 y QYR-0075 citados en el prompt verbatim sin entradas en el ledger prohibido.
+- `check_docs_consistency.sh`: PASS tras registrar QYR-0073/74/75 y corregir
+  QYR-0100. El contrato Bash observó rojo antes de la corrección y pasa después.
+- `check_docs_consistency.ps1` y su contrato: pendientes de PowerShell 7 en CI;
+  el host local sólo dispone de Windows PowerShell 5.
 - CI 31521002851: run global `failure`; jobs `rust`, `scripts` y `flutter` PASS, job `documentation` FAIL por la misma causa.
-- Decisión obligada por §11: no empezar Fase 2. La puerta no puede pasar sin autorización para modificar `BUGS_PENDING.md`, para excluir el reporte del checker, o para omitir/alterar el prompt verbatim.
+- La continuación levantó el bloqueo. No empezar Fase 2 hasta que el nuevo run
+  confirme el workspace Linux y las dos implementaciones del checker.
 
 ### Puerta 2
 
@@ -518,6 +847,22 @@ Pendiente.
 Pendiente.
 
 ### Puerta 6
+
+Pendiente.
+
+### Puerta 7
+
+Pendiente.
+
+### Puerta 8
+
+Pendiente.
+
+### Puerta 9
+
+Pendiente.
+
+### Puerta 10
 
 Pendiente.
 
@@ -543,371 +888,20 @@ Pendiente.
 - Dependencias externas nuevas: ninguna prevista.
 - `git diff origin/claude/qyro-filesystem-5b1...HEAD -- Cargo.lock`: vacío.
 
-## 13. `git diff --name-only origin/main...HEAD`
+## 13. `git diff --name-only 15934aae3dda7f469b5496c8341eb78d9e32f335...HEAD`
 
-+La salida literal actual contiene 353 rutas heredadas de la rama base, porque `main` no contiene los sprints previos:
+La continuación corrige el criterio imposible contra `origin/main`. El delta propio desde la base exacta es:
 
 ```text
-.gitattributes
-.github/scripts/android_crypto_smoke.sh
-.github/workflows/android-runtime.yml
-.github/workflows/ci.yml
-.github/workflows/crypto-fuzz.yml
-.github/workflows/crypto-platform.yml
-.github/workflows/ios-runtime.yml
-.github/workflows/platform-builds.yml
-.gitignore
-AGENTS.md
-ARCHITECTURE.md
 BUGS_PENDING.md
-CHANGELOG.md
-Cargo.lock
-Cargo.toml
-DECISIONS.md
-FILE_MAP.md
-HANDOFF.md
-NEXT_STEPS.md
-PROJECT_CONTEXT.md
-PROTOCOL.md
-README.md
-SECURITY.md
-STATUS.md
-TESTING.md
-THIRD_PARTY_NOTICES.md
-THREAT_MODEL.md
-apps/qyro/android/app/src/main/res/drawable-v21/launch_background.xml
-apps/qyro/android/app/src/main/res/drawable/launch_background.xml
-apps/qyro/android/app/src/main/res/values-night/styles.xml
-apps/qyro/android/app/src/main/res/values/colors.xml
-apps/qyro/android/app/src/main/res/values/styles.xml
-apps/qyro/assets/brand/qyro-logo.png
-apps/qyro/assets/generated/logo_ascii.json
-apps/qyro/assets/generated/logo_ascii.txt
-apps/qyro/assets/generated/logo_ascii_preview.png
-apps/qyro/integration_test/native_abi_smoke_test.dart
-apps/qyro/ios/.gitignore
-apps/qyro/ios/Native/README.md
-apps/qyro/ios/Runner.xcodeproj/project.pbxproj
-apps/qyro/ios/Runner/Base.lproj/LaunchScreen.storyboard
-apps/qyro/ios/RunnerTests/RunnerTests.swift
-apps/qyro/l10n.yaml
-apps/qyro/lib/app.dart
-apps/qyro/lib/boot/ascii_logo_model.dart
-apps/qyro/lib/boot/ascii_logo_painter.dart
-apps/qyro/lib/boot/boot_screen.dart
-apps/qyro/lib/boot/boot_sequence_controller.dart
-apps/qyro/lib/boot/boot_status_model.dart
-apps/qyro/lib/boot/cipher_rain_painter.dart
-apps/qyro/lib/boot/scramble_decode_engine.dart
-apps/qyro/lib/boot/scrambled_line.dart
-apps/qyro/lib/ffi/qyro_native_api.dart
-apps/qyro/lib/generated/branding.g.dart
-apps/qyro/lib/home/home_screen.dart
-apps/qyro/lib/l10n/app_en.arb
-apps/qyro/lib/l10n/app_es.arb
-apps/qyro/lib/startup/native_bridge.dart
-apps/qyro/lib/startup/production_startup.dart
-apps/qyro/lib/startup/startup_coordinator.dart
-apps/qyro/pubspec.lock
-apps/qyro/pubspec.yaml
-apps/qyro/test/boot_painters_test.dart
-apps/qyro/test/boot_visual_contract_test.dart
-apps/qyro/test/boot_wordmark_test.dart
-apps/qyro/test/branding_generator_test.dart
-apps/qyro/test/ffi/qyro_native_api_test.dart
-apps/qyro/test/localization_contract_test.dart
-apps/qyro/test/qyro_app_test.dart
-apps/qyro/test/scramble_decode_engine_test.dart
-apps/qyro/test/startup_coordinator_test.dart
-apps/qyro/windows/runner/main.cpp
-apps/qyro/windows/runner/win32_window.cpp
-design/brand/source/README.md
-docs/LICENSE_AUDIT.md
-docs/REPOSITORY_RENAME.md
-docs/adr/ADR-0012-build-time-branding.md
-docs/adr/ADR-0013-startup-coordinator.md
-docs/adr/ADR-0014-canonical-logo.md
-docs/adr/ADR-0015-branch-reconciliation.md
-docs/adr/ADR-0016-qyro1-wire-framing.md
-docs/adr/ADR-0017-manifest-serialization.md
-docs/adr/ADR-0018-protocol-semantic-errors.md
-docs/adr/ADR-0019-manifest-display-name.md
-docs/adr/ADR-0020-device-identity-foundation.md
-docs/adr/ADR-0021-authenticated-handshake.md
-docs/adr/ADR-0022-qyro1-frame-aead.md
-docs/adr/ADR-0023-crypto-platform-test-harness.md
-docs/adr/ADR-0024-secure-identity-storage.md
-docs/adr/ADR-0025-android-keystore-identity-storage.md
-docs/adr/ADR-0026-transfer-session.md
-docs/adr/ADR-0027-filesystem-materialisation.md
-docs/audits/CLAUDE_RECOVERY_AUDIT.md
-docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md
-docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md
-docs/audits/SPRINT4C2_AUDIT_CLOSURE.md
-docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md
-docs/audits/SPRINT4C_AEAD_AUDIT.md
-docs/audits/SPRINT4D1_SECURE_STORAGE.md
-docs/audits/external/README.md
-docs/prompts/2026-08-04-master.md
-docs/protocols/manifest-format.md
-docs/protocols/qyro1-wire-format.md
 docs/reports/5C-codex.md
-docs/security/authenticated-handshake.md
-docs/security/device-identity.md
-docs/security/frame-encryption.md
-docs/security/handshake-state-machine.md
-docs/security/handshake-threat-analysis.md
-docs/security/identity-storage.md
-docs/security/nonce-lifecycle.md
-docs/security/parser-threats.md
-docs/security/replay-window.md
-docs/security/secret-lifecycle-audit.md
-docs/security/test-vectors/README.md
-docs/security/test-vectors/aead-v1.json
-docs/security/test-vectors/aead-v1.schema.json
-docs/security/test-vectors/handshake-v1.json
-docs/security/test-vectors/handshake-v1.schema.json
-docs/security/test-vectors/identity-v1.json
-docs/security/test-vectors/rfc4231-hmac-sha256.json
-docs/security/test-vectors/rfc7748-x25519.json
-docs/security/test-vectors/rfc8032-ed25519.json
-docs/security/test-vectors/rfc8439-chacha20poly1305.json
-docs/security/test-vectors/storage-v1.json
-docs/security/test-vectors/storage-v1.schema.json
-docs/testing/crypto-fuzzing.md
-docs/testing/crypto-platform-matrix.md
-rust/crates/qyro_core/src/lib.rs
-rust/crates/qyro_crypto/Cargo.toml
-rust/crates/qyro_crypto/src/aead/corpus.rs
-rust/crates/qyro_crypto/src/aead/error.rs
-rust/crates/qyro_crypto/src/aead/guards.rs
-rust/crates/qyro_crypto/src/aead/mod.rs
-rust/crates/qyro_crypto/src/aead/replay.rs
-rust/crates/qyro_crypto/src/aead/tests.rs
-rust/crates/qyro_crypto/src/aead/vectors.rs
-rust/crates/qyro_crypto/src/error.rs
-rust/crates/qyro_crypto/src/fingerprint.rs
-rust/crates/qyro_crypto/src/fuzzing.rs
-rust/crates/qyro_crypto/src/guards.rs
-rust/crates/qyro_crypto/src/handshake/closure_tests.rs
-rust/crates/qyro_crypto/src/handshake/error.rs
-rust/crates/qyro_crypto/src/handshake/mod.rs
-rust/crates/qyro_crypto/src/handshake/schedule.rs
-rust/crates/qyro_crypto/src/handshake/tests.rs
-rust/crates/qyro_crypto/src/handshake/transcript.rs
-rust/crates/qyro_crypto/src/handshake/vectors.rs
-rust/crates/qyro_crypto/src/identity.rs
-rust/crates/qyro_crypto/src/lib.rs
-rust/crates/qyro_crypto/src/schema.rs
-rust/crates/qyro_crypto/src/signature.rs
-rust/crates/qyro_crypto/src/vectors.rs
-rust/crates/qyro_ffi/Cargo.toml
-rust/crates/qyro_ffi/tests/c_abi_contract.rs
-rust/crates/qyro_fs/Cargo.toml
-rust/crates/qyro_fs/src/error.rs
-rust/crates/qyro_fs/src/guards.rs
-rust/crates/qyro_fs/src/io.rs
-rust/crates/qyro_fs/src/lib.rs
-rust/crates/qyro_fs/src/manifest_builder.rs
-rust/crates/qyro_fs/src/resume.rs
-rust/crates/qyro_fs/src/safe_path.rs
-rust/crates/qyro_fs/src/tests.rs
-rust/crates/qyro_identity_store/Cargo.toml
-rust/crates/qyro_identity_store/src/blob.rs
-rust/crates/qyro_identity_store/src/error.rs
-rust/crates/qyro_identity_store/src/guards.rs
-rust/crates/qyro_identity_store/src/lib.rs
-rust/crates/qyro_identity_store/src/tests.rs
-rust/crates/qyro_manifest/Cargo.toml
-rust/crates/qyro_manifest/src/codec.rs
-rust/crates/qyro_manifest/src/error.rs
-rust/crates/qyro_manifest/src/guards.rs
-rust/crates/qyro_manifest/src/lib.rs
-rust/crates/qyro_manifest/src/limits.rs
-rust/crates/qyro_manifest/src/model.rs
-rust/crates/qyro_manifest/src/path.rs
-rust/crates/qyro_manifest/tests/ancestor_collision_contract.rs
-rust/crates/qyro_manifest/tests/common/mod.rs
-rust/crates/qyro_manifest/tests/corpus_smoke.rs
-rust/crates/qyro_manifest/tests/decode_guard_contract.rs
-rust/crates/qyro_manifest/tests/manifest_contract.rs
-rust/crates/qyro_manifest/tests/portable_collision_contract.rs
-rust/crates/qyro_manifest/tests/property.rs
-rust/crates/qyro_manifest/tests/unicode_path_contract.rs
-rust/crates/qyro_protocol/Cargo.toml
-rust/crates/qyro_protocol/src/decoder.rs
-rust/crates/qyro_protocol/src/envelope.rs
-rust/crates/qyro_protocol/src/error.rs
-rust/crates/qyro_protocol/src/frame.rs
-rust/crates/qyro_protocol/src/guards.rs
-rust/crates/qyro_protocol/src/header.rs
-rust/crates/qyro_protocol/src/lib.rs
-rust/crates/qyro_protocol/src/limits.rs
-rust/crates/qyro_protocol/src/message.rs
-rust/crates/qyro_protocol/src/session.rs
-rust/crates/qyro_protocol/src/version.rs
-rust/crates/qyro_protocol/tests/corpus_smoke.rs
-rust/crates/qyro_protocol/tests/forward_compatibility.rs
-rust/crates/qyro_protocol/tests/plain_encrypted_boundary.rs
-rust/crates/qyro_protocol/tests/property.rs
-rust/crates/qyro_protocol/tests/public_api_contract.rs
-rust/crates/qyro_protocol/tests/session_id_contract.rs
-rust/crates/qyro_protocol/tests/wire_contract.rs
-rust/crates/qyro_transfer/Cargo.toml
-rust/crates/qyro_transfer/src/error.rs
-rust/crates/qyro_transfer/src/guards.rs
-rust/crates/qyro_transfer/src/lib.rs
-rust/crates/qyro_transfer/src/session.rs
-rust/crates/qyro_transfer/src/tests.rs
-rust/crates/qyro_transfer/src/wire.rs
-rust/crates/qyro_win_dpapi/Cargo.toml
-rust/crates/qyro_win_dpapi/src/ffi.rs
-rust/crates/qyro_win_dpapi/src/guards.rs
-rust/crates/qyro_win_dpapi/src/lib.rs
-rust/crates/qyro_win_dpapi/src/store.rs
-rust/crates/qyro_win_dpapi/src/tests.rs
-rust/fuzz/Cargo.lock
-rust/fuzz/Cargo.toml
-rust/fuzz/corpus/frame_decoder/all_ff.bin
-rust/fuzz/corpus/frame_decoder/all_flags.bin
-rust/fuzz/corpus/frame_decoder/all_zero.bin
-rust/fuzz/corpus/frame_decoder/bad_magic.bin
-rust/fuzz/corpus/frame_decoder/bad_major.bin
-rust/fuzz/corpus/frame_decoder/data_chunk.bin
-rust/fuzz/corpus/frame_decoder/empty.bin
-rust/fuzz/corpus/frame_decoder/empty_hello.bin
-rust/fuzz/corpus/frame_decoder/future_minor.bin
-rust/fuzz/corpus/frame_decoder/header_len_too_big.bin
-rust/fuzz/corpus/frame_decoder/header_len_too_small.bin
-rust/fuzz/corpus/frame_decoder/heartbeat.bin
-rust/fuzz/corpus/frame_decoder/hostile_payload_len.bin
-rust/fuzz/corpus/frame_decoder/max_ids.bin
-rust/fuzz/corpus/frame_decoder/one_byte.bin
-rust/fuzz/corpus/frame_decoder/reserved_byte_set.bin
-rust/fuzz/corpus/frame_decoder/reserved_flag_set.bin
-rust/fuzz/corpus/frame_decoder/sealed_bad_sequence.bin
-rust/fuzz/corpus/frame_decoder/sealed_bad_tag.bin
-rust/fuzz/corpus/frame_decoder/sealed_both_flags.bin
-rust/fuzz/corpus/frame_decoder/sealed_empty_payload.bin
-rust/fuzz/corpus/frame_decoder/sealed_flag_without_trailer.bin
-rust/fuzz/corpus/frame_decoder/sealed_missing_tag.bin
-rust/fuzz/corpus/frame_decoder/sealed_oversize_trailer.bin
-rust/fuzz/corpus/frame_decoder/sealed_responder.bin
-rust/fuzz/corpus/frame_decoder/sealed_short_payload.bin
-rust/fuzz/corpus/frame_decoder/sealed_truncated_header.bin
-rust/fuzz/corpus/frame_decoder/sealed_truncated_tag.bin
-rust/fuzz/corpus/frame_decoder/sealed_two_frames.bin
-rust/fuzz/corpus/frame_decoder/sealed_wrong_session.bin
-rust/fuzz/corpus/frame_decoder/trailer_present.bin
-rust/fuzz/corpus/frame_decoder/truncated_header.bin
-rust/fuzz/corpus/frame_decoder/truncated_payload.bin
-rust/fuzz/corpus/frame_decoder/two_frames.bin
-rust/fuzz/corpus/frame_decoder/type_zero.bin
-rust/fuzz/corpus/frame_decoder/unknown_type.bin
-rust/fuzz/corpus/manifest_decoder/absolute.bin
-rust/fuzz/corpus/manifest_decoder/all_zero.bin
-rust/fuzz/corpus/manifest_decoder/backslash.bin
-rust/fuzz/corpus/manifest_decoder/bad_magic.bin
-rust/fuzz/corpus/manifest_decoder/bad_option_tag.bin
-rust/fuzz/corpus/manifest_decoder/bad_version.bin
-rust/fuzz/corpus/manifest_decoder/directory.bin
-rust/fuzz/corpus/manifest_decoder/drive_prefix.bin
-rust/fuzz/corpus/manifest_decoder/empty.bin
-rust/fuzz/corpus/manifest_decoder/hostile_item_count.bin
-rust/fuzz/corpus/manifest_decoder/huge_total.bin
-rust/fuzz/corpus/manifest_decoder/large_item_count.bin
-rust/fuzz/corpus/manifest_decoder/nested.bin
-rust/fuzz/corpus/manifest_decoder/nul_in_path.bin
-rust/fuzz/corpus/manifest_decoder/one_file.bin
-rust/fuzz/corpus/manifest_decoder/reserved_name.bin
-rust/fuzz/corpus/manifest_decoder/sha256_hash.bin
-rust/fuzz/corpus/manifest_decoder/trailing_bytes.bin
-rust/fuzz/corpus/manifest_decoder/traversal.bin
-rust/fuzz/corpus/manifest_decoder/v2_bad_hash_len.bin
-rust/fuzz/corpus/manifest_decoder/v2_blake3.bin
-rust/fuzz/corpus/manifest_decoder/v2_case_collision.bin
-rust/fuzz/corpus/manifest_decoder/v2_dir_with_hash.bin
-rust/fuzz/corpus/manifest_decoder/v2_directory.bin
-rust/fuzz/corpus/manifest_decoder/v2_empty.bin
-rust/fuzz/corpus/manifest_decoder/v2_file_without_hash.bin
-rust/fuzz/corpus/manifest_decoder/v2_hostile_count.bin
-rust/fuzz/corpus/manifest_decoder/v2_illegal_char.bin
-rust/fuzz/corpus/manifest_decoder/v2_mime_mtime.bin
-rust/fuzz/corpus/manifest_decoder/v2_nested.bin
-rust/fuzz/corpus/manifest_decoder/v2_nfd_collision.bin
-rust/fuzz/corpus/manifest_decoder/v2_one_file.bin
-rust/fuzz/corpus/manifest_decoder/v2_trailing.bin
-rust/fuzz/corpus/manifest_decoder/v2_traversal.bin
-rust/fuzz/corpus/manifest_decoder/v2_unicode.bin
-rust/fuzz/corpus/manifest_decoder/with_mime_and_mtime.bin
-rust/fuzz/corpus/relative_path/absolute.txt
-rust/fuzz/corpus/relative_path/backslash.txt
-rust/fuzz/corpus/relative_path/control.txt
-rust/fuzz/corpus/relative_path/deep.txt
-rust/fuzz/corpus/relative_path/dot_segment.txt
-rust/fuzz/corpus/relative_path/double_slash.txt
-rust/fuzz/corpus/relative_path/drive.txt
-rust/fuzz/corpus/relative_path/empty.txt
-rust/fuzz/corpus/relative_path/invalid_utf8.txt
-rust/fuzz/corpus/relative_path/long_segment.txt
-rust/fuzz/corpus/relative_path/nested.txt
-rust/fuzz/corpus/relative_path/nul_byte.txt
-rust/fuzz/corpus/relative_path/only_slash.txt
-rust/fuzz/corpus/relative_path/reserved_com1_ext.txt
-rust/fuzz/corpus/relative_path/reserved_con.txt
-rust/fuzz/corpus/relative_path/simple.txt
-rust/fuzz/corpus/relative_path/space_name.txt
-rust/fuzz/corpus/relative_path/trailing_dot.txt
-rust/fuzz/corpus/relative_path/trailing_space.txt
-rust/fuzz/corpus/relative_path/traversal.txt
-rust/fuzz/corpus/relative_path/unc.txt
-rust/fuzz/corpus/relative_path/unicode.txt
-rust/fuzz/fuzz_targets/encrypted_envelope.rs
-rust/fuzz/fuzz_targets/frame_decoder.rs
-rust/fuzz/fuzz_targets/frame_opener.rs
-rust/fuzz/fuzz_targets/manifest_decoder.rs
-rust/fuzz/fuzz_targets/relative_path.rs
-rust/fuzz/fuzz_targets/replay_window.rs
-rust/guards/source_guard.rs
-rust/tools/qyro_crypto_smoke/Cargo.toml
-rust/tools/qyro_crypto_smoke/include/module.modulemap
-rust/tools/qyro_crypto_smoke/include/qyro_crypto_smoke.h
-rust/tools/qyro_crypto_smoke/ios/Package.swift
-rust/tools/qyro_crypto_smoke/ios/Tests/QyroCryptoSmokeTests/QyroCryptoSmokeTests.swift
-rust/tools/qyro_crypto_smoke/src/lib.rs
-rust/tools/qyro_crypto_smoke/src/main.rs
-rust/tools/qyro_store_smoke/Cargo.toml
-rust/tools/qyro_store_smoke/src/main.rs
-scripts/check_crypto_platform_evidence.ps1
-scripts/check_crypto_platform_evidence.sh
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
-scripts/check_harness_isolation.ps1
-scripts/check_harness_isolation.sh
-scripts/check_repo_portability.ps1
-scripts/check_repo_portability.sh
-scripts/tests/crypto_platform_evidence_contract_test.ps1
-scripts/tests/crypto_platform_evidence_contract_test.sh
 scripts/tests/docs_consistency_contract_test.ps1
 scripts/tests/docs_consistency_contract_test.sh
-scripts/tests/launch_surface_contract_test.ps1
-scripts/tests/launch_surface_contract_test.sh
-scripts/tests/repo_portability_contract_test.ps1
-scripts/tests/repo_portability_contract_test.sh
-scripts/tests/windows_package_contract_test.ps1
-scripts/verify_windows_package.ps1
-tools/branding_generator/bin/generate.dart
-tools/branding_generator/lib/branding_generator.dart
-tools/branding_generator/pubspec.yaml
-tools/logo_ascii_generator/generate.py
-tools/logo_ascii_generator/test_logo_ascii_generator.py
 ```
 
-El delta propio contra la base exigida es:
-
-```text
-docs/reports/5C-codex.md
-```
+No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo de los crates reservados al otro agente.
 
 ## 14. Todos los runs de CI de la rama
 
@@ -916,12 +910,17 @@ docs/reports/5C-codex.md
 | 31520332918 | 15934aae3dda7f469b5496c8341eb78d9e32f335 | CI | workflow_dispatch | success |
 | 31521002851 | a1c7398fbc2d7ef903282f3d64cfb19da23dcf42 | CI | workflow_dispatch | failure global; `rust` PASS, `documentation` FAIL por ledger |
 
-Lista reconstruida por API al detener la Fase 1: son los dos únicos runs de la rama. No hubo runs cancelados; el segundo fallo se conserva y no se filtra.
+Lista reconstruida por API antes de lanzar la revalidación de Fase 1bis. No hubo
+runs cancelados; el fallo anterior se conserva y no se filtra.
 
 ## 15. Qué NO debe leerse como progreso
 
-Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay red, sockets, descubrimiento, FFI del motor ni selector de archivos; Enviar y Recibir siguen deshabilitados. No hay persistencia de identidad en Android ni iOS. QYR-0072 sigue abierta deliberadamente. Nada se ha probado en hardware físico.
+Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay red, sockets, descubrimiento, FFI del motor ni selector de archivos; Enviar y Recibir siguen deshabilitados. No hay persistencia de identidad en Android ni iOS. QYR-0072 sigue abierta hasta la Fase 7. Nada se ha probado en hardware físico.
 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
-El sprint no llegó a cambiar la superficie de cabecera. El siguiente paso necesita resolver primero la incompatibilidad entre el reporte verbatim, la regla de IDs del checker y la prohibición de tocar el ledger. Después, la superficie de cabecera que resulte de la Fase 5 debe comunicarse al agente de red sin modificar los documentos raíz prohibidos.
+El sprint todavía no cambió la superficie de cabecera. El bloqueo documental ya
+está resuelto; la Puerta 1bis espera evidencia CI. Cuando la Fase 5 congele e
+implemente ADR-0029, §16 documentará el API exacto para el agente de red. Los
+cambios compartidos actuales son las entradas añadidas al final del ledger y
+las líneas de escaneo de rangos en ambos checkers y sus contratos.

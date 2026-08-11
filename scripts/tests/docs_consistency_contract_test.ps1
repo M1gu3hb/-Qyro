@@ -96,6 +96,25 @@ try {
     Add-Content (Join-Path $falseClaim 'README.md') 'File transfer: implemented'
     Assert-FailsWith $falseClaim '[BLOCKER] Pending capability claim'
 
+    # Reserved ranges describe ownership, not findings. Their endpoints must
+    # not require placeholder ledger records outside an agent's allocation.
+    $rangeRefs = New-Fixture; $fixtures += $rangeRefs
+    @('## QYR-0001 — fixture', '', '- Estado: cerrado') |
+        Set-Content -LiteralPath (Join-Path $rangeRefs 'BUGS_PENDING.md')
+    Add-Content (Join-Path $rangeRefs 'README.md') 'Reserved: QYR-0076–QYR-0099; this agent owns QYR-0100 onward.'
+    $output = & pwsh -NoProfile -File $checker -RepoRoot $rangeRefs 2>&1
+    if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
+        throw "Reserved range fixture failed: $($output -join [Environment]::NewLine)"
+    }
+
+    # A concrete citation remains subject to the ledger rule.
+    $concreteFinding = New-Fixture; $fixtures += $concreteFinding
+    @('## QYR-0001 — fixture', '', '- Estado: cerrado') |
+        Set-Content -LiteralPath (Join-Path $concreteFinding 'BUGS_PENDING.md')
+    $missingId = 'QYR-' + '0101'
+    Add-Content (Join-Path $concreteFinding 'README.md') "$missingId is a concrete missing finding."
+    Assert-FailsWith $concreteFinding "$missingId is cited but has no entry"
+
     # A commit recorded one revision back is normal: STATUS cannot contain the SHA
     # of the very commit that introduces it.
     $fresh = New-GitFixture; $fixtures += $fresh

@@ -56,7 +56,8 @@ assert_fails_with() {
 
 valid="$(mktemp -d)"; missing="$(mktemp -d)"; stale="$(mktemp -d)"
 scripts_pending="$(mktemp -d)"; false_claim="$(mktemp -d)"
-trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim"' EXIT
+range_refs="$(mktemp -d)"; concrete_finding="$(mktemp -d)"
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding"' EXIT
 
 make_fixture "$valid"
 output="$(bash "$checker" --repo-root "$valid")"
@@ -77,6 +78,21 @@ assert_fails_with "$scripts_pending" "[BLOCKER] AGENTS script state"
 make_fixture "$false_claim"
 printf '\nFile transfer: implemented\n' >> "$false_claim/README.md"
 assert_fails_with "$false_claim" "[BLOCKER] Pending capability claim"
+
+# Reserved ranges describe ownership, not findings. Their endpoints must not
+# force agents to create placeholder ledger records outside their allocation.
+make_fixture "$range_refs"
+printf '## QYR-0001 — fixture\n\n- Estado: cerrado\n' > "$range_refs/BUGS_PENDING.md"
+printf '\nReserved: QYR-0076–QYR-0099; this agent owns QYR-0100 onward.\n' >> "$range_refs/README.md"
+output="$(bash "$checker" --repo-root "$range_refs")"
+[[ "$output" == *"[OK] Documentation consistency"* ]]
+
+# A concrete citation remains subject to the ledger rule.
+make_fixture "$concrete_finding"
+printf '## QYR-0001 — fixture\n\n- Estado: cerrado\n' > "$concrete_finding/BUGS_PENDING.md"
+missing_id='QYR-''0101'
+printf '\n%s is a concrete missing finding.\n' "$missing_id" >> "$concrete_finding/README.md"
+assert_fails_with "$concrete_finding" "$missing_id is cited but has no entry"
 
 # STATUS.md drifted 58 commits behind audit/baseline-hardening without any check
 # noticing, because only the field layout was validated. These fixtures pin the
@@ -99,7 +115,7 @@ set_verified_commit() {
 
 fresh="$(mktemp -d)"; drifted="$(mktemp -d)"
 unreachable="$(mktemp -d)"; malformed="$(mktemp -d)"
-trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$fresh" "$drifted" "$unreachable" "$malformed"' EXIT
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$fresh" "$drifted" "$unreachable" "$malformed"' EXIT
 
 # A commit recorded one revision back is normal: STATUS cannot contain the SHA of
 # the very commit that introduces it.

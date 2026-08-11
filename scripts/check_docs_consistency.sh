@@ -247,18 +247,30 @@ fi
 
 # ------------------------------------------------------------- finding ledger
 #
-# Every `QYR-00xx` cited anywhere must have exactly one entry in
+# Every concrete `QYR-00xx` citation must have exactly one entry in
 # BUGS_PENDING.md. QYR-0043: two identifiers from an external audit had zero
 # mentions in this repository, part of their content was fixed without being
 # numbered, and QYR-0024 and QYR-0027 lived in STATUS.md and NEXT_STEPS.md while
 # every other finding lived in the ledger. An identifier with no entry is a
-# finding whose state nobody can look up.
+# finding whose state nobody can look up. Ownership declarations such as
+# `QYR-0100 onward` and `QYR-0076–QYR-0099` are ranges, not finding citations;
+# counting their boundaries would require fake records in another owner's range
+# (QYR-0100).
 ledger="$repo_root/BUGS_PENDING.md"
 if [[ -f "$ledger" ]]; then
   recorded="$(grep -oE '^## QYR-[0-9]{4}' "$ledger" | sed 's/^## //' | sort -u)"
-  cited="$(grep -rhoE 'QYR-[0-9]{4}' \
-      --include='*.md' --include='*.rs' --include='*.sh' --include='*.ps1' \
-      --include='*.yml' "$repo_root" 2>/dev/null | sort -u)"
+  cited="$(
+    grep -rhE 'QYR-[0-9]{4}' \
+        --include='*.md' --include='*.rs' --include='*.sh' --include='*.ps1' \
+        --include='*.yml' "$repo_root" 2>/dev/null |
+      sed -E \
+        -e 's/QYR-[0-9]{4}[[:space:]]*-[[:space:]]*QYR-[0-9]{4}//g' \
+        -e 's/QYR-[0-9]{4}[[:space:]]*–[[:space:]]*QYR-[0-9]{4}//g' \
+        -e 's/QYR-[0-9]{4}[[:space:]]*—[[:space:]]*QYR-[0-9]{4}//g' \
+        -e 's/QYR-[0-9]{4}[[:space:]]+(onward|onwards|en adelante)//g' \
+        -e 's/QYR-[0-9]{4}\+//g' |
+      grep -oE 'QYR-[0-9]{4}' | sort -u || true
+  )"
   while IFS= read -r finding; do
     [[ -z "$finding" ]] && continue
     if ! grep -qx -- "$finding" <<< "$recorded"; then
