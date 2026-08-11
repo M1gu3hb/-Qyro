@@ -1571,3 +1571,41 @@
   `resume_metadata_for_another_transfer_makes_the_part_an_orphan` falló con
   longitud 8192 en vez de 1; al retirar después la comparación de
   `transfer_id`, falló con longitud 4096 en vez de 1
+
+## QYR-0102 — QYR-0068 y `header.rs` negaban una API pública existente
+
+- Plataforma: protocolo y documentación
+- Severidad: P2
+- Esperado: el ledger, el comentario de `FrameHeader::new` y la ADR vigente
+  describen la superficie pública que un crate externo puede compilar y usar
+- Actual: QYR-0068 y `header.rs` afirman que nada público puede rellenar los
+  identificadores, pero `Frame::with_identifiers` y
+  `FrameHeader::with_identifiers` son públicos desde `cc38554`; pruebas de
+  integración y `qyro_crypto_smoke` ya los llaman con valores no cero
+- Resolución: pendiente; ADR-0029 congela la API real antes de tocar código. La
+  fase debe corregir el comentario, convertir la evidencia existente en los
+  tres contratos nominales y actualizar QYR-0068 sin inventar una API duplicada
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: `git show 15934aa:rust/crates/qyro_protocol/src/header.rs` contiene
+  `pub const fn with_identifiers`; `rg -n 'with_identifiers'` encuentra usos en
+  tests externos y `rust/tools/qyro_crypto_smoke/src/lib.rs`
+
+## QYR-0103 — `FrameError::InvalidIdentifier` no tiene construcción posible
+
+- Plataforma: protocolo
+- Severidad: P3
+- Esperado: cada variante pública de `FrameError` corresponde a un rechazo que
+  el decoder o un constructor puede producir, o su ausencia está decidida y
+  documentada sin prometer un control inexistente
+- Actual: `InvalidIdentifier { field: IdentifierField }` sólo aparece en su
+  declaración, `Display` y reexport. Ningún código lo construye; ADR-0029 decide
+  además que framing acepta el rango entero, incluido cero
+- Resolución: pendiente. No se reutiliza para routing: `qyro_protocol` no conoce
+  transfers activos ni manifests. Fase 9 decidirá su compatibilidad al añadir
+  la guarda de sitios de construcción que hoy falta en este crate
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: `rg -n 'InvalidIdentifier|IdentifierField' rust/crates/qyro_protocol`
+  sólo devuelve `error.rs` y el reexport de `lib.rs`; ninguna rama productiva
+  devuelve la variante
