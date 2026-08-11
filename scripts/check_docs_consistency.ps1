@@ -246,7 +246,10 @@ if (Test-Path -LiteralPath $ledger) {
     $cited = [System.Collections.Generic.HashSet[string]]::new()
     $extensions = @('*.md', '*.rs', '*.sh', '*.ps1', '*.yml')
     foreach ($file in (Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Include $extensions -ErrorAction SilentlyContinue)) {
-        $content = Get-Content -LiteralPath $file.FullName -Raw
+        # `Get-Content -Raw` returns $null for an empty file. The fixtures keep
+        # intentionally empty scripts, and range normalisation must treat those
+        # as empty text rather than passing null to Regex.Replace.
+        $content = [string](Get-Content -LiteralPath $file.FullName -Raw)
         $content = [regex]::Replace($content, 'QYR-[0-9]{4}\s*[-–—]\s*QYR-[0-9]{4}', '')
         $content = [regex]::Replace($content, 'QYR-[0-9]{4}\s+(?:onward|onwards|en adelante)', '')
         $content = [regex]::Replace($content, 'QYR-[0-9]{4}\+', '')
