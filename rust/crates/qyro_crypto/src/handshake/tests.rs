@@ -8,7 +8,8 @@
 use super::{
     CRYPTO_SUITE_ID, EstablishedInitiator, EstablishedResponder, FINISHED_MAC_LEN,
     HANDSHAKE_VERSION, HandshakeError, INITIATOR_FINISH_LEN, INITIATOR_HELLO_LEN, InitiatorStart,
-    NONCE_LEN, RESPONDER_FINISH_LEN, RESPONDER_HELLO_LEN, ResponderStart, X25519_PUBLIC_LEN,
+    NONCE_LEN, RESPONDER_FINISH_LEN, RESPONDER_HELLO_LEN, ResponderStart, TYPE_INITIATOR_HELLO,
+    X25519_PUBLIC_LEN, check_prefix,
 };
 use crate::identity::{DeviceIdentity, PUBLIC_IDENTITY_WIRE_LEN};
 
@@ -271,6 +272,22 @@ fn a_message_of_the_wrong_length_is_refused() {
             "{extra} bytes past an InitiatorHello must be named as trailing"
         );
     }
+}
+
+#[test]
+fn the_prefix_guard_itself_rejects_a_message_one_byte_short() {
+    let mut message = vec![0u8; INITIATOR_HELLO_LEN - 1];
+    message[0] = HANDSHAKE_VERSION;
+    message[1] = CRYPTO_SUITE_ID;
+    message[2] = TYPE_INITIATOR_HELLO;
+
+    assert_eq!(
+        check_prefix(&message, TYPE_INITIATOR_HELLO, INITIATOR_HELLO_LEN),
+        Err(HandshakeError::InvalidMessageLength {
+            found: INITIATOR_HELLO_LEN - 1,
+            expected: INITIATOR_HELLO_LEN,
+        })
+    );
 }
 
 #[test]

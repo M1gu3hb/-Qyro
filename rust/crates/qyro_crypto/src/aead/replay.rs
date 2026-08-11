@@ -358,6 +358,41 @@ mod tests {
     }
 
     #[test]
+    fn advancing_from_a_nonzero_sequence_uses_the_delta() {
+        let mut window = ReplayWindow::new();
+        window.record(100).expect("first nonzero sequence");
+        window.record(102).expect("advance by two");
+
+        assert_eq!(window.highest_seen(), Some(102));
+        assert_eq!(
+            window.check(100),
+            Err(AeadError::ReplayDetected { sequence: 100 }),
+            "the old top moves back by the delta, not by a sum involving its absolute value"
+        );
+        assert!(window.check(101).is_ok(), "101 never arrived");
+    }
+
+    #[test]
+    fn a_recorded_bit_crosses_a_bitmap_word_boundary() {
+        let mut window = ReplayWindow::new();
+        window.record(100).expect("first");
+        window.record(37).expect("63 behind the top");
+        window
+            .record(102)
+            .expect("push the older bit from offset 63 to 65");
+
+        assert_eq!(
+            window.check(37),
+            Err(AeadError::ReplayDetected { sequence: 37 }),
+            "the bit carried from one u64 word to the next must remain recorded"
+        );
+        assert!(
+            window.check(38).is_ok(),
+            "the neighbouring sequence never arrived"
+        );
+    }
+
+    #[test]
     fn recording_the_same_sequence_twice_reports_it() {
         let mut window = ReplayWindow::new();
         window.record(5).expect("first");

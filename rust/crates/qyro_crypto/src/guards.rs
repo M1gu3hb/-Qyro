@@ -170,6 +170,35 @@ fn every_public_path_returning_key_material_is_listed() {
 }
 
 #[test]
+fn every_plain_secret_array_is_zeroized_on_drop() {
+    let source = format!(
+        "{}\n{}",
+        production_source("aead/mod.rs"),
+        production_source("handshake/schedule.rs")
+    );
+    let compact: String = source
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect();
+
+    for (secret_type, drop_body) in [
+        (
+            "DirectionalKeys",
+            "implDropforDirectionalKeys{fndrop(&mutself){self.nonce_prefix.zeroize();}}",
+        ),
+        (
+            "SessionKey",
+            "implDropforSessionKey{fndrop(&mutself){self.0.zeroize();}}",
+        ),
+    ] {
+        assert!(
+            compact.contains(drop_body),
+            "{secret_type} must keep an explicit Drop implementation that zeroizes its plain secret array"
+        );
+    }
+}
+
+#[test]
 fn every_identity_error_has_a_construction_site() {
     assert_every_variant_has_a_construction_site(
         &PRODUCTION_FILES,

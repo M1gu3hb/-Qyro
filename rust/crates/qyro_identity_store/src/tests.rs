@@ -209,6 +209,20 @@ fn a_truncated_blob_is_refused() {
 }
 
 #[test]
+fn an_exactly_header_sized_blob_reaches_length_validation() {
+    let header = crate::blob::BlobHeader {
+        version: VERSION,
+        wrap: WRAP_DPAPI_USER,
+        wrapped_len: 0,
+    }
+    .encode();
+
+    let (parsed, body) = crate::blob::parse(&header).expect("a complete header is not truncated");
+    assert_eq!(parsed.wrapped_len, 0);
+    assert!(body.is_empty());
+}
+
+#[test]
 fn an_empty_blob_is_refused() {
     assert_eq!(
         open_identity(&[], &FakeWrapper).unwrap_err(),

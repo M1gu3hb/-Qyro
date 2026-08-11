@@ -134,7 +134,13 @@ fn every_workspace_crate_has_the_minimum_structural_guards_or_an_exact_exception
             .find(|(excepted, _)| *excepted == name);
         let guard_path = root.join(member).join("src/guards.rs");
         let guard = std::fs::read_to_string(&guard_path).unwrap_or_default();
-        let has_minimum = guard.contains("/../../guards/source_guard.rs")
+        let source_root = root.join(member).join("src");
+        let guard_module_is_active = ["lib.rs", "main.rs"].iter().any(|crate_root| {
+            std::fs::read_to_string(source_root.join(crate_root))
+                .is_ok_and(|source| source.lines().any(|line| line.trim() == "mod guards;"))
+        });
+        let has_minimum = guard_module_is_active
+            && guard.contains("/../../guards/source_guard.rs")
             && guard.contains("assert_no_production_path_can_panic(&PRODUCTION_FILES)")
             && guard.contains("assert_the_production_list_matches_the_source(&PRODUCTION_FILES)");
 
