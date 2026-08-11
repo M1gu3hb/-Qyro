@@ -202,11 +202,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Install the pinned mutation runner
         run: cargo install cargo-mutants --version 27.1.0 --locked
+      - name: Prepare the mutation output directory
+        run: mkdir -p mutation-results/fs-linux
       - name: Sweep every qyro_fs mutant on Linux
         continue-on-error: true
         run: >-
           cargo mutants --no-config -p qyro_fs -j 4 --baseline skip --timeout 90
           -o mutation-results/fs-linux
+      - name: Require machine-readable mutation evidence
+        if: always()
+        run: test -f mutation-results/fs-linux/mutants.out/outcomes.json
       - name: Print the complete mutation classification
         if: always()
         shell: bash
@@ -224,3 +229,4 @@ jobs:
         with:
           name: phase9-qyro-fs-linux-mutation
           path: mutation-results/fs-linux/mutants.out
+          if-no-files-found: error
