@@ -490,6 +490,47 @@ fn sender_next(wired: &mut WiredTransfer) -> Result<(), TransferError> {
     }
 }
 
+/// Releases the part files of a transfer that will never finish.
+///
+/// A cancelled transfer leaves a `.qyro-part` per started item and nothing
+/// removes it: `FileSink` has no `abandon`, and the only thing that deletes a
+/// part file is `finish_item` on a digest that does not match. So that is what
+/// this calls — a partially written item cannot hash to what the manifest
+/// promised, so `finish_item` refuses it and deletes it, which is exactly the
+/// cleanup wanted.
+///
+/// It works, and it is the wrong shape. The caller has to know that "refuse it
+/// and it will tidy up" is the way to abandon a transfer, which is a
+/// side effect rather than an interface. `qyro_fs` is another agent's this run,
+/// so the finding is recorded rather than fixed here.
+fn abandon(sink: &mut FileSink, items: &[u32]) {
+    for item_id in items {
+        let _ = sink.finish_item(*item_id);
+    }
+}
+
+/// No `.qyro-part` anywhere under `dir`.
+///
+/// Required of every ending by the sprint prompt, and it is the half that is
+/// easy to miss: refusing is not enough if the bytes are left under a name that
+/// means "transfer in progress". Finding 6A-12 was exactly this, caught in the
+/// two-process harness.
+fn assert_no_part_files(dir: &PathBuf, ending: &str) {
+    let leftovers: Vec<String> = fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.contains("qyro-part"))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(
+        leftovers.is_empty(),
+        "after {ending}, the destination still holds {leftovers:?}"
+    );
+}
+
 fn cleanup(wired: &WiredTransfer) {
     let _ = fs::remove_dir_all(&wired.source_dir);
     let _ = fs::remove_dir_all(&wired.destination);
@@ -534,6 +575,10 @@ fn a_sender_that_cancels_mid_transfer_tells_the_receiver() {
         "a cancelled transfer left a final file at {}",
         arrived.display()
     );
+    // The transfer is over and will never resume, so its part files go. See
+    // `abandon` for why this is spelled the way it is.
+    abandon(&mut wired.sink, &[1]);
+    assert_no_part_files(&wired.destination, "a cancel");
 
     cleanup(&wired);
 }
@@ -576,6 +621,8 @@ fn a_receiver_that_refuses_stops_the_sender() {
         "the sender produced {} more frames after being refused",
         produced.len()
     );
+    abandon(&mut wired.sink, &[1]);
+    assert_no_part_files(&wired.destination, "a refusal");
 
     cleanup(&wired);
 }

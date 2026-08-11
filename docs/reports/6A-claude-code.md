@@ -13,53 +13,70 @@
 
 ### Sobre los identificadores de hallazgo de este informe
 
-Los hallazgos van numerados **`6A-n`**, no `QYR-00xx`. No es un descuido: es la
-consecuencia directa de §5 de este sprint, y está explicado en el hallazgo 6A-1.
-En corto: §5 prohíbe a los dos agentes tocar el ledger, y
-`check_docs_consistency` bloquea cualquier identificador citado que no tenga entrada
-en él. Acuñar aquí un número que no puedo registrar produciría exactamente el fallo
-que ese control existe para detectar. **El supervisor asigna el número QYR-00xx de
-cada hallazgo al consolidar**, y esa asignación es trivial porque cada uno lleva
-abajo su descripción completa, su efecto y su estado.
+Los hallazgos nacieron numerados **`6A-n`** porque el primer prompt prohibía tocar
+el ledger, y acuñar un identificador que no se puede registrar produce exactamente
+el fallo que `check_docs_consistency` existe para detectar. Es el hallazgo
+6A-1 (QYR-0076).
+
+**El segundo prompt levantó esa prohibición y asignó un rango.** Los doce hallazgos
+tienen ya su ficha en `BUGS_PENDING.md`, y las tablas de §4 y §5 llevan las dos
+etiquetas: la `6A-n` con la que se descubrieron y la `QYR-00xx` que las registra.
+Se conservan las dos porque los commits de este sprint citan las primeras, y
+renombrarlas sin dejar rastro rompería ese hilo.
+
+| Hallazgo | Ficha | | Hallazgo | Ficha |
+|---|---|---|---|---|
+| 6A-1 | QYR-0076 | | 6A-7 | QYR-0082 |
+| 6A-2 | QYR-0077 | | 6A-8 | QYR-0083 |
+| 6A-3 | QYR-0078 | | 6A-9 | QYR-0084 |
+| 6A-4 | QYR-0079 | | 6A-10 | QYR-0085 |
+| 6A-5 | QYR-0080 | | 6A-11 | QYR-0086 |
+| 6A-6 | QYR-0081 | | 6A-12 | QYR-0087 |
+
+Y cinco fichas más que no vienen de un `6A-n`: QYR-0088 (`FileSink` sin forma de
+abandonar), QYR-0089 (`TransferReject` que nadie emite), QYR-0090 (una prueba mía
+que se cuelga bajo mutación) y QYR-0091 (este informe contradiciéndose a sí mismo).
 
 ---
 
-## 1. El prompt recibido, verbatim y completo
+## 1. Los prompts recibidos, verbatim y completos
 
-**El prompt está reproducido verbatim, íntegro y sin una sola modificación en
-[`docs/reports/6A-prompt.txt`](6A-prompt.txt)** (223 líneas, SHA-256
-`c88b4bc54ae04de3ad12c55bf8b9df26aed77fe860916409f003929cbb368385`). El formato de
-origen no traía marcas de código; se conserva el texto plano tal cual llegó.
+Dos prompts gobiernan este sprint. El segundo corrige tres criterios del primero
+—QYR-0076, QYR-0081 y QYR-0085— y amplía el reparto de archivos.
 
-Vive en un archivo hermano y no incrustado aquí por un motivo concreto que conviene
-dejar escrito, porque de otro modo parecería una comodidad de maquetación y no lo
-es:
+Los dos están reproducidos **verbatim, íntegros y sin una sola modificación**:
 
-El prompt cita, en su §9, los identificadores de los tres huecos de prueba de
-`qyro_fs` que asigna al otro agente; el primero de los tres es el que importa aquí, y
-este informe no lo escribe literalmente por el motivo que sigue.
-`check_docs_consistency`, que `ci.yml` ejecuta en Bash y en PowerShell, bloquea
-**cualquier** identificador `QYR-00xx` citado en un `.md` que no tenga su entrada en
-`BUGS_PENDING.md`. Esa entrada le corresponde a Codex y aparecerá en su rama. Y §5
-prohíbe a los dos agentes tocar
-`BUGS_PENDING.md` en este run. Las tres reglas no pueden cumplirse a la vez mientras
-el prompt esté dentro de un `.md`; es el hallazgo 6A-1.
+| Prompt | Archivo | SHA-256 |
+|---|---|---|
+| Inicial — Sprint 6A | [`6A-prompt.txt`](6A-prompt.txt) | `c88b4bc54ae04de3ad12c55bf8b9df26aed77fe860916409f003929cbb368385` |
+| Segundo — fases 5 a 10 | [`6A-prompt-2.txt`](6A-prompt-2.txt) | `a7dfaf424dcdd46ca1ff8bd1923de2378f02a28cec3294a5f325c4861cbfb379` |
 
-De las cuatro salidas posibles, ésta es la única que **no debilita ningún control, no
-toca ningún archivo ajeno y no deja la rama en rojo**. Las otras tres se descartaron
-así:
+### Por qué siguen en archivos hermanos, aunque el segundo prompt pida lo contrario
 
-| Salida descartada | Por qué |
-|---|---|
-| Dejar `ci.yml` en rojo hasta que el supervisor fusione | Incumple el criterio de §10 de seis workflows en verde, y §15 lo prohíbe expresamente |
-| Escribir yo las entradas en `BUGS_PENDING.md` | Toca un archivo prohibido por §5 y provoca justo el conflicto de fusión que §5 existe para evitar: Codex está escribiendo esas mismas entradas |
-| Eximir `docs/reports/` en `check_docs_consistency` | Debilita un control vivo para que pase mi propio artefacto. Y los informes son precisamente donde hay que cazar un hallazgo citado sin ficha |
+El segundo prompt dice, con razón, que la prohibición que obligó a sacarlos del
+informe ya no existe, y pide devolverlos al `.md`. **Lo intenté y no pasa**, por un
+motivo que el propio prompt crea sin querer. Es QYR-0092.
 
-Lo que queda es una distinción que además es correcta de por sí: **un documento
-externo archivado verbatim no es el repositorio citando un hallazgo, es el
-repositorio guardando el texto de otro.** El archivo hermano hace esa distinción
-explícita en el sistema de archivos en vez de esconderla. El contenido no se ha
-tocado: es byte a byte lo que se recibió, y el SHA-256 de arriba lo fija.
+`check_docs_consistency` bloquea cualquier identificador `QYR-00xx` citado en un
+`.md` que no tenga ficha en `BUGS_PENDING.md`. Entre los dos prompts se citan tres
+que no la tienen, y ninguno de los tres puedo registrarlo yo:
+
+| Identificador | De dónde sale | Por qué no puedo crearlo |
+|---|---|---|
+| El primero de los huecos de prueba de `qyro_fs` | §9 del prompt inicial | Es de Codex. Su ficha aparecerá en su rama |
+| El límite superior de mi rango | §0 del segundo prompt | Está *en* mi rango, pero es un número de frontera, no un hallazgo. Inventarle una ficha para callar al comprobador es exactamente lo que este proyecto llama ajustar el barrido para que pase |
+| El inicio del rango de Codex | §0 del segundo prompt | Fuera de mi rango. El segundo prompt lo prohíbe explícitamente |
+
+Así que la elección real es: dejar `ci.yml` en rojo, inventar fichas ajenas, o
+mantener el texto fuera de los archivos que el comprobador escanea. La tercera es la
+única que no rompe nada, y la distinción que la sostiene sigue siendo correcta: **un
+documento externo archivado verbatim no es el repositorio citando un hallazgo, es el
+repositorio guardando el texto de otro.**
+
+Los digests de arriba son lo que hace que esto no sea una excusa: el contenido está
+fijado y se puede comprobar con `sha256sum`. Lo que cambió respecto a la Puerta 4 es
+que ahora **los dos** prompts están archivados y ambos llevan digest, y que el motivo
+está registrado como ficha en vez de vivir sólo en este párrafo.
 
 ---
 
@@ -205,18 +222,18 @@ dos como final rompería toda transferencia en una de las dos plataformas**.
 
 | # | Hallazgo | Fase | Gravedad | Dónde |
 |---|---|---|---|---|
-| 6A-1 | **Tres reglas del propio sprint no pueden cumplirse a la vez.** §13.1 exige el prompt verbatim en el informe; el prompt cita el identificador del primero de los tres huecos de prueba de `qyro_fs` de su §9; `check_docs_consistency` bloquea todo identificador citado sin ficha en `BUGS_PENDING.md`; y §5 prohíbe a los dos agentes tocar `BUGS_PENDING.md`. Alcanza además a §13.5, que exige proponer identificadores para los hallazgos no arreglados: cada uno que acuñara dispararía el mismo bloqueo | 1 | Media — bloquea `ci.yml`, no afecta al producto | §1 |
-| 6A-2 | Falso verde propio al reproducir la línea base: `&&` tras una tubería lee el estado de salida de `tail`, no el de `rustfmt`, y la ruta `rust/Cargo.toml` no existe —el workspace está en la raíz—. El comando fallaba e imprimía `FMT_PASS` | 0 | Baja — instrumento de medida, detectado y rehecho en la misma fase | §2 |
-| 6A-3 | **`qyro_net` no se ejecuta en Windows en ningún workflow.** `cargo test --workspace` corre sólo en `ubuntu-latest` (`ci.yml:33,47`); los trabajos de Windows prueban `qyro_crypto` y `qyro_win_dpapi` y nada más. Y este crate es precisamente donde el comportamiento diverge entre plataformas | 2 | **Alta** para lo que se pueda afirmar de Windows; nula para Linux | §8, §15 |
-| 6A-4 | Un control que sobrevivió a su propio borrado, encontrado por el barrido: quitar `TimedOut` de `is_read_timeout` no rompía nada, porque en Linux un `read` vencido da `WouldBlock` y sólo Windows da `TimedOut`. La mitad de Windows de esa rama no la defendía nadie. Es 6A-3 con consecuencias concretas | 2 | Media — habría roto **toda** transferencia en Windows sin que ninguna prueba lo dijera | §10 |
-| 6A-9 | **`qyro_transfer::Receiver` no dejaba leer el manifest que aceptaba.** Derivaba su estado por elemento y lo tiraba. En un proceso no se nota porque el llamante ya tiene una copia; sobre un socket el extremo receptor **sólo** conoce el manifest por el cable, y `FileSink` se construye a partir de un `&TransferManifest` — así que ningún receptor real podía materializar un archivo | 4 | **Alta.** Bloqueaba la Fase 4 entera | §5 |
-| 6A-10 | El criterio de §10 dice que `Cargo.lock` pasa de 61 a 62 «y el que entra es `qyro_net`». Son **63**: entra también `qyro_net_smoke`, el binario de dos procesos que §5 autoriza y §8 Fase 4 exige. §10 y §8 no concuerdan | 4 | Baja — la intención del criterio (cero dependencias externas) se cumple | §12 |
-| 6A-11 | **Mi prueba de memoria no distinguía un contador medido de una constante.** Con dos tamaños de archivo, un pico que informara siempre el mismo número satisface a la vez «por debajo del techo» y «no crece con el archivo». Lo encontró el barrido: mutar el pico a la constante `1_049_804` **pasó** | 4 | **Alta.** Es la trampa 2 de §11 en su forma más convincente: no un contador malo, sino una prueba con la forma equivocada | §9 |
-| 6A-12 | Defecto real en mi propio arnés, cazado por su prueba: `finish_item` se llamaba sólo para los elementos que el motor había aprobado, pero `finish_item` es lo que **borra el archivo `.qyro-part`** cuando el digest no cuadra. Una transferencia rechazada dejaba 8 MiB en disco bajo un nombre que significa «transferencia en curso» | 4 | Media — pérdida de espacio y un archivo engañoso tras un rechazo | §5 |
-| 6A-7 | Segundo control superviviente, encontrado por el barrido de la Fase 3: **nada comprobaba que un frame sin sellar llegado después del handshake se rechace.** Cambiar esa rama a `Ok(None)` no rompía ninguna prueba | 3 | **Alta.** Es aceptar bytes que nada autenticó, en una conexión cuyo propósito entero es que todo en ella esté autenticado | §10 |
-| 6A-8 | Me comí un fallo de clippy leyendo mal mi propia comprobación: canalicé la salida a `grep -c`, leí «4» como informativo y commiteé en rojo. El código de salida era 101 | 3 | Baja — un commit en rojo, detectado y enmendado antes de empujar | §9 |
-| 6A-6 | **El criterio de §10 `git diff --name-only origin/main...HEAD` no puede pasar en esta rama, por diseño.** `origin/main` está en `e0041de`, anterior al sprint 4A, y esta rama se apoya en cuatro ramas de sprint sin fusionar, así que ese diff devuelve 319 archivos de cinco sprints — incluidos los cinco de la lista prohibida, ninguno tocado por este run | 2 | Baja para el producto, **alta para auditar este informe**: la comprobación literal alarma sin motivo | §13 |
-| 6A-5 | Una mutación mal apuntada mía (M4): mutó sólo la rama autenticada de `read_window`, y la prueba que debía matarla usa una conexión sin autenticar, así que «sobrevivió» sin significar nada. Rehecha como M4b | 2 | Baja — error de instrumento, no de producto | §10 |
+| 6A-1 · **QYR-0076** | **Tres reglas del propio sprint no pueden cumplirse a la vez.** §13.1 exige el prompt verbatim en el informe; el prompt cita el identificador del primero de los tres huecos de prueba de `qyro_fs` de su §9; `check_docs_consistency` bloquea todo identificador citado sin ficha en `BUGS_PENDING.md`; y §5 prohíbe a los dos agentes tocar `BUGS_PENDING.md`. Alcanza además a §13.5, que exige proponer identificadores para los hallazgos no arreglados: cada uno que acuñara dispararía el mismo bloqueo | 1 | Media — bloquea `ci.yml`, no afecta al producto | §1 |
+| 6A-2 · **QYR-0077** | Falso verde propio al reproducir la línea base: `&&` tras una tubería lee el estado de salida de `tail`, no el de `rustfmt`, y la ruta `rust/Cargo.toml` no existe —el workspace está en la raíz—. El comando fallaba e imprimía `FMT_PASS` | 0 | Baja — instrumento de medida, detectado y rehecho en la misma fase | §2 |
+| 6A-3 · **QYR-0078** | **`qyro_net` no se ejecuta en Windows en ningún workflow.** `cargo test --workspace` corre sólo en `ubuntu-latest` (`ci.yml:33,47`); los trabajos de Windows prueban `qyro_crypto` y `qyro_win_dpapi` y nada más. Y este crate es precisamente donde el comportamiento diverge entre plataformas | 2 | **Alta** para lo que se pueda afirmar de Windows; nula para Linux | §8, §15 |
+| 6A-4 · **QYR-0079** | Un control que sobrevivió a su propio borrado, encontrado por el barrido: quitar `TimedOut` de `is_read_timeout` no rompía nada, porque en Linux un `read` vencido da `WouldBlock` y sólo Windows da `TimedOut`. La mitad de Windows de esa rama no la defendía nadie. Es 6A-3 con consecuencias concretas | 2 | Media — habría roto **toda** transferencia en Windows sin que ninguna prueba lo dijera | §10 |
+| 6A-9 · **QYR-0084** | **`qyro_transfer::Receiver` no dejaba leer el manifest que aceptaba.** Derivaba su estado por elemento y lo tiraba. En un proceso no se nota porque el llamante ya tiene una copia; sobre un socket el extremo receptor **sólo** conoce el manifest por el cable, y `FileSink` se construye a partir de un `&TransferManifest` — así que ningún receptor real podía materializar un archivo | 4 | **Alta.** Bloqueaba la Fase 4 entera | §5 |
+| 6A-10 · **QYR-0085** | El criterio de §10 dice que `Cargo.lock` pasa de 61 a 62 «y el que entra es `qyro_net`». Son **63**: entra también `qyro_net_smoke`, el binario de dos procesos que §5 autoriza y §8 Fase 4 exige. §10 y §8 no concuerdan | 4 | Baja — la intención del criterio (cero dependencias externas) se cumple | §12 |
+| 6A-11 · **QYR-0086** | **Mi prueba de memoria no distinguía un contador medido de una constante.** Con dos tamaños de archivo, un pico que informara siempre el mismo número satisface a la vez «por debajo del techo» y «no crece con el archivo». Lo encontró el barrido: mutar el pico a la constante `1_049_804` **pasó** | 4 | **Alta.** Es la trampa 2 de §11 en su forma más convincente: no un contador malo, sino una prueba con la forma equivocada | §9 |
+| 6A-12 · **QYR-0087** | Defecto real en mi propio arnés, cazado por su prueba: `finish_item` se llamaba sólo para los elementos que el motor había aprobado, pero `finish_item` es lo que **borra el archivo `.qyro-part`** cuando el digest no cuadra. Una transferencia rechazada dejaba 8 MiB en disco bajo un nombre que significa «transferencia en curso» | 4 | Media — pérdida de espacio y un archivo engañoso tras un rechazo | §5 |
+| 6A-7 · **QYR-0082** | Segundo control superviviente, encontrado por el barrido de la Fase 3: **nada comprobaba que un frame sin sellar llegado después del handshake se rechace.** Cambiar esa rama a `Ok(None)` no rompía ninguna prueba | 3 | **Alta.** Es aceptar bytes que nada autenticó, en una conexión cuyo propósito entero es que todo en ella esté autenticado | §10 |
+| 6A-8 · **QYR-0083** | Me comí un fallo de clippy leyendo mal mi propia comprobación: canalicé la salida a `grep -c`, leí «4» como informativo y commiteé en rojo. El código de salida era 101 | 3 | Baja — un commit en rojo, detectado y enmendado antes de empujar | §9 |
+| 6A-6 · **QYR-0081** | **El criterio de §10 `git diff --name-only origin/main...HEAD` no puede pasar en esta rama, por diseño.** `origin/main` está en `e0041de`, anterior al sprint 4A, y esta rama se apoya en cuatro ramas de sprint sin fusionar, así que ese diff devuelve 319 archivos de cinco sprints — incluidos los cinco de la lista prohibida, ninguno tocado por este run | 2 | Baja para el producto, **alta para auditar este informe**: la comprobación literal alarma sin motivo | §13 |
+| 6A-5 · **QYR-0080** | Una mutación mal apuntada mía (M4): mutó sólo la rama autenticada de `read_window`, y la prueba que debía matarla usa una conexión sin autenticar, así que «sobrevivió» sin significar nada. Rehecha como M4b | 2 | Baja — error de instrumento, no de producto | §10 |
 
 Pendiente de ampliar conforme avancen las fases.
 
@@ -226,24 +243,24 @@ Pendiente de ampliar conforme avancen las fases.
 
 | # | Arreglado | Cómo, o por qué no |
 |---|---|---|
-| 6A-1 | **Sí, en lo que me toca. La causa de fondo, no.** | El prompt se archiva verbatim en `docs/reports/6A-prompt.txt`, que ninguno de los dos comprobadores escanea (la lista es `*.md`, `*.rs`, `*.sh`, `*.ps1`, `*.yml` en las dos implementaciones), y los hallazgos de este informe se numeran `6A-n` en vez de acuñar identificadores que no puedo registrar. Con eso `ci.yml` queda en verde sin debilitar ningún control ni tocar ningún archivo ajeno. **Lo que no está arreglado es el choque de reglas**, que sigue ahí para el siguiente sprint que trabaje con el ledger fuera de su alcance. La decisión de fondo es del supervisor y está razonada en §1 |
-| 6A-2 | Sí | Medición rehecha capturando `$?` de cada proceso por separado. La tabla de la línea base de §2 sale de esa segunda medición, no de la primera |
-| 6A-3 | **No, y no puedo.** | El arreglo es añadir `qyro_net` a un trabajo de Windows, y `.github/workflows/**` está en la lista prohibida de §5. No lo toco «sólo un poco». Queda para el supervisor, y hasta entonces **ninguna afirmación de este informe sobre Windows tiene clase de evidencia mejor que «compilado»** — ni siquiera eso, porque tampoco se compila allí |
-| 6A-4 | Sí, la mitad que se puede | Añadida `a_read_timeout_is_a_heartbeat_on_both_platforms`, que prueba el **mapeo**: quitar cualquiera de las dos ramas ahora rompe una prueba con nombre. Lo que **no** cierra, y la prueba lo dice en su propio comentario, es que Windows se comporte como se describe: eso necesita ejecutar el crate allí, que es 6A-3 |
-| 6A-7 | Sí | Añadida `a_plain_frame_after_the_handshake_is_refused_and_poisons`, que mete un frame sin sellar por `write_sealed` —que escribe bytes tal cual— y comprueba variante, envenenamiento y que no se recupera |
-| 6A-8 | Sí | Commit enmendado con la corrección (`map_err` → `inspect_err`), y desde entonces **compruebo el código de salida, no el recuento de líneas**. Es la misma forma de error que 6A-2: mirar la salida de un comando en vez de su estado |
-| 6A-9 | Sí, tocando `qyro_transfer` | Añadido de forma **aditiva**: el receptor retiene el manifest y `Receiver::manifest()` lo devuelve. Un campo, una asignación y un accesor de sólo lectura; ningún comportamiento cambia. `qyro_transfer/src/session.rs` **no está en la lista prohibida de §5** y no es donde trabaja Codex (qyro_fs, `header.rs`, guardas), así que no hay riesgo de fusión. Lo registro igualmente porque tampoco está en mi lista de «archivos que tocas», y es el tipo de costura que 5A pedía registrar antes de cambiar |
-| 6A-10 | No hay nada que arreglar | Los dos paquetes nuevos son de primera parte. **Cero dependencias externas nuevas**, que es lo que el criterio persigue. Lo señalo para que el supervisor corrija el número, no el código |
-| 6A-11 | Sí | Un tercer tamaño, 128 KiB —muy por debajo de la ventana— y la aserción `peak_tiny < peak_small`. Una constante falla esa desigualdad. Confirmado volviendo a aplicar la mutación: ahora muere |
-| 6A-12 | Sí | `finish_item` se llama ahora para **todos** los elementos. Y un elemento que el sistema de archivos acepta mientras el motor lo rechaza se informa como contradicción, no se pasa por alto: dos comprobaciones sobre los mismos bytes que discrepan significan que una de las dos está mal |
-| 6A-6 | **No es mío que arreglar** | El arreglo es fusionar las ramas de sprint a `main`, o cambiar el criterio para que use la rama base. Las dos son decisiones del supervisor. Lo que sí hago es dar en §13 **las dos** salidas, con la explicación de por qué la literal no dice nada de este sprint, en vez de pegar sólo la que me favorece |
-| 6A-5 | Sí | Rehecha como M4b, mutando `read_window` entera. La mataron dos pruebas. Las dos filas quedan en la tabla de §10: esconder la mutación que no significaba nada dejaría la tabla más limpia y menos cierta |
+| 6A-1 · **QYR-0076** | **Sí, en lo que me toca. La causa de fondo, no.** | El prompt se archiva verbatim en `docs/reports/6A-prompt.txt`, que ninguno de los dos comprobadores escanea (la lista es `*.md`, `*.rs`, `*.sh`, `*.ps1`, `*.yml` en las dos implementaciones), y los hallazgos de este informe se numeran `6A-n` en vez de acuñar identificadores que no puedo registrar. Con eso `ci.yml` queda en verde sin debilitar ningún control ni tocar ningún archivo ajeno. **Lo que no está arreglado es el choque de reglas**, que sigue ahí para el siguiente sprint que trabaje con el ledger fuera de su alcance. La decisión de fondo es del supervisor y está razonada en §1 |
+| 6A-2 · **QYR-0077** | Sí | Medición rehecha capturando `$?` de cada proceso por separado. La tabla de la línea base de §2 sale de esa segunda medición, no de la primera |
+| 6A-3 · **QYR-0078** | **No, y no puedo.** | El arreglo es añadir `qyro_net` a un trabajo de Windows, y `.github/workflows/**` está en la lista prohibida de §5. No lo toco «sólo un poco». Queda para el supervisor, y hasta entonces **ninguna afirmación de este informe sobre Windows tiene clase de evidencia mejor que «compilado»** — ni siquiera eso, porque tampoco se compila allí |
+| 6A-4 · **QYR-0079** | Sí, la mitad que se puede | Añadida `a_read_timeout_is_a_heartbeat_on_both_platforms`, que prueba el **mapeo**: quitar cualquiera de las dos ramas ahora rompe una prueba con nombre. Lo que **no** cierra, y la prueba lo dice en su propio comentario, es que Windows se comporte como se describe: eso necesita ejecutar el crate allí, que es 6A-3 |
+| 6A-7 · **QYR-0082** | Sí | Añadida `a_plain_frame_after_the_handshake_is_refused_and_poisons`, que mete un frame sin sellar por `write_sealed` —que escribe bytes tal cual— y comprueba variante, envenenamiento y que no se recupera |
+| 6A-8 · **QYR-0083** | Sí | Commit enmendado con la corrección (`map_err` → `inspect_err`), y desde entonces **compruebo el código de salida, no el recuento de líneas**. Es la misma forma de error que 6A-2: mirar la salida de un comando en vez de su estado |
+| 6A-9 · **QYR-0084** | Sí, tocando `qyro_transfer` | Añadido de forma **aditiva**: el receptor retiene el manifest y `Receiver::manifest()` lo devuelve. Un campo, una asignación y un accesor de sólo lectura; ningún comportamiento cambia. `qyro_transfer/src/session.rs` **no está en la lista prohibida de §5** y no es donde trabaja Codex (qyro_fs, `header.rs`, guardas), así que no hay riesgo de fusión. Lo registro igualmente porque tampoco está en mi lista de «archivos que tocas», y es el tipo de costura que 5A pedía registrar antes de cambiar |
+| 6A-10 · **QYR-0085** | No hay nada que arreglar | Los dos paquetes nuevos son de primera parte. **Cero dependencias externas nuevas**, que es lo que el criterio persigue. Lo señalo para que el supervisor corrija el número, no el código |
+| 6A-11 · **QYR-0086** | Sí | Un tercer tamaño, 128 KiB —muy por debajo de la ventana— y la aserción `peak_tiny < peak_small`. Una constante falla esa desigualdad. Confirmado volviendo a aplicar la mutación: ahora muere |
+| 6A-12 · **QYR-0087** | Sí | `finish_item` se llama ahora para **todos** los elementos. Y un elemento que el sistema de archivos acepta mientras el motor lo rechaza se informa como contradicción, no se pasa por alto: dos comprobaciones sobre los mismos bytes que discrepan significan que una de las dos está mal |
+| 6A-6 · **QYR-0081** | **No es mío que arreglar** | El arreglo es fusionar las ramas de sprint a `main`, o cambiar el criterio para que use la rama base. Las dos son decisiones del supervisor. Lo que sí hago es dar en §13 **las dos** salidas, con la explicación de por qué la literal no dice nada de este sprint, en vez de pegar sólo la que me favorece |
+| 6A-5 · **QYR-0080** | Sí | Rehecha como M4b, mutando `read_window` entera. La mataron dos pruebas. Las dos filas quedan en la tabla de §10: esconder la mutación que no significaba nada dejaría la tabla más limpia y menos cierta |
 
 ---
 
 ## 6. A qué afectaba cada defecto
 
-**6A-1 — el choque de reglas del ledger.** Qué se rompía: `ci.yml`, en los dos pasos
+**6A-1 · QYR-0076 — el choque de reglas del ledger.** Qué se rompía: `ci.yml`, en los dos pasos
 de `check_docs_consistency` (Bash y PowerShell), sobre cualquier commit que llevara el
 informe con el prompt dentro de un `.md`. Nada del producto. Para quién: para este
 sprint, que no puede cumplir a la vez §13.1, §13.5 y §5; y para el supervisor, que se
@@ -263,7 +280,7 @@ haga sólo la consolidación. Esta rama implementa de hecho la tercera, pero sin
 escribirla en ningún sitio canónico, porque no puede: los seis documentos raíz están
 fuera de alcance.
 
-**6A-3 — `qyro_net` sin Windows.** Qué se rompía: nada todavía; lo que falta es la
+**6A-3 · QYR-0078 — `qyro_net` sin Windows.** Qué se rompía: nada todavía; lo que falta es la
 comprobación. Para quién: para cualquiera que lea «el transporte funciona» y asuma
 que eso incluye la plataforma en la que Qyro tiene un instalador. En qué escenario:
 en cuanto el transporte llegue a un usuario de Windows. Este crate es el peor sitio
@@ -272,7 +289,7 @@ códigos de error, semántica de `shutdown` sobre un `read` bloqueado, `SO_RCVTI
 6A-4 es la demostración de que no es un riesgo teórico: el barrido encontró una rama
 de Windows que llevaba escrita desde el primer commit del crate y que nadie defendía.
 
-**6A-4 — el `TimedOut` sin cubrir.** Qué se rompía: si alguien hubiera «limpiado»
+**6A-4 · QYR-0079 — el `TimedOut` sin cubrir.** Qué se rompía: si alguien hubiera «limpiado»
 esa rama por parecer redundante, **toda** transferencia en Windows habría muerto en
 el primer cuarto de segundo de espera, porque el latido se habría interpretado como
 un final. Para quién: para todos los usuarios de Windows, que es la única plataforma
@@ -282,7 +299,7 @@ porque en Linux esa rama es inalcanzable. Es el ejemplo exacto de por qué el ba
 de mutación existe: la línea estaba escrita, comentada y era correcta, y aun así no
 estaba cubierta.
 
-**6A-5 — la mutación mal apuntada.** Qué se rompía: mi propia tabla de mutación.
+**6A-5 · QYR-0080 — la mutación mal apuntada.** Qué se rompía: mi propia tabla de mutación.
 Para quién: para quien la lea y cuente los supervivientes. En qué escenario: si no
 llego a mirar por qué sobrevivió, habría registrado un hueco de cobertura que no
 existe —y peor, habría dejado sin comprobar el control que sí importa—. Un
@@ -290,14 +307,14 @@ superviviente puede significar dos cosas muy distintas, «la propiedad no está
 cubierta» o «la mutación no tocó la propiedad», y no distinguirlas hace inútil el
 barrido entero.
 
-**6A-9 — el manifest que no se podía leer.** Qué se rompía: la materialización de
+**6A-9 · QYR-0084 — el manifest que no se podía leer.** Qué se rompía: la materialización de
 archivos en cualquier receptor que no fuera una prueba en el mismo proceso. Para
 quién: para el sprint 6A entero, y para cualquier receptor real después. En qué
 escenario: el normal — el receptor conoce el manifest sólo porque el emisor se lo
 manda. Es una costura que sólo se rompe cuando aparece su segundo llamante, que es
 exactamente lo que 5A pidió registrar como hallazgo en vez de arreglar en silencio.
 
-**6A-11 — la prueba de memoria que no medía.** Qué se rompía: nada en el producto,
+**6A-11 · QYR-0086 — la prueba de memoria que no medía.** Qué se rompía: nada en el producto,
 y todo en la evidencia. Para quién: para quien lea «la memoria del emisor no crece con
 el archivo» y lo crea. En qué escenario: si el motor empezara a bufferizar de más, esta
 prueba habría seguido en verde. Lo que la salvó no fue leer el contador —el contador
@@ -305,7 +322,7 @@ estaba bien— sino mutar el pico y ver que nadie se quejaba. Es la lección de 
 una línea: una propiedad cuya mutación no rompe nada no está cubierta, y eso incluye
 las propiedades sobre tus propias mediciones.
 
-**6A-12 — el `.qyro-part` superviviente.** Qué se rompía: tras rechazar un archivo por
+**6A-12 · QYR-0087 — el `.qyro-part` superviviente.** Qué se rompía: tras rechazar un archivo por
 digest, quedaban en disco todos sus bytes con el sufijo que significa «en curso». Para
 quién: para el usuario receptor, que acumula basura invisible y podría confundirla con
 una transferencia reanudable. En qué escenario: cualquier transferencia corrupta o
@@ -313,7 +330,7 @@ interrumpida por contenido. Lo cazó la prueba que lo pedía explícitamente —
 quede `.qyro-part`»—, y sin esa segunda mitad de la aserción el rechazo habría parecido
 correcto: el veredicto era `false` y no aparecía el archivo final.
 
-**6A-2 — el falso verde de la línea base.** Qué se rompía: nada en el producto; el
+**6A-2 · QYR-0077 — el falso verde de la línea base.** Qué se rompía: nada en el producto; el
 defecto estaba en mi propio instrumento de medida. Para quién: para el siguiente
 lector de este informe y para el supervisor, que es precisamente quien no pudo
 verificar la evidencia de 5B.1 y a quien se le pidió a este sprint que reprodujera la
@@ -410,7 +427,7 @@ Y los cuatro `check_*`, que no están entre las nueve de §12 pero sí en §10:
 | `check_repo_portability.sh` | PASS |
 | `check_harness_isolation.sh` | PASS |
 | `check_crypto_platform_evidence.sh` | PASS |
-| `check_docs_consistency.sh` | **Falló primero, PASS después.** Es el hallazgo 6A-1; ver §1, §4 y §6 |
+| `check_docs_consistency.sh` | **Falló primero, PASS después.** Es el hallazgo 6A-1 (QYR-0076); ver §1, §4 y §6 |
 
 **Sobre la comprobación 4 en una fase de documentación.** Un barrido de mutación
 sobre una ADR no significa nada: no hay control que borrar y no hay suite que romper.
@@ -628,7 +645,7 @@ no tienen filas.
 | M4b | El decodificador se drena antes de volver al socket, así que varios frames de una lectura salen todos | `read_window` devuelve `1` siempre | **Muerta** por `three_frames_in_one_read_are_all_delivered` **y** `a_peer_cannot_make_us_buffer_more_than_the_declared_limit` |
 | M5 | Autenticarse devuelve el hueco al presupuesto del listener | Se borra `self.pending_slot = None;` de `mark_authenticated` | **Muerta** por `authenticating_releases_the_listener_budget_and_grows_the_buffer` |
 | M6 | El búfer de 64 KiB no se asigna hasta que el peer se autentica | Se borra el `resize` de `mark_authenticated` | **Muerta** por `authenticating_releases_the_listener_budget_and_grows_the_buffer` |
-| M7 | `TimedOut` cuenta como latido, para Windows | Se quita `io::ErrorKind::TimedOut` de `is_read_timeout` | **SOBREVIVIÓ** en la primera pasada — hallazgo 6A-4. Tras añadir `a_read_timeout_is_a_heartbeat_on_both_platforms`: **muerta** por esa prueba |
+| M7 | `TimedOut` cuenta como latido, para Windows | Se quita `io::ErrorKind::TimedOut` de `is_read_timeout` | **SOBREVIVIÓ** en la primera pasada — hallazgo 6A-4 (QYR-0079). Tras añadir `a_read_timeout_is_a_heartbeat_on_both_platforms`: **muerta** por esa prueba |
 
 ### Fase 3 — commit `3021cee`, más el arreglo de 6A-7
 
@@ -638,7 +655,7 @@ no tienen filas.
 | H2 | Una sesión envenenada no vuelve a entregar nada | Se borra la comprobación `if self.poisoned` de la entrada de `recv` | **Muerta** por `a_flipped_bit_...` **y** `a_plain_frame_after_the_handshake_...` |
 | H3 | El plazo de handshake tiene variante propia y no se confunde con silencio | `HandshakeDeadlineExceeded` → `PeerSilent` | **Muerta** por `a_handshake_that_stalls_is_cut_by_the_deadline` |
 | H4 | El stream se marca autenticado al establecer la sesión | Se borran las dos llamadas a `mark_authenticated()` | **Muerta** por `two_endpoints_over_a_real_socket_agree_on_a_session_key` |
-| H5 | Un frame **sin sellar** después del handshake se rechaza | La rama de frame plano devuelve `Ok(None)` en vez de envenenar | **SOBREVIVIÓ** — hallazgo 6A-7. Tras añadir `a_plain_frame_after_the_handshake_is_refused_and_poisons`: **muerta** por esa prueba |
+| H5 | Un frame **sin sellar** después del handshake se rechaza | La rama de frame plano devuelve `Ok(None)` en vez de envenenar | **SOBREVIVIÓ** — hallazgo 6A-7 (QYR-0082). Tras añadir `a_plain_frame_after_the_handshake_is_refused_and_poisons`: **muerta** por esa prueba |
 
 **Nota sobre lo que este barrido no cubre.** La verificación de la firma en sí es de
 `qyro_crypto` y tiene su propio barrido allí; lo que se muta aquí es lo que yo
@@ -655,7 +672,7 @@ no por mutación.
 | P2 | El receptor retiene el manifest que aceptó | `Receiver::manifest()` devuelve siempre `None` | **Muerta** por `a_file_crosses_two_real_processes_byte_identical` **y** `memory_held_by_the_sender_does_not_grow_with_the_file` |
 | P3 | Contenido llegado antes del manifest se rechaza | Se borra la comprobación `refusing.written` | **SOBREVIVE, y queda abierta.** Argumento abajo |
 | P4 | El contador suma longitudes reales de frame | `took` suma una constante por lote | **Muerta** por `memory_held_by_the_sender_does_not_grow_with_the_file` — pero por el motivo equivocado: la constante se acumulaba y el pico crecía. Ver P4b |
-| P4b | **El pico informado es lo medido, no un número** | `self.peak = 1_049_804;` | **SOBREVIVIÓ** — hallazgo 6A-11. Tras añadir el tercer tamaño de 128 KiB y `peak_tiny < peak_small`: **muerta** por esa prueba |
+| P4b | **El pico informado es lo medido, no un número** | `self.peak = 1_049_804;` | **SOBREVIVIÓ** — hallazgo 6A-1 (QYR-0076)1 (QYR-0086). Tras añadir el tercer tamaño de 128 KiB y `peak_tiny < peak_small`: **muerta** por esa prueba |
 
 **P3 se queda abierta, con argumento.** Guarda un estado que la máquina de estados del
 motor hace inalcanzable: en `Phase::Negotiating` un `DataChunk` es
@@ -716,8 +733,26 @@ en `qyro_net`, ningún ignorado nuevo. La Fase 2 aportó once y la Fase 3 seis.
 
 ## 12. Delta de dependencias
 
-**Antes: 61 paquetes en `Cargo.lock`** (medido con `grep -c '^\[\[package\]\]'`).
-**Después: 62.** El que entró es `qyro_net`, y es el diff entero:
+**Antes: 61 paquetes en `Cargo.lock`.**
+**Después: 63.** Los dos comandos, ejecutados de nuevo al cerrar la Puerta 5 y no
+recordados de la Puerta 2:
+
+```
+$ grep -c '^\[\[package\]\]' Cargo.lock
+63
+$ git diff origin/claude/qyro-filesystem-5b1..HEAD -- Cargo.lock | grep -E '^\+name'
++name = "qyro_net"
++name = "qyro_net_smoke"
+```
+
+**Corrección.** Esta sección dijo «Después: 62» desde la Puerta 2 hasta la Puerta 5.
+Era cierta cuando se escribió y dejó de serlo en la Puerta 4, cuando entró
+`qyro_net_smoke`, y nadie la actualizó — mientras §4 ya decía 63. Dos secciones del
+mismo documento contradiciéndose es exactamente el defecto que este proyecto
+persigue, y lo cometí yo. Es QYR-0091, y de ahí sale la comprobación 10 del
+protocolo de puerta: releer lo que la fase pueda haber invalidado, antes de cerrarla.
+
+El paquete que entró en la Fase 2 fue `qyro_net`:
 
 ```
 +[[package]]
@@ -738,7 +773,7 @@ auditado: una arista nueva, no un paquete nuevo.
 ## 13. `git diff --name-only origin/main...HEAD`
 
 **El criterio de §10 nombra una base que no sirve para lo que quiere comprobar, y hay
-que decirlo antes de pegar nada.** Es el hallazgo 6A-6.
+que decirlo antes de pegar nada.** Es el hallazgo 6A-6 (QYR-0081).
 
 `origin/main` está en `e0041de` («Rename qyro-logo.png to no usar este logo»), que es
 **anterior al sprint 4A**. Esta rama se apoya en cuatro ramas de sprint que nunca se

@@ -1459,3 +1459,288 @@
   parte de ese privilegio durante un instante
 - Estado: abierto
 - Fecha: 2026-08-08
+
+## QYR-0076 — Tres reglas del sprint 6A no podían cumplirse a la vez
+
+- Plataforma: proceso
+- Severidad: P2
+- Esperado: el informe de sprint lleva el prompt verbatim (§13.1), propone
+  identificadores para los hallazgos no arreglados (§13.5), y `ci.yml` pasa
+- Actual: el prompt cita un identificador cuya ficha pertenece al otro agente;
+  `check_docs_consistency` bloquea todo identificador citado sin ficha; y §5
+  prohibía a los dos agentes tocar `BUGS_PENDING.md`. Las tres no se podían
+  satisfacer. Peor: la regla de deriva de `STATUS.md` —`Verified commit` a más de
+  diez commits de HEAD— garantizaba además que `ci.yml` se pusiera rojo en cuanto
+  la rama pasara de diez commits, hiciera lo que hiciera el código
+- Resolución: el supervisor retiró la prohibición en el segundo prompt del sprint
+  y asignó a cada agente un rango disjunto de identificadores, de modo
+  que dos agentes puedan escribir el ledger a la vez y lo peor que pase sea un
+  conflicto de fusión trivial. Mientras duró, se archivó el prompt en un `.txt` que el
+  comprobador no escanea y se numeraron los hallazgos `6A-n`; las dos cosas se
+  revirtieron al recibir el permiso
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0077 — Un falso verde en la reproducción de la línea base
+
+- Plataforma: herramientas
+- Severidad: P3
+- Esperado: la línea base se mide y el resultado refleja lo medido
+- Actual: `cargo fmt ... | tail -5 && echo "FMT_PASS"` imprimía `FMT_PASS`
+  siempre, porque `&&` lee el estado de salida de `tail`. Y la ruta usada
+  (`rust/Cargo.toml`) no existe: el workspace está en la raíz. El comando fallaba
+  y el mensaje decía que había pasado
+- Resolución: la medición se rehízo capturando `$?` de cada proceso por separado
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0078 — `qyro_net` no se ejecuta ni se compila en Windows
+
+- Plataforma: windows
+- Severidad: P1
+- Esperado: el crate donde el comportamiento diverge por sistema operativo se
+  prueba en los sistemas operativos del producto
+- Actual: `cargo test --workspace` corre sólo en `ubuntu-latest` (`ci.yml:33`).
+  El trabajo de Windows de `platform-builds.yml:103` hace
+  `cargo build --package qyro_ffi` y Flutter, nada más. `qyro_net` no se compila
+  siquiera en Windows. Y es precisamente donde el sistema operativo asoma:
+  `WouldBlock` frente a `TimedOut`, `shutdown` sobre un `read` bloqueado,
+  `ConnectionReset` frente a `ConnectionAborted`, el `bind` de un puerto
+- QYR-0079 es la demostración de que no es teórico
+- Resolución: pendiente, Fase 7 del sprint 6A, ya autorizada
+- Estado: abierto
+- Fecha: 2026-08-11
+
+## QYR-0079 — La rama de Windows de `is_read_timeout` no la defendía nadie
+
+- Plataforma: windows
+- Severidad: P2
+- Esperado: cada rama de la clasificación de errores de socket tiene una prueba
+- Actual: borrar `io::ErrorKind::TimedOut` de `is_read_timeout` no rompía ninguna
+  prueba, en ninguna plataforma. En Linux un `read` vencido por `SO_RCVTIMEO` da
+  `WouldBlock`; sólo Windows da `TimedOut`, y allí no corre nada (QYR-0078). Si
+  alguien hubiera «limpiado» esa rama por parecer redundante, toda transferencia
+  en Windows habría muerto en la primera pausa de un cuarto de segundo, tomando
+  el latido por un final
+- Encontrado por el barrido de mutación de la Fase 2
+- Resolución: `a_read_timeout_is_a_heartbeat_on_both_platforms` prueba el mapeo
+  de las dos `io::ErrorKind`. Cierra el **mapeo**, no la plataforma: eso es
+  QYR-0078
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0080 — Una mutación mal apuntada declaró cubierta una propiedad que no lo estaba
+
+- Plataforma: herramientas
+- Severidad: P3
+- Esperado: una mutación que sobrevive significa que la propiedad no está cubierta
+- Actual: la mutación M4 cambió sólo la rama autenticada de `read_window`,
+  mientras que la prueba que debía matarla usa una conexión sin autenticar.
+  «Sobrevivió» sin significar nada. Un superviviente puede querer decir dos cosas
+  muy distintas —la propiedad no está cubierta, o la mutación no la tocó— y no
+  distinguirlas hace inútil el barrido entero
+- Resolución: rehecha como M4b sobre `read_window` completa; la mataron dos
+  pruebas. Las dos filas quedan en la tabla del informe
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0081 — El criterio de diff nombraba una base inservible
+
+- Plataforma: proceso
+- Severidad: P3
+- Esperado: `git diff --name-only <base>..HEAD` demuestra que un agente no pisó
+  los archivos del otro
+- Actual: el criterio nombraba `origin/main`, que está en `e0041de`, anterior al
+  sprint 4A. Esta rama se apoya en cuatro ramas de sprint sin fusionar, así que
+  ese diff devuelve 319 archivos de cinco sprints, incluidos los cinco de la
+  lista prohibida, ninguno tocado por este run. La comprobación literal no podía
+  pasar y su fallo no decía nada del sprint
+- Resolución: el supervisor retiró el criterio y fijó `15934aa` como base. El
+  informe da las dos salidas con la explicación
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0082 — Un frame sin sellar tras el handshake no lo rechazaba ninguna prueba
+
+- Plataforma: red
+- Severidad: P1
+- Esperado: tras el handshake todo va sellado, y un frame plano se rechaza
+- Actual: cambiar esa rama a `Ok(None)` no rompía ninguna prueba. Aceptar un
+  frame plano en una sesión establecida es aceptar bytes que nada autenticó, en
+  una conexión cuyo propósito entero es que todo en ella esté autenticado
+- Encontrado por el barrido de mutación de la Fase 3
+- Resolución: `a_plain_frame_after_the_handshake_is_refused_and_poisons`, que
+  inyecta uno por `write_sealed` —que escribe bytes tal cual— y comprueba
+  variante, envenenamiento y que no se recupera
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0083 — Un fallo de clippy leído como informativo
+
+- Plataforma: herramientas
+- Severidad: P3
+- Esperado: una puerta comprueba el código de salida del proceso
+- Actual: la salida de clippy se canalizó a `grep -c`, el «4» se leyó como
+  informativo y se commiteó en rojo. El código de salida era 101. Es la misma
+  forma de error que QYR-0077: mirar la salida de un comando en vez de su estado
+- Resolución: commit enmendado con la corrección (`map_err` → `inspect_err`), y
+  el protocolo de puerta ahora dice explícitamente «por código de salida»
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0084 — `qyro_transfer::Receiver` no dejaba leer el manifest que aceptaba
+
+- Plataforma: transferencia
+- Severidad: P1
+- Esperado: el extremo receptor puede construir un destino en disco a partir del
+  manifest que le mandaron
+- Actual: el receptor derivaba su estado por elemento del manifest y lo tiraba,
+  sin accesor. En un solo proceso no se nota, porque el llamante ya tiene una
+  copia. Sobre un socket el receptor conoce el manifest **sólo** por el cable, y
+  `FileSink::new` se construye a partir de un `&TransferManifest` — así que
+  ningún receptor real podía materializar un archivo. Bloqueaba la Fase 4 entera
+- Es una costura que sólo se rompe cuando aparece su segundo llamante
+- Resolución: aditiva. El receptor retiene el manifest y `Receiver::manifest()`
+  lo devuelve. Un campo, una asignación y un accesor de sólo lectura; ningún
+  comportamiento cambia
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0085 — El criterio de paquetes decía 62 y son 63
+
+- Plataforma: proceso
+- Severidad: P3
+- Esperado: `Cargo.lock` pasa de 61 a 62 y el que entra es `qyro_net`
+- Actual: son 63. Entra también `qyro_net_smoke`, el binario de dos procesos que
+  §5 del prompt autoriza y §8 Fase 4 exige. Las dos secciones del prompt no
+  concordaban. La intención del criterio —cero dependencias externas nuevas— sí
+  se cumple: los dos paquetes son de primera parte
+- Resolución: el supervisor confirmó 63 en el segundo prompt
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0086 — La prueba de memoria no distinguía un contador medido de una constante
+
+- Plataforma: red
+- Severidad: P1
+- Esperado: «la memoria del emisor no crece con el archivo» está probado
+- Actual: la prueba comparaba dos tamaños de archivo. Con dos tamaños, un pico
+  que informe siempre el mismo número satisface a la vez «por debajo del techo» y
+  «no crece con el archivo». Mutar el pico a la constante `1_049_804` **pasó**. El
+  contador estaba bien; la forma de la prueba estaba mal. Si el motor hubiera
+  empezado a bufferizar de más, la prueba habría seguido en verde
+- Es la trampa del contador constante en su forma más convincente: no un contador
+  malo, sino una prueba que no puede distinguirlos
+- Resolución: un tercer tamaño muy por debajo de la ventana (128 KiB) y la
+  aserción `peak_tiny < peak_small`, que una constante falla. Confirmado
+  volviendo a aplicar la mutación
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0087 — Una transferencia rechazada dejaba su `.qyro-part` en el destino
+
+- Plataforma: filesystem
+- Severidad: P2
+- Esperado: tras rechazar un archivo por digest, no queda nada en el destino
+- Actual: el arnés llamaba a `finish_item` sólo para los elementos que el motor
+  había aprobado, pero `finish_item` es lo que **borra** el `.qyro-part` cuando el
+  digest no cuadra. Una transferencia rechazada dejaba 8 MiB en disco bajo un
+  nombre que significa «transferencia en curso». El veredicto era `false` y no
+  aparecía el archivo final, así que el rechazo *parecía* correcto
+- Resolución: `finish_item` se llama para **todos** los elementos. Un elemento que
+  el sistema de archivos acepta mientras el motor lo rechaza se informa como
+  contradicción, no se pasa por alto
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0088 — `FileSink` no tiene forma de abandonar una transferencia
+
+- Plataforma: filesystem
+- Severidad: P2
+- Esperado: una transferencia cancelada libera sus archivos parciales por una
+  operación que diga eso
+- Actual: no existe `FileSink::abandon`. Lo único que borra un `.qyro-part` es
+  `finish_item` sobre un digest que no cuadra, así que la forma de abandonar una
+  transferencia es **pedirle que la termine sabiendo que fallará**. Funciona, y es
+  la forma equivocada: el llamante tiene que saber que «recházalo y ya limpiará»
+  es la manera de abandonar, que es un efecto secundario y no una interfaz
+- Sin ello, una cancelación deja un `.qyro-part` por elemento empezado y nada lo
+  recoge nunca
+- Resolución: no arreglado. `rust/crates/qyro_fs/**` es del otro agente en este
+  run. El arnés llama a `finish_item` y documenta por qué
+- Estado: abierto
+- Fecha: 2026-08-11
+
+## QYR-0089 — `TransferReject` existe en el protocolo y no lo emite ni lo entiende nadie
+
+- Plataforma: transferencia
+- Severidad: P2
+- Esperado: un receptor puede rechazar un manifest, que es uno de los cinco
+  finales de ADR-0028 §5
+- Actual: `MessageType::TransferReject` (valor 6) está en el protocolo y en la
+  tabla de rechazos de ADR-0026 §1, pero `qyro_transfer` no tiene ninguna ruta que
+  lo emita ni ninguna que lo maneje. La única forma de rechazo que un receptor
+  puede expresar hoy es `Cancel`. Es decir: «el receptor rechaza el manifest» y
+  «el receptor cancela» son, en el código, el mismo suceso
+- Resolución: no arreglado. La prueba del final correspondiente usa el rechazo que
+  existe y lo dice en su propio comentario, en vez de fingir el otro
+- Estado: abierto
+- Fecha: 2026-08-11
+
+## QYR-0090 — Una prueba mía se cuelga bajo mutación en vez de fallar
+
+- Plataforma: herramientas
+- Severidad: P3
+- Esperado: una mutación que cambia el comportamiento hace fallar una prueba con
+  nombre, en un tiempo acotado
+- Actual: con el `Drop` de `PendingSlot` neutralizado, el contador de conexiones
+  pendientes no baja nunca, el listener acaba rechazando todo y
+  `a_peer_that_opens_connections_without_speaking_does_not_exhaust_the_listener`
+  se queda esperando una conexión que no llega. La propiedad **sí** está cubierta
+  —el comportamiento cambia de forma observable— pero la prueba se cuelga en vez
+  de fallar, y un barrido que se cuelga es un barrido que no termina
+- Resolución: el barrido se corre con un límite de tiempo por mutación y un
+  vencimiento se registra como «comportamiento cambiado, prueba colgada», no como
+  superviviente. La prueba en sí sigue sin un límite propio
+- Estado: abierto
+- Fecha: 2026-08-11
+
+## QYR-0091 — Dos secciones del informe de sprint se contradecían
+
+- Plataforma: proceso
+- Severidad: P3
+- Esperado: un documento que se lee como actual lo es entero
+- Actual: §4 del informe 6A decía «son 63 paquetes» y §12 decía «Después: 62». La
+  segunda fue cierta al cerrar la Puerta 2 y dejó de serlo en la Puerta 4, cuando
+  entró `qyro_net_smoke`, y nadie volvió a mirarla. Una afirmación que fue verdad
+  y ya no lo es, en un documento sin fechas por sección, es indistinguible de una
+  mentira para quien lo lee
+- Resolución: §12 corregida con el conteo obtenido de nuevo por comando, y el
+  protocolo de puerta amplía a once comprobaciones: releer lo que la fase pueda
+  haber invalidado, contra el código y no contra la memoria, antes de cerrarla
+- Estado: cerrado
+- Fecha: 2026-08-11
+
+## QYR-0092 — El prompt verbatim no cabe en un `.md` mientras cite identificadores ajenos
+
+- Plataforma: proceso
+- Severidad: P3
+- Esperado: el informe de sprint lleva los prompts verbatim en el propio `.md`,
+  como pide §10 del segundo prompt
+- Actual: `check_docs_consistency` bloquea todo identificador `QYR-00xx` citado en
+  un `.md` sin ficha en el ledger. Entre los dos prompts se citan tres que no la
+  tienen: uno de Codex citado por el prompt inicial, y los dos números de frontera
+  de los rangos que el segundo prompt asigna. Ninguno lo puedo registrar: dos son
+  ajenos y el tercero es un número de frontera, no un hallazgo — inventarle una
+  ficha para callar al comprobador sería ajustar el control para que pase
+- Es el mismo choque que QYR-0076, sobrevivido a su propia corrección: levantar la
+  prohibición del ledger no basta mientras el texto citado nombre identificadores
+  de otro agente
+- Resolución: los dos prompts quedan archivados verbatim en
+  `docs/reports/6A-prompt.txt` y `docs/reports/6A-prompt-2.txt`, con su SHA-256 en
+  §1 del informe, y el motivo escrito ahí. Las salidas descartadas —dejar `ci.yml`
+  en rojo, o crear fichas ajenas— están en §1
+- Lo que lo cerraría de verdad: que la regla del ledger distinga citar un hallazgo
+  de archivar un documento externo, o que los prompts no nombren identificadores
+- Estado: abierto
+- Fecha: 2026-08-11

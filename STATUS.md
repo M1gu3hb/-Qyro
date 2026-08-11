@@ -3,15 +3,48 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-08T03:40:00Z
-- Branch: claude/qyro-filesystem-5b1
-- Verified commit: e3fbaf10073faef91c21350937356be5d861c666
-- Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
-  byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
-  de archivos, no hay red, y los botones Enviar y Recibir siguen
-  deshabilitados.** La persistencia de identidad sigue **IMPLEMENTED solo en
-  Windows y NOT_IMPLEMENTED en Android y en iOS**; nada se ha probado en hardware
-  físico
+- Updated UTC: 2026-08-11T20:00:00Z
+- Branch: claude/qyro-net-6a
+- Verified commit: @@SHA@@
+- Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
+  operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
+  byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
+  veces seguidas sin intermitencia. Antes de este sprint el «transporte» era un
+  `Vec<u8>` que pasaba de una variable a otra dentro del mismo proceso.
+  **Sigue sin haber descubrimiento, sin FFI del motor, sin selector de archivos y
+  sin UI: los botones Enviar y Recibir siguen deshabilitados**, y nada de esto ha
+  tocado hardware físico ni dos máquinas distintas — dos procesos en 127.0.0.1 no
+  son dos dispositivos en una Wi-Fi. La persistencia de identidad sigue
+  **IMPLEMENTED sólo en Windows y NOT_IMPLEMENTED en Android y en iOS**
+
+### Sprint 6A — `qyro_net`, hasta la Puerta 5
+
+**Lo que existe y está ejecutado en Linux:**
+
+- `qyro_net`: listener con presupuesto de conexiones, dialer con plazo, y un
+  `FrameStream` que alimenta el decodificador incremental de `qyro_protocol` sin
+  reimplementarlo. `#![forbid(unsafe_code)]`
+- El handshake autenticado de cuatro mensajes de ADR-0021 **sobre un socket
+  real**, y frames sellados en las dos direcciones después
+- Finales tipados: ninguno se llama `Io`. Sólo envenenan los dos que significan
+  que los bytes mintieron — un framing inválido y un tag que no verifica
+- `qyro_net_smoke`: dos procesos de verdad, `serve` y `send`, con una prueba de
+  integración que los lanza con `std::process::Command`
+- Los cinco finales de ADR-0028 §5 provocados de verdad, incluido matar el
+  proceso remoto con `Child::kill()`, y sin hilos ni descriptores supervivientes
+
+**Lo que NO existe, y no debe leerse como progreso:**
+
+- **Nada de esto es alcanzable desde Dart.** `qyro_ffi` sigue exponiendo sólo la
+  versión del protocolo; el motor, el disco y la red son inalcanzables desde la
+  app. Los botones siguen deshabilitados y deben seguirlo
+- **No hay descubrimiento.** La dirección del peer se la pasa el llamante
+- **`qyro_net` no se compila ni se ejecuta en Windows** (QYR-0078). Es el
+  crate donde más diverge el sistema operativo, y es el que menos se prueba
+- **Ninguna prueba en hardware físico ni entre dos máquinas.** Todo es loopback,
+  que no pierde paquetes, no reordena y no se parece a ninguna red real
+- El barrido de mutación completo sobre `qyro_net` y las guardas del crate
+  todavía no están hechos: son las fases 6 en adelante
 
 **Qué es y qué no es «Verified commit».** Es el ancla de frescura que comprueba
 `check_docs_consistency`: el commit hasta el que este archivo describe el estado.
