@@ -194,3 +194,33 @@ jobs:
       # Runner.app and the Windows ZIP exist.
       - run: bash scripts/check_harness_isolation.sh
       - run: pwsh -NoProfile -File scripts/check_harness_isolation.ps1
+
+  mutation-fs-linux-phase9:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Install the pinned mutation runner
+        run: cargo install cargo-mutants --version 27.1.0 --locked
+      - name: Sweep every qyro_fs mutant on Linux
+        continue-on-error: true
+        run: >-
+          cargo mutants --no-config -p qyro_fs -j 4 --baseline skip --timeout 90
+          -o mutation-results/fs-linux
+      - name: Print the complete mutation classification
+        if: always()
+        shell: bash
+        run: |
+          for result in caught missed timeout unviable; do
+            file="mutation-results/fs-linux/mutants.out/${result}.txt"
+            if [[ -f "$file" ]]; then
+              echo "[$result]"
+              cat "$file"
+            fi
+          done
+      - name: Upload the machine-readable mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-qyro-fs-linux-mutation
+          path: mutation-results/fs-linux/mutants.out
