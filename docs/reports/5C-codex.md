@@ -426,35 +426,51 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 
 ## 2. Qué hice, punto por punto
 
-Pendiente de completar fase a fase.
+- Fase 0: verifiqué el SHA base, leí íntegros los documentos y fuentes exigidos y reproduje la línea base en Windows y en CI Linux.
+- Fase 1/M1: sustituí temporalmente `O_NOFOLLOW` por `0`, ejecuté el workspace en Linux y confirmé que las 388 pruebas siguieron en verde; restauré el control en `dae0996`.
+- Fase 1/M2: sustituí temporalmente el bucle de `digest_of` por `read_to_end`; `tests::building_a_manifest_from_disk_does_not_load_the_file` siguió pasando.
+- Fase 1/M3: hice el huérfano de 8192 bytes frente a un payload de 2048; `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy` falló con `DigestMismatch { item_id: 1 }`.
+- Fase 1/M4: busqué llamantes productivos de `ResumeState::decode`; el recuento fue cero.
 
 ## 3. Cómo lo hice y decisiones
 
-Pendiente de completar fase a fase.
+- Las mutaciones se aplicaron una por una y se restauraron antes de la siguiente. M1 necesitaba semántica Unix, así que se ejecutó en el job `rust` de CI sobre el commit mutante; M2–M4 se reprodujeron localmente.
+- No se modificó ningún archivo prohibido, no se añadió ninguna dependencia y Cargo.lock permaneció intacto.
 
 ## 4. Errores detectados fuera del prompt
 
 - Fase 0: el host local Windows ejecuta 394 pruebas/2 ignoradas, no 388/2, por la selección `cfg` de plataforma. El mismo árbol en Linux (CI 31520332918) ejecuta 388/2.
 - Fase 0: `cargo clippy --workspace --all-targets -- -D warnings` falla en Windows por `qyro_store_smoke::UNSUPPORTED_PLATFORM` sin uso; el mismo comando pasa en Linux. El archivo está fuera del alcance permitido de 5C.
 - Fase 0: el host trae Windows PowerShell 5, no PowerShell 7; los scripts declaran `#requires -Version 7.0`. Git Bash ejecutó tres checks; `check_repo_portability.sh` agotó 120 s por su coste de procesos en Windows. Los ocho checks pasaron en CI Linux con Bash y PowerShell 7.
+- Fase 1: conflicto de requisitos. Esta sección 1 debe contener el prompt verbatim, que cita QYR-0073, QYR-0074 y QYR-0075. `check_docs_consistency` exige una entrada en `BUGS_PENDING.md` para todo ID citado. El mismo prompt prohíbe modificar `BUGS_PENDING.md`. Al versionar el reporte, el check falla por esos tres IDs; no hay forma de satisfacer a la vez los tres requisitos sin cambiar alcance.
+- Fase 1: `git diff --name-only origin/main...HEAD` contiene 353 rutas, incluidos todos los documentos raíz y workflows prohibidos, porque la rama base exigida todavía no está integrada en `main`. El delta propio contra `origin/claude/qyro-filesystem-5b1` es únicamente este reporte. Por tanto, el criterio literal contra `origin/main` tampoco puede pasar sin reescribir historia, fusionar o cambiar la base, tres acciones prohibidas.
 
 ## 5. Errores arreglados y no arreglados
 
-Pendiente de completar fase a fase.
+- Fase 1 sólo reprodujo: no arregló todavía QYR-0073/74/75 ni QYR-0068.
+- El conflicto reporte/ledger no se arregló porque las dos correcciones posibles violan una orden expresa: quitar o alterar el prompt deja de ser verbatim; añadir las entradas toca un archivo prohibido.
 
 ## 6. Impacto de cada defecto
 
-Pendiente de completar fase a fase.
+- M1 demuestra que el control del componente final podía desaparecer sin regresión visible.
+- M2 demuestra que la prueba de memoria no medía la lectura real y aceptaba cargar el archivo completo.
+- M3 demuestra que un huérfano más largo contamina la nueva transferencia y la hace fallar por digest.
+- M4 demuestra que los metadatos escritos por producción no tenían lector productivo.
+- El conflicto documental vuelve rojo el job `documentation` en cuanto el reporte obligatorio se versiona, impidiendo pasar cualquier puerta posterior aun con el código intacto.
 
 ## 7. Resultado contra cada objetivo
 
-Pendiente de completar fase a fase.
+- Reproducir M1–M4 antes de arreglar: **cumplido**.
+- Pasar Puerta 1: **no hecho/bloqueado** por el conflicto reporte/ledger descrito arriba.
+- Fases 2–6: **no empezadas**, conforme a la orden de no avanzar con una puerta fallida.
 
 ## 8. Clase de evidencia por afirmación
 
 - Línea base Linux: probado en unidad e integración en GitHub Actions sobre `15934aae3dda7f469b5496c8341eb78d9e32f335`, run 31520332918.
 - Línea base Windows: probado en unidad localmente con Rust 1.88.0; 394 passed, 0 failed, 2 ignored.
 - Hardware físico: no probado.
+- M1: probado en integración en Linux, CI run 31521002851, job `rust`; `cargo test --workspace` pasó con `O_NOFOLLOW = 0`.
+- M2/M3/M4: probado en unidad o inspección estructural en Windows host. M3 falló por el motivo esperado, no por compilación ni fixture.
 
 ## 9. Las seis puertas
 
@@ -473,9 +489,17 @@ Pendiente de completar fase a fase.
 - Lectura de aserciones/contadores/nombres: sin aserciones, contadores ni tests nuevos.
 - `git diff --name-only`: sólo `docs/reports/5C-codex.md` al iniciar Fase 1; ningún archivo prohibido.
 
-### Puerta 1
+### Puerta 1 — 2026-08-11 — BLOCKED
 
-Pendiente.
+- M1–M4: reproducidas y restauradas.
+- `cargo fmt --all --check`: PASS.
+- `cargo clippy --workspace --all-targets -- -D warnings`: FAIL en Windows por el warning base de `qyro_store_smoke::UNSUPPORTED_PLATFORM`; PASS en Linux en el job `rust` del commit M1.
+- `cargo test -p qyro_fs`: PASS tras restaurar las mutaciones.
+- Lectura de aserciones/contadores/nombres: sin código de producción ni tests nuevos en Fase 1.
+- Archivos de código al terminar: idénticos a la base; sólo el reporte cambia respecto a la base.
+- `check_docs_consistency.sh`: FAIL por QYR-0073, QYR-0074 y QYR-0075 citados en el prompt verbatim sin entradas en el ledger prohibido.
+- CI 31521002851: job `rust` PASS, job `documentation` FAIL por la misma causa; run global en curso/failure a la hora de esta puerta.
+- Decisión obligada por §11: no empezar Fase 2. La puerta no puede pasar sin autorización para modificar `BUGS_PENDING.md`, para excluir el reporte del checker, o para omitir/alterar el prompt verbatim.
 
 ### Puerta 2
 
@@ -501,10 +525,10 @@ Pendiente.
 
 | Fase | Control | Mutación aplicada | Resultado/test que falló | Commit |
 |---|---|---|---|---|
-| 1/M1 | `O_NOFOLLOW` Linux/Android | Pendiente | Pendiente | Pendiente |
-| 1/M2 | lectura acotada de `digest_of` | Pendiente | Pendiente | Pendiente |
-| 1/M3 | descarte de huérfano largo | Pendiente | Pendiente | Pendiente |
-| 1/M4 | lectura productiva de `ResumeState::decode` | `rg` de llamantes fuera de tests | Pendiente | N/A |
+| 1/M1 | `O_NOFOLLOW` Linux/Android | `libc_o_nofollow()` devuelve `0` | Sobrevivió: `cargo test --workspace`, 388/388 en verde en el job `rust` | `a1c7398` |
+| 1/M2 | lectura acotada de `digest_of` | `read_to_end` carga el archivo completo | Sobrevivió: `tests::building_a_manifest_from_disk_does_not_load_the_file` pasó (1/1) | Mutación local restaurada |
+| 1/M3 | descarte de huérfano largo | `.qyro-part` de 8192 bytes frente a contenido de 2048, sin metadata | Falló `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy` con `DigestMismatch { item_id: 1 }` | Mutación local restaurada |
+| 1/M4 | lectura productiva de `ResumeState::decode` | `rg -n 'ResumeState::decode' rust/crates/qyro_fs/src -g '*.rs'`, excluyendo `tests.rs` | Cero llamantes productivos | N/A |
 
 ## 11. Tests antes y después
 
@@ -515,19 +539,382 @@ Pendiente.
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después: pendiente.
+- Paquetes después de Fase 1: 61.
 - Dependencias externas nuevas: ninguna prevista.
-- `git diff -- Cargo.lock`: pendiente de cierre; debe estar vacío.
+- `git diff origin/claude/qyro-filesystem-5b1...HEAD -- Cargo.lock`: vacío.
 
 ## 13. `git diff --name-only origin/main...HEAD`
 
-Pendiente de cierre.
++La salida literal actual contiene 353 rutas heredadas de la rama base, porque `main` no contiene los sprints previos:
+
+```text
+.gitattributes
+.github/scripts/android_crypto_smoke.sh
+.github/workflows/android-runtime.yml
+.github/workflows/ci.yml
+.github/workflows/crypto-fuzz.yml
+.github/workflows/crypto-platform.yml
+.github/workflows/ios-runtime.yml
+.github/workflows/platform-builds.yml
+.gitignore
+AGENTS.md
+ARCHITECTURE.md
+BUGS_PENDING.md
+CHANGELOG.md
+Cargo.lock
+Cargo.toml
+DECISIONS.md
+FILE_MAP.md
+HANDOFF.md
+NEXT_STEPS.md
+PROJECT_CONTEXT.md
+PROTOCOL.md
+README.md
+SECURITY.md
+STATUS.md
+TESTING.md
+THIRD_PARTY_NOTICES.md
+THREAT_MODEL.md
+apps/qyro/android/app/src/main/res/drawable-v21/launch_background.xml
+apps/qyro/android/app/src/main/res/drawable/launch_background.xml
+apps/qyro/android/app/src/main/res/values-night/styles.xml
+apps/qyro/android/app/src/main/res/values/colors.xml
+apps/qyro/android/app/src/main/res/values/styles.xml
+apps/qyro/assets/brand/qyro-logo.png
+apps/qyro/assets/generated/logo_ascii.json
+apps/qyro/assets/generated/logo_ascii.txt
+apps/qyro/assets/generated/logo_ascii_preview.png
+apps/qyro/integration_test/native_abi_smoke_test.dart
+apps/qyro/ios/.gitignore
+apps/qyro/ios/Native/README.md
+apps/qyro/ios/Runner.xcodeproj/project.pbxproj
+apps/qyro/ios/Runner/Base.lproj/LaunchScreen.storyboard
+apps/qyro/ios/RunnerTests/RunnerTests.swift
+apps/qyro/l10n.yaml
+apps/qyro/lib/app.dart
+apps/qyro/lib/boot/ascii_logo_model.dart
+apps/qyro/lib/boot/ascii_logo_painter.dart
+apps/qyro/lib/boot/boot_screen.dart
+apps/qyro/lib/boot/boot_sequence_controller.dart
+apps/qyro/lib/boot/boot_status_model.dart
+apps/qyro/lib/boot/cipher_rain_painter.dart
+apps/qyro/lib/boot/scramble_decode_engine.dart
+apps/qyro/lib/boot/scrambled_line.dart
+apps/qyro/lib/ffi/qyro_native_api.dart
+apps/qyro/lib/generated/branding.g.dart
+apps/qyro/lib/home/home_screen.dart
+apps/qyro/lib/l10n/app_en.arb
+apps/qyro/lib/l10n/app_es.arb
+apps/qyro/lib/startup/native_bridge.dart
+apps/qyro/lib/startup/production_startup.dart
+apps/qyro/lib/startup/startup_coordinator.dart
+apps/qyro/pubspec.lock
+apps/qyro/pubspec.yaml
+apps/qyro/test/boot_painters_test.dart
+apps/qyro/test/boot_visual_contract_test.dart
+apps/qyro/test/boot_wordmark_test.dart
+apps/qyro/test/branding_generator_test.dart
+apps/qyro/test/ffi/qyro_native_api_test.dart
+apps/qyro/test/localization_contract_test.dart
+apps/qyro/test/qyro_app_test.dart
+apps/qyro/test/scramble_decode_engine_test.dart
+apps/qyro/test/startup_coordinator_test.dart
+apps/qyro/windows/runner/main.cpp
+apps/qyro/windows/runner/win32_window.cpp
+design/brand/source/README.md
+docs/LICENSE_AUDIT.md
+docs/REPOSITORY_RENAME.md
+docs/adr/ADR-0012-build-time-branding.md
+docs/adr/ADR-0013-startup-coordinator.md
+docs/adr/ADR-0014-canonical-logo.md
+docs/adr/ADR-0015-branch-reconciliation.md
+docs/adr/ADR-0016-qyro1-wire-framing.md
+docs/adr/ADR-0017-manifest-serialization.md
+docs/adr/ADR-0018-protocol-semantic-errors.md
+docs/adr/ADR-0019-manifest-display-name.md
+docs/adr/ADR-0020-device-identity-foundation.md
+docs/adr/ADR-0021-authenticated-handshake.md
+docs/adr/ADR-0022-qyro1-frame-aead.md
+docs/adr/ADR-0023-crypto-platform-test-harness.md
+docs/adr/ADR-0024-secure-identity-storage.md
+docs/adr/ADR-0025-android-keystore-identity-storage.md
+docs/adr/ADR-0026-transfer-session.md
+docs/adr/ADR-0027-filesystem-materialisation.md
+docs/audits/CLAUDE_RECOVERY_AUDIT.md
+docs/audits/SPRINT4B_HANDSHAKE_AUDIT.md
+docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md
+docs/audits/SPRINT4C2_AUDIT_CLOSURE.md
+docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md
+docs/audits/SPRINT4C_AEAD_AUDIT.md
+docs/audits/SPRINT4D1_SECURE_STORAGE.md
+docs/audits/external/README.md
+docs/prompts/2026-08-04-master.md
+docs/protocols/manifest-format.md
+docs/protocols/qyro1-wire-format.md
+docs/reports/5C-codex.md
+docs/security/authenticated-handshake.md
+docs/security/device-identity.md
+docs/security/frame-encryption.md
+docs/security/handshake-state-machine.md
+docs/security/handshake-threat-analysis.md
+docs/security/identity-storage.md
+docs/security/nonce-lifecycle.md
+docs/security/parser-threats.md
+docs/security/replay-window.md
+docs/security/secret-lifecycle-audit.md
+docs/security/test-vectors/README.md
+docs/security/test-vectors/aead-v1.json
+docs/security/test-vectors/aead-v1.schema.json
+docs/security/test-vectors/handshake-v1.json
+docs/security/test-vectors/handshake-v1.schema.json
+docs/security/test-vectors/identity-v1.json
+docs/security/test-vectors/rfc4231-hmac-sha256.json
+docs/security/test-vectors/rfc7748-x25519.json
+docs/security/test-vectors/rfc8032-ed25519.json
+docs/security/test-vectors/rfc8439-chacha20poly1305.json
+docs/security/test-vectors/storage-v1.json
+docs/security/test-vectors/storage-v1.schema.json
+docs/testing/crypto-fuzzing.md
+docs/testing/crypto-platform-matrix.md
+rust/crates/qyro_core/src/lib.rs
+rust/crates/qyro_crypto/Cargo.toml
+rust/crates/qyro_crypto/src/aead/corpus.rs
+rust/crates/qyro_crypto/src/aead/error.rs
+rust/crates/qyro_crypto/src/aead/guards.rs
+rust/crates/qyro_crypto/src/aead/mod.rs
+rust/crates/qyro_crypto/src/aead/replay.rs
+rust/crates/qyro_crypto/src/aead/tests.rs
+rust/crates/qyro_crypto/src/aead/vectors.rs
+rust/crates/qyro_crypto/src/error.rs
+rust/crates/qyro_crypto/src/fingerprint.rs
+rust/crates/qyro_crypto/src/fuzzing.rs
+rust/crates/qyro_crypto/src/guards.rs
+rust/crates/qyro_crypto/src/handshake/closure_tests.rs
+rust/crates/qyro_crypto/src/handshake/error.rs
+rust/crates/qyro_crypto/src/handshake/mod.rs
+rust/crates/qyro_crypto/src/handshake/schedule.rs
+rust/crates/qyro_crypto/src/handshake/tests.rs
+rust/crates/qyro_crypto/src/handshake/transcript.rs
+rust/crates/qyro_crypto/src/handshake/vectors.rs
+rust/crates/qyro_crypto/src/identity.rs
+rust/crates/qyro_crypto/src/lib.rs
+rust/crates/qyro_crypto/src/schema.rs
+rust/crates/qyro_crypto/src/signature.rs
+rust/crates/qyro_crypto/src/vectors.rs
+rust/crates/qyro_ffi/Cargo.toml
+rust/crates/qyro_ffi/tests/c_abi_contract.rs
+rust/crates/qyro_fs/Cargo.toml
+rust/crates/qyro_fs/src/error.rs
+rust/crates/qyro_fs/src/guards.rs
+rust/crates/qyro_fs/src/io.rs
+rust/crates/qyro_fs/src/lib.rs
+rust/crates/qyro_fs/src/manifest_builder.rs
+rust/crates/qyro_fs/src/resume.rs
+rust/crates/qyro_fs/src/safe_path.rs
+rust/crates/qyro_fs/src/tests.rs
+rust/crates/qyro_identity_store/Cargo.toml
+rust/crates/qyro_identity_store/src/blob.rs
+rust/crates/qyro_identity_store/src/error.rs
+rust/crates/qyro_identity_store/src/guards.rs
+rust/crates/qyro_identity_store/src/lib.rs
+rust/crates/qyro_identity_store/src/tests.rs
+rust/crates/qyro_manifest/Cargo.toml
+rust/crates/qyro_manifest/src/codec.rs
+rust/crates/qyro_manifest/src/error.rs
+rust/crates/qyro_manifest/src/guards.rs
+rust/crates/qyro_manifest/src/lib.rs
+rust/crates/qyro_manifest/src/limits.rs
+rust/crates/qyro_manifest/src/model.rs
+rust/crates/qyro_manifest/src/path.rs
+rust/crates/qyro_manifest/tests/ancestor_collision_contract.rs
+rust/crates/qyro_manifest/tests/common/mod.rs
+rust/crates/qyro_manifest/tests/corpus_smoke.rs
+rust/crates/qyro_manifest/tests/decode_guard_contract.rs
+rust/crates/qyro_manifest/tests/manifest_contract.rs
+rust/crates/qyro_manifest/tests/portable_collision_contract.rs
+rust/crates/qyro_manifest/tests/property.rs
+rust/crates/qyro_manifest/tests/unicode_path_contract.rs
+rust/crates/qyro_protocol/Cargo.toml
+rust/crates/qyro_protocol/src/decoder.rs
+rust/crates/qyro_protocol/src/envelope.rs
+rust/crates/qyro_protocol/src/error.rs
+rust/crates/qyro_protocol/src/frame.rs
+rust/crates/qyro_protocol/src/guards.rs
+rust/crates/qyro_protocol/src/header.rs
+rust/crates/qyro_protocol/src/lib.rs
+rust/crates/qyro_protocol/src/limits.rs
+rust/crates/qyro_protocol/src/message.rs
+rust/crates/qyro_protocol/src/session.rs
+rust/crates/qyro_protocol/src/version.rs
+rust/crates/qyro_protocol/tests/corpus_smoke.rs
+rust/crates/qyro_protocol/tests/forward_compatibility.rs
+rust/crates/qyro_protocol/tests/plain_encrypted_boundary.rs
+rust/crates/qyro_protocol/tests/property.rs
+rust/crates/qyro_protocol/tests/public_api_contract.rs
+rust/crates/qyro_protocol/tests/session_id_contract.rs
+rust/crates/qyro_protocol/tests/wire_contract.rs
+rust/crates/qyro_transfer/Cargo.toml
+rust/crates/qyro_transfer/src/error.rs
+rust/crates/qyro_transfer/src/guards.rs
+rust/crates/qyro_transfer/src/lib.rs
+rust/crates/qyro_transfer/src/session.rs
+rust/crates/qyro_transfer/src/tests.rs
+rust/crates/qyro_transfer/src/wire.rs
+rust/crates/qyro_win_dpapi/Cargo.toml
+rust/crates/qyro_win_dpapi/src/ffi.rs
+rust/crates/qyro_win_dpapi/src/guards.rs
+rust/crates/qyro_win_dpapi/src/lib.rs
+rust/crates/qyro_win_dpapi/src/store.rs
+rust/crates/qyro_win_dpapi/src/tests.rs
+rust/fuzz/Cargo.lock
+rust/fuzz/Cargo.toml
+rust/fuzz/corpus/frame_decoder/all_ff.bin
+rust/fuzz/corpus/frame_decoder/all_flags.bin
+rust/fuzz/corpus/frame_decoder/all_zero.bin
+rust/fuzz/corpus/frame_decoder/bad_magic.bin
+rust/fuzz/corpus/frame_decoder/bad_major.bin
+rust/fuzz/corpus/frame_decoder/data_chunk.bin
+rust/fuzz/corpus/frame_decoder/empty.bin
+rust/fuzz/corpus/frame_decoder/empty_hello.bin
+rust/fuzz/corpus/frame_decoder/future_minor.bin
+rust/fuzz/corpus/frame_decoder/header_len_too_big.bin
+rust/fuzz/corpus/frame_decoder/header_len_too_small.bin
+rust/fuzz/corpus/frame_decoder/heartbeat.bin
+rust/fuzz/corpus/frame_decoder/hostile_payload_len.bin
+rust/fuzz/corpus/frame_decoder/max_ids.bin
+rust/fuzz/corpus/frame_decoder/one_byte.bin
+rust/fuzz/corpus/frame_decoder/reserved_byte_set.bin
+rust/fuzz/corpus/frame_decoder/reserved_flag_set.bin
+rust/fuzz/corpus/frame_decoder/sealed_bad_sequence.bin
+rust/fuzz/corpus/frame_decoder/sealed_bad_tag.bin
+rust/fuzz/corpus/frame_decoder/sealed_both_flags.bin
+rust/fuzz/corpus/frame_decoder/sealed_empty_payload.bin
+rust/fuzz/corpus/frame_decoder/sealed_flag_without_trailer.bin
+rust/fuzz/corpus/frame_decoder/sealed_missing_tag.bin
+rust/fuzz/corpus/frame_decoder/sealed_oversize_trailer.bin
+rust/fuzz/corpus/frame_decoder/sealed_responder.bin
+rust/fuzz/corpus/frame_decoder/sealed_short_payload.bin
+rust/fuzz/corpus/frame_decoder/sealed_truncated_header.bin
+rust/fuzz/corpus/frame_decoder/sealed_truncated_tag.bin
+rust/fuzz/corpus/frame_decoder/sealed_two_frames.bin
+rust/fuzz/corpus/frame_decoder/sealed_wrong_session.bin
+rust/fuzz/corpus/frame_decoder/trailer_present.bin
+rust/fuzz/corpus/frame_decoder/truncated_header.bin
+rust/fuzz/corpus/frame_decoder/truncated_payload.bin
+rust/fuzz/corpus/frame_decoder/two_frames.bin
+rust/fuzz/corpus/frame_decoder/type_zero.bin
+rust/fuzz/corpus/frame_decoder/unknown_type.bin
+rust/fuzz/corpus/manifest_decoder/absolute.bin
+rust/fuzz/corpus/manifest_decoder/all_zero.bin
+rust/fuzz/corpus/manifest_decoder/backslash.bin
+rust/fuzz/corpus/manifest_decoder/bad_magic.bin
+rust/fuzz/corpus/manifest_decoder/bad_option_tag.bin
+rust/fuzz/corpus/manifest_decoder/bad_version.bin
+rust/fuzz/corpus/manifest_decoder/directory.bin
+rust/fuzz/corpus/manifest_decoder/drive_prefix.bin
+rust/fuzz/corpus/manifest_decoder/empty.bin
+rust/fuzz/corpus/manifest_decoder/hostile_item_count.bin
+rust/fuzz/corpus/manifest_decoder/huge_total.bin
+rust/fuzz/corpus/manifest_decoder/large_item_count.bin
+rust/fuzz/corpus/manifest_decoder/nested.bin
+rust/fuzz/corpus/manifest_decoder/nul_in_path.bin
+rust/fuzz/corpus/manifest_decoder/one_file.bin
+rust/fuzz/corpus/manifest_decoder/reserved_name.bin
+rust/fuzz/corpus/manifest_decoder/sha256_hash.bin
+rust/fuzz/corpus/manifest_decoder/trailing_bytes.bin
+rust/fuzz/corpus/manifest_decoder/traversal.bin
+rust/fuzz/corpus/manifest_decoder/v2_bad_hash_len.bin
+rust/fuzz/corpus/manifest_decoder/v2_blake3.bin
+rust/fuzz/corpus/manifest_decoder/v2_case_collision.bin
+rust/fuzz/corpus/manifest_decoder/v2_dir_with_hash.bin
+rust/fuzz/corpus/manifest_decoder/v2_directory.bin
+rust/fuzz/corpus/manifest_decoder/v2_empty.bin
+rust/fuzz/corpus/manifest_decoder/v2_file_without_hash.bin
+rust/fuzz/corpus/manifest_decoder/v2_hostile_count.bin
+rust/fuzz/corpus/manifest_decoder/v2_illegal_char.bin
+rust/fuzz/corpus/manifest_decoder/v2_mime_mtime.bin
+rust/fuzz/corpus/manifest_decoder/v2_nested.bin
+rust/fuzz/corpus/manifest_decoder/v2_nfd_collision.bin
+rust/fuzz/corpus/manifest_decoder/v2_one_file.bin
+rust/fuzz/corpus/manifest_decoder/v2_trailing.bin
+rust/fuzz/corpus/manifest_decoder/v2_traversal.bin
+rust/fuzz/corpus/manifest_decoder/v2_unicode.bin
+rust/fuzz/corpus/manifest_decoder/with_mime_and_mtime.bin
+rust/fuzz/corpus/relative_path/absolute.txt
+rust/fuzz/corpus/relative_path/backslash.txt
+rust/fuzz/corpus/relative_path/control.txt
+rust/fuzz/corpus/relative_path/deep.txt
+rust/fuzz/corpus/relative_path/dot_segment.txt
+rust/fuzz/corpus/relative_path/double_slash.txt
+rust/fuzz/corpus/relative_path/drive.txt
+rust/fuzz/corpus/relative_path/empty.txt
+rust/fuzz/corpus/relative_path/invalid_utf8.txt
+rust/fuzz/corpus/relative_path/long_segment.txt
+rust/fuzz/corpus/relative_path/nested.txt
+rust/fuzz/corpus/relative_path/nul_byte.txt
+rust/fuzz/corpus/relative_path/only_slash.txt
+rust/fuzz/corpus/relative_path/reserved_com1_ext.txt
+rust/fuzz/corpus/relative_path/reserved_con.txt
+rust/fuzz/corpus/relative_path/simple.txt
+rust/fuzz/corpus/relative_path/space_name.txt
+rust/fuzz/corpus/relative_path/trailing_dot.txt
+rust/fuzz/corpus/relative_path/trailing_space.txt
+rust/fuzz/corpus/relative_path/traversal.txt
+rust/fuzz/corpus/relative_path/unc.txt
+rust/fuzz/corpus/relative_path/unicode.txt
+rust/fuzz/fuzz_targets/encrypted_envelope.rs
+rust/fuzz/fuzz_targets/frame_decoder.rs
+rust/fuzz/fuzz_targets/frame_opener.rs
+rust/fuzz/fuzz_targets/manifest_decoder.rs
+rust/fuzz/fuzz_targets/relative_path.rs
+rust/fuzz/fuzz_targets/replay_window.rs
+rust/guards/source_guard.rs
+rust/tools/qyro_crypto_smoke/Cargo.toml
+rust/tools/qyro_crypto_smoke/include/module.modulemap
+rust/tools/qyro_crypto_smoke/include/qyro_crypto_smoke.h
+rust/tools/qyro_crypto_smoke/ios/Package.swift
+rust/tools/qyro_crypto_smoke/ios/Tests/QyroCryptoSmokeTests/QyroCryptoSmokeTests.swift
+rust/tools/qyro_crypto_smoke/src/lib.rs
+rust/tools/qyro_crypto_smoke/src/main.rs
+rust/tools/qyro_store_smoke/Cargo.toml
+rust/tools/qyro_store_smoke/src/main.rs
+scripts/check_crypto_platform_evidence.ps1
+scripts/check_crypto_platform_evidence.sh
+scripts/check_docs_consistency.ps1
+scripts/check_docs_consistency.sh
+scripts/check_harness_isolation.ps1
+scripts/check_harness_isolation.sh
+scripts/check_repo_portability.ps1
+scripts/check_repo_portability.sh
+scripts/tests/crypto_platform_evidence_contract_test.ps1
+scripts/tests/crypto_platform_evidence_contract_test.sh
+scripts/tests/docs_consistency_contract_test.ps1
+scripts/tests/docs_consistency_contract_test.sh
+scripts/tests/launch_surface_contract_test.ps1
+scripts/tests/launch_surface_contract_test.sh
+scripts/tests/repo_portability_contract_test.ps1
+scripts/tests/repo_portability_contract_test.sh
+scripts/tests/windows_package_contract_test.ps1
+scripts/verify_windows_package.ps1
+tools/branding_generator/bin/generate.dart
+tools/branding_generator/lib/branding_generator.dart
+tools/branding_generator/pubspec.yaml
+tools/logo_ascii_generator/generate.py
+tools/logo_ascii_generator/test_logo_ascii_generator.py
+```
+
+El delta propio contra la base exigida es:
+
+```text
+docs/reports/5C-codex.md
+```
 
 ## 14. Todos los runs de CI de la rama
 
 | Run | Commit | Workflow | Evento | Conclusión |
 |---|---|---|---|---|
 | 31520332918 | 15934aae3dda7f469b5496c8341eb78d9e32f335 | CI | workflow_dispatch | success |
+| 31521002851 | a1c7398fbc2d7ef903282f3d64cfb19da23dcf42 | CI | workflow_dispatch | failure global; `rust` PASS, `documentation` FAIL por ledger |
 
 La lista se reconstruirá por API al cierre, sin filtrar fallos ni cancelaciones.
 
@@ -537,6 +924,4 @@ Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay 
 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
-Pendiente de completar. La superficie de cabecera que resulte de la Fase 5 debe comunicarse al agente de red sin modificar los documentos raíz prohibidos.
-
-
+El sprint no llegó a cambiar la superficie de cabecera. El siguiente paso necesita resolver primero la incompatibilidad entre el reporte verbatim, la regla de IDs del checker y la prohibición de tocar el ledger. Después, la superficie de cabecera que resulte de la Fase 5 debe comunicarse al agente de red sin modificar los documentos raíz prohibidos.
