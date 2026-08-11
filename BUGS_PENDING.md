@@ -1666,8 +1666,8 @@
 - Evidencia: local Windows Rust 1.88.0: Clippy PASS y 405 passed/2 ignored; las
   nueve pruebas de `qyro_win_dpapi` pasan, incluida la guarda de `unsafe` que
   también corre en Linux. Al retirar el `cfg`, Clippy falló nominalmente con
-  `constant UNSUPPORTED_PLATFORM is never used`; restaurado después. CI de
-  cierre pendiente de registrar en Puerta 8
+  `constant UNSUPPORTED_PLATFORM is never used`; restaurado después. CI
+  31540971698 ejecutó Clippy y 405/2 en `windows-latest`; los ocho jobs pasaron
 
 ## QYR-0106 — STATUS presentaba un conteo Linux como universal
 

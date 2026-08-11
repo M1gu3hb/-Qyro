@@ -965,8 +965,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Decidir QYR-0072, implementar la mitigación elegida y declarar lo no cubierto:
   **cumplido** mediante opción (c), sin dependencia ni `unsafe`.
 - Resolver los tres hallazgos Windows de Fase 0, asignarles fichas y decidir la
-  cobertura CI: **implementado**; Puerta 8 espera el run del commit de fase.
-- Fases 9–10: **no empezadas** mientras Puerta 8 no esté verde.
+  cobertura CI: **cumplido**; Puerta 8 cerró con ocho jobs verdes en
+  31540971698, incluido el workspace completo Windows.
+- Fases 9–10: **no empezadas** al cerrar Puerta 8.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -1001,8 +1002,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   ejecutó el mismo rechazo post-open en Ubuntu, macOS y Windows. Prueba la
   mitigación declarada, no una carrera adversarial ni la opción (a).
 - QYR-0105: Clippy y workspace completos en Windows local. Retirar el `cfg`
-  exacto reproduce `dead_code`; el job `windows-latest` queda pendiente de su
-  primera ejecución sobre el commit de Fase 8.
+  exacto reproduce `dead_code`; CI 31540971698 confirmó Clippy y 405/2 en el
+  primer job completo `windows-latest`.
 - QYR-0106: comparación nominal de los 407 tests listados en Windows (405
   passed/2 ignored) con 401 en Linux (399/2). Sólo Windows:
   `a_data_blob_that_lies_does_not_round_trip`,
@@ -1043,8 +1044,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - M1–M4: reproducidas y restauradas.
 - `cargo fmt --all --check`: PASS.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI
-  31528757962; el warning Windows base se resolverá en Fase 8 como exige la
-  continuación.
+  31528757962. El warning Windows quedó entonces reservado para Fase 8 y fue
+  cerrado después por QYR-0105/CI 31540971698.
 - `cargo test --workspace`: PASS. Linux 388 passed/2 ignored en CI 31528757962;
   Windows local 394 passed/2 ignored.
 - Mutaciones de fase: M1 y M2 sobrevivieron como se esperaba; M3 falló con el
@@ -1070,8 +1071,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 ### Puerta 2 — 2026-08-11 — PASS
 
 - `cargo fmt --all --check`: PASS local y CI 31529821869.
-- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux; el warning
-  Windows base sigue asignado a Fase 8.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux. En esta
+  puerta el warning Windows seguía asignado a Fase 8; QYR-0105 lo cerró después.
 - `cargo test --workspace`: PASS. Linux sube a 389 passed/2 ignored por el test
   Unix nuevo; Windows normal permanece en 394/2 porque el fixture privilegiado
   es opt-in.
@@ -1101,7 +1102,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 
 - `cargo fmt --all --check`: PASS local y CI 31531259815.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
-  el warning Windows base sigue asignado a Fase 8, como exige el protocolo.
+  el warning Windows estaba aún asignado a Fase 8. QYR-0105 lo cerró después.
 - `cargo test --workspace`: PASS. Linux 390 passed/2 ignored; Windows local
   396 passed/2 ignored. `qyro_fs` ejecutó 15/15 en Windows.
 - Mutaciones: `read_to_end` y el literal `HASH_BUFFER_LEN` rompieron
@@ -1126,7 +1127,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 
 - `cargo fmt --all --check`: PASS local y CI 31532723390.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
-  el warning Windows base sigue asignado a Fase 8.
+  el warning Windows estaba aún asignado a Fase 8. QYR-0105 lo cerró después.
 - `cargo test --workspace`: PASS. Linux 391 passed/2 ignored; Windows local
   397 passed/2 ignored. `qyro_fs` ejecutó 16/16 en Windows.
 - Mutaciones: sin `set_len`, la cola dejó 262243 bytes en vez de 131072; sin la
@@ -1156,7 +1157,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - `cargo fmt --all --check`: PASS local y CI 31534679436.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
   Clippy de `qyro_protocol` y `qyro_crypto` PASS en Windows. El warning base del
-  smoke Windows sigue asignado a Fase 8.
+  smoke Windows estaba aún asignado a Fase 8 y QYR-0105 lo cerró después.
 - `cargo test --workspace`: PASS. Linux 392 passed/2 ignored; Windows local
   398 passed/2 ignored. El único test nuevo es el tamper específico.
 - Mutaciones: fijar `transfer_id` a cero rompió el round-trip; excluir offsets
@@ -1182,7 +1183,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - `cargo fmt --all --check`: PASS local y CI 31536398365.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
   Clippy con `-D warnings` de los seis crates consumidores PASS en Windows. El
-  warning global del smoke Windows sigue reservado para Fase 8.
+  warning global del smoke Windows estaba aún reservado para Fase 8; QYR-0105
+  lo cerró después.
 - `cargo test --workspace`: PASS. Linux 398 passed/2 ignored; Windows local
   404 passed/2 ignored. Son seis instancias nuevas, una por crate consumidor.
 - Mutación: añadí temporalmente a `qyro_fs/src/tests.rs`
@@ -1209,8 +1211,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 
 - `cargo fmt --all --check`: PASS local y CI 31537833116.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
-  Clippy de `qyro_fs` PASS en Windows. El warning global Windows sigue asignado
-  a Fase 8.
+  Clippy de `qyro_fs` PASS en Windows. El warning global Windows estaba aún
+  asignado a Fase 8 y QYR-0105 lo cerró después.
 - `cargo test --workspace`: PASS. Linux 399 passed/2 ignored; Windows local
   405 passed/2 ignored. `qyro_fs` ejecutó 18/18 en Windows.
 - Mutación: la firma nueva de `open_part` recibió la raíz pero omitió el check;
@@ -1230,9 +1232,36 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Gate escrito antes de empezar Fase 8. ADR `01133a8` precede al código
   `5deb51a`; CI 31537833116: **success** en siete jobs.
 
-### Puerta 8
+### Puerta 8 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local Windows y job Rust Linux de
+  31540971698.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS local Windows y
+  en los dos jobs completos de CI, Linux y el nuevo `windows-latest`.
+- `cargo test --workspace`: PASS. Extracción del step exacto: Linux 399
+  passed/2 ignored; Windows 405 passed/2 ignored.
+- Mutaciones: retirar `#[cfg(not(windows))]` hizo fallar Clippy por
+  `UNSUPPORTED_PLATFORM`; el `printf | tr` por segmento siguió activo >120 s;
+  el checker documental sin adaptaciones 5.1 falló por el rango reservado,
+  stderr nativo y CRLF. Todo restaurado/corregido, con contratos verdes.
+- Aserciones: no se añadió ninguna aserción Rust; los contratos de script
+  comparan códigos y mensajes elegidos por la fixture, no dos resultados del
+  checker entre sí. La guarda de Fase 6 sigue activa en seis crates.
+- Contadores: ninguno nuevo; los tres de filesystem conservan valores derivados
+  de operaciones y sus contratos contra constantes.
+- Nombres: `docs_consistency_contract_test` ejerce coherencia documental y
+  `repo_portability_contract_test` ejerce rutas hostiles/portables. Cada caso
+  impreso corresponde a la ruta creada sólo en el índice.
+- Delta desde `15934aa`: sin `qyro_net`, `qyro_net_smoke`, `qyro_ffi`, app,
+  `qyro_transfer`, Cargo raíz, Cargo.lock ni archivo Claude. Sigue en 61 paquetes.
+- Documentación: `check_docs_consistency` PASS en Bash, PowerShell 5.1 local y
+  PowerShell 7 CI; ambos contratos Bash/PowerShell PASS. Portabilidad también
+  PASS en los cuatro procesos locales y en CI.
+- Coherencia: §2–§8, §10–§16 y STATUS distinguen base 388/394 de rama 399/405,
+  explican 8 Windows - 2 Unix, registran QYR-0105–0109 y eliminan los
+  «pendiente» que la fase invalidó.
+- Gate escrito antes de empezar Fase 9. Código `26af47a`; CI 31540971698:
+  **success** en ocho jobs, incluido el primer workspace completo Windows.
 
 ### Puerta 9
 
@@ -1360,8 +1389,9 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31537082688 | bb9c0a7ccfe85eb3af436ca3fb8f77822374947c | CI | workflow_dispatch | success; ledger e informe de Puerta 6, siete jobs PASS |
 | 31537833116 | 5deb51a5d9ebe203d661a7da0ad806441f59a87c | CI | workflow_dispatch | success; mitigación post-open en Ubuntu, macOS y Windows, siete jobs PASS |
 | 31538490463 | 754093de6e52fe9a7e9dc5cf0968ccf616a4b917 | CI | workflow_dispatch | success; informe de Puerta 7 coherente, siete jobs PASS |
+| 31540971698 | 26af47a9eabd1c816d4388a1c115a1855d210ede | CI | workflow_dispatch | success; ocho jobs PASS, incluido Clippy y 405/2 del workspace Windows |
 
-Lista reconstruida por API al iniciar la Fase 8. No hubo runs cancelados; todos
+Lista reconstruida por API al cerrar la Fase 8. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
@@ -1380,8 +1410,8 @@ puede usar `Frame::with_identifiers(SessionId, u64, u32, u32)`; el sealer
 sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
 del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
 rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
-no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–7 están
-cerradas y la implementación de Fase 8 espera su run.
+no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–8 están
+cerradas.
 `rust/guards/source_guard.rs` añade automáticamente la guarda
 antitautologías a todo crate que lo incluya; cualquier consumidor nuevo debe
 mantener verdes sus contratos o usar una excepción exacta con argumento. Los
