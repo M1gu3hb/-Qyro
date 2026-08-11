@@ -11,238 +11,55 @@
 > que se completará con lo que salga, es trabajo que todavía no se ha hecho. Ninguna
 > afirmación de este informe debe leerse sin su clase de evidencia (§8).
 
+### Sobre los identificadores de hallazgo de este informe
+
+Los hallazgos van numerados **`6A-n`**, no `QYR-00xx`. No es un descuido: es la
+consecuencia directa de §5 de este sprint, y está explicado en el hallazgo 6A-1.
+En corto: §5 prohíbe a los dos agentes tocar el ledger, y
+`check_docs_consistency` bloquea cualquier identificador citado que no tenga entrada
+en él. Acuñar aquí un número que no puedo registrar produciría exactamente el fallo
+que ese control existe para detectar. **El supervisor asigna el número QYR-00xx de
+cada hallazgo al consolidar**, y esa asignación es trivial porque cada uno lleva
+abajo su descripción completa, su efecto y su estado.
+
 ---
 
 ## 1. El prompt recibido, verbatim y completo
 
-Reproducido tal y como se recibió, sin parafrasear, sin resumir y sin reordenar. El
-formato de origen no traía marcas de código; se conserva el texto plano.
+**El prompt está reproducido verbatim, íntegro y sin una sola modificación en
+[`docs/reports/6A-prompt.txt`](6A-prompt.txt)** (223 líneas, SHA-256
+`c88b4bc54ae04de3ad12c55bf8b9df26aed77fe860916409f003929cbb368385`). El formato de
+origen no traía marcas de código; se conserva el texto plano tal cual llegó.
 
-```text
-1. Título del sprint
-Sprint 6A — qyro_net: que dos procesos de verdad, por un socket de verdad, se pasen un archivo cifrado y verificado.
-Sin descubrimiento, sin FFI, sin UI, sin selector de archivos. La dirección del peer se la pasa el llamante como IpAddr:puerto.
-Es el sprint que convierte todo lo construido en cinco meses en algo que ocurre entre dos procesos separados. Hoy, el «transporte» de Qyro es un Vec<u8> que pasa de una variable a otra dentro del mismo proceso. Al terminar este sprint, tiene que ser un socket TCP.
-2. Cómo se trabaja en este sprint — léelo antes que nada
-Este prompt es largo a propósito y tiene seis fases. No es una lista de deseos: es una secuencia, y cada fase termina en una puerta de auto-auditoría que tienes que pasar antes de empezar la siguiente.
-No avances de fase con la anterior a medias. Si una puerta no pasa, arréglalo y vuelve a pasarla. Si no puedes arreglarlo, para y reporta; no lo dejes para después ni lo compenses con trabajo de la fase siguiente.
-El protocolo de puerta está en §12 y es idéntico para las seis. Léelo ahora, antes de escribir una línea.
-Trabajas en paralelo con otro agente (Codex) que está tocando otras partes del mismo repositorio, al mismo tiempo, en otra rama. Las reglas de no interferencia son §5 y son estrictas: si tocas un archivo que no te toca, el merge se rompe y los dos sprints se pierden.
-3. Repositorio, rama y HEAD
-https://github.com/M1gu3hb/-Qyro
-Rama base: claude/qyro-filesystem-5b1. Crea una rama nueva: claude/qyro-net-6a.
-git fetch --all --prune
-git rev-parse origin/claude/qyro-filesystem-5b1
-# debe imprimir 15934aae3dda7f469b5496c8341eb78d9e32f335
-Si imprime otra cosa, detente y reporta.
-Verified commit de partida: e3fbaf10073faef91c21350937356be5d861c666.
-Aviso de honestidad sobre esa evidencia: el sprint 5B.1 declara seis workflows en verde sobre e3fbaf1 con los IDs 31232028441 / 378 / 429 / 435 / 405 / 433. El supervisor no pudo verificarlos (la API de GitHub devolvió 403 desde su entorno). Reproduce tú la línea base localmente en la Fase 0 y no des por buena la tabla ajena.
-4. Lo que ya existe, y las costuras exactas por donde entras
-Crate	Qué te da
-qyro_protocol	Cabecera fija de 48 bytes, tipos de mensaje, y un decodificador incremental acotado que arma mensajes conforme llegan los bytes. MAX_PAYLOAD_LEN 1 MiB, MAX_BUFFER_LEN 1 049 664, semántica de envenenamiento, errores estructurales y semánticos separados (ADR-0018)
-qyro_crypto	Identidad Ed25519, handshake autenticado de cuatro mensajes (X25519 + firmas sobre el transcript + HKDF-SHA256 + HMAC-SHA256), FrameSealer/FrameOpener con ChaCha20-Poly1305 y la cabecera de 48 bytes completa como AAD, nonce sin repetición, ventana de replay de 1024
-qyro_transfer	Sender/Receiver, chunks de 64 KiB, ventana de 16, go-back-N con ACK acumulativo, pausa/reanudación/cancelación desde ambos lados, veredicto de SHA-256 por archivo, ocho rechazos por estado tipados
-qyro_fs	FileSource/FileSink sobre archivos reales, .qyro-part, rename tras digest verificado, resolución segura de rutas
-qyro_manifest	Manifest canónico con digest obligatorio y validación dura de rutas
-El decodificador incremental de qyro_protocol es la pieza clave y ya está resuelto. No escribas otro. Un socket TCP te entrega bytes en trozos arbitrarios, que es exactamente el problema que ese decodificador existe para resolver. Tu trabajo es alimentarlo desde un TcpStream, no reimplementarlo.
-Línea base a reproducir: 388 tests, 0 failed, 2 ignored. 61 paquetes en Cargo.lock. Clippy y fmt limpios. Los cuatro check_* en verde.
-5. Reglas de no interferencia — un agente en paralelo
-Otro agente trabaja al mismo tiempo en codex/qyro-gap-closure-5c, sobre qyro_fs, qyro_protocol/src/header.rs y las guardas compartidas.
-Archivos que TÚ tocas:
-rust/crates/qyro_net/** — todo nuevo, es tuyo entero
-Cargo.toml de la raíz — una línea, añadir qyro_net a members
-Cargo.lock — el efecto de lo anterior
-docs/adr/ADR-0028-network-transport.md — nuevo
-docs/reports/6A-claude-code.md — tu reporte
-tools/qyro_net_smoke/** si decides hacer el binario de dos procesos como herramienta (ver §8, Fase 4)
-Archivos que NO tocas bajo ninguna circunstancia:
-rust/crates/qyro_fs/** — es del otro agente
-rust/crates/qyro_protocol/src/header.rs — es del otro agente
-rust/guards/source_guard.rs — es del otro agente. Tú haces include! de él sin modificarlo, igual que hacen los otros crates
-STATUS.md, HANDOFF.md, NEXT_STEPS.md, CHANGELOG.md, BUGS_PENDING.md, DECISIONS.md — ninguno de los dos agentes los toca en este run
-.github/workflows/** — los seis workflows ya cubren tu caso
-main — no commits, no merge, no PR, no rebase, no force-push
-Esto es un cambio de proceso respecto a los cinco sprints anteriores y es deliberado. Todo lo que normalmente iría en STATUS.md y BUGS_PENDING.md va en tu reporte de docs/reports/6A-claude-code.md, con la estructura de §13. El supervisor consolida los seis documentos raíz después, en un commit aparte.
-Si necesitas tocar un archivo de la lista prohibida, para y reporta por qué. No lo toques «sólo un poco».
-6. La decisión que ya está tomada, para que no la investigues
-Nada de async. std::net y std::thread.
-El supervisor lo investigó con fuentes primarias el 2026-08-11 y la conclusión es firme:
-Qyro tiene una conexión TCP. El valor de un runtime async es multiplexar miles de conexiones sobre pocos hilos; con N=1 un hilo bloqueante es más simple, más fácil de depurar y produce backtraces legibles.
-El motor ya es una máquina de estados síncrona con su propio windowing. Envolverlo en async obliga a reescribirlo.
-TcpStream::try_clone() da el split lectura/escritura: un hilo escribe frames, otro lee ACKs.
-set_nodelay(true) es obligatorio con go-back-N — sin él, Nagle interactúa con el ACK retardado y produce pausas de cientos de milisegundos.
-set_read_timeout(Some(...)) da el despertar periódico para comprobar cancelación.
-shutdown(Shutdown::Both) desde otro hilo hace que un read bloqueado retorne.
-Coordinación con std::sync::mpsc, Mutex y Condvar, todo en std.
-Medido, por si te tienta: tokio con sólo net+rt son 5 crates; completo, 19; smol, 32; async-std, 34 y deprecado por sus propios autores.
-Cero dependencias externas nuevas. Este proyecto lleva seis sprints sin añadir ninguna. Si crees que necesitas una, para y explica antes de añadirla.
-7. Los tres problemas de verdad de este sprint
-No son «abrir un socket». Son estos, y la ADR de la Fase 1 tiene que decidirlos:
-7.1 — Un read de TCP no es un mensaje. TcpStream::read devuelve los bytes que haya, que pueden ser medio frame, tres frames y medio, o un byte. El decodificador incremental de qyro_protocol resuelve el reensamblado; lo que tienes que decidir tú es el tamaño del búfer de lectura, qué pasa cuando el decodificador se envenena, y cómo se distingue un peer lento de un peer muerto.
-7.2 — Un socket es memoria que un desconocido controla. Antes del handshake, el peer no está autenticado y puede mandar lo que quiera. Decide y prueba: cuántos bytes acepta el proceso antes de que el handshake termine, cuánto tiempo puede tardar un handshake antes de cortar, y cuántas conexiones simultáneas acepta un listener. Un peer que abre 10 000 conexiones y no dice nada es la denegación de servicio más barata que existe.
-7.3 — Un cierre no es un final. Hay al menos cinco formas de que una transferencia acabe y son distintas: terminó bien; el emisor canceló; el receptor rechazó; la conexión se cortó a mitad; el proceso remoto murió. El motor ya tiene rechazos tipados para las tres primeras. Las dos últimas son nuevas y llegan como un read que devuelve Ok(0) o un Err(ConnectionReset). Decide qué error tipado produce cada una y no las mezcles en un Io(...) genérico.
-8. Las seis fases
-Fase 0 — Línea base verificada por ti
-Antes de escribir nada:
-Clona, crea la rama, y reproduce: cargo test --workspace, cargo clippy --workspace --all-targets -- -D warnings, cargo fmt --all --check, los cuatro check_*, y wc -l de Cargo.lock contando paquetes.
-Anota los números que obtienes tú, no los que dice STATUS.
-Lee qyro_protocol/src/ entero. Especialmente el decodificador incremental: su API, qué hace cuando se envenena, y qué errores distingue.
-Lee qyro_transfer/src/session.rs entero. Especialmente cómo Sender y Receiver producen y consumen bytes, y qué esperan del llamante.
-Lee ADR-0018 y ADR-0026.
-Puerta 0: los números de la línea base coinciden con los declarados, o has escrito en qué difieren. Sabes decir, sin volver a mirar, cuál es la firma exacta por la que el decodificador incremental recibe bytes.
-Fase 1 — ADR-0028, congelada antes de una sola línea de código
-docs/adr/ADR-0028-network-transport.md. Decide, con el razonamiento escrito y las alternativas descartadas:
-El framing sobre el stream. ¿El frame de 48 bytes + payload va tal cual sobre TCP, o lleva un prefijo de longitud propio? Pista fuerte: la cabecera ya lleva la longitud del payload y está autenticada por el AEAD. Un prefijo de longitud fuera del AEAD es un campo que un atacante puede alterar sin romper el tag. Decide, y di qué garantiza tu elección.
-El tamaño del búfer de lectura, con el número y el porqué. No «8192 porque sí».
-Los límites antes de autenticar (§7.2): bytes máximos, tiempo máximo de handshake, conexiones simultáneas máximas. Los tres con número.
-Los timeouts: de lectura, de escritura, de inactividad. Y cómo se distingue un peer lento de uno muerto — un archivo de 4 GiB por Wi-Fi lento no puede parecer una conexión colgada.
-La taxonomía de finales (§7.3): los cinco casos, el error tipado de cada uno, y cuál de ellos deja la sesión en Poisoned.
-El modelo de hilos: cuántos hilos por conexión, quién es dueño de qué, y cómo se cancela desde fuera. Nombra el mecanismo (shutdown, bandera atómica, canal) y di por qué ése.
-Quién escucha y quién marca. ¿Los dos extremos hacen las dos cosas, o hay un rol? Y cómo se elige el puerto.
-Lo que esta ADR no promete. Sección obligatoria, con al menos: no hay descubrimiento, no hay NAT ni internet, no hay reconexión automática, no está probado en hardware físico, y lo que no hayas probado en Windows.
-Puerta 1 (protocolo de §12). Además: la ADR está commiteada antes del primer commit de código y se puede comprobar en el historial.
-Fase 2 — El transporte crudo: bytes por un socket
-Crate nuevo rust/crates/qyro_net. Con #![forbid(unsafe_code)] y el mismo bloque #![deny(clippy::unwrap_used, expect_used, panic, unreachable, todo, unimplemented, indexing_slicing)] que usan qyro_fs y qyro_transfer.
-Lo que existe al final de esta fase:
-Un listener que acepta una conexión en un puerto y aplica los límites de la ADR §3.
-Un dialer que conecta a IpAddr:puerto con timeout.
-Un FrameStream que envuelve un TcpStream y ofrece dos operaciones: escribir un frame completo, y leer el siguiente frame alimentando el decodificador incremental de qyro_protocol, con el búfer acotado de la ADR §2.
-Errores tipados propios, uno por cada final de §7.3. Ninguno se llama Io a secas.
-Pruebas de esta fase, todas sobre sockets reales en 127.0.0.1:
-a_frame_split_across_three_reads_is_reassembled — escribe un frame en tres write con pausas y comprueba que llega uno solo, íntegro.
-three_frames_in_one_read_are_all_delivered — el caso contrario.
-a_peer_that_sends_nothing_times_out_and_says_so — con el error tipado correcto, no un Io.
-a_peer_that_disconnects_mid_frame_is_a_typed_end — cierra el socket a mitad de un frame y comprueba el error exacto.
-a_peer_cannot_make_us_buffer_more_than_the_declared_limit — manda una cabecera que declara un payload gigantesco y comprueba que el proceso no reserva esa memoria. Instruméntalo con un contador bajo cfg(test), no con un cronómetro. Y mide lo que realmente se reservó, no la constante del límite — ver §11, es un error que este proyecto acaba de cometer.
-a_legitimate_frame_still_round_trips — la comprobación de que los rechazos no pasan por rechazarlo todo.
-Puerta 2 (protocolo de §12).
-Fase 3 — El handshake y el sellado, sobre socket real
-Al final de esta fase, dos extremos en el mismo proceso pero en hilos distintos, comunicados por un socket real de 127.0.0.1, completan el handshake de cuatro mensajes y se mandan frames sellados.
-El handshake de qyro_crypto corre sobre FrameStream. No inventes un handshake nuevo ni un doble. Si tienes que cambiar algo de qyro_crypto para que quepa, eso es un hallazgo y hay que registrarlo, igual que 5A registró QYR-0068 y QYR-0069.
-Los límites de §7.2 se aplican durante el handshake, no después.
-Un peer que falla la firma se rechaza sin que un solo byte de aplicación pase.
-Pruebas:
-two_endpoints_over_a_real_socket_agree_on_a_session_key — y compara las huellas de sesión de los dos lados, que son valores distintos calculados por caminos distintos, no la misma llamada dos veces.
-a_peer_with_a_wrong_signature_never_reaches_the_application — y comprueba que nada llegó al otro lado.
-a_handshake_that_stalls_is_cut_by_the_deadline — con el número de la ADR.
-a_flipped_bit_after_the_handshake_poisons_the_session — tres aserciones: la variante exacta, la sesión en Poisoned, y nada entregado.
-Puerta 3 (protocolo de §12).
-Fase 4 — Dos procesos de verdad
-Ésta es la fase que define el sprint. Dos hilos en el mismo proceso no prueban lo mismo que dos procesos: comparten el asignador, el estado global y el runtime de pruebas.
-Un binario de prueba —bajo tools/ o como [[bin]] del crate— que corre en dos modos: serve <puerto> <directorio-destino> y send <ip:puerto> <archivo...>.
-Una prueba de integración que lanza el proceso servidor con std::process::Command, espera a que escuche, lanza el cliente, y espera a los dos.
-El archivo llega byte a byte idéntico, comparado byte a byte y no por veredicto.
-Y el archivo tiene que ser grande de verdad —al menos 8 MiB— para que la ventana, el go-back-N y el control de flujo se ejerciten realmente. Genera el contenido desde una semilla, no lo guardes: lo que se mide es el motor, no el fixture.
-Pruebas:
-a_file_crosses_two_real_processes_byte_identical
-the_receiver_refuses_a_file_whose_digest_does_not_match — corrompe un byte en vuelo y comprueba que no aparece el archivo final y que no queda .qyro-part.
-memory_held_by_the_sender_does_not_grow_with_the_file — contador bajo cfg(test) que registre el tamaño real de los búferes vivos, no una constante.
-Puerta 4 (protocolo de §12). Y una comprobación extra específica: corre esta prueba diez veces seguidas. Una prueba de red que pasa una vez y falla la tercera es peor que no tenerla. Si hay flakiness, es un hallazgo y va al reporte con su causa, no un sleep más largo.
-Fase 5 — Lo que pasa cuando algo va mal
-Los cinco finales de §7.3, cada uno provocado de verdad y comprobado.
-El emisor cancela a mitad — el receptor se entera con el error tipado correcto y no deja el archivo final.
-El receptor rechaza el manifest — el emisor se entera y para; no sigue mandando chunks a un peer que dijo que no.
-El proceso remoto muere a mitad — mátalo de verdad con Child::kill(). El superviviente produce el error tipado de §7.3, no un pánico y no un cuelgue.
-La conexión se corta a mitad — shutdown desde el otro lado.
-Un peer que abre conexiones y no habla — el listener no se queda sin recursos. Con el número de la ADR §3.
-Y dos de recursos:
-Ningún hilo queda vivo después de que una transferencia termine, de cualquiera de las cinco formas. Cuéntalos.
-Ningún descriptor de archivo queda abierto. En Linux se cuenta con /proc/self/fd.
-Puerta 5 (protocolo de §12).
-Fase 6 — Guardas, barrido completo y reporte
-guards.rs en qyro_net con include! del análisis compartido —sin modificarlo— y las cuatro guardas que usan los demás crates: no_production_path_can_panic, every_production_file_is_listed, every_..._error_has_a_construction_site, y la de forbid(unsafe_code). Recuerda QYR-0071: ese análisis leía menos de la mitad de un archivo hasta hace un sprint. Comprueba que assert_analysis_reached_the_end pasa sobre cada uno de tus archivos nuevos y di el número de bytes analizados de cada uno.
-Barrido de mutación completo sobre todo lo escrito en este sprint. Por cada control de producción: bórralo, corre la suite, anota qué test falló. Un control que sobrevive a su propio borrado no está cubierto — arréglalo o regístralo con ID de ledger en el reporte.
-El reporte de §13.
-Puerta 6 (protocolo de §12) + el reporte completo + los seis workflows en verde sobre el commit final.
-9. No objetivos — estrictos
-Descubrimiento, mDNS, Bonjour, NsdManager. Nada. La dirección se la pasa el llamante. El descubrimiento es nativo por plataforma y es otro sprint.
-FFI. qyro_ffi no cambia y sigue sin alcanzar qyro_crypto, qyro_transfer, qyro_fs ni qyro_net.
-UI. Los botones siguen deshabilitados.
-Los archivos de §5. En particular qyro_fs y header.rs, que los está tocando el otro agente ahora mismo.
-QYR-0068. Los tres identificadores de la cabecera siguen sin setter público y tú no se los pones. Los está resolviendo el otro agente con su propia ADR. Si tu diseño los necesita, eso es un hallazgo y va al reporte, no una excusa para tocar header.rs.
-Los tres huecos de prueba de qyro_fs (QYR-0073, 0074, 0075). Son del otro agente.
-Reconexión automática, NAT traversal, internet, IPv6 más allá de que funcione si el IpAddr es v6.
-TLS. Qyro tiene su propio handshake autenticado; añadir TLS encima sería cifrar dos veces y traer una dependencia enorme.
-Android Keystore, iOS Keychain, historial, emparejamiento, release.
-Si encuentras algo fuera de alcance, regístralo en tu reporte con un ID propuesto QYR-00XX y sigue.
-10. Criterios de aceptación
-ADR-0028 congelada antes del primer commit de código, comprobable en el historial.
-Las seis puertas pasadas y escritas en el reporte con su resultado.
-Un archivo de al menos 8 MiB cruza dos procesos de sistema operativo distintos por un socket TCP y llega byte a byte idéntico, comparado byte a byte.
-La prueba anterior pasa diez veces seguidas.
-Los cinco finales de §7.3 tienen error tipado propio y prueba que lo produce.
-Un peer no autenticado no puede hacer que el proceso reserve más memoria que el límite de la ADR, medido con un contador que registre lo reservado de verdad.
-Ningún hilo ni descriptor queda vivo tras terminar, de las cinco formas.
-Cero dependencias externas nuevas. Cargo.lock pasa de 61 a 62 paquetes y el que entra es qyro_net.
-Barrido de mutación completo, con tabla, y cero controles supervivientes sin registrar.
-assert_analysis_reached_the_end pasa sobre cada archivo nuevo, con el número de bytes analizados de cada uno en el reporte.
-#![forbid(unsafe_code)] en qyro_net; la lista de crates exentos sigue con tres entradas.
-cargo fmt --all --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, cargo test --doc, cargo audit --deny warnings: PASS. Las pruebas suben desde 388; di cuánto y qué prueba cada una.
-Los cuatro check_* pasan en Bash y en PowerShell.
-Los seis workflows en success sobre el commit final, por push, con todos los runs de la rama listados, incluidos los fallidos y los cancelados.
-git diff --name-only origin/main...HEAD no contiene ni un solo archivo de la lista prohibida de §5. Pega la salida literal en el reporte.
-git status --short limpio. Sin commits en main, sin merge, sin PR, sin force-push.
-11. Las trampas que este proyecto ya ha pisado — no las repitas
-Cinco, y las cinco han ocurrido de verdad en este repositorio:
-Una aserción cuyos dos lados son la misma llamada. Cinco veces. La última, hace tres días, en una prueba de seguridad: digest_of(&victim) == digest_of(&victim) dentro de un assert!. Antes de commitear, lee cada aserción nueva y comprueba que los dos términos pueden diferir.
-Un contador que registra una constante en vez de lo medido. Hace tres días: PEAK_BUILDER_READ.fetch_max(HASH_BUFFER_LEN, ...) seguido de assert_eq!(peak, HASH_BUFFER_LEN). La prueba «no carga el archivo en memoria» pasaba aunque el archivo se cargara entero. Tu contador tiene que registrar el valor que salió de la operación, no el que esperabas.
-Una prueba cuyo nombre enuncia una propiedad y no la ejerce. Hace tres días: a_symlink_at_the_final_component_is_refused nunca abría un archivo, y desactivar O_NOFOLLOW entero dejaba los 388 tests en verde.
-Una cota extrapolada de una muestra de uno.
-Un Ok que nadie mira. Hace tres días: FileSink escribe metadatos de reanudación que ningún código de producción lee jamás.
-Regla general, y es la del proyecto: por cada propiedad que declares probada, borra el control que la produce y comprueba que alguna prueba falla con nombre. Una propiedad que sobrevive al borrado de su propio control no está cubierta.
-12. El protocolo de puerta — idéntico en las seis fases
-No pasas de fase hasta que las nueve comprobaciones pasan.
-cargo fmt --all --check — PASS.
-cargo clippy --workspace --all-targets -- -D warnings — PASS.
-cargo test --workspace — PASS, sin tests ignorados nuevos.
-Barrido de mutación de la fase. Por cada propiedad nueva: aplica la mutación que debería romperla, confirma que falla un test con nombre, restaura. Si sobrevive, no has terminado la fase.
-Lectura de aserciones. Lee cada assert!/assert_eq! nuevo y comprueba que los dos lados pueden diferir. Trampa 1 de §11.
-Lectura de contadores. Si la fase añadió un contador bajo cfg(test), comprueba que registra un valor derivado de la operación. Trampa 2.
-Lectura de nombres. Por cada test nuevo: ¿el cuerpo ejerce lo que el nombre dice? Trampa 3.
-git diff --name-only de la fase — ni un archivo de la lista prohibida de §5.
-Escribe el resultado de la puerta en docs/reports/6A-claude-code.md antes de empezar la fase siguiente. Fecha, comprobaciones, tabla de mutación de la fase, y lo que encontraste.
-Si una comprobación falla: arréglalo y repite la puerta entera. No la parchees en la fase siguiente.
-Si no puedes arreglarlo: para, escribe por qué en el reporte, y reporta. Una fase declarada cerrada que no lo está envenena todo lo que viene detrás — es exactamente lo que pasó con QYR-0071, que hizo que cuatro sprints de evidencia estructural midieran menos de lo que decían.
-13. El reporte — docs/reports/6A-claude-code.md
-Créalo en la Fase 1 y ve escribiéndolo fase a fase, no al final. Es un requisito, no un resumen.
-Dieciséis secciones, todas obligatorias:
-El prompt recibido, verbatim y completo. No parafraseado.
-Qué hiciste, punto por punto contra los objetivos de §8.
-Cómo lo hiciste: las decisiones de ADR-0028 y las alternativas descartadas, con el motivo.
-Errores detectados — todo lo que encontraste y no estaba en el prompt.
-Cuáles arreglaste y cuáles no, y para los que no: por qué no, con ID QYR-00XX propuesto.
-A qué afectaba cada defecto: qué se rompía, para quién, en qué escenario.
-Resultado final contra el objetivo, objetivo por objetivo: cumplido / parcial / no hecho. «Parcial» es una respuesta válida; «cumplido» sin evidencia no lo es.
-Clase de evidencia por cada afirmación: compilado / probado en unidad / probado en integración / probado entre dos procesos / probado en emulador / probado en simulador / probado en hardware físico. Una afirmación sin clase se audita como no probada. No conviertas «compiló en Linux» en «funciona».
-Las seis puertas, con su resultado y su fecha.
-Tabla de mutación completa: propiedad → mutación aplicada → test que falló → commit. Y los controles que sobrevivieron, si los hubo, con ID.
-Tests antes (388) y después, con una línea por test nuevo diciendo qué prueba.
-Delta de dependencias: paquetes antes (61) y después, y el diff de Cargo.lock.
-git diff --name-only origin/main...HEAD, salida literal. Es la prueba de que no pisaste al otro agente.
-Todos los runs de CI de la rama, sin filtrar, con ID, commit, workflow y conclusión. Los fallos y las cancelaciones también. Una lista de la que se caen los fallos no es evidencia, es un resumen favorable.
-Qué NO debe leerse como progreso. La sección más importante. Como mínimo: no hay descubrimiento, no hay FFI, no hay UI, los botones siguen deshabilitados, no hay persistencia de identidad en Android ni iOS, y nada se ha probado en hardware físico ni entre dos máquinas distintas — dos procesos en 127.0.0.1 no son dos dispositivos en una Wi-Fi.
-Qué documentación del repositorio quedó desfasada por lo que hiciste, y qué necesita saber el sprint siguiente.
-14. Commits sugeridos
-docs: freeze ADR-0028 before opening a single socket
-feat(net): a frame stream over TCP that feeds the incremental decoder
-test(net): a frame split across three reads is reassembled
-test(net): an unauthenticated peer cannot make us buffer without bound
-feat(net): typed ends for the five ways a transfer stops
-feat(net): run the four-message handshake over a real socket
-test(net): a peer with a wrong signature never reaches the application
-feat(net): a listener and a dialer with the deadlines ADR-0028 froze
-test(net): a file crosses two real processes byte identical
-test(net): a remote process killed mid-transfer is a typed end, not a hang
-test(net): no thread and no descriptor survives a finished transfer
-test(guards): the shared analysis reaches the end of every new file
-docs(report): sprint 6A, gate by gate
-15. Si te quedas sin contexto
-Para después de una puerta, nunca a mitad de una fase. Escribe en el reporte en qué puerta estás y qué falta. Deja la rama en verde. No dejes una fase declarada cerrada que no pasó su puerta.
-Prohibido: tocar cualquier archivo de la lista prohibida de §5, añadir una dependencia sin justificarla y pararte a preguntar, meter un runtime async, inventar un handshake propio, usar unsafe, dejar la rama en rojo, omitir un run fallido del reporte, declarar una fase cerrada sin su puerta, o commitear en main.
-16. Próxima tarea (no la empieces)
-Sprint 6B — el descubrimiento LAN, que es nativo por plataforma: NsdManager en Android, NWBrowser en iOS, mdns-sd sólo bajo cfg(windows). Detrás de un trait PeerDiscovery en el core, con cero dependencias en móvil. Y el fallback de IP manual o QR desde el primer día, porque es lo único que funciona en el 100 % de las redes.
-Después: el FFI del motor con NativeCallable.listener para el progreso, el selector de archivos, y la UI.
-```
+Vive en un archivo hermano y no incrustado aquí por un motivo concreto que conviene
+dejar escrito, porque de otro modo parecería una comodidad de maquetación y no lo
+es:
+
+El prompt cita, en su §9, los identificadores de los tres huecos de prueba de
+`qyro_fs` que asigna al otro agente; el primero de los tres es el que importa aquí, y
+este informe no lo escribe literalmente por el motivo que sigue.
+`check_docs_consistency`, que `ci.yml` ejecuta en Bash y en PowerShell, bloquea
+**cualquier** identificador `QYR-00xx` citado en un `.md` que no tenga su entrada en
+`BUGS_PENDING.md`. Esa entrada le corresponde a Codex y aparecerá en su rama. Y §5
+prohíbe a los dos agentes tocar
+`BUGS_PENDING.md` en este run. Las tres reglas no pueden cumplirse a la vez mientras
+el prompt esté dentro de un `.md`; es el hallazgo 6A-1.
+
+De las cuatro salidas posibles, ésta es la única que **no debilita ningún control, no
+toca ningún archivo ajeno y no deja la rama en rojo**. Las otras tres se descartaron
+así:
+
+| Salida descartada | Por qué |
+|---|---|
+| Dejar `ci.yml` en rojo hasta que el supervisor fusione | Incumple el criterio de §10 de seis workflows en verde, y §15 lo prohíbe expresamente |
+| Escribir yo las entradas en `BUGS_PENDING.md` | Toca un archivo prohibido por §5 y provoca justo el conflicto de fusión que §5 existe para evitar: Codex está escribiendo esas mismas entradas |
+| Eximir `docs/reports/` en `check_docs_consistency` | Debilita un control vivo para que pase mi propio artefacto. Y los informes son precisamente donde hay que cazar un hallazgo citado sin ficha |
+
+Lo que queda es una distinción que además es correcta de por sí: **un documento
+externo archivado verbatim no es el repositorio citando un hallazgo, es el
+repositorio guardando el texto de otro.** El archivo hermano hace esa distinción
+explícita en el sistema de archivos en vez de esconderla. El contenido no se ha
+tocado: es byte a byte lo que se recibió, y el SHA-256 de arriba lo fija.
 
 ---
 
@@ -356,15 +173,40 @@ Lo que hay que saber de ellas para no romper nada en la Fase 2:
 
 ## 3. Cómo lo hice: las decisiones de ADR-0028 y las alternativas descartadas
 
-Pendiente — Fase 1.
+`docs/adr/ADR-0028-network-transport.md`, congelada antes de la primera línea de
+código y commiteada antes del primer commit de código —comprobable en el historial,
+ver §9 Puerta 1—. Ocho decisiones; el documento lleva el razonamiento completo, aquí
+va el resumen con el motivo y la alternativa que se descartó.
+
+| # | Decisión | Valor | Alternativa descartada, y por qué |
+|---|---|---|---|
+| 1 | Framing sobre el stream | El frame va **tal cual**, sin prefijo de longitud propio | Un prefijo de longitud, que es lo habitual sobre TCP. La longitud ya vive en la cabecera de 48 B **y la cabecera es el AAD del AEAD**: un segundo campo fuera del tag es un campo que un atacante activo altera sin romper nada, y decide cuánto reserva y espera el receptor. También un delimitador: el payload sellado es indistinguible de aleatorio, haría falta escapado, y escapar cambia los bytes que el AEAD autenticó |
+| 1b | Los cuatro mensajes del handshake | Dentro de frames planos `Hello` | En crudo sobre el socket, con cambio de modo al acabar. El cambio de modo cae justo donde el peer aún no está autenticado, que es donde viven los fallos de desincronización. Además así **no hace falta tocar `message.rs` ni `header.rs`**, que son del otro agente |
+| 2 | Búfer de lectura | **65 536 B** | 8192, el valor reflejo: convierte un chunk en nueve lecturas y nueve `push`, y `push` puede compactar. Y el techo del decodificador: memoria residente por conexión que no compra nada. 64 KiB es del orden del frame dominante (un `DataChunk` sellado son 65 608 B) y ya es el número de la casa (`CHUNK_SIZE`, `HASH_BUFFER_LEN`) |
+| 3 | Bytes antes de autenticar | **4096** por conexión | «Leer 64 KiB y luego comprobar», que no es un límite: ya aceptaste los bytes cuando lo compruebas. Se impone en el `read`, emitiendo la lectura con `buf[..remaining]`, así que es una propiedad de lo que el proceso *puede* recibir. Un handshake legítimo recibe 295 B |
+| 3b | Plazo de handshake | **10 s**, sobre el handshake **entero** | Un plazo por mensaje, que lo reinicia indefinidamente un peer que suelta un byte antes de cada vencimiento — el slowloris clásico |
+| 3c | Conexiones simultáneas | **8** sin autenticar, **4** establecidas | Un solo límite para las dos cosas. Son surfaces distintas: el primero acota lo que un desconocido crea, el segundo es política de producto. Al llegar al tope se **acepta y se cierra**, no se deja de aceptar: dejar de aceptar llena la cola del kernel y castiga al siguiente peer legítimo |
+| 4 | Timeouts | Conexión 10 s · lectura **250 ms** · inactividad **60 s** · escritura **ninguno** | Un plazo total de transferencia, que convierte un archivo de 4 GiB por Wi-Fi lenta en una conexión colgada. La propiedad correcta es el **progreso**, no el tiempo total: el plazo cuenta «tiempo desde el último byte» y lo reinicia cualquier byte. Y `set_write_timeout` con valor, que deja frames escritos a medias — un estado del que ADR-0018 dice que no se sale, porque resincronizar es adivinar |
+| 5 | Taxonomía de finales | Siete filas tipadas; **sólo envenena la última** | Un `Io(...)` genérico. La regla es «**envenena lo que miente, no lo que se acaba**»: un tag que no verifica dice que lo recibido no es lo que dice ser; un cierre o un silencio sólo dicen que se acabó. Y se descartó un tipo `RemoteProcessKilled`: TCP no puede saber eso, así que los tipos nombran lo observado (`PeerVanished`, `PeerSilent`, `PeerClosedMidFrame`) |
+| 6 | Modelo de hilos | **Dos por conexión**: lector (posee decodificador y motor) y escritor | Uno solo, que se interbloquea en cuanto el peer deja de leer —la escritura se bloquea y con ella la lectura de los ACK que la desbloquearían—. Y tres, con el motor en el suyo: añade un `Mutex` alrededor de una máquina de estados que sólo el lector toca |
+| 6b | Cancelación | `AtomicBool` **y** `shutdown`, con trabajos distintos | Cualquiera de las dos sola. **Una bandera no despierta una llamada al sistema bloqueada, y un `shutdown` no manda un frame `Cancel`.** La bandera hace que el peer distinga una cancelación de una caída; el `shutdown` es lo único que devuelve a un escritor parado dentro de `write` |
+| 7 | Roles y puerto | Recibe = escucha = **responder**; envía = marca = **initiator**. Puerto del llamante, **0 = lo elige el sistema** | Un puerto por defecto, que es una decisión de descubrimiento y el descubrimiento es 6B. El puerto 0 no es comodidad: un puerto fijo hace intermitente cualquier prueba de red, y la reacción típica a esa intermitencia es añadir un `sleep`, que esconde el problema |
+
+La sección obligatoria «lo que esta ADR no promete» es §8 del documento, con trece
+entradas. Las que más importan: no hay descubrimiento, no hay NAT ni internet, no hay
+reconexión, nada probado en hardware físico ni entre dos máquinas, y una lista
+explícita de riesgos conocidos en Windows —empezando por que un `read` vencido
+devuelve `WouldBlock` en Linux y `TimedOut` en Windows, y **tratar cualquiera de las
+dos como final rompería toda transferencia en una de las dos plataformas**.
 
 ---
 
 ## 4. Errores detectados que no estaban en el prompt
 
-| # | Hallazgo | Fase | Dónde |
-|---|---|---|---|
-| 1 | Falso verde propio en la reproducción de la línea base: `&&` tras una tubería lee el estado de `tail`, y la ruta `rust/Cargo.toml` no existe. Detectado y rehecho en la misma fase; no llegó a ningún commit ni a ninguna afirmación del informe salvo ésta | 0 | §2 |
+| # | Hallazgo | Fase | Gravedad | Dónde |
+|---|---|---|---|---|
+| 6A-1 | **Tres reglas del propio sprint no pueden cumplirse a la vez.** §13.1 exige el prompt verbatim en el informe; el prompt cita el identificador del primero de los tres huecos de prueba de `qyro_fs` de su §9; `check_docs_consistency` bloquea todo identificador citado sin ficha en `BUGS_PENDING.md`; y §5 prohíbe a los dos agentes tocar `BUGS_PENDING.md`. Alcanza además a §13.5, que exige proponer identificadores para los hallazgos no arreglados: cada uno que acuñara dispararía el mismo bloqueo | 1 | Media — bloquea `ci.yml`, no afecta al producto | §1 |
+| 6A-2 | Falso verde propio al reproducir la línea base: `&&` tras una tubería lee el estado de salida de `tail`, no el de `rustfmt`, y la ruta `rust/Cargo.toml` no existe —el workspace está en la raíz—. El comando fallaba e imprimía `FMT_PASS` | 0 | Baja — instrumento de medida, detectado y rehecho en la misma fase | §2 |
 
 Pendiente de ampliar conforme avancen las fases.
 
@@ -372,23 +214,45 @@ Pendiente de ampliar conforme avancen las fases.
 
 ## 5. Cuáles arreglé y cuáles no
 
-| # | Arreglado | Cómo, o por qué no | ID propuesto |
-|---|---|---|---|
-| 1 | Sí | Medición rehecha capturando `$?` de cada proceso. La tabla de la línea base de §2 sale de la segunda medición | — |
+| # | Arreglado | Cómo, o por qué no |
+|---|---|---|
+| 6A-1 | **Sí, en lo que me toca. La causa de fondo, no.** | El prompt se archiva verbatim en `docs/reports/6A-prompt.txt`, que ninguno de los dos comprobadores escanea (la lista es `*.md`, `*.rs`, `*.sh`, `*.ps1`, `*.yml` en las dos implementaciones), y los hallazgos de este informe se numeran `6A-n` en vez de acuñar identificadores que no puedo registrar. Con eso `ci.yml` queda en verde sin debilitar ningún control ni tocar ningún archivo ajeno. **Lo que no está arreglado es el choque de reglas**, que sigue ahí para el siguiente sprint que trabaje con el ledger fuera de su alcance. La decisión de fondo es del supervisor y está razonada en §1 |
+| 6A-2 | Sí | Medición rehecha capturando `$?` de cada proceso por separado. La tabla de la línea base de §2 sale de esa segunda medición, no de la primera |
 
 ---
 
 ## 6. A qué afectaba cada defecto
 
-**Hallazgo 1 — el falso verde de la línea base.** Qué se rompía: nada en el producto;
-el defecto estaba en mi propio instrumento de medida. Para quién: para el siguiente
+**6A-1 — el choque de reglas del ledger.** Qué se rompía: `ci.yml`, en los dos pasos
+de `check_docs_consistency` (Bash y PowerShell), sobre cualquier commit que llevara el
+informe con el prompt dentro de un `.md`. Nada del producto. Para quién: para este
+sprint, que no puede cumplir a la vez §13.1, §13.5 y §5; y para el supervisor, que se
+encuentra un control rojo cuya causa no está en el código sino en el reparto de
+archivos que él mismo definió. En qué escenario: aparece en cuanto un informe cita un
+identificador cuya ficha pertenece al otro agente, que es el escenario **normal**
+—no excepcional— de dos agentes en paralelo con el ledger congelado. `docs/reports/`
+no existía antes de este sprint, así que ningún sprint anterior lo tocó: es un
+estreno, no una regresión.
+
+Lo que conviene que sepa el supervisor: la parte que arreglé es cosmética —dónde vive
+un archivo y cómo se numeran unas filas—. La parte de fondo es una decisión de
+proceso, y las opciones reales son tres: que el ledger deje de estar congelado para
+entradas nuevas, que `check_docs_consistency` distinga citar un hallazgo de archivar
+un documento externo, o que los informes de sprint no acuñen identificadores y lo
+haga sólo la consolidación. Esta rama implementa de hecho la tercera, pero sin
+escribirla en ningún sitio canónico, porque no puede: los seis documentos raíz están
+fuera de alcance.
+
+**6A-2 — el falso verde de la línea base.** Qué se rompía: nada en el producto; el
+defecto estaba en mi propio instrumento de medida. Para quién: para el siguiente
 lector de este informe y para el supervisor, que es precisamente quien no pudo
 verificar la evidencia de 5B.1 y a quien se le pidió a este sprint que reprodujera la
 línea base por su cuenta. En qué escenario: si no llego a mirar el resto de la
 salida, la Fase 0 se habría declarado cerrada con una línea base que no se midió, que
-es la misma forma de fallo que QYR-0071 —una fase declarada cerrada que no lo estaba—
-y que el propio §12 del prompt cita como el motivo de que cuatro sprints de evidencia
-estructural midieran menos de lo que decían.
+es la misma forma de fallo que el hallazgo que dejó cuatro sprints de evidencia
+estructural midiendo menos de lo que decían —una fase declarada cerrada que no lo
+estaba—, y que el propio §12 del prompt pone como ejemplo de por qué una puerta no se
+parchea en la fase siguiente.
 
 ---
 
@@ -440,7 +304,44 @@ tests son la propia línea base y están arriba; no hay mutación, aserciones,
 contadores ni tests nuevos que leer, porque la Fase 0 no escribe código. Lo que sí
 aplica —el diff sin archivos prohibidos— está comprobado.
 
-### Puertas 1 a 6
+### Puerta 1 — 2026-08-11 — **PASADA**
+
+Las nueve comprobaciones de §12, más la condición extra que §8 Fase 1 añade.
+
+| # | Comprobación de §12 | Resultado |
+|---|---|---|
+| 1 | `cargo fmt --all --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0 |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — 388 passed, 0 failed, **2 ignored** (los mismos dos de la línea base) |
+| 4 | Barrido de mutación de la fase | **No aplica.** La fase no añade ningún control de producción: es una ADR y un informe. Ver la nota de abajo |
+| 5 | Lectura de aserciones | **No aplica.** Cero aserciones nuevas |
+| 6 | Lectura de contadores | **No aplica.** Cero contadores nuevos |
+| 7 | Lectura de nombres de test | **No aplica.** Cero tests nuevos |
+| 8 | `git diff --name-only` sin archivos prohibidos | PASS — sólo `docs/adr/ADR-0028-network-transport.md`, `docs/reports/6A-claude-code.md` y `docs/reports/6A-prompt.txt`, los tres míos por §5 |
+| 9 | Resultado escrito en el informe antes de empezar la fase siguiente | PASS — esto |
+
+Condición extra de §8 Fase 1: *«la ADR está commiteada antes del primer commit de
+código y se puede comprobar en el historial»*. PASS — y es comprobable con
+`git log --oneline --name-only`: a fecha de la Puerta 1 no existe **ningún** archivo
+`.rs` en la rama, porque `qyro_net` no se ha creado todavía.
+
+Y los cuatro `check_*`, que no están entre las nueve de §12 pero sí en §10:
+
+| Script | Resultado |
+|---|---|
+| `check_repo_portability.sh` | PASS |
+| `check_harness_isolation.sh` | PASS |
+| `check_crypto_platform_evidence.sh` | PASS |
+| `check_docs_consistency.sh` | **Falló primero, PASS después.** Es el hallazgo 6A-1; ver §1, §4 y §6 |
+
+**Sobre la comprobación 4 en una fase de documentación.** Un barrido de mutación
+sobre una ADR no significa nada: no hay control que borrar y no hay suite que romper.
+Decirlo es más honesto que inventarse una fila. Lo que sí sujeta esta fase es la
+Puerta 2: cada número que ADR-0028 fija —4096, 10 s, 8, 250 ms, 60 s, 65 536— tiene
+que aparecer en el código de la Fase 2 y tener una prueba que lo ejerza, y ahí sí hay
+mutación. Una ADR cuyos números no aparecen en ninguna prueba es prosa.
+
+### Puertas 2 a 6
 
 Pendientes.
 
