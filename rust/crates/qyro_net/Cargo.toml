@@ -1,0 +1,16 @@
+[package]
+name = "qyro_net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Qyro network transport: QYRO/1 frames over a blocking TCP socket."
+
+[lib]
+path = "src/lib.rs"
+
+# Zero new external dependencies, which is the whole point of ADR-0028 §6: the
+# transport is `std::net` and `std::thread`, and the framing it carries already
+# exists. `qyro_protocol` is first-party and already in the audited graph, so
+# this crate adds one package to Cargo.lock and that package is itself.
+[dependencies]
+qyro_protocol = { path = "../qyro_protocol" }
