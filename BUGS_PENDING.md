@@ -1438,7 +1438,7 @@
 - Estado: cerrado
 - Fecha: 2026-08-08
 
-## QYR-0072 — La carrera de los componentes intermedios de la ruta sigue abierta
+## QYR-0072 — La carrera intermedia no se cierra con comprobaciones por nombre
 
 - Plataforma: filesystem
 - Severidad: P2
@@ -1457,8 +1457,25 @@
   de destino **ya puede escribir lo que quiera ahí**. Lo que las comprobaciones
   impiden es que use Qyro para escribir **fuera** de ahí. La ventana devuelve
   parte de ese privilegio durante un instante
-- Estado: abierto
+- Decisión: opción (c), mitigación parcial sin dependencias. `FileSink` conserva
+  la raíz canonicalizada y `open_part` vuelve a canonicalizar el padre después
+  de obtener el handle y antes de truncar, borrar o escribir. Un padre que sigue
+  fuera produce `FsError::EscapesRoot`. La opción (a) por descriptor es la única
+  que cerraría la carrera, pero exige APIs fuera de `std` y dos implementaciones;
+  no se añadió `libc` ni un cuarto crate con `unsafe`. La opción (b) dejaría sin
+  implementar ADR-0027 §1.5 y se descartó
+- Límite aceptado: un atacante puede hacer un doble cambio —fuera durante el
+  `open`, dentro durante la canonicalización— y dejar un handle exterior que la
+  comprobación por nombre no detecta. La creación puede dejar un archivo vacío
+  fuera; `digest`, `rename` y `remove_file` conservan ventanas propias. Sólo la
+  opción (a) completa puede cerrar esas propiedades
+- Estado: resuelto por decisión de riesgo y mitigación; la TOCTOU no se declara
+  cerrada
 - Fecha: 2026-08-08
+- Evidencia: enmienda congelada en `01133a8`, código `5deb51a`; sin la
+  comprobación post-open,
+  `an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed`
+  devolvió `Ok(File)` y falló. CI 31537833116 pasó en Ubuntu, macOS y Windows
 
 ## QYR-0073 — `O_NOFOLLOW` no tiene una prueba que ejerza el enlace final
 

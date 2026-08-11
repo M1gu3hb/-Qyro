@@ -771,6 +771,12 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 6: la guarda se activa automáticamente en los seis crates que incluyen
   el archivo compartido. Una tautología real temporal en `qyro_fs` produjo el
   fallo nominal con ruta, línea y operando; después quedó restaurada.
+- Fase 7: evalué las tres salidas de QYR-0072 y congelé la opción (c) en
+  `01133a8`: mitigación post-open con `std`, sin dependencia ni `unsafe`, y sin
+  llamarla cierre de TOCTOU.
+- Fase 7: `FileSink` almacena la raíz canonicalizada; `open_part` valida el
+  padre después de obtener el handle y antes de entregarlo. El contrato corre
+  también en el job de filesystem de Ubuntu, macOS y Windows.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -808,6 +814,14 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   intenta equivalencia semántica general. Ignora comentarios y literales al
   analizar delimitadores. Las excepciones exigen crate, archivo, operando y
   argumento escrito; hoy la lista está vacía y no existe un allow global.
+- Para QYR-0072 descarté (b) porque omitía una comprobación ya congelada y no
+  reducía el riesgo. (a) es la única solución completa, pero requiere recorrer y
+  operar por handles con APIs fuera de `std` tanto en Unix como en Windows;
+  resolver sólo el `open` no bastaría para `digest`/`rename`/`remove_file`.
+- La opción (c) detecta el cambio que persiste entre resolución y comprobación,
+  pero no un doble swap. Puede crear un part vacío fuera antes del rechazo y
+  conserva ventanas en operaciones posteriores por nombre. No se añadió
+  `libc`; la lista de crates que relajan `forbid(unsafe_code)` sigue en tres.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -841,11 +855,15 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 6: al extraer el total del step exacto de Rust encontré que el informe
   llevaba un test Linux de más desde Fase 3. QYR-0104 corrige 391/392/393 a
   390/391/392; no altera los totales Windows ni resultados de los runs.
+- Fase 7: ADR-0027 §1.5 afirmaba una canonicalización del padre después del
+  `open`, pero producción sólo canonicalizaba durante `resolve_under`, antes de
+  abrir. Se corrigió dentro de QYR-0072, sin duplicar su ficha.
 
 ## 5. Errores arreglados y no arreglados
 
-- QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101, QYR-0102 y QYR-0104 están
-  cerrados. QYR-0103 queda abierto y asignado a la guarda de errores de Fase 9.
+- QYR-0072 está resuelto por decisión explícita y mitigación, con la TOCTOU
+  residual documentada. QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101,
+  QYR-0102 y QYR-0104 están cerrados. QYR-0103 queda abierto para Fase 9.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -878,6 +896,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0104 hacía que el informe atribuyera al CI una prueba que no ejecutó. La
   extracción por step preserva la diferencia real entre Linux y Windows y evita
   sumar otra vez `--all-features` o doc tests.
+- QYR-0072 permitía que un cambio persistente del padre alcanzara el primer
+  write pese a que ADR-0027 prometía comprobar después de abrir. La mitigación
+  lo rechaza antes de tocar contenido; el doble swap sigue siendo riesgo real.
 
 ## 7. Resultado contra cada objetivo
 
@@ -895,7 +916,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   layout: **cumplido**, corrigiendo la premisa mediante QYR-0102.
 - Instalar y ver fallar la guarda contra aserciones tautológicas en todos los
   consumidores del análisis compartido: **cumplido**.
-- Fases 7–10: **no empezadas** al cerrar Puerta 6.
+- Decidir QYR-0072, implementar la mitigación elegida y declarar lo no cubierto:
+  **cumplido** mediante opción (c), sin dependencia ni `unsafe`.
+- Fases 8–10: **no empezadas** al cerrar Puerta 7.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -926,6 +949,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Guarda antitautologías: contratos del parser y seis instancias del test
   compartido en Windows local y Ubuntu CI 31536398365. Mutación temporal en
   `qyro_fs/src/tests.rs`: fallo nominal en línea 652; restaurada antes del commit.
+- QYR-0072: contrato determinista rojo→verde en Windows local; CI 31537833116
+  ejecutó el mismo rechazo post-open en Ubuntu, macOS y Windows. Prueba la
+  mitigación declarada, no una carrera adversarial ni la opción (a).
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -1111,9 +1137,30 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Gate escrito antes de empezar Fase 7. Código `0982e24`; CI 31536398365:
   **success** en siete jobs.
 
-### Puerta 7
+### Puerta 7 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local y CI 31537833116.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
+  Clippy de `qyro_fs` PASS en Windows. El warning global Windows sigue asignado
+  a Fase 8.
+- `cargo test --workspace`: PASS. Linux 399 passed/2 ignored; Windows local
+  405 passed/2 ignored. `qyro_fs` ejecutó 18/18 en Windows.
+- Mutación: la firma nueva de `open_part` recibió la raíz pero omitió el check;
+  `an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed` falló
+  al obtener `Ok(File)` exterior. Restaurada con la implementación.
+- Aserciones: el error esperado es `EscapesRoot` y el contenido exterior se
+  compara byte a byte con bytes elegidos antes de abrir; no se deriva del SUT.
+- Contadores: ninguno nuevo; los tres de filesystem conservan sus contratos.
+- Nombre: enuncia el momento post-open, el límite de raíz y la ausencia de
+  cambios. El test se ejecutó en los tres SO del job dedicado.
+- Delta desde `15934aa`: sin dependencias, Cargo.lock, Cargo raíz ni crates
+  reservados. Sólo se amplió el job de filesystem ya propio de esta rama.
+- `check_docs_consistency.sh`: PASS local y Bash/PowerShell 7 PASS en CI
+  31537833116; QYR-0072 y la enmienda cuentan la misma garantía parcial.
+- Coherencia: §2–§8 y §10–§16 distinguen detección post-open de cierre por
+  descriptor y enumeran el archivo vacío, doble swap y operaciones posteriores.
+- Gate escrito antes de empezar Fase 8. ADR `01133a8` precede al código
+  `5deb51a`; CI 31537833116: **success** en siete jobs.
 
 ### Puerta 8
 
@@ -1148,6 +1195,7 @@ Pendiente.
 | 5 | identificadores dentro del AAD | poner a cero offsets 24–39 en `associated_data` | Falló `aead::tests::altering_an_identifier_in_flight_breaks_the_tag`: el opener devolvió `Ok(AuthenticatedFrame)` | Mutación local restaurada |
 | 5 | layout fijo de 48 bytes | escribir `item_id` en el offset 32 de `stream_id` | Falló `the_forty_eight_byte_layout_is_unchanged` contra el vector literal | Mutación local restaurada |
 | 6 | prohibición de aserciones tautológicas | añadir `assert_eq!(source.read_at(...), source.read_at(...))` a `qyro_fs/src/tests.rs` | Falló `guards::assert_no_assertion_compares_a_call_to_itself`: `src/tests.rs:652`, operando `source.read_at(1,0,&mutfirst)` | Mutación local restaurada |
+| 7 | contención del padre después de abrir | pasar la raíz a `open_part` pero omitir la canonicalización/comparación | Falló `an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed`: devolvió `Ok(File)` exterior | Mutación local restaurada |
 
 ## 11. Tests antes y después
 
@@ -1169,11 +1217,14 @@ Pendiente.
 - Después de Fase 6, Linux: 398 passed, 0 failed, 2 ignored (CI 31536398365).
 - Después de Fase 6, Windows normal: 404 passed, 0 failed, 2 ignored. El delta
   de seis es una instancia del test compartido en cada crate consumidor.
+- Después de Fase 7, Linux: 399 passed, 0 failed, 2 ignored (CI 31537833116).
+- Después de Fase 7, Windows normal: 405 passed, 0 failed, 2 ignored. El test
+  adicional también pasó por separado en Ubuntu, macOS y Windows.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 6: 61.
+- Paquetes después de Fase 7: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
 - `git diff 15934aae3dda7f469b5496c8341eb78d9e32f335 -- Cargo.lock`: vacío.
@@ -1193,6 +1244,7 @@ rust/crates/qyro_crypto/src/aead/tests.rs
 rust/crates/qyro_fs/Cargo.toml
 rust/crates/qyro_fs/src/error.rs
 rust/crates/qyro_fs/src/io.rs
+rust/crates/qyro_fs/src/lib.rs
 rust/crates/qyro_fs/src/manifest_builder.rs
 rust/crates/qyro_fs/src/tests.rs
 rust/crates/qyro_protocol/src/frame.rs
@@ -1227,13 +1279,20 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31534679436 | b97163c33bbd0a5e9d6b824598c49ba4187585e3 | CI | workflow_dispatch | success; ancla de STATUS restaurada, ADR-0029 y contratos de identificadores, siete jobs PASS |
 | 31535319037 | c5aa973f43dbfcb522abf978b98f1b86d253d9c2 | CI | workflow_dispatch | success; informe y ledger de Puerta 5, siete jobs PASS |
 | 31536398365 | 0982e24a7641d43690bd48e17866b01be30dabc8 | CI | workflow_dispatch | success; guarda antitautologías activa en seis crates, siete jobs PASS |
+| 31537082688 | bb9c0a7ccfe85eb3af436ca3fb8f77822374947c | CI | workflow_dispatch | success; ledger e informe de Puerta 6, siete jobs PASS |
+| 31537833116 | 5deb51a5d9ebe203d661a7da0ad806441f59a87c | CI | workflow_dispatch | success; mitigación post-open en Ubuntu, macOS y Windows, siete jobs PASS |
 
-Lista reconstruida por API al cerrar la Fase 6. No hubo runs cancelados; todos
+Lista reconstruida por API al cerrar la Fase 7. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
 
-Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay red, sockets, descubrimiento, FFI del motor ni selector de archivos; Enviar y Recibir siguen deshabilitados. No hay persistencia de identidad en Android ni iOS. QYR-0072 sigue abierta hasta la Fase 7. Nada se ha probado en hardware físico.
+Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay
+red, sockets, descubrimiento, FFI del motor ni selector de archivos; Enviar y
+Recibir siguen deshabilitados. No hay persistencia de identidad en Android ni
+iOS. QYR-0072 está decidida con mitigación parcial; no se declara cerrada la
+carrera, que requeriría resolución por descriptor. Nada se ha probado en
+hardware físico.
 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
@@ -1242,7 +1301,7 @@ puede usar `Frame::with_identifiers(SessionId, u64, u32, u32)`; el sealer
 sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
 del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
 rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
-no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–6 están
+no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–7 están
 cerradas. `rust/guards/source_guard.rs` añade automáticamente la guarda
 antitautologías a todo crate que lo incluya; cualquier consumidor nuevo debe
 mantener verdes sus contratos o usar una excepción exacta con argumento. Los
@@ -1250,5 +1309,5 @@ cambios compartidos actuales son las entradas añadidas al final del ledger y
 la enmienda fechada de ADR-0027 que define metadata de otro `transfer_id`,
 las líneas de escaneo de rangos en ambos checkers y sus contratos. En
 `.github/workflows/ci.yml` se tocaron las líneas 48–51 (comentario de
-`--all-features`) y 65–85 (job `fs-final-component`); en `STATUS.md`, sólo las
+`--all-features`) y 65–90 (job `fs-final-component`); en `STATUS.md`, sólo las
 líneas 6–8 de fecha, rama y `Verified commit`.
