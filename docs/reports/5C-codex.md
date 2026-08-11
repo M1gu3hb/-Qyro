@@ -740,6 +740,13 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 1bis: el nuevo prompt destapó QYR-0100. Añadí un contrato que primero
   falló y corregí los checkers Bash y PowerShell para no confundir límites de
   rangos reservados con hallazgos concretos.
+- Fase 2: sustituí la tautología por una transferencia real que coloca el enlace
+  en `a.bin.qyro-part`, exige `FsError::SymlinkInPath`, conserva el objetivo
+  externo y no produce `a.bin`.
+- Fase 2: añadí al workflow el mismo test en Ubuntu, macOS y Windows. El host
+  Windows local no tiene privilegio de symlink (error 1314); el runner Windows
+  sí creó el fixture y lo pasó. La mutación Linux `O_NOFOLLOW = 0` hizo fallar
+  el test nominal en CI y después quedó restaurada.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -748,6 +755,13 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0100 conserva la regla estricta para citas concretas. Sólo elimina antes
   del escaneo las formas de reserva `QYR-NNNN–QYR-NNNN`, `QYR-NNNN onward`,
   `QYR-NNNN en adelante` y `QYR-NNNN+`.
+- `open_part` clasifica el error Unix después de que el `open` atómico haya
+  fallado; esa inspección sólo elige el tipo de error. En Windows inspecciona
+  los atributos del handle abierto con `FILE_FLAG_OPEN_REPARSE_POINT`, no hace
+  depender el control de una segunda resolución de ruta.
+- El fixture Windows es opt-in (`windows-reparse-test`) porque inventar un pass
+  cuando falta el privilegio habría repetido el defecto de evidencia. El job
+  dedicado lo ejecuta explícitamente; no añade paquetes.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -763,11 +777,14 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 1bis: el checker trataba los límites de rangos de propiedad del segundo
   prompt como hallazgos sin ficha. QYR-0100 registra y corrige el defecto sin
   crear entradas en el rango ajeno 0076–0099.
+- Fase 2: el host Windows local no puede crear un enlace de archivo por falta de
+  `SeCreateSymbolicLinkPrivilege` (código 1314). No es un fallo de Qyro ni se
+  contó como evidencia; el runner `windows-latest` ejecutó el caso real.
 
 ## 5. Errores arreglados y no arreglados
 
-- Fase 1 sólo reprodujo; QYR-0073/74/75 y QYR-0068 siguen abiertos hasta sus
-  fases funcionales.
+- QYR-0073 está cerrado. QYR-0074/75 y QYR-0068 siguen abiertos hasta sus fases
+  funcionales.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -780,6 +797,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0100 hacía que una declaración de coordinación exigiera fichas falsas en
   un rango ajeno y volvía rojo `documentation` aun después de registrar los
   tres hallazgos reales.
+- QYR-0073 permitía retirar el único control atómico del componente final sin
+  que una suite observara la escritura fuera del destino. El nuevo test cae con
+  ese control retirado y además fija el error tipado.
 
 ## 7. Resultado contra cada objetivo
 
@@ -787,7 +807,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Resolver el bloqueo documental de Puerta 1: **cumplido**. Bash y PowerShell 7,
   sus contratos, Clippy Linux, las suites Rust y audit pasaron en CI
   31528757962.
-- Fases 2–10: **no empezadas** al cerrar esta puerta.
+- Cerrar QYR-0073 con prueba real, mutación y evidencia multiplataforma:
+  **cumplido**.
+- Fases 3–10: **no empezadas** al cerrar Puerta 2.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -799,6 +821,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0100: contrato Bash rojo→verde local; primer contrato PowerShell 7 rojo
   por entrada vacía en CI 31528281381; ambos contratos verdes en Linux con
   PowerShell 7 en CI 31528757962.
+- QYR-0073: integración real de filesystem en Ubuntu, macOS y Windows, CI
+  31529521600/31529821869. Android e iOS sólo compilan el código de plataforma;
+  no se presenta eso como ejecución. Mutación ejecutada en Ubuntu,
+  CI 31529689978.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -846,9 +872,35 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Gate escrito antes de empezar Fase 2. CI 31528757962: **success** en los cuatro
   jobs, incluidas 388 pruebas Linux, doc tests, audit y 61 paquetes.
 
-### Puerta 2
+### Puerta 2 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local y CI 31529821869.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux; el warning
+  Windows base sigue asignado a Fase 8.
+- `cargo test --workspace`: PASS. Linux sube a 389 passed/2 ignored por el test
+  Unix nuevo; Windows normal permanece en 394/2 porque el fixture privilegiado
+  es opt-in.
+- Mutación de fase: `libc_o_nofollow()` Linux/Android devolvió `0` en
+  `fc0c780`. El test
+  `a_symlink_at_the_final_part_component_is_refused_without_touching_its_target`
+  falló con `wrong typed error: Ok(())` en CI 31529689978. Restaurado en
+  `a9f21a9`.
+- Aserciones: la prueba comprueba fixture real, error tipado, objetivo externo
+  byte-idéntico y ausencia del final. La revisión completa de `qyro_fs/tests.rs`
+  no encontró otra comparación textual de una llamada consigo misma.
+- Contadores: ninguno nuevo en esta fase; los tres existentes quedan para la
+  Fase 3, donde se medirán y mutarán.
+- Nombre: describe el componente real, la negativa y la no modificación del
+  objetivo; coincide con las cuatro aserciones.
+- Delta desde `15934aa`: sin rutas Claude, `qyro_net`, `qyro_ffi`, app,
+  `qyro_transfer`, Cargo raíz ni Cargo.lock (§13).
+- Documentación: ambos checkers PASS en CI 31529821869. `io.rs` dice con
+  precisión qué hosts ejecutan el valor ABI y qué targets sólo compilan.
+- Coherencia: QYR-0073 está cerrado en el ledger; el run mutante fallido y los
+  runs verdes están todos en §14.
+- Gate escrito antes de empezar Fase 3. El job dedicado pasó el test real en
+  Ubuntu, macOS y Windows; no hay evidencia de ejecución Android/iOS ni hardware
+  físico.
 
 ### Puerta 3
 
@@ -890,34 +942,44 @@ Pendiente.
 | 1/M2 | lectura acotada de `digest_of` | `read_to_end` carga el archivo completo | Sobrevivió: `tests::building_a_manifest_from_disk_does_not_load_the_file` pasó (1/1) | Mutación local restaurada |
 | 1/M3 | descarte de huérfano largo | `.qyro-part` de 8192 bytes frente a contenido de 2048, sin metadata | Falló `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy` con `DigestMismatch { item_id: 1 }` | Mutación local restaurada |
 | 1/M4 | lectura productiva de `ResumeState::decode` | `rg -n 'ResumeState::decode' rust/crates/qyro_fs/src -g '*.rs'`, excluyendo `tests.rs` | Cero llamantes productivos | N/A |
+| 2 | `O_NOFOLLOW` Linux/Android | `libc_o_nofollow()` devuelve `0` | Falló `tests::a_symlink_at_the_final_part_component_is_refused_without_touching_its_target`: FileSink devolvió `Ok(())` | `fc0c780`, restaurado en `a9f21a9` |
 
 ## 11. Tests antes y después
 
 - Antes, Linux: 388 passed, 0 failed, 2 ignored.
 - Antes, Windows: 394 passed, 0 failed, 2 ignored.
-- Después: pendiente.
+- Después de Fase 2, Linux: 389 passed, 0 failed, 2 ignored.
+- Después de Fase 2, Windows normal: 394 passed, 0 failed, 2 ignored; el test
+  privilegiado adicional pasó 1/1 en el job Windows dedicado.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 1: 61.
-- Dependencias externas nuevas: ninguna prevista.
+- Paquetes después de Fase 2: 61.
+- Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
+  código ni paquetes al producto.
 - `git diff origin/claude/qyro-filesystem-5b1...HEAD -- Cargo.lock`: vacío.
 
 ## 13. `git diff --name-only 15934aae3dda7f469b5496c8341eb78d9e32f335...HEAD`
 
-La continuación corrige el criterio imposible contra `origin/main`. El delta propio desde la base exacta es:
+El delta propio desde la base exacta es:
 
 ```text
+.github/workflows/ci.yml
 BUGS_PENDING.md
+STATUS.md
 docs/reports/5C-codex.md
+rust/crates/qyro_fs/Cargo.toml
+rust/crates/qyro_fs/src/error.rs
+rust/crates/qyro_fs/src/io.rs
+rust/crates/qyro_fs/src/tests.rs
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
 scripts/tests/docs_consistency_contract_test.ps1
 scripts/tests/docs_consistency_contract_test.sh
 ```
 
-No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo de los crates reservados al otro agente.
+No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agente. `Cargo.lock` y el `Cargo.toml` raíz permanecen idénticos a la base.
 
 ## 14. Todos los runs de CI de la rama
 
@@ -927,9 +989,12 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo de los crates reservado
 | 31521002851 | a1c7398fbc2d7ef903282f3d64cfb19da23dcf42 | CI | workflow_dispatch | failure global; `rust` PASS, `documentation` FAIL por ledger |
 | 31528281381 | 6175820a28d1e2a79fe5a70a56d2bff60a4a4663 | CI | workflow_dispatch | failure global; `documentation`, `rust` y `flutter` PASS; contrato PowerShell de QYR-0100 FAIL por entrada vacía |
 | 31528757962 | d6701a149fc3a3249c446cf65ffe01b7fc62e986 | CI | workflow_dispatch | success; cuatro jobs PASS |
+| 31529521600 | 05fe684f0730dfef5ba478c2e417560a0758a7e2 | CI | workflow_dispatch | success; siete jobs PASS, incluido el test final-component en tres SO |
+| 31529689978 | fc0c780184c8e39fc5f368436c285b82f5fe03d5 | CI | workflow_dispatch | failure esperado: test nominal y workspace Linux FAIL con `O_NOFOLLOW = 0`; documentation además detectó STATUS a 11 commits |
+| 31529821869 | a9f21a968e21f47c43caad738261839160c6a170 | CI | workflow_dispatch | success; control restaurado, STATUS fresco y siete jobs PASS |
 
-Lista reconstruida por API al cerrar la Fase 1bis. No hubo runs cancelados; los
-dos fallos se conservan y no se filtran.
+Lista reconstruida por API al cerrar la Fase 2. No hubo runs cancelados; todos
+los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
 
@@ -938,7 +1003,10 @@ Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
 El sprint todavía no cambió la superficie de cabecera. El bloqueo documental y
-la Puerta 1 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
+las Puertas 1 y 2 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
 documentará el API exacto para el agente de red. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
-las líneas de escaneo de rangos en ambos checkers y sus contratos.
+las líneas de escaneo de rangos en ambos checkers y sus contratos. En
+`.github/workflows/ci.yml` se tocaron las líneas 48–51 (comentario de
+`--all-features`) y 65–85 (job `fs-final-component`); en `STATUS.md`, sólo las
+líneas 6–8 de fecha, rama y `Verified commit`.

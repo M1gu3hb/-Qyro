@@ -1462,8 +1462,8 @@
 
 ## QYR-0073 — `O_NOFOLLOW` no tiene una prueba que ejerza el enlace final
 
-- Plataforma: Linux/Android; equivalencia pendiente de comprobar en Windows,
-  macOS e iOS
+- Plataforma: Linux, macOS y Windows probados en CI; Android e iOS sólo
+  compilados, sin ejecución de filesystem en dispositivo
 - Severidad: P1
 - Esperado: una transferencia real mediante `FileSink` rechaza un
   `<destino>/<nombre>.qyro-part` que sea un enlace simbólico, no modifica el
@@ -1471,12 +1471,17 @@
 - Actual: la prueba existente compara dos veces el digest del mismo archivo y
   no construye el enlace en la ruta que abre producción. Sustituir
   temporalmente `O_NOFOLLOW` por `0` dejó las 388 pruebas Linux en verde
-- Resolución: pendiente; reemplazar la tautología por una prueba de transferencia
-  real y demostrar que la mutación `O_NOFOLLOW = 0` rompe esa prueba
-- Estado: abierto
+- Resolución: la prueba usa `FileSink` y coloca el enlace en la ruta
+  `.qyro-part` que abre producción. Exige `SymlinkInPath`, conserva byte por
+  byte el objetivo externo y no produce el nombre final. `open_part` clasifica
+  el rechazo atómico Unix y el handle de reparse point Windows sin convertir
+  una segunda consulta de ruta en el control de seguridad
+- Estado: cerrado
 - Fecha: 2026-08-11
-- Evidencia: CI 31521002851, job `rust`, commit mutante `a1c7398`; 388 pruebas
-  pasaron con el control retirado
+- Evidencia: CI 31529521600 y 31529821869 pasaron el test real en Ubuntu, macOS
+  y Windows. Con `O_NOFOLLOW = 0`, CI 31529689978 falló el test nominal en
+  Ubuntu con `the real FileSink path returned the wrong typed error: Ok(())`;
+  el control quedó restaurado en `a9f21a9`
 
 ## QYR-0074 — La prueba de memoria del manifest mide una constante
 

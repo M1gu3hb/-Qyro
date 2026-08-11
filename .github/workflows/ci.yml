@@ -45,8 +45,9 @@ jobs:
       # `cfg(test)` and crate-private, so they no longer need a feature flag and
       # can no longer be skipped by running the default set.
       - run: cargo test --workspace
-      # No crate declares a feature today. Kept so that adding one cannot ship
-      # untested: the day a feature exists, this line already covers it.
+      # qyro_fs has one opt-in feature for the privileged Windows reparse-point
+      # fixture. This line covers its Unix build; the matrix job below executes
+      # the Windows side on a runner that can create the link.
       - run: cargo test --workspace --all-features
       - run: cargo test --doc --workspace
       - name: Install cargo-audit
