@@ -172,6 +172,23 @@ impl Session {
     pub fn shutdown(&self) -> Result<(), NetError> {
         self.stream.shutdown()
     }
+
+    /// Breaks the session into the stream and the two AEAD contexts.
+    ///
+    /// This is the seam the transfer engine needs: `qyro_transfer::Sender` and
+    /// `Receiver` are constructed from a `FrameSealer` and a `FrameOpener`, and
+    /// the handshake is the only thing that can produce a matched pair.
+    ///
+    /// It **consumes** the session, which is the point. While a `Session`
+    /// exists, every byte leaving it has gone through the sealer; handing the
+    /// parts out without consuming it would leave two owners of one sealer, and
+    /// two sealers on one direction both start at sequence zero and reissue
+    /// every nonce. After this call there is no `Session`, so there is no
+    /// second path to the wire.
+    #[must_use]
+    pub fn into_parts(self) -> (FrameStream, FrameSealer, FrameOpener) {
+        (self.stream, self.sealer, self.opener)
+    }
 }
 
 /// Runs the initiator half over `stream`, under [`HANDSHAKE_DEADLINE`].

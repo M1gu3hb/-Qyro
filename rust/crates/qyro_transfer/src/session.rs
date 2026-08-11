@@ -524,6 +524,16 @@ pub struct Receiver {
     items: Vec<RecvItem>,
     manifest_seen: bool,
     verdicts_sent: bool,
+    /// The manifest this receiver accepted, kept rather than only consumed.
+    ///
+    /// Added in sprint 6A. The receiver derived `items` from the manifest and
+    /// then dropped it, which is enough while both ends live in one process and
+    /// the caller already holds a copy. Over a socket the receiving end learns
+    /// the manifest **only** from the wire, and a filesystem sink is built from
+    /// a `&TransferManifest` -- so with no way to read it back, no real
+    /// receiver could materialise a file. Retaining it costs one clone of a
+    /// structure the peer already sent.
+    manifest: Option<TransferManifest>,
 }
 
 impl Receiver {
@@ -539,6 +549,7 @@ impl Receiver {
             items: Vec::new(),
             manifest_seen: false,
             verdicts_sent: false,
+            manifest: None,
         }
     }
 
@@ -546,6 +557,16 @@ impl Receiver {
     #[must_use]
     pub const fn phase(&self) -> Phase {
         self.phase
+    }
+
+    /// The manifest this receiver accepted, once one has arrived.
+    ///
+    /// `None` until the `Manifest` message has been delivered. A caller that
+    /// has to create files needs this: over a transport, the manifest is
+    /// something the receiving end is told, not something it already had.
+    #[must_use]
+    pub const fn manifest(&self) -> Option<&TransferManifest> {
+        self.manifest.as_ref()
     }
 
     /// Verdicts computed so far, in manifest order.
@@ -668,6 +689,7 @@ impl Receiver {
                     })
                     .collect();
                 self.manifest_seen = true;
+                self.manifest = Some(manifest);
                 self.phase = Phase::Transferring;
                 Ok(None)
             }

@@ -1,0 +1,22 @@
+[package]
+name = "qyro_net_smoke"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Two-process transfer harness for sprint 6A. Never shipped; see ADR-0023."
+
+[[bin]]
+name = "qyro_net_smoke"
+path = "src/main.rs"
+
+# A harness, not a product crate. Nothing in the product depends on it, and it
+# depends on the product rather than the other way round. Every dependency is
+# first-party and already in the audited graph, so this adds one package to
+# Cargo.lock and that package is itself.
+[dependencies]
+qyro_crypto = { path = "../../crates/qyro_crypto" }
+qyro_fs = { path = "../../crates/qyro_fs" }
+qyro_manifest = { path = "../../crates/qyro_manifest" }
+qyro_net = { path = "../../crates/qyro_net" }
+qyro_protocol = { path = "../../crates/qyro_protocol" }
+qyro_transfer = { path = "../../crates/qyro_transfer" }

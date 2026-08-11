@@ -17,6 +17,8 @@ members = [
   "rust/tools/qyro_crypto_smoke",
   # Two-process persistence harness. Never shipped; see ADR-0023.
   "rust/tools/qyro_store_smoke",
+  # Two-process transfer harness for sprint 6A. Never shipped; see ADR-0023.
+  "rust/tools/qyro_net_smoke",
 ]
 
 [workspace.package]
