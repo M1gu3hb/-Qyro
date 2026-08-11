@@ -100,7 +100,11 @@ impl Frame {
         self.header.message_type()
     }
 
-    /// Sets the routing identifiers.
+    /// Sets the routing identifiers frozen by ADR-0029.
+    ///
+    /// Every integer value, including zero, is valid at the framing layer. The
+    /// sealer replaces `session_id` with the session it owns; `transfer_id`,
+    /// `stream_id` and `item_id` survive as authenticated caller metadata.
     #[must_use]
     pub const fn with_identifiers(
         mut self,
