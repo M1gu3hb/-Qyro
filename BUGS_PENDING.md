@@ -1515,17 +1515,19 @@
 - Esperado: `FileSink` lee `.qyro-resume`, reanuda sólo el `transfer_id`
   coincidente truncando el parcial a `bytes_committed`, y elimina un parcial
   huérfano antes de empezar una transferencia nueva
-- Actual: producción escribe y codifica `ResumeState`, pero no llama a
-  `ResumeState::decode`. Un parcial huérfano más largo que el payload contamina
-  la transferencia y termina en `DigestMismatch { item_id: 1 }`
-- Resolución: pendiente; implementar ADR-0027 §5 en `part_for`, cubrir huérfanos
-  largos/cortos y reanudación válida, y demostrar que retirar la lectura de los
-  metadatos rompe la prueba nominal
-- Estado: abierto
+- Actual: corregido. `FileSink::part_for` llama a `ResumeState::decode` cuando
+  existe un parcial, reanuda sólo metadata coincidente, trunca a
+  `bytes_committed` y elimina el parcial cuando ningún progreso lo describe
+- Resolución: `an_interrupted_transfer_resumes_from_its_metadata` deja una cola
+  no confirmada y exige que producción la trunque; la prueba de huérfanos
+  comprueba por longitud el descarte tanto de 17 como de 8192 bytes. QYR-0101
+  y la enmienda de ADR-0027 cubren el `transfer_id` discordante
+- Estado: cerrado
 - Fecha: 2026-08-11
-- Evidencia: búsqueda M4 con cero llamantes productivos de
-  `ResumeState::decode`; mutación local M3 de 8192 bytes frente a 2048 falló por
-  digest en lugar de descartar el huérfano
+- Evidencia: M4 original encontró cero llamantes productivos y M3 falló por
+  digest. Cierre en `4d7b6fd`: retirar la lectura productiva volvió a causar
+  `DigestMismatch`; retirar `set_len` conservó 262243 bytes en vez de 131072;
+  reutilizar el huérfano conservó 17 bytes en vez de 1. CI 31532723390 pasó
 
 ## QYR-0100 — El checker confunde límites de rangos reservados con hallazgos
 

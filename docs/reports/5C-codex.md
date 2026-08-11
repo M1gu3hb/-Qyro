@@ -753,6 +753,12 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 3: cada contador tiene ahora una prueba de dos tamaños con desigualdad
   estricta. Además, el sink prueba que un `item_id` rechazado deja el pico en
   cero. Las cuatro mutaciones locales hicieron fallar pruebas con nombre.
+- Fase 4: implementé ADR-0027 §5 en `FileSink::part_for`. Producción lee y
+  decodifica `.qyro-resume`, trunca una reanudación coincidente a
+  `bytes_committed` y elimina un parcial huérfano antes de crear el nuevo.
+- Fase 4: reescribí los dos tests existentes para sacar la política del harness:
+  la reanudación deja una cola no confirmada y los huérfanos corto/largo se
+  observan tras una escritura de un byte. Añadí el caso de `transfer_id` ajeno.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -771,6 +777,13 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - `PEAK_BUILDER_READ` es `thread_local`: la medida sigue fuera del producto y
   un test paralelo que calcule otro digest no puede inflar el pico observado.
   Se leyó `qyro_transfer/src/session.rs` como modelo, sin modificar ese crate.
+- Elegí la salida A de Fase 4: la política congelada era implementable sin
+  cambiar interfaces ni dependencias. Un parcial existente se abre primero con
+  el guard atómico de enlace/reparse; sólo después se trunca o se cierra y borra.
+- La discordancia de `transfer_id` no estaba decidida por ADR-0027. La registré
+  como QYR-0101 y añadí una enmienda fechada: sólo el mismo transfer y una
+  entrada para el item describen el parcial; metadata malformada sigue siendo
+  error tipado, no ausencia.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -789,11 +802,14 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 2: el host Windows local no puede crear un enlace de archivo por falta de
   `SeCreateSymbolicLinkPrivilege` (código 1314). No es un fallo de Qyro ni se
   contó como evidencia; el runner `windows-latest` ejecutó el caso real.
+- Fase 4: ADR-0027 no definía si metadata válida de otro `transfer_id`
+  describía el parcial. QYR-0101 y la enmienda fechada fijan que no: se trata
+  como huérfano, sin reinterpretar metadata malformada como ausencia.
 
 ## 5. Errores arreglados y no arreglados
 
-- QYR-0073 y QYR-0074 están cerrados. QYR-0075 y QYR-0068 siguen abiertos
-  hasta sus fases funcionales.
+- QYR-0073, QYR-0074, QYR-0075 y QYR-0101 están cerrados. QYR-0068 sigue
+  abierto hasta su fase funcional.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -813,6 +829,11 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   registrar constantes/solicitudes no realizadas sin que la suite lo notara.
   Los contadores ahora describen operaciones completadas y sus pruebas separan
   valores reales mediante entradas pequeñas y grandes.
+- QYR-0075 hacía que metadata escrita por producción no tuviera lector: colas
+  no confirmadas y huérfanos largos provocaban fallos de digest. La política
+  ahora conserva sólo el prefijo confirmado o empieza desde un parcial vacío.
+- QYR-0101 dejaba sin definir qué hacer con metadata de otro transfer. Confiarla
+  mezclaría estados; tratarla como huérfana mantiene el límite de transferencia.
 
 ## 7. Resultado contra cada objetivo
 
@@ -824,7 +845,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   **cumplido**.
 - Cerrar QYR-0074 midiendo los tres contadores y mutando cada contrato:
   **cumplido**.
-- Fases 4–10: **no empezadas** al cerrar Puerta 3.
+- Implementar ADR-0027 §5, cerrar QYR-0075 y decidir la discordancia de
+  `transfer_id`: **cumplido** mediante la salida A y QYR-0101.
+- Fases 5–10: **no empezadas** al cerrar Puerta 4.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -844,6 +867,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   reescrita. Linux ejecutó el workspace, Clippy y doc tests sobre `f56435c` en
   CI 31531259815. Las cuatro mutaciones se ejecutaron localmente y se
   restauraron antes del commit.
+- QYR-0075/QYR-0101: pruebas de filesystem real en Windows local y Ubuntu CI
+  31532723390. El job dedicado macOS/Windows de ese run sólo ejecutó el guard de
+  enlace final; no se presenta como evidencia de reanudación en esos hosts.
+  Las cuatro mutaciones de reanudación se ejecutaron localmente en Windows.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -946,9 +973,34 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Gate escrito antes de empezar Fase 4. CI 31531259815: **success** con todas
   las suites, doc tests, audit, scripts y los siete jobs en verde.
 
-### Puerta 4
+### Puerta 4 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local y CI 31532723390.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
+  el warning Windows base sigue asignado a Fase 8.
+- `cargo test --workspace`: PASS. Linux 392 passed/2 ignored; Windows local
+  397 passed/2 ignored. `qyro_fs` ejecutó 16/16 en Windows.
+- Mutaciones: sin `set_len`, la cola dejó 262243 bytes en vez de 131072; sin la
+  lectura de `.qyro-resume`, la reanudación terminó en `DigestMismatch`; sin
+  descarte, el huérfano corto conservó 17 bytes; sin comparar `transfer_id`, el
+  estado ajeno conservó 4096 bytes. Todas quedaron restauradas.
+- Aserciones: la reanudación compara el límite físico tras la primera escritura
+  y el archivo final byte a byte; los huérfanos comparan 1 contra su longitud
+  previa; el caso ajeno usa IDs distintos y comprueba la recreación.
+- Contadores: ninguno nuevo. Los tres contadores corregidos en Fase 3 siguen
+  midiendo operaciones completadas y sus tests permanecen verdes.
+- Nombres: `an_interrupted_transfer_resumes_from_its_metadata` ya no decodifica
+  metadata en el harness; el test de leftover ejerce ambos tamaños y el nuevo
+  test enuncia y ejerce la discordancia de transferencia.
+- Delta desde `15934aa`: sin archivos de Claude Code, `qyro_net`, `qyro_ffi`,
+  app, `qyro_transfer`, Cargo raíz ni Cargo.lock (§13).
+- `check_docs_consistency.sh`: PASS local y ambos checkers PASS en CI. QYR-0101
+  está al final del rango propio y ADR-0027 lleva una enmienda fechada.
+- Coherencia: §2–§8, §10–§14 y §16 reflejan la salida A, QYR-0101, los conteos
+  nuevos, la ADR modificada y todos los runs conocidos.
+- Gate escrito antes de empezar Fase 5. La comprobación extra exigida —borrar la
+  lectura de `.qyro-resume`— hizo fallar con nombre la reanudación; CI
+  31532723390: **success** en siete jobs.
 
 ### Puerta 5
 
@@ -987,6 +1039,10 @@ Pendiente.
 | 3 | medida real del builder | sustituir `count` por el literal `HASH_BUFFER_LEN` | Falló `tests::building_a_manifest_from_disk_does_not_load_the_file`: pico pequeño `65536`, esperado `1024` | Mutación local restaurada |
 | 3 | medida real de `FileSource` | contar la solicitud antes de leer, con `HASH_BUFFER_LEN` | Falló `tests::file_source_peak_is_the_largest_completed_read_not_the_request`: `65536`, esperado `1024` | Mutación local restaurada |
 | 3 | medida de escrituras aceptadas de `FileSink` | contar `HASH_BUFFER_LEN` antes de resolver el item | Falló `tests::file_sink_peak_is_the_largest_successful_write_not_a_constant`: una escritura rechazada dejó pico `65536`, esperado `0` | Mutación local restaurada |
+| 4 | truncamiento al límite confirmado | retirar `handle.set_len(bytes_committed)` | Falló `tests::an_interrupted_transfer_resumes_from_its_metadata`: longitud `262243`, esperada `131072` | Mutación local restaurada |
+| 4 | lector productivo de metadata | sustituir el resultado de `committed_progress` por `None` | Falló `tests::an_interrupted_transfer_resumes_from_its_metadata` con `DigestMismatch { item_id: 1 }` | Mutación local restaurada |
+| 4 | descarte de huérfanos | reutilizar el handle existente en vez de borrar y recrear | Falló `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy`: longitud `17`, esperada `1` | Mutación local restaurada |
+| 4 | límite entre transferencias | retirar la comparación de `transfer_id` | Falló `tests::resume_metadata_for_another_transfer_makes_the_part_an_orphan`: longitud `4096`, esperada `1` | Mutación local restaurada |
 
 ## 11. Tests antes y después
 
@@ -998,14 +1054,17 @@ Pendiente.
 - Después de Fase 3, Linux: 391 passed, 0 failed, 2 ignored.
 - Después de Fase 3, Windows normal: 396 passed, 0 failed, 2 ignored;
   `qyro_fs` pasó de 13 a 15 tests por los dos contratos nuevos.
+- Después de Fase 4, Linux: 392 passed, 0 failed, 2 ignored.
+- Después de Fase 4, Windows normal: 397 passed, 0 failed, 2 ignored;
+  `qyro_fs` pasó de 15 a 16 tests por el caso de transferencia discordante.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 3: 61.
+- Paquetes después de Fase 4: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
-- `git diff origin/claude/qyro-filesystem-5b1...HEAD -- Cargo.lock`: vacío.
+- `git diff 15934aae3dda7f469b5496c8341eb78d9e32f335 -- Cargo.lock`: vacío.
 
 ## 13. `git diff --name-only 15934aae3dda7f469b5496c8341eb78d9e32f335...HEAD`
 
@@ -1015,6 +1074,7 @@ El delta propio desde la base exacta es:
 .github/workflows/ci.yml
 BUGS_PENDING.md
 STATUS.md
+docs/adr/ADR-0027-filesystem-materialisation.md
 docs/reports/5C-codex.md
 rust/crates/qyro_fs/Cargo.toml
 rust/crates/qyro_fs/src/error.rs
@@ -1042,8 +1102,10 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31529821869 | a9f21a968e21f47c43caad738261839160c6a170 | CI | workflow_dispatch | success; control restaurado, STATUS fresco y siete jobs PASS |
 | 31530421925 | adaf2128cbd0b515ac876cda5ada7a1c48675dd0 | CI | workflow_dispatch | success; informe y ledger de Puerta 2 coherentes, siete jobs PASS |
 | 31531259815 | f56435ccb48e0d3169281f09e67e3f277fffd077 | CI | workflow_dispatch | success; implementación de Fase 3, siete jobs PASS |
+| 31531722569 | 2bae9343654ed3c1c7da0444186db40bb5ed8ec8 | CI | workflow_dispatch | success; ledger e informe de Puerta 3, siete jobs PASS |
+| 31532723390 | 4d7b6fd29114b4483cec7c8ade4859bfc0087255 | CI | workflow_dispatch | success; política productiva de reanudación y QYR-0101, siete jobs PASS |
 
-Lista reconstruida por API al cerrar la Fase 2. No hubo runs cancelados; todos
+Lista reconstruida por API al cerrar la Fase 4. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
@@ -1053,9 +1115,10 @@ Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
 El sprint todavía no cambió la superficie de cabecera. El bloqueo documental y
-las Puertas 1–3 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
+las Puertas 1–4 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
 documentará el API exacto para el agente de red. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
+la enmienda fechada de ADR-0027 que define metadata de otro `transfer_id`,
 las líneas de escaneo de rangos en ambos checkers y sus contratos. En
 `.github/workflows/ci.yml` se tocaron las líneas 48–51 (comentario de
 `--all-features`) y 65–85 (job `fs-final-component`); en `STATUS.md`, sólo las
