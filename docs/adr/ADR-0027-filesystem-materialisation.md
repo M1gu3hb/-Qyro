@@ -172,3 +172,12 @@ motor.
 - **No está probado en hardware físico**, y las garantías de `fsync` que §4
   describe **no se han comprobado cortando la corriente**: lo que se prueba en CI
   es la caída del proceso, que es un fallo distinto.
+
+## Enmienda 2026-08-11 — qué metadatos describen un parcial
+
+QYR-0101 concreta la frase «`.qyro-resume` que lo describa» de §5 sin cambiar
+el formato de §3. Los metadatos describen un `.qyro-part` sólo cuando su
+`transfer_id` coincide con el manifest actual y contienen una entrada para ese
+`item_id`. Un `transfer_id` distinto o una entrada ausente hacen que el parcial
+sea huérfano y se descarte antes de escribir. Metadatos presentes pero mal
+formados siguen produciendo su error tipado; no se reinterpretan como ausencia.

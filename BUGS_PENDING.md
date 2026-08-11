@@ -1548,3 +1548,24 @@
   pasó después. CI 31528281381 hizo fallar el contrato PowerShell por el caso
   vacío de `Get-Content -Raw`; tras convertir `$null` a texto vacío, Bash y
   PowerShell 7 pasaron en CI 31528757962
+
+## QYR-0101 — Metadatos de otra transferencia no describen el parcial
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `FileSink` sólo reanuda un `.qyro-part` cuando el `transfer_id` de
+  `.qyro-resume` coincide con el manifest actual; metadatos de otra transferencia
+  convierten el parcial en huérfano y se descartan antes de escribir
+- Actual: ADR-0027 §5 no definía la discordancia y producción no leía los
+  metadatos. Un parcial de 8192 bytes acompañado por progreso de la transferencia
+  99 se reutilizaba al iniciar la transferencia 42
+- Resolución: la enmienda fechada de ADR-0027 define «lo describa» y
+  `FileSink::committed_progress` exige el `transfer_id` actual antes de devolver
+  `bytes_committed`; en caso contrario `part_for` abre con el guard de enlaces,
+  elimina el parcial y crea uno nuevo
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes del cambio,
+  `resume_metadata_for_another_transfer_makes_the_part_an_orphan` falló con
+  longitud 8192 en vez de 1; al retirar después la comparación de
+  `transfer_id`, falló con longitud 4096 en vez de 1

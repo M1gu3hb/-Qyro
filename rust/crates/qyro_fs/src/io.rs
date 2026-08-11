@@ -249,6 +249,21 @@ impl FileSink {
         root.join(".qyro-resume")
     }
 
+    /// Returns the committed boundary when the destination metadata belongs to
+    /// this transfer and describes `item_id`.
+    fn committed_progress(&self, item_id: u32) -> Result<Option<u64>, FsError> {
+        let bytes = match fs::read(Self::resume_path(&self.root)) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let state = ResumeState::decode(&bytes)?;
+        if state.transfer_id != self.transfer_id {
+            return Ok(None);
+        }
+        Ok(state.progress_of(item_id))
+    }
+
     /// Opens (or reopens) the part file for `item_id`.
     fn part_for(&mut self, item_id: u32) -> Result<&mut PartFile, FsError> {
         if !self.open.contains_key(&item_id) {
@@ -268,8 +283,31 @@ impl FileSink {
                 });
             }
 
-            let handle = open_part(&resolved.part_path, false)?;
-            let written = handle.metadata().map(|m| m.len()).unwrap_or(0);
+            let part_exists = match fs::symlink_metadata(&resolved.part_path) {
+                Ok(_) => true,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+                Err(error) => return Err(error.into()),
+            };
+            let committed = if part_exists {
+                self.committed_progress(item_id)?
+            } else {
+                None
+            };
+            let (handle, written) = if part_exists {
+                // Opening first applies the atomic final-component link/reparse
+                // guard before either truncating or removing the prior file.
+                let handle = open_part(&resolved.part_path, false)?;
+                if let Some(bytes_committed) = committed {
+                    handle.set_len(bytes_committed)?;
+                    (handle, bytes_committed)
+                } else {
+                    drop(handle);
+                    fs::remove_file(&resolved.part_path)?;
+                    (open_part(&resolved.part_path, false)?, 0)
+                }
+            } else {
+                (open_part(&resolved.part_path, false)?, 0)
+            };
             self.open.insert(
                 item_id,
                 PartFile {

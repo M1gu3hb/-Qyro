@@ -523,25 +523,47 @@ fn an_interrupted_transfer_resumes_from_its_metadata() {
         sink.persist_progress().expect("metadata");
     }
 
-    let metadata = fs::read(FileSink::resume_path(&to.dir)).expect("metadata survived");
-    let state = ResumeState::decode(&metadata).expect("decodes");
-    assert_eq!(state.transfer_id, 42);
-    let committed = state.progress_of(1).expect("item 1 recorded");
-    assert_eq!(committed, HASH_BUFFER_LEN as u64);
+    let committed = HASH_BUFFER_LEN as u64;
     assert!(
         to.path("a.bin.qyro-part").exists(),
         "the part file did not survive the interruption"
     );
+    assert!(
+        FileSink::resume_path(&to.dir).exists(),
+        "the resume metadata did not survive the interruption"
+    );
 
-    // Second run: a fresh sink, carrying on from where the metadata says.
+    // Bytes after the committed boundary model a write that reached the file
+    // but not the metadata before the process died. The fresh production sink,
+    // not this test, must read `.qyro-resume` and truncate them.
+    let mut interrupted = fs::OpenOptions::new()
+        .append(true)
+        .open(to.path("a.bin.qyro-part"))
+        .unwrap();
+    interrupted.write_all(&vec![0xA5; size as usize]).unwrap();
+    interrupted.sync_all().unwrap();
+    drop(interrupted);
+    assert!(fs::metadata(to.path("a.bin.qyro-part")).unwrap().len() > size);
+
+    // Second run: the harness knows only the boundary it wrote in the fixture;
+    // it never decodes the metadata. `put` must make production apply it.
     let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
     let mut offset = committed;
     let mut buffer = vec![0u8; HASH_BUFFER_LEN];
+    let mut first_resumed_write = true;
     while offset < size {
         let want = ((size - offset).min(HASH_BUFFER_LEN as u64)) as usize;
         let filled = source.read_at(1, offset, &mut buffer[..want]);
         sink.put(1, offset, &buffer[..filled]).expect("write");
         offset += filled as u64;
+        if first_resumed_write {
+            assert_eq!(
+                fs::metadata(to.path("a.bin.qyro-part")).unwrap().len(),
+                offset,
+                "production did not truncate bytes beyond bytes_committed"
+            );
+            first_resumed_write = false;
+        }
     }
     sink.finish_item(1).expect("the resumed transfer verifies");
 
@@ -555,26 +577,76 @@ fn an_interrupted_transfer_resumes_from_its_metadata() {
 #[test]
 fn a_leftover_part_file_is_recovered_or_discarded_by_policy() {
     let from = Scratch::new("leftoverfrom");
-    let to = Scratch::new("leftoverto");
     write_pattern(&from.path("a.bin"), 2048);
 
     let files = vec![plan(&from.path("a.bin"), "a.bin")];
     let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("a.bin"));
+    let source = FileSource::new(paths);
 
-    // An orphan: a part file with no metadata beside it. ADR-0027 §5 says it
-    // cannot be verified against anything, so it must not become a file.
-    fs::write(to.path("a.bin.qyro-part"), b"bytes nobody sent").unwrap();
-    assert!(FileSink::resume_path(&to.dir).exists().eq(&false));
+    for (tag, orphan_len) in [("short", 17usize), ("long", 8192usize)] {
+        let to = Scratch::new(&format!("leftover-{tag}"));
+
+        // Orphans on both sides of the real 2048-byte payload. A one-byte
+        // accepted write exposes whether production discarded and recreated
+        // the part instead of merely overwriting enough of it by accident.
+        fs::write(to.path("a.bin.qyro-part"), vec![0xA5; orphan_len]).unwrap();
+        assert!(!FileSink::resume_path(&to.dir).exists());
+
+        let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+        let mut first = [0u8; 1];
+        assert_eq!(source.read_at(1, 0, &mut first), 1);
+        sink.put(1, 0, &first).expect("first write");
+        assert_eq!(
+            fs::metadata(to.path("a.bin.qyro-part")).unwrap().len(),
+            1,
+            "the {tag} orphan was reused instead of discarded"
+        );
+
+        materialise(&manifest, &source, &mut sink).expect("transfer");
+        assert_eq!(
+            fs::read(to.path("a.bin")).unwrap(),
+            fs::read(from.path("a.bin")).unwrap(),
+            "the {tag} orphan contaminated the result"
+        );
+    }
+}
+
+#[test]
+fn resume_metadata_for_another_transfer_makes_the_part_an_orphan() {
+    let from = Scratch::new("foreign-resume-from");
+    let to = Scratch::new("foreign-resume-to");
+    write_pattern(&from.path("a.bin"), 4096);
+
+    let files = vec![plan(&from.path("a.bin"), "a.bin")];
+    let manifest = manifest_from_disk(42, 0, &files).expect("manifest");
+    fs::write(to.path("a.bin.qyro-part"), vec![0xA5; 8192]).unwrap();
+    let foreign = ResumeState {
+        transfer_id: 99,
+        items: vec![crate::resume::ItemProgress {
+            item_id: 1,
+            bytes_committed: 4096,
+        }],
+    };
+    fs::write(FileSink::resume_path(&to.dir), foreign.encode()).unwrap();
 
     let mut paths = std::collections::BTreeMap::new();
     paths.insert(1u32, from.path("a.bin"));
     let source = FileSource::new(paths);
     let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
-    materialise(&manifest, &source, &mut sink).expect("transfer");
+    let mut first = [0u8; 1];
+    assert_eq!(source.read_at(1, 0, &mut first), 1);
+    sink.put(1, 0, &first).expect("first write");
+    assert_eq!(
+        fs::metadata(to.path("a.bin.qyro-part")).unwrap().len(),
+        1,
+        "metadata for transfer 99 was trusted by transfer 42"
+    );
 
+    materialise(&manifest, &source, &mut sink).expect("transfer");
     assert_eq!(
         fs::read(to.path("a.bin")).unwrap(),
-        fs::read(from.path("a.bin")).unwrap(),
-        "the orphan part file contaminated the result"
+        fs::read(from.path("a.bin")).unwrap()
     );
 }
