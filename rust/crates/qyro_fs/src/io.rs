@@ -63,16 +63,51 @@ fn open_part(path: &Path, append: bool) -> Result<File, FsError> {
         options.custom_flags(0x0020_0000);
     }
 
-    Ok(options.open(path)?)
+    match options.open(path) {
+        Ok(file) if metadata_is_link_or_reparse_point(&file.metadata()?) => {
+            Err(final_component_link(path))
+        }
+        Ok(file) => Ok(file),
+        Err(error) => match fs::symlink_metadata(path) {
+            // Unix reports ELOOP before returning a handle. Classify that
+            // refusal by inspecting the path *after* the atomic open failed;
+            // this check only chooses the error variant and is not the control.
+            Ok(metadata) if metadata_is_link_or_reparse_point(&metadata) => {
+                Err(final_component_link(path))
+            }
+            _ => Err(error.into()),
+        },
+    }
+}
+
+fn final_component_link(path: &Path) -> FsError {
+    FsError::SymlinkInPath {
+        component: path.to_string_lossy().into_owned(),
+    }
+}
+
+#[cfg(unix)]
+fn metadata_is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+#[cfg(windows)]
+fn metadata_is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt as _;
+
+    // FILE_ATTRIBUTE_REPARSE_POINT. Looking at the metadata of the handle
+    // opened with FILE_FLAG_OPEN_REPARSE_POINT binds this decision to the
+    // object that would otherwise receive the write, not to a second path walk.
+    metadata.file_attributes() & 0x0000_0400 != 0
 }
 
 /// `O_NOFOLLOW` as a literal.
 ///
 /// Spelled out rather than pulled from `libc`, which this workspace does not
-/// depend on and which would be a new package for one integer. The value is
-/// fixed by the platform ABI, and `a_symlink_at_the_final_component_is_refused`
-/// is what proves the number is the right one: a wrong constant makes that test
-/// pass a write through the link, loudly.
+/// depend on and which would be a new package for one integer. The values are
+/// fixed by each platform ABI. The final-component integration test proves the
+/// value on every host where it runs: Linux and macOS in CI. Android and iOS
+/// compile these constants but still lack runtime filesystem evidence.
 #[cfg(unix)]
 const fn libc_o_nofollow() -> i32 {
     #[cfg(any(target_os = "linux", target_os = "android"))]

@@ -258,29 +258,59 @@ fn a_symlink_in_the_destination_cannot_redirect_a_write() {
     );
 }
 
-#[test]
 #[cfg(unix)]
-fn a_symlink_at_the_final_component_is_refused() {
-    // The half O_NOFOLLOW covers, and the reason the flag's numeric value is
-    // load-bearing: a wrong constant lets this write through the link.
-    let to = Scratch::new("finallink");
+fn symlink_file(target: &Path, link: &Path) {
+    std::os::unix::fs::symlink(target, link).unwrap();
+}
+
+#[cfg(all(windows, feature = "windows-reparse-test"))]
+fn symlink_file(target: &Path, link: &Path) {
+    std::os::windows::fs::symlink_file(target, link).unwrap();
+}
+
+#[test]
+#[cfg(any(unix, all(windows, feature = "windows-reparse-test")))]
+fn a_symlink_at_the_final_part_component_is_refused_without_touching_its_target() {
+    // This is the path `FileSink` really opens. A resolver-only assertion does
+    // not exercise O_NOFOLLOW/FILE_FLAG_OPEN_REPARSE_POINT.
+    let from = Scratch::new("finallinkfrom");
+    let to = Scratch::new("finallinkto");
     let elsewhere = Scratch::new("finaltarget");
+    write_pattern(&from.path("a.bin"), 2048);
+
     let victim = elsewhere.path("victim.txt");
-    fs::write(&victim, b"original").unwrap();
-
-    std::os::unix::fs::symlink(&victim, to.path("a.bin.qyro-part")).unwrap();
-
-    let resolved = safe_path::resolve_under(&to.dir, "a.bin");
+    let original = b"receiver-owned bytes outside the destination";
+    fs::write(&victim, original).unwrap();
+    let part_path = to.path("a.bin.qyro-part");
+    symlink_file(&victim, &part_path);
     assert!(
-        matches!(resolved, Err(FsError::SymlinkInPath { .. }))
-            || crate::io::digest_of(&victim).unwrap() == crate::io::digest_of(&victim).unwrap(),
-        "resolution did not notice the linked part file"
+        fs::symlink_metadata(&part_path)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the fixture did not put a real link at the part-file component"
     );
 
+    let files = vec![plan(&from.path("a.bin"), "a.bin")];
+    let manifest = manifest_from_disk(1, 0, &files).expect("manifest");
+    let mut paths = std::collections::BTreeMap::new();
+    paths.insert(1u32, from.path("a.bin"));
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    let outcome = materialise(&manifest, &source, &mut sink);
+    assert!(
+        matches!(outcome, Err(FsError::SymlinkInPath { .. })),
+        "the real FileSink path returned the wrong typed error: {outcome:?}"
+    );
     assert_eq!(
         fs::read(&victim).unwrap(),
-        b"original",
-        "the file behind the link was written through"
+        original,
+        "FileSink wrote through the final-component link"
+    );
+    assert!(
+        !to.path("a.bin").exists(),
+        "a refused transfer still produced the final file"
     );
 }
 

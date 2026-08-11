@@ -61,6 +61,28 @@ jobs:
       - name: Check fuzz target formatting
         run: rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
 
+  fs-final-component:
+    name: fs final-component guard (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            feature_args: ''
+          - os: macos-latest
+            feature_args: ''
+          - os: windows-latest
+            feature_args: '--features windows-reparse-test'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Refuse a final-component link without touching its target
+        run: >-
+          cargo test -p qyro_fs ${{ matrix.feature_args }}
+          tests::a_symlink_at_the_final_part_component_is_refused_without_touching_its_target
+          -- --exact
+
   flutter:
     runs-on: ubuntu-latest
     defaults:

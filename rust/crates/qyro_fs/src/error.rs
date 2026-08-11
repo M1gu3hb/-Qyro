@@ -16,7 +16,8 @@ use core::fmt;
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum FsError {
-    /// A component of the destination path exists and is a symbolic link.
+    /// A component of the destination path is a symbolic link, or on Windows
+    /// a reparse point.
     ///
     /// ADR-0027 §1. The link is not followed to see where it points: following
     /// one in order to judge it is half the race.
