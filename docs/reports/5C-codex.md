@@ -498,7 +498,7 @@ Depende de lo que salga de esta ronda. En el horizonte: el FFI del motor con Nat
 - Lectura de aserciones/contadores/nombres: sin código de producción ni tests nuevos en Fase 1.
 - Archivos de código al terminar: idénticos a la base; sólo el reporte cambia respecto a la base.
 - `check_docs_consistency.sh`: FAIL por QYR-0073, QYR-0074 y QYR-0075 citados en el prompt verbatim sin entradas en el ledger prohibido.
-- CI 31521002851: job `rust` PASS, job `documentation` FAIL por la misma causa; run global en curso/failure a la hora de esta puerta.
+- CI 31521002851: run global `failure`; jobs `rust`, `scripts` y `flutter` PASS, job `documentation` FAIL por la misma causa.
 - Decisión obligada por §11: no empezar Fase 2. La puerta no puede pasar sin autorización para modificar `BUGS_PENDING.md`, para excluir el reporte del checker, o para omitir/alterar el prompt verbatim.
 
 ### Puerta 2
@@ -916,7 +916,7 @@ docs/reports/5C-codex.md
 | 31520332918 | 15934aae3dda7f469b5496c8341eb78d9e32f335 | CI | workflow_dispatch | success |
 | 31521002851 | a1c7398fbc2d7ef903282f3d64cfb19da23dcf42 | CI | workflow_dispatch | failure global; `rust` PASS, `documentation` FAIL por ledger |
 
-La lista se reconstruirá por API al cierre, sin filtrar fallos ni cancelaciones.
+Lista reconstruida por API al detener la Fase 1: son los dos únicos runs de la rama. No hubo runs cancelados; el segundo fallo se conserva y no se filtra.
 
 ## 15. Qué NO debe leerse como progreso
 
