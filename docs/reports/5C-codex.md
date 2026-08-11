@@ -777,6 +777,18 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 7: `FileSink` almacena la raíz canonicalizada; `open_part` valida el
   padre después de obtener el handle y antes de entregarlo. El contrato corre
   también en el job de filesystem de Ubuntu, macOS y Windows.
+- Fase 8: corregí el Clippy Windows haciendo que `UNSUPPORTED_PLATFORM` sólo se
+  compile donde es alcanzable y añadí al CI Clippy estricto más la suite normal
+  completa en `windows-latest`. Localmente ambos pasan, con 405/2.
+- Fase 8: reconté por nombre el delta de plataforma, corregí `STATUS.md` y
+  registré QYR-0105/0106. Son ocho tests funcionales DPAPI sólo Windows menos
+  dos tests de symlinks sólo Unix; la novena guarda DPAPI corre en ambos.
+- Fase 8: medí el checker Bash antes de tocarlo (>120 s) y después (0.860 s).
+  Eliminé los procesos `printf | tr` por segmento, bajé el contrato PowerShell
+  a 5.1 y adapté sus fixtures; QYR-0107/0108 conservan medidas y causas.
+- Fase 8: al ejecutar toda la puerta en 5.1, el checker documental confundió
+  de nuevo 0076/0099 por encoding, luego tropezó con stderr de Git y CRLF. El
+  contrato rojo→verde de QYR-0109 fija las tres diferencias entre 5.1 y 7.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -822,12 +834,27 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   pero no un doble swap. Puede crear un part vacío fuera antes del rechazo y
   conserva ventanas en operaciones posteriores por nombre. No se añadió
   `libc`; la lista de crates que relajan `forbid(unsafe_code)` sigue en tres.
+- El job completo Windows cuesta un runner y una segunda suite en cada cambio,
+  pero es la única comprobación continua que compila el backend DPAPI y los
+  caminos `cfg(windows)` del smoke. El hallazgo de Clippy demuestra que el coste
+  no era hipotético; por eso elegí añadirlo.
+- No documenté PowerShell 7 como dependencia: el checker no usa una primitiva
+  que la necesite y Windows incluye PowerShell 5.1. El timeout Bash tampoco era
+  coste inherente al repositorio: era un proceso `tr` por segmento y desapareció
+  con la conversión nativa `${stem^^}`.
 
 ## 4. Errores detectados fuera del prompt
 
 - Fase 0: el host local Windows ejecuta 394 pruebas/2 ignoradas, no 388/2, por la selección `cfg` de plataforma. El mismo árbol en Linux (CI 31520332918) ejecuta 388/2.
-- Fase 0: `cargo clippy --workspace --all-targets -- -D warnings` falla en Windows por `qyro_store_smoke::UNSUPPORTED_PLATFORM` sin uso; el mismo comando pasa en Linux. El archivo está fuera del alcance permitido de 5C.
-- Fase 0: el host trae Windows PowerShell 5, no PowerShell 7; los scripts declaran `#requires -Version 7.0`. Git Bash ejecutó tres checks; `check_repo_portability.sh` agotó 120 s por su coste de procesos en Windows. Los ocho checks pasaron en CI Linux con Bash y PowerShell 7.
+- Fase 0/Fase 8: `cargo clippy --workspace --all-targets -- -D warnings`
+  fallaba en Windows por `qyro_store_smoke::UNSUPPORTED_PLATFORM` sin uso. El
+  alcance ampliado autorizó corregirlo; QYR-0105 queda cerrado y el workflow
+  completo Windows evita que vuelva a quedar invisible para Linux.
+- Fase 0/Fase 8: el host trae Windows PowerShell 5.1, no PowerShell 7; los
+  scripts exigían 7.0. Git Bash ejecutó tres checks y
+  `check_repo_portability.sh` agotó 120 s por procesos por segmento. QYR-0107
+  baja el requisito y elimina esos procesos; QYR-0108 registra dos fallos
+  adicionales de fixtures descubiertos al ejecutar el contrato en Windows.
 - Fase 1, histórico: el prompt inicial exigía citar QYR-0073/74/75 y a la vez
   prohibía registrarlos; la continuación reconoce el conflicto y autoriza el
   ledger. Quedó resuelto en Fase 1bis.
@@ -858,12 +885,21 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 7: ADR-0027 §1.5 afirmaba una canonicalización del padre después del
   `open`, pero producción sólo canonicalizaba durante `resolve_under`, antes de
   abrir. Se corrigió dentro de QYR-0072, sin duplicar su ficha.
+- Fase 8: el contrato de portabilidad no era aún compatible con 5.1:
+  `Join-Path` recibía una forma de tres segmentos no aceptada. Git for Windows
+  además rechazaba `NUL` antes del checker. QYR-0108 corrige ambas fixtures sin
+  crear el nombre hostil en disco.
+- Fase 8: `check_docs_consistency.ps1` tampoco era compatible con 5.1 aunque no
+  declaraba lo contrario: lectura ANSI de UTF-8, stderr nativo convertido en
+  excepción y headings CRLF estrictos. QYR-0109 se descubrió al repetir la
+  puerta completa y quedó cubierto por el contrato PowerShell en el host real.
 
 ## 5. Errores arreglados y no arreglados
 
 - QYR-0072 está resuelto por decisión explícita y mitigación, con la TOCTOU
   residual documentada. QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101,
-  QYR-0102 y QYR-0104 están cerrados. QYR-0103 queda abierto para Fase 9.
+  QYR-0102, QYR-0104, QYR-0105, QYR-0106, QYR-0107, QYR-0108 y QYR-0109 están
+  cerrados. QYR-0103 queda abierto para Fase 9.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -899,6 +935,16 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0072 permitía que un cambio persistente del padre alcanzara el primer
   write pese a que ADR-0027 prometía comprobar después de abrir. La mitigación
   lo rechaza antes de tocar contenido; el doble swap sigue siendo riesgo real.
+- QYR-0105 dejaba código productivo Windows y ocho tests funcionales fuera de
+  la compilación continua completa; por eso un warning estricto sobrevivía.
+- QYR-0106 convertía una cifra Linux en afirmación universal y ocultaba si seis
+  pruebas realmente faltaban. El diff nominal demuestra que no: 8 Windows - 2
+  Unix = 6, con la guarda DPAPI restante común a ambos.
+- QYR-0107 hacía inejecutable el checker con el PowerShell incluido en Windows
+  y convertía una comparación lineal en miles de procesos. QYR-0108 impedía
+  además que las fixtures llegaran al componente bajo prueba en ese host.
+- QYR-0109 hacía que bajar el requisito fuera una promesa parcial: el checker
+  documental seguía interpretando contenido y procesos con semántica de 7.
 
 ## 7. Resultado contra cada objetivo
 
@@ -918,7 +964,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   consumidores del análisis compartido: **cumplido**.
 - Decidir QYR-0072, implementar la mitigación elegida y declarar lo no cubierto:
   **cumplido** mediante opción (c), sin dependencia ni `unsafe`.
-- Fases 8–10: **no empezadas** al cerrar Puerta 7.
+- Resolver los tres hallazgos Windows de Fase 0, asignarles fichas y decidir la
+  cobertura CI: **implementado**; Puerta 8 espera el run del commit de fase.
+- Fases 9–10: **no empezadas** mientras Puerta 8 no esté verde.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -952,6 +1000,26 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0072: contrato determinista rojo→verde en Windows local; CI 31537833116
   ejecutó el mismo rechazo post-open en Ubuntu, macOS y Windows. Prueba la
   mitigación declarada, no una carrera adversarial ni la opción (a).
+- QYR-0105: Clippy y workspace completos en Windows local. Retirar el `cfg`
+  exacto reproduce `dead_code`; el job `windows-latest` queda pendiente de su
+  primera ejecución sobre el commit de Fase 8.
+- QYR-0106: comparación nominal de los 407 tests listados en Windows (405
+  passed/2 ignored) con 401 en Linux (399/2). Sólo Windows:
+  `a_data_blob_that_lies_does_not_round_trip`,
+  `a_single_flipped_byte_is_a_typed_error_against_dpapi`,
+  `a_wrapped_secret_needs_the_same_entropy`,
+  `an_unreadable_store_is_not_an_absent_one`, `delete_leaves_nothing_loadable`,
+  `load_on_an_empty_store_is_a_typed_absence`,
+  `rotate_replaces_exactly_one_identity`, `two_creates_do_not_lose_data`.
+  Sólo Unix: `a_symlink_at_the_final_part_component_is_refused_without_touching_its_target`
+  y `a_symlink_in_the_destination_cannot_redirect_a_write`. La guarda DPAPI
+  `the_unsafe_blocks_are_the_ones_we_listed` aparece en ambos.
+- QYR-0107/0108: medidas Windows antes/después y contratos Bash/PowerShell
+  completos. Después: 0.860/19.262 s en Bash y 0.731/27.409 s en PowerShell
+  5.1; los cuatro procesos devolvieron 0.
+- QYR-0109: checker real PowerShell 5.1 rojo por QYR-0076–QYR-0099; el contrato
+  descubrió después los fallos de stderr de Git y CRLF. Tras la corrección,
+  checker real y contrato completo devolvieron 0 en 42.6 s.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -1196,6 +1264,9 @@ Pendiente.
 | 5 | layout fijo de 48 bytes | escribir `item_id` en el offset 32 de `stream_id` | Falló `the_forty_eight_byte_layout_is_unchanged` contra el vector literal | Mutación local restaurada |
 | 6 | prohibición de aserciones tautológicas | añadir `assert_eq!(source.read_at(...), source.read_at(...))` a `qyro_fs/src/tests.rs` | Falló `guards::assert_no_assertion_compares_a_call_to_itself`: `src/tests.rs:652`, operando `source.read_at(1,0,&mutfirst)` | Mutación local restaurada |
 | 7 | contención del padre después de abrir | pasar la raíz a `open_part` pero omitir la canonicalización/comparación | Falló `an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed`: devolvió `Ok(File)` exterior | Mutación local restaurada |
+| 8 | alcance de `UNSUPPORTED_PLATFORM` | retirar `#[cfg(not(windows))]` | `cargo clippy -p qyro_store_smoke --all-targets -- -D warnings` falló: `constant UNSUPPORTED_PLATFORM is never used` | Mutación local restaurada |
+| 8 | coste del checker Bash | restaurar `printf | tr` por cada segmento | El checker siguió activo a los 120 s y fue terminado; con `${stem^^}` termina en 0.860 s | Mutación inicial restaurada por la corrección |
+| 8 | compatibilidad documental PowerShell 5.1 | leer UTF-8 implícito, promover stderr de Git y exigir headings LF | Checker real falló por QYR-0076–QYR-0099; el contrato falló después por Git y nueve headings CRLF | Mutaciones corregidas; contrato 5.1 PASS |
 
 ## 11. Tests antes y después
 
@@ -1220,11 +1291,13 @@ Pendiente.
 - Después de Fase 7, Linux: 399 passed, 0 failed, 2 ignored (CI 31537833116).
 - Después de Fase 7, Windows normal: 405 passed, 0 failed, 2 ignored. El test
   adicional también pasó por separado en Ubuntu, macOS y Windows.
+- Después de Fase 8 local, Linux permanece en 399/2 y Windows en 405/2: no se
+  añadió un test Rust; se añadió la obligación de ejecutar el conjunto Windows.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 7: 61.
+- Paquetes después de Fase 8: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
 - `git diff 15934aae3dda7f469b5496c8341eb78d9e32f335 -- Cargo.lock`: vacío.
@@ -1251,10 +1324,15 @@ rust/crates/qyro_protocol/src/frame.rs
 rust/crates/qyro_protocol/src/header.rs
 rust/crates/qyro_protocol/tests/wire_contract.rs
 rust/guards/source_guard.rs
+rust/tools/qyro_store_smoke/src/main.rs
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
+scripts/check_repo_portability.ps1
+scripts/check_repo_portability.sh
 scripts/tests/docs_consistency_contract_test.ps1
 scripts/tests/docs_consistency_contract_test.sh
+scripts/tests/repo_portability_contract_test.ps1
+scripts/tests/repo_portability_contract_test.sh
 ```
 
 No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agente. `Cargo.lock` y el `Cargo.toml` raíz permanecen idénticos a la base.
@@ -1281,8 +1359,9 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31536398365 | 0982e24a7641d43690bd48e17866b01be30dabc8 | CI | workflow_dispatch | success; guarda antitautologías activa en seis crates, siete jobs PASS |
 | 31537082688 | bb9c0a7ccfe85eb3af436ca3fb8f77822374947c | CI | workflow_dispatch | success; ledger e informe de Puerta 6, siete jobs PASS |
 | 31537833116 | 5deb51a5d9ebe203d661a7da0ad806441f59a87c | CI | workflow_dispatch | success; mitigación post-open en Ubuntu, macOS y Windows, siete jobs PASS |
+| 31538490463 | 754093de6e52fe9a7e9dc5cf0968ccf616a4b917 | CI | workflow_dispatch | success; informe de Puerta 7 coherente, siete jobs PASS |
 
-Lista reconstruida por API al cerrar la Fase 7. No hubo runs cancelados; todos
+Lista reconstruida por API al iniciar la Fase 8. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
@@ -1302,12 +1381,15 @@ sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
 del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
 rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
 no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–7 están
-cerradas. `rust/guards/source_guard.rs` añade automáticamente la guarda
+cerradas y la implementación de Fase 8 espera su run.
+`rust/guards/source_guard.rs` añade automáticamente la guarda
 antitautologías a todo crate que lo incluya; cualquier consumidor nuevo debe
 mantener verdes sus contratos o usar una excepción exacta con argumento. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
 la enmienda fechada de ADR-0027 que define metadata de otro `transfer_id`,
 las líneas de escaneo de rangos en ambos checkers y sus contratos. En
-`.github/workflows/ci.yml` se tocaron las líneas 48–51 (comentario de
-`--all-features`) y 65–90 (job `fs-final-component`); en `STATUS.md`, sólo las
-líneas 6–8 de fecha, rama y `Verified commit`.
+`.github/workflows/ci.yml` se tocaron el comentario de `--all-features`, el job
+`fs-final-component` y el nuevo job completo `rust-windows`; el otro agente debe
+resolver ese último bloque con su job Windows, no conservar dos suites completas
+redundantes. `STATUS.md` cambia el ancla y califica por plataforma los conteos
+que antes presentaba como universales.

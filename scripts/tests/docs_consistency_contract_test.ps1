@@ -1,6 +1,8 @@
+#requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $checker = Join-Path $repoRoot 'scripts/check_docs_consistency.ps1'
+$powerShellExecutable = (Get-Process -Id $PID).Path
 if (-not (Test-Path -LiteralPath $checker)) { throw "Expected $checker to exist." }
 
 function New-Fixture {
@@ -35,11 +37,11 @@ function New-Fixture {
 ## Provisional values
 - REPLACE_WITH_OWNER
 - com.owner.qyro
-'@ | Set-Content -LiteralPath (Join-Path $root 'STATUS.md')
+'@ | Set-Content -LiteralPath (Join-Path $root 'STATUS.md') -Encoding UTF8
     foreach ($doc in @('AGENTS.md', 'PROJECT_CONTEXT.md', 'README.md', 'HANDOFF.md', 'TESTING.md')) {
-        @('# Document', '', 'Current state: see STATUS.md.') | Set-Content -LiteralPath (Join-Path $root $doc)
+        @('# Document', '', 'Current state: see STATUS.md.') | Set-Content -LiteralPath (Join-Path $root $doc) -Encoding UTF8
     }
-    '{"owner":"REPLACE_WITH_OWNER"}' | Set-Content -LiteralPath (Join-Path $root 'config/branding.example.json')
+    '{"owner":"REPLACE_WITH_OWNER"}' | Set-Content -LiteralPath (Join-Path $root 'config/branding.example.json') -Encoding UTF8
     return $root
 }
 
@@ -59,8 +61,8 @@ function New-GitFixture {
 function Set-VerifiedCommit {
     param([string] $Root, [string] $Value)
     $path = Join-Path $Root 'STATUS.md'
-    (Get-Content -LiteralPath $path) -replace '^- Verified commit:.*', "- Verified commit: $Value" |
-        Set-Content -LiteralPath $path
+    (Get-Content -LiteralPath $path -Encoding UTF8) -replace '^- Verified commit:.*', "- Verified commit: $Value" |
+        Set-Content -LiteralPath $path -Encoding UTF8
 }
 
 function Get-FixtureHead {
@@ -70,7 +72,7 @@ function Get-FixtureHead {
 
 function Assert-FailsWith {
     param([string] $Root, [string] $Expected)
-    $output = & pwsh -NoProfile -File $checker -RepoRoot $Root 2>&1
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $Root 2>&1
     if ($LASTEXITCODE -eq 0 -or -not (($output -join [Environment]::NewLine).Contains($Expected))) {
         throw "Expected failure containing '$Expected'. Output: $($output -join [Environment]::NewLine)"
     }
@@ -79,49 +81,52 @@ function Assert-FailsWith {
 $fixtures = @()
 try {
     $valid = New-Fixture; $fixtures += $valid
-    $output = & pwsh -NoProfile -File $checker -RepoRoot $valid 2>&1
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $valid 2>&1
     if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
         throw "Valid fixture failed: $($output -join [Environment]::NewLine)"
     }
     $missing = New-Fixture; $fixtures += $missing
-    (Get-Content (Join-Path $missing 'STATUS.md')) | Where-Object { $_ -notmatch '^- Milestone:' } | Set-Content (Join-Path $missing 'STATUS.md')
+    (Get-Content (Join-Path $missing 'STATUS.md') -Encoding UTF8) | Where-Object { $_ -notmatch '^- Milestone:' } | Set-Content (Join-Path $missing 'STATUS.md') -Encoding UTF8
     Assert-FailsWith $missing '[BLOCKER] STATUS fields'
     $stale = New-Fixture; $fixtures += $stale
-    Add-Content (Join-Path $stale 'README.md') 'Commit actual: 0000000000000000000000000000000000000000'
+    Add-Content (Join-Path $stale 'README.md') 'Commit actual: 0000000000000000000000000000000000000000' -Encoding UTF8
     Assert-FailsWith $stale '[BLOCKER] Stale current commit'
     $scriptsPending = New-Fixture; $fixtures += $scriptsPending
-    Add-Content (Join-Path $scriptsPending 'AGENTS.md') 'doctor, bootstrap and test_all are pending'
+    Add-Content (Join-Path $scriptsPending 'AGENTS.md') 'doctor, bootstrap and test_all are pending' -Encoding UTF8
     Assert-FailsWith $scriptsPending '[BLOCKER] AGENTS script state'
     $falseClaim = New-Fixture; $fixtures += $falseClaim
-    Add-Content (Join-Path $falseClaim 'README.md') 'File transfer: implemented'
+    Add-Content (Join-Path $falseClaim 'README.md') 'File transfer: implemented' -Encoding UTF8
     Assert-FailsWith $falseClaim '[BLOCKER] Pending capability claim'
 
     # Reserved ranges describe ownership, not findings. Their endpoints must
     # not require placeholder ledger records outside an agent's allocation.
     $rangeRefs = New-Fixture; $fixtures += $rangeRefs
-    @('## QYR-0001 — fixture', '', '- Estado: cerrado') |
-        Set-Content -LiteralPath (Join-Path $rangeRefs 'BUGS_PENDING.md')
-    Add-Content (Join-Path $rangeRefs 'README.md') 'Reserved: QYR-0076–QYR-0099; this agent owns QYR-0100 onward.'
-    $output = & pwsh -NoProfile -File $checker -RepoRoot $rangeRefs 2>&1
+    @('## QYR-0001 - fixture', '', '- Estado: cerrado') |
+        Set-Content -LiteralPath (Join-Path $rangeRefs 'BUGS_PENDING.md') -Encoding UTF8
+    $rangeStart = 'QYR-' + '0076'
+    $rangeEnd = 'QYR-' + '0099'
+    $rangeOnward = 'QYR-' + '0100'
+    Add-Content (Join-Path $rangeRefs 'README.md') "Reserved: $rangeStart$([char]0x2013)$rangeEnd; this agent owns $rangeOnward onward." -Encoding UTF8
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $rangeRefs 2>&1
     if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
         throw "Reserved range fixture failed: $($output -join [Environment]::NewLine)"
     }
 
     # A concrete citation remains subject to the ledger rule.
     $concreteFinding = New-Fixture; $fixtures += $concreteFinding
-    @('## QYR-0001 — fixture', '', '- Estado: cerrado') |
-        Set-Content -LiteralPath (Join-Path $concreteFinding 'BUGS_PENDING.md')
+    @('## QYR-0001 - fixture', '', '- Estado: cerrado') |
+        Set-Content -LiteralPath (Join-Path $concreteFinding 'BUGS_PENDING.md') -Encoding UTF8
     $missingId = 'QYR-' + '0101'
-    Add-Content (Join-Path $concreteFinding 'README.md') "$missingId is a concrete missing finding."
+    Add-Content (Join-Path $concreteFinding 'README.md') "$missingId is a concrete missing finding." -Encoding UTF8
     Assert-FailsWith $concreteFinding "$missingId is cited but has no entry"
 
     # A commit recorded one revision back is normal: STATUS cannot contain the SHA
     # of the very commit that introduces it.
     $fresh = New-GitFixture; $fixtures += $fresh
     Set-VerifiedCommit $fresh (Get-FixtureHead $fresh)
-    Add-Content (Join-Path $fresh 'README.md') 'follow-up'
+    Add-Content (Join-Path $fresh 'README.md') 'follow-up' -Encoding UTF8
     & git -C $fresh commit --quiet -am 'docs: follow-up'
-    $output = & pwsh -NoProfile -File $checker -RepoRoot $fresh 2>&1
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $fresh 2>&1
     if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
         throw "Fresh Git fixture failed: $($output -join [Environment]::NewLine)"
     }
@@ -129,7 +134,7 @@ try {
     $drifted = New-GitFixture; $fixtures += $drifted
     Set-VerifiedCommit $drifted (Get-FixtureHead $drifted)
     foreach ($index in 1..12) {
-        Add-Content (Join-Path $drifted 'README.md') "change $index"
+        Add-Content (Join-Path $drifted 'README.md') "change $index" -Encoding UTF8
         & git -C $drifted commit --quiet -am "chore: change $index"
     }
     Assert-FailsWith $drifted '[BLOCKER] Stale verified commit'

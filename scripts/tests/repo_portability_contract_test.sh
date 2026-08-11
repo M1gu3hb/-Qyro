@@ -11,6 +11,10 @@ make_fixture() {
   git -C "$root" init --quiet
   git -C "$root" config user.email "test@example.invalid"
   git -C "$root" config user.name "Contract test"
+  # The fixture must be able to put a Windows-hostile path in the *index* so
+  # the checker, rather than Git for Windows' pre-emptive protection, rejects
+  # it. No such path is created on disk.
+  git -C "$root" config core.protectNTFS false
   mkdir -p "$root/docs"
   printf 'ok\n' > "$root/docs/readme.md"
   git -C "$root" add -A

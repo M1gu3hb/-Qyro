@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-11T20:46:39Z
+- Updated UTC: 2026-08-11T21:50:26Z
 - Branch: codex/qyro-gap-closure-5c
-- Verified commit: 62c82b8b4fdb3695790975367fee075e173c8c0b
+- Verified commit: 754093de6e52fe9a7e9dc5cf0968ccf616a4b917
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
@@ -310,23 +310,35 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
 
 ## Real tests
 
-Host Linux, Rust 1.88.0, Python 3 y PowerShell 7.4.6. **Este contenedor no trae
-Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aquí:
+Evidencia actual: Linux en CI y Windows local, ambos con Rust 1.88.0. **El host
+local no trae Flutter ni Dart**, así que todo lo que los necesita se ejecutó en
+CI y no aquí:
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **388 tests**, 0 failed, 2 ignored. Eran 369 al
+- `cargo test --workspace`: PASS. Rama actual: **399 passed en Linux CI y 405
+  passed en Windows local**, 0 failed y 2 ignored en ambos. La base era 388/394.
+  El delta Windows +6 está explicado test por test: Windows añade los ocho
+  `qyro_win_dpapi::tests::{a_data_blob_that_lies_does_not_round_trip,
+  a_single_flipped_byte_is_a_typed_error_against_dpapi,
+  a_wrapped_secret_needs_the_same_entropy,
+  an_unreadable_store_is_not_an_absent_one, delete_leaves_nothing_loadable,
+  load_on_an_empty_store_is_a_typed_absence, rotate_replaces_exactly_one_identity,
+  two_creates_do_not_lose_data}`; Unix añade los dos
+  `qyro_fs::tests::{a_symlink_at_the_final_part_component_is_refused_without_touching_its_target,
+  a_symlink_in_the_destination_cannot_redirect_a_write}`. La novena prueba de
+  DPAPI, `guards::the_unsafe_blocks_are_the_ones_we_listed`, corre en ambos y no
+  altera la diferencia. Eran 369 al
   empezar el sprint 5B.1: quince del filesystem y cuatro de las guardas y los
   veredictos. Eran 352 al empezar el sprint 5A; las diecisiete nuevas son las del motor de transferencia,
   y cuatro de ellas existen porque el barrido de mutación encontró sin cubrir
   cuatro negativas de ADR-0026 §4. Eran 350 al empezar 4D.2a, y 323 al empezar
   4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
-  crate de plataforma. **Las nueve pruebas de `qyro_win_dpapi` no están en esa
-  cuenta**: el crate entero es `cfg(windows)` y en este host no compila ninguna.
-  Corren en CI, y ese es su único sitio
-- `cargo test --workspace --all-features`: PASS, **388 tests**. Ningún crate
-  declara features, así que los dos conjuntos no pueden divergir
+  crate de plataforma.
+- `cargo test --workspace --all-features`: PASS, **399 passed en Linux**, 0
+  failed, 2 ignored. `qyro_fs` declara una feature de fixture Windows; no añade
+  una prueba al conjunto Linux
 - `cargo test --doc --workspace`: PASS
 - `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **61 crates**.
   La entrada nueva del sprint 5B.1 es **`qyro_fs`, de primera parte**: el diff de

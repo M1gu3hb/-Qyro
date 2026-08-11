@@ -1645,3 +1645,103 @@
 - Fecha: 2026-08-11
 - Evidencia: extracción por API de los logs de CI; implementación de Fase 6 en
   31536398365: 38 resúmenes, 398 passed, 0 failed, 2 ignored
+
+## QYR-0105 — El workspace no compilaba su superficie Windows en CI
+
+- Plataforma: Windows y CI
+- Severidad: P2
+- Esperado: Clippy estricto y las pruebas normales del workspace compilan y
+  corren tanto la superficie Linux como la superficie Windows en cada cambio
+- Actual: el único job completo usaba `ubuntu-latest`. En Windows,
+  `qyro_store_smoke::code::UNSUPPORTED_PLATFORM` quedaba sin usar y
+  `cargo clippy --workspace --all-targets -- -D warnings` fallaba por
+  `dead_code`; Linux no podía ver el defecto ni compilar el backend DPAPI
+- Resolución: `UNSUPPORTED_PLATFORM` sólo se compila fuera de Windows, que es
+  donde puede devolverse. CI añade un job `windows-latest` con el mismo Clippy
+  estricto y `cargo test --workspace`. El coste es un runner adicional y una
+  segunda suite; el beneficio es cubrir código productivo Windows y ocho tests
+  funcionales `cfg(windows)` que el job Linux no puede ejecutar
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: local Windows Rust 1.88.0: Clippy PASS y 405 passed/2 ignored; las
+  nueve pruebas de `qyro_win_dpapi` pasan, incluida la guarda de `unsafe` que
+  también corre en Linux. Al retirar el `cfg`, Clippy falló nominalmente con
+  `constant UNSUPPORTED_PLATFORM is never used`; restaurado después. CI de
+  cierre pendiente de registrar en Puerta 8
+
+## QYR-0106 — STATUS presentaba un conteo Linux como universal
+
+- Plataforma: documentación, Linux y Windows
+- Severidad: P3
+- Esperado: cada total de pruebas dice la plataforma y cualquier diferencia por
+  `cfg` queda explicada por pruebas concretas
+- Actual: `STATUS.md` declaraba 388 como «el» total, pero la misma base ejecutaba
+  394 en Windows. La rama de Fase 7 ejecuta 399 en Linux y 405 en Windows
+- Resolución: STATUS publica ambos conteos. El delta exacto de +6 en Windows es
+  ocho tests funcionales DPAPI sólo Windows menos dos tests de symlinks sólo
+  Unix; la novena prueba DPAPI, la guarda de bloques `unsafe`, corre en ambos y
+  no contribuye al delta
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: comparación por nombre de `cargo test --workspace -- --list` en
+  Windows con el step Linux de CI 31537833116; lista nominal en STATUS y en el
+  informe 5C
+
+## QYR-0107 — Los checkers de portabilidad no eran portables al host Windows
+
+- Plataforma: Git Bash y Windows PowerShell
+- Severidad: P2
+- Esperado: ambos checkers y sus contratos terminan en el Windows incluido de
+  fábrica sin exigir instalar PowerShell 7 ni lanzar un proceso por segmento
+- Actual: los dos scripts PowerShell exigían 7.0 y Windows PowerShell 5.1 los
+  rechazaba antes de ejecutarlos. El checker Bash hacía `printf | tr` por cada
+  segmento versionado y agotó 120 s en Git Bash
+- Resolución: los scripts PowerShell declaran 5.1 y el contrato invoca el mismo
+  ejecutable que lo aloja; el Bash convierte mayúsculas con `${stem^^}`, sin
+  subprocesos por segmento
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes, Windows PowerShell 5.1 produjo
+  `ScriptRequiresUnmatchedPSVersion` y Bash siguió activo después de 120 s.
+  Después: checker/contrato PowerShell 0.731 s/27.409 s y checker/contrato Bash
+  0.860 s/19.262 s, todos con salida 0
+
+## QYR-0108 — Las fixtures de portabilidad dependían de PowerShell 7 y Unix Git
+
+- Plataforma: Git for Windows y Windows PowerShell 5.1
+- Severidad: P3
+- Esperado: el contrato llega a ejecutar el checker contra nombres hostiles
+  mantenidos sólo en el índice, y la construcción de su ruta raíz funciona en
+  PowerShell 5.1
+- Actual: `Join-Path $PSScriptRoot '..' '..'` usa una forma no aceptada por 5.1;
+  además Git for Windows rechazaba `NUL` antes de que el checker pudiera ser el
+  componente bajo prueba
+- Resolución: el contrato anida las dos llamadas `Join-Path`, reutiliza el
+  ejecutable PowerShell actual y fija `core.protectNTFS=false` sólo dentro de
+  cada repositorio temporal. El nombre hostil permanece únicamente en el índice
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: ambos contratos completos pasan en Windows; retirar cualquiera de
+  las adaptaciones reproduce respectivamente el error de parámetros de
+  `Join-Path` o el rechazo anticipado de Git for Windows
+
+## QYR-0109 — El checker documental leía UTF-8 y Git de forma distinta en PowerShell 5.1
+
+- Plataforma: Windows PowerShell 5.1
+- Severidad: P2
+- Esperado: el checker y su contrato aceptan el mismo repositorio y las mismas
+  reservas de rango que PowerShell 7, incluidos UTF-8 y finales CRLF
+- Actual: bajar el requisito de los scripts de portabilidad permitió ejecutar
+  el checker documental en el host real. Éste leyó UTF-8 sin declarar encoding,
+  no reconoció el en dash de `QYR-0076–QYR-0099` y exigió dos fichas ajenas.
+  Después, `ErrorActionPreference=Stop` convirtió el stderr esperado de Git en
+  excepción y los headings CRLF no satisficieron patrones anclados a `$`
+- Resolución: todas las lecturas textuales declaran UTF-8; el regex de rangos
+  usa escapes ASCII `\u2013`/`\u2014`; `Invoke-Git` captura salida y código sin
+  promover estados no cero a excepciones; los headings aceptan LF y CRLF. El
+  contrato usa el ejecutable PowerShell actual y fixtures UTF-8
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes, el repositorio real falló con QYR-0076–QYR-0099 sin ficha.
+  El contrato 5.1 reprodujo después el stderr nativo y los nueve headings CRLF;
+  tras las correcciones, checker real y contrato completo terminan con salida 0

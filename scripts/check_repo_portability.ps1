@@ -1,4 +1,4 @@
-#requires -Version 7.0
+#requires -Version 5.1
 # Refuses tracked paths that Windows cannot check out.
 #
 # Twin of scripts/check_repo_portability.sh. See that file for why this exists:

@@ -21,8 +21,8 @@ use std::process::ExitCode;
 
 /// Stable exit codes, so a runner reads a process status rather than a string.
 ///
-/// Most are only read on Windows, where a backend exists. They are declared
-/// unconditionally so the numbers cannot drift between platforms.
+/// Most are only read on Windows, where a backend exists. Every value stays an
+/// explicit literal; the unsupported outcome is compiled only where reachable.
 #[cfg_attr(not(windows), allow(dead_code, reason = "no backend off Windows"))]
 mod code {
     pub const OK: u8 = 0;
@@ -30,6 +30,7 @@ mod code {
     pub const CREATE_FAILED: u8 = 2;
     pub const LOAD_FAILED: u8 = 3;
     pub const FINGERPRINT_MISMATCH: u8 = 4;
+    #[cfg(not(windows))]
     pub const UNSUPPORTED_PLATFORM: u8 = 5;
 }
 

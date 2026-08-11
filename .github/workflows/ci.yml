@@ -62,6 +62,20 @@ jobs:
       - name: Check fuzz target formatting
         run: rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
 
+  rust-windows:
+    name: rust workspace (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: clippy
+      # The workspace has Windows-only production and eight cfg(windows) DPAPI
+      # tests; its ninth guard test runs everywhere. Linux cannot cover that
+      # production surface, which is how QYR-0105 survived until 5C.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
   fs-final-component:
     name: fs final-component guard (${{ matrix.os }})
     strategy:

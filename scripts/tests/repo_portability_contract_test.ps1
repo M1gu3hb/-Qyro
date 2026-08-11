@@ -1,9 +1,10 @@
-#requires -Version 7.0
+#requires -Version 5.1
 # Twin of scripts/tests/repo_portability_contract_test.sh.
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path
+$repoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 $checker = Join-Path $repoRoot 'scripts/check_repo_portability.ps1'
+$powerShellExecutable = (Get-Process -Id $PID).Path
 if (-not (Test-Path -LiteralPath $checker)) {
     Write-Error "Expected $checker to exist."
     exit 1
@@ -19,6 +20,9 @@ function New-Fixture {
     & git -C $root init --quiet
     & git -C $root config user.email 'test@example.invalid'
     & git -C $root config user.name 'Contract test'
+    # Hostile names live only in the index. Disable Git for Windows' early
+    # refusal so the checker itself is the component the fixture exercises.
+    & git -C $root config core.protectNTFS false
     & git -C $root add -A
     & git -C $root commit --quiet -m 'fixture'
     return $root
@@ -38,7 +42,7 @@ function Assert-Rejects {
     $root = New-Fixture
     try {
         Add-TrackedPath -Root $root -Path $Path
-        $output = & pwsh -NoProfile -File $checker -RepoRoot $root 2>&1 | Out-String
+        $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $root 2>&1 | Out-String
         if ($LASTEXITCODE -eq 0) {
             Write-Host "FAIL: $Path must be rejected, but the checker passed"
             $script:failures++
@@ -62,7 +66,7 @@ function Assert-Accepts {
     $root = New-Fixture
     try {
         Add-TrackedPath -Root $root -Path $Path
-        & pwsh -NoProfile -File $checker -RepoRoot $root *> $null
+        & $powerShellExecutable -NoProfile -File $checker -RepoRoot $root *> $null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "FAIL: $Path is portable and must be accepted"
             $script:failures++
@@ -97,10 +101,10 @@ Assert-Accepts 'docs/release notes.md'
 Assert-Accepts 'docs/trailing .md'
 Assert-Accepts 'rust/fuzz/corpus/relative_path/reserved_con.txt'
 
-& pwsh -NoProfile -File $checker -RepoRoot $repoRoot *> $null
+& $powerShellExecutable -NoProfile -File $checker -RepoRoot $repoRoot *> $null
 if ($LASTEXITCODE -ne 0) {
     Write-Host 'FAIL: the repository itself has a path Windows cannot check out'
-    & pwsh -NoProfile -File $checker -RepoRoot $repoRoot
+    & $powerShellExecutable -NoProfile -File $checker -RepoRoot $repoRoot
     $failures++
 }
 else {

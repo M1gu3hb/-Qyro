@@ -63,7 +63,10 @@ while IFS= read -r path; do
     [[ -n "$segment" ]] || continue
 
     stem="${segment%%.*}"
-    upper="$(printf '%s' "$stem" | tr '[:lower:]' '[:upper:]')"
+    # Bash already has ASCII case conversion. Spawning `printf | tr` for every
+    # segment made this O(paths) process launches and exceeded 120 s in Git Bash
+    # on Windows even though the actual comparisons are tiny.
+    upper="${stem^^}"
     if [[ "$upper" =~ $reserved ]]; then
       report "BLOCKER" "Portability" "$path uses the reserved Windows device name $upper; git checkout fails on Windows"
       blockers=$((blockers + 1))
