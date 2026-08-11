@@ -1534,5 +1534,6 @@
 - Estado: cerrado
 - Fecha: 2026-08-11
 - Evidencia: el contrato Bash falló antes del cambio en el fixture de rangos y
-  pasó después; la mitad PowerShell queda pendiente de ejecución con PowerShell
-  7 en CI
+  pasó después. CI 31528281381 hizo fallar el contrato PowerShell por el caso
+  vacío de `Get-Content -Raw`; tras convertir `$null` a texto vacío, Bash y
+  PowerShell 7 pasaron en CI 31528757962

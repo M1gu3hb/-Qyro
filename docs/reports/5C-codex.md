@@ -784,10 +784,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 ## 7. Resultado contra cada objetivo
 
 - Reproducir M1–M4 antes de arreglar: **cumplido**.
-- Resolver el bloqueo documental de Puerta 1: **cumplido localmente en Bash**;
-  la ejecución PowerShell 7 y el gate Linux completo están pendientes del run
-  de CI de la Fase 1bis.
-- Fases 2–10: **no empezadas** mientras termina esa revalidación.
+- Resolver el bloqueo documental de Puerta 1: **cumplido**. Bash y PowerShell 7,
+  sus contratos, Clippy Linux, las suites Rust y audit pasaron en CI
+  31528757962.
+- Fases 2–10: **no empezadas** al cerrar esta puerta.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -796,6 +796,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Hardware físico: no probado.
 - M1: probado en integración en Linux, CI run 31521002851, job `rust`; `cargo test --workspace` pasó con `O_NOFOLLOW = 0`.
 - M2/M3/M4: probado en unidad o inspección estructural en Windows host. M3 falló por el motivo esperado, no por compilación ni fixture.
+- QYR-0100: contrato Bash rojo→verde local; primer contrato PowerShell 7 rojo
+  por entrada vacía en CI 31528281381; ambos contratos verdes en Linux con
+  PowerShell 7 en CI 31528757962.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -814,21 +817,34 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Lectura de aserciones/contadores/nombres: sin aserciones, contadores ni tests nuevos.
 - `git diff --name-only`: sólo `docs/reports/5C-codex.md` al iniciar Fase 1; ningún archivo prohibido.
 
-### Puerta 1 — 2026-08-11 — REABIERTA, VALIDACIÓN EN CURSO
+### Puerta 1 — 2026-08-11 — PASS
 
 - M1–M4: reproducidas y restauradas.
 - `cargo fmt --all --check`: PASS.
-- `cargo clippy --workspace --all-targets -- -D warnings`: FAIL en Windows por el warning base de `qyro_store_smoke::UNSUPPORTED_PLATFORM`; PASS en Linux en el job `rust` del commit M1.
-- `cargo test -p qyro_fs`: PASS tras restaurar las mutaciones.
-- Lectura de aserciones/contadores/nombres: sin código de producción ni tests nuevos en Fase 1.
-- Archivos de código al terminar: idénticos a la base; sólo el reporte cambia respecto a la base.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI
+  31528757962; el warning Windows base se resolverá en Fase 8 como exige la
+  continuación.
+- `cargo test --workspace`: PASS. Linux 388 passed/2 ignored en CI 31528757962;
+  Windows local 394 passed/2 ignored.
+- Mutaciones de fase: M1 y M2 sobrevivieron como se esperaba; M3 falló con el
+  error esperado; M4 confirmó cero lectores productivos. Todas quedaron
+  restauradas antes de validar.
+- Lectura de aserciones/contadores/nombres: confirmó la tautología de M1, el
+  contador constante de M2 y que el nombre del test M3 no cubría el huérfano
+  largo. El contrato nuevo de QYR-0100 sí distingue rango reservado de cita
+  concreta.
+- Delta desde `15934aa`: sólo ledger, informe y ambos checkers/contratos; ninguna
+  ruta Claude ni crate reservado (§13).
 - `check_docs_consistency.sh`: PASS tras registrar QYR-0073/74/75 y corregir
   QYR-0100. El contrato Bash observó rojo antes de la corrección y pasa después.
-- `check_docs_consistency.ps1` y su contrato: pendientes de PowerShell 7 en CI;
-  el host local sólo dispone de Windows PowerShell 5.
+- `check_docs_consistency.ps1` y su contrato: PASS con PowerShell 7 en CI
+  31528757962. El run 31528281381 falló primero porque `Get-Content -Raw`
+  devolvía `$null` para fixtures vacíos; el fallo queda registrado.
 - CI 31521002851: run global `failure`; jobs `rust`, `scripts` y `flutter` PASS, job `documentation` FAIL por la misma causa.
-- La continuación levantó el bloqueo. No empezar Fase 2 hasta que el nuevo run
-  confirme el workspace Linux y las dos implementaciones del checker.
+- Coherencia del informe: segundo prompt comparado íntegro con el adjunto;
+  §13 usa la base exacta y esta puerta contiene los once controles exigidos.
+- Gate escrito antes de empezar Fase 2. CI 31528757962: **success** en los cuatro
+  jobs, incluidas 388 pruebas Linux, doc tests, audit y 61 paquetes.
 
 ### Puerta 2
 
@@ -909,9 +925,11 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo de los crates reservado
 |---|---|---|---|---|
 | 31520332918 | 15934aae3dda7f469b5496c8341eb78d9e32f335 | CI | workflow_dispatch | success |
 | 31521002851 | a1c7398fbc2d7ef903282f3d64cfb19da23dcf42 | CI | workflow_dispatch | failure global; `rust` PASS, `documentation` FAIL por ledger |
+| 31528281381 | 6175820a28d1e2a79fe5a70a56d2bff60a4a4663 | CI | workflow_dispatch | failure global; `documentation`, `rust` y `flutter` PASS; contrato PowerShell de QYR-0100 FAIL por entrada vacía |
+| 31528757962 | d6701a149fc3a3249c446cf65ffe01b7fc62e986 | CI | workflow_dispatch | success; cuatro jobs PASS |
 
-Lista reconstruida por API antes de lanzar la revalidación de Fase 1bis. No hubo
-runs cancelados; el fallo anterior se conserva y no se filtra.
+Lista reconstruida por API al cerrar la Fase 1bis. No hubo runs cancelados; los
+dos fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
 
@@ -919,8 +937,8 @@ Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay 
 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
-El sprint todavía no cambió la superficie de cabecera. El bloqueo documental ya
-está resuelto; la Puerta 1bis espera evidencia CI. Cuando la Fase 5 congele e
-implemente ADR-0029, §16 documentará el API exacto para el agente de red. Los
+El sprint todavía no cambió la superficie de cabecera. El bloqueo documental y
+la Puerta 1 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
+documentará el API exacto para el agente de red. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
 las líneas de escaneo de rangos en ambos checkers y sus contratos.
