@@ -304,9 +304,26 @@ fn memory_held_by_the_sender_does_not_grow_with_the_file() {
     // is not.
     let small = AT_LEAST;
     let large = AT_LEAST * 2;
+    // A third size, far below the window, and it is not decoration. Without it
+    // this test cannot tell a measured counter from a hard-coded number: a
+    // harness that simply reported 1_049_804 every time would satisfy both
+    // assertions below, and that is trap 2 of the prompt exactly -- a counter
+    // that records the value you were hoping for. The mutation sweep for this
+    // phase proved it: replacing the peak with a constant survived until this
+    // size was added.
+    let tiny = 128 * 1024;
 
+    let peak_tiny = peak_held_sending(tiny, 0x5EED_0000);
     let peak_small = peak_held_sending(small, 0x5EED_0001);
     let peak_large = peak_held_sending(large, 0x5EED_0002);
+
+    // The counter tracks the operation. A transfer of two chunks cannot hold as
+    // much as one of a hundred and twenty-eight.
+    assert!(
+        peak_tiny < peak_small,
+        "a {tiny}-byte transfer reported holding {peak_tiny}, not less than the \
+         {peak_small} of an {small}-byte one; the number is not being measured"
+    );
 
     // Neither is anywhere near the file. ADR-0026 §6 bounds what is in flight
     // at window x chunk = 16 x 64 KiB = 1 MiB per direction, plus per-frame

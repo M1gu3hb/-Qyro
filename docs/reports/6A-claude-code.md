@@ -71,7 +71,7 @@ tocado: es byte a byte lo que se recibió, y el SHA-256 de arriba lo fija.
 | 1 | ADR-0028 congelada antes de una sola línea de código | **Hecha.** Puerta 1, §9. Commiteada en `db3ce79`, antes de que existiera ningún `.rs` |
 | 2 | `qyro_net`: listener, dialer, `FrameStream`, errores tipados, seis pruebas sobre sockets reales | **Hecha.** Puerta 2, §9. Once pruebas, no seis |
 | 3 | El handshake de cuatro mensajes sobre socket real, cuatro pruebas | **Hecha.** Puerta 3, §9. Seis pruebas, no cuatro |
-| 4 | Dos procesos de sistema operativo, ≥8 MiB byte a byte, tres pruebas, diez ejecuciones seguidas | Pendiente |
+| 4 | Dos procesos de sistema operativo, ≥8 MiB byte a byte, tres pruebas, diez ejecuciones seguidas | **Hecha.** Puerta 4, §9. 8 MiB, byte a byte, 10/10 |
 | 5 | Los cinco finales provocados de verdad, más hilos y descriptores | Pendiente |
 | 6 | Guardas, barrido de mutación completo, informe, seis workflows en verde | Pendiente |
 
@@ -209,6 +209,10 @@ dos como final rompería toda transferencia en una de las dos plataformas**.
 | 6A-2 | Falso verde propio al reproducir la línea base: `&&` tras una tubería lee el estado de salida de `tail`, no el de `rustfmt`, y la ruta `rust/Cargo.toml` no existe —el workspace está en la raíz—. El comando fallaba e imprimía `FMT_PASS` | 0 | Baja — instrumento de medida, detectado y rehecho en la misma fase | §2 |
 | 6A-3 | **`qyro_net` no se ejecuta en Windows en ningún workflow.** `cargo test --workspace` corre sólo en `ubuntu-latest` (`ci.yml:33,47`); los trabajos de Windows prueban `qyro_crypto` y `qyro_win_dpapi` y nada más. Y este crate es precisamente donde el comportamiento diverge entre plataformas | 2 | **Alta** para lo que se pueda afirmar de Windows; nula para Linux | §8, §15 |
 | 6A-4 | Un control que sobrevivió a su propio borrado, encontrado por el barrido: quitar `TimedOut` de `is_read_timeout` no rompía nada, porque en Linux un `read` vencido da `WouldBlock` y sólo Windows da `TimedOut`. La mitad de Windows de esa rama no la defendía nadie. Es 6A-3 con consecuencias concretas | 2 | Media — habría roto **toda** transferencia en Windows sin que ninguna prueba lo dijera | §10 |
+| 6A-9 | **`qyro_transfer::Receiver` no dejaba leer el manifest que aceptaba.** Derivaba su estado por elemento y lo tiraba. En un proceso no se nota porque el llamante ya tiene una copia; sobre un socket el extremo receptor **sólo** conoce el manifest por el cable, y `FileSink` se construye a partir de un `&TransferManifest` — así que ningún receptor real podía materializar un archivo | 4 | **Alta.** Bloqueaba la Fase 4 entera | §5 |
+| 6A-10 | El criterio de §10 dice que `Cargo.lock` pasa de 61 a 62 «y el que entra es `qyro_net`». Son **63**: entra también `qyro_net_smoke`, el binario de dos procesos que §5 autoriza y §8 Fase 4 exige. §10 y §8 no concuerdan | 4 | Baja — la intención del criterio (cero dependencias externas) se cumple | §12 |
+| 6A-11 | **Mi prueba de memoria no distinguía un contador medido de una constante.** Con dos tamaños de archivo, un pico que informara siempre el mismo número satisface a la vez «por debajo del techo» y «no crece con el archivo». Lo encontró el barrido: mutar el pico a la constante `1_049_804` **pasó** | 4 | **Alta.** Es la trampa 2 de §11 en su forma más convincente: no un contador malo, sino una prueba con la forma equivocada | §9 |
+| 6A-12 | Defecto real en mi propio arnés, cazado por su prueba: `finish_item` se llamaba sólo para los elementos que el motor había aprobado, pero `finish_item` es lo que **borra el archivo `.qyro-part`** cuando el digest no cuadra. Una transferencia rechazada dejaba 8 MiB en disco bajo un nombre que significa «transferencia en curso» | 4 | Media — pérdida de espacio y un archivo engañoso tras un rechazo | §5 |
 | 6A-7 | Segundo control superviviente, encontrado por el barrido de la Fase 3: **nada comprobaba que un frame sin sellar llegado después del handshake se rechace.** Cambiar esa rama a `Ok(None)` no rompía ninguna prueba | 3 | **Alta.** Es aceptar bytes que nada autenticó, en una conexión cuyo propósito entero es que todo en ella esté autenticado | §10 |
 | 6A-8 | Me comí un fallo de clippy leyendo mal mi propia comprobación: canalicé la salida a `grep -c`, leí «4» como informativo y commiteé en rojo. El código de salida era 101 | 3 | Baja — un commit en rojo, detectado y enmendado antes de empujar | §9 |
 | 6A-6 | **El criterio de §10 `git diff --name-only origin/main...HEAD` no puede pasar en esta rama, por diseño.** `origin/main` está en `e0041de`, anterior al sprint 4A, y esta rama se apoya en cuatro ramas de sprint sin fusionar, así que ese diff devuelve 319 archivos de cinco sprints — incluidos los cinco de la lista prohibida, ninguno tocado por este run | 2 | Baja para el producto, **alta para auditar este informe**: la comprobación literal alarma sin motivo | §13 |
@@ -228,6 +232,10 @@ Pendiente de ampliar conforme avancen las fases.
 | 6A-4 | Sí, la mitad que se puede | Añadida `a_read_timeout_is_a_heartbeat_on_both_platforms`, que prueba el **mapeo**: quitar cualquiera de las dos ramas ahora rompe una prueba con nombre. Lo que **no** cierra, y la prueba lo dice en su propio comentario, es que Windows se comporte como se describe: eso necesita ejecutar el crate allí, que es 6A-3 |
 | 6A-7 | Sí | Añadida `a_plain_frame_after_the_handshake_is_refused_and_poisons`, que mete un frame sin sellar por `write_sealed` —que escribe bytes tal cual— y comprueba variante, envenenamiento y que no se recupera |
 | 6A-8 | Sí | Commit enmendado con la corrección (`map_err` → `inspect_err`), y desde entonces **compruebo el código de salida, no el recuento de líneas**. Es la misma forma de error que 6A-2: mirar la salida de un comando en vez de su estado |
+| 6A-9 | Sí, tocando `qyro_transfer` | Añadido de forma **aditiva**: el receptor retiene el manifest y `Receiver::manifest()` lo devuelve. Un campo, una asignación y un accesor de sólo lectura; ningún comportamiento cambia. `qyro_transfer/src/session.rs` **no está en la lista prohibida de §5** y no es donde trabaja Codex (qyro_fs, `header.rs`, guardas), así que no hay riesgo de fusión. Lo registro igualmente porque tampoco está en mi lista de «archivos que tocas», y es el tipo de costura que 5A pedía registrar antes de cambiar |
+| 6A-10 | No hay nada que arreglar | Los dos paquetes nuevos son de primera parte. **Cero dependencias externas nuevas**, que es lo que el criterio persigue. Lo señalo para que el supervisor corrija el número, no el código |
+| 6A-11 | Sí | Un tercer tamaño, 128 KiB —muy por debajo de la ventana— y la aserción `peak_tiny < peak_small`. Una constante falla esa desigualdad. Confirmado volviendo a aplicar la mutación: ahora muere |
+| 6A-12 | Sí | `finish_item` se llama ahora para **todos** los elementos. Y un elemento que el sistema de archivos acepta mientras el motor lo rechaza se informa como contradicción, no se pasa por alto: dos comprobaciones sobre los mismos bytes que discrepan significan que una de las dos está mal |
 | 6A-6 | **No es mío que arreglar** | El arreglo es fusionar las ramas de sprint a `main`, o cambiar el criterio para que use la rama base. Las dos son decisiones del supervisor. Lo que sí hago es dar en §13 **las dos** salidas, con la explicación de por qué la literal no dice nada de este sprint, en vez de pegar sólo la que me favorece |
 | 6A-5 | Sí | Rehecha como M4b, mutando `read_window` entera. La mataron dos pruebas. Las dos filas quedan en la tabla de §10: esconder la mutación que no significaba nada dejaría la tabla más limpia y menos cierta |
 
@@ -281,6 +289,29 @@ existe —y peor, habría dejado sin comprobar el control que sí importa—. Un
 superviviente puede significar dos cosas muy distintas, «la propiedad no está
 cubierta» o «la mutación no tocó la propiedad», y no distinguirlas hace inútil el
 barrido entero.
+
+**6A-9 — el manifest que no se podía leer.** Qué se rompía: la materialización de
+archivos en cualquier receptor que no fuera una prueba en el mismo proceso. Para
+quién: para el sprint 6A entero, y para cualquier receptor real después. En qué
+escenario: el normal — el receptor conoce el manifest sólo porque el emisor se lo
+manda. Es una costura que sólo se rompe cuando aparece su segundo llamante, que es
+exactamente lo que 5A pidió registrar como hallazgo en vez de arreglar en silencio.
+
+**6A-11 — la prueba de memoria que no medía.** Qué se rompía: nada en el producto,
+y todo en la evidencia. Para quién: para quien lea «la memoria del emisor no crece con
+el archivo» y lo crea. En qué escenario: si el motor empezara a bufferizar de más, esta
+prueba habría seguido en verde. Lo que la salvó no fue leer el contador —el contador
+estaba bien— sino mutar el pico y ver que nadie se quejaba. Es la lección de §12 en
+una línea: una propiedad cuya mutación no rompe nada no está cubierta, y eso incluye
+las propiedades sobre tus propias mediciones.
+
+**6A-12 — el `.qyro-part` superviviente.** Qué se rompía: tras rechazar un archivo por
+digest, quedaban en disco todos sus bytes con el sufijo que significa «en curso». Para
+quién: para el usuario receptor, que acumula basura invisible y podría confundirla con
+una transferencia reanudable. En qué escenario: cualquier transferencia corrupta o
+interrumpida por contenido. Lo cazó la prueba que lo pedía explícitamente —«que no
+quede `.qyro-part`»—, y sin esa segunda mitad de la aserción el rechazo habría parecido
+correcto: el veredicto era `false` y no aparecía el archivo final.
 
 **6A-2 — el falso verde de la línea base.** Qué se rompía: nada en el producto; el
 defecto estaba en mi propio instrumento de medida. Para quién: para el siguiente
@@ -517,7 +548,62 @@ vive la trampa 1 de §11 —dos lados que son la misma llamada—. Cómo se evit
 | `a_flipped_bit_after_the_handshake_poisons_the_session` | Envenena | Las tres aserciones que pide §8: variante exacta `NotAuthenticated`, `is_poisoned()`, y que un frame legítimo posterior **tampoco** se entrega |
 | `a_plain_frame_after_the_handshake_is_refused_and_poisons` | Refusa y envenena | Mete un frame **sin sellar** por `write_sealed`, que escribe bytes tal cual. Nació del barrido (6A-7) |
 
-### Puertas 4 a 6
+### Puerta 4 — 2026-08-11 — **PASADA**
+
+| # | Comprobación de §12 | Resultado |
+|---|---|---|
+| 1 | `cargo fmt --all --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0 |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — **408** passed, 0 failed, **2 ignored** |
+| 4 | Barrido de mutación de la fase | PASS tras cerrar un superviviente grave (6A-11). Un superviviente **queda abierto y argumentado**: P3 |
+| 5 | Lectura de aserciones | PASS — y es la comprobación que encontró 6A-11 |
+| 6 | Lectura de contadores | **Falló primero.** Ver 6A-11 |
+| 7 | Lectura de nombres de test | PASS |
+| 8 | `git diff --name-only` sin archivos prohibidos | PASS — §13 |
+| 9 | Resultado escrito antes de la fase siguiente | PASS — esto |
+
+`cargo test --doc --workspace`: PASS. Los cuatro `check_*`: PASS.
+Paquetes: **63** — ver 6A-10.
+
+**La comprobación extra de §8 Fase 4: diez ejecuciones seguidas.** La suite de dos
+procesos se corrió **diez veces consecutivas, 10/10**, después del cambio de la Fase 4
+y otra vez después del arreglo de 6A-11. Sin intermitencia, y sin un solo `sleep`
+añadido: la sincronización es la línea `LISTENING <puerto>` que `serve` imprime y
+vacía antes de aceptar.
+
+#### Lo que de verdad cruzó
+
+| Medida | Valor |
+|---|---|
+| Tamaño del archivo | **8 388 608 bytes** (8 MiB), generado desde una semilla, no almacenado |
+| Comparación | **byte a byte** contra los bytes que escribió la prueba, con el índice del primero que difiera en el mensaje de fallo |
+| `bytes_sent` informado por el emisor | 8 388 608, comparado contra el tamaño que la prueba pidió |
+| Pico sostenido por el emisor, 8 MiB | **1 049 804 bytes** |
+| Pico sostenido por el emisor, 16 MiB | **1 049 804 bytes** — el mismo |
+| Pico sostenido por el emisor, 128 KiB | **muy inferior**, y es lo que ata el contador a la realidad |
+| Pico sostenido por el receptor | ~73 bytes: no buferiza fuera de orden (ADR-0026 §4) |
+
+1 049 804 no es un número que yo eligiera: es `ventana × chunk` más la sobrecarga de
+frame — 16 × (48 + 8 + 65 536 + 16) = 1 049 728, más un frame de 76 bytes. La cota de
+ADR-0026 §6, medida entre dos procesos.
+
+#### Comprobación 6 — lectura de contadores, y por qué falló
+
+Ésta es la comprobación que hizo su trabajo. El contador `HeldBytes` suma las
+longitudes reales de los frames que el proceso sostiene, así que *parecía* correcto. Y
+la prueba comparaba dos tamaños de archivo, así que *parecía* atada a la realidad.
+
+No lo estaba. Muté el pico para que informara la constante `1_049_804` en vez de lo
+medido, y **la prueba pasó**. Con dos tamaños, un contador que devuelve siempre el
+mismo número satisface a la vez «por debajo del techo» y «no crece con el archivo» —
+que es la trampa 2 de §11 con el disfraz más convincente que he visto: no un contador
+que guarda una constante, sino una prueba cuya forma no puede distinguirlos.
+
+El arreglo es un tercer tamaño, **muy por debajo de la ventana** (128 KiB, dos
+chunks), y la aserción `peak_tiny < peak_small`. Un número constante falla esa
+desigualdad. Con ella, la mutación muere.
+
+### Puertas 5 y 6
 
 Pendientes.
 
@@ -560,6 +646,32 @@ escribí. Que el error de firma se **propague** en vez de tragarse no es mutable
 romper la compilación —el valor hace falta para continuar—, así que esa propiedad la
 sujeta `a_peer_with_a_wrong_signature_never_reaches_the_application` directamente y
 no por mutación.
+
+### Fase 4 — commit `1ab9b08`, más el arreglo de 6A-11
+
+| # | Propiedad | Mutación aplicada | Resultado |
+|---|---|---|---|
+| P1 | `finish_item` se llama para **todos** los elementos, no sólo los aprobados | Se filtra el bucle a los de veredicto `Ok` | **Muerta** por `the_receiver_refuses_a_file_whose_digest_does_not_match` |
+| P2 | El receptor retiene el manifest que aceptó | `Receiver::manifest()` devuelve siempre `None` | **Muerta** por `a_file_crosses_two_real_processes_byte_identical` **y** `memory_held_by_the_sender_does_not_grow_with_the_file` |
+| P3 | Contenido llegado antes del manifest se rechaza | Se borra la comprobación `refusing.written` | **SOBREVIVE, y queda abierta.** Argumento abajo |
+| P4 | El contador suma longitudes reales de frame | `took` suma una constante por lote | **Muerta** por `memory_held_by_the_sender_does_not_grow_with_the_file` — pero por el motivo equivocado: la constante se acumulaba y el pico crecía. Ver P4b |
+| P4b | **El pico informado es lo medido, no un número** | `self.peak = 1_049_804;` | **SOBREVIVIÓ** — hallazgo 6A-11. Tras añadir el tercer tamaño de 128 KiB y `peak_tiny < peak_small`: **muerta** por esa prueba |
+
+**P3 se queda abierta, con argumento.** Guarda un estado que la máquina de estados del
+motor hace inalcanzable: en `Phase::Negotiating` un `DataChunk` es
+`UnexpectedMessage`, así que no hay forma de provocar contenido antes del manifest sin
+romper primero el motor. No es un control con comportamiento observable, es una
+aserción defensiva que cuesta un `bool`. La alternativa honesta a dejarla sin cubrir
+sería borrarla, y prefiero una comprobación barata que convierte un futuro fallo del
+motor en un error con nombre a no tener nada ahí. **Registrada como superviviente, no
+escondida.**
+
+**Y una nota sobre P4 que importa más que la fila.** P4 murió, pero por accidente: mi
+mutación sumaba una constante que se acumulaba, así que el pico crecía y la prueba lo
+notó. La mutación que de verdad probaba la propiedad era P4b —fijar el pico— y esa
+sobrevivió. Si me hubiera quedado en P4 habría anotado «cubierta» sobre una prueba que
+no lo estaba. Una mutación que muere no siempre demuestra lo que crees: hay que mirar
+**por qué** murió.
 
 **Supervivientes sin cerrar al final de la Fase 2: ninguno.** M7 se cerró en cuanto a
 mapeo; lo que queda abierto no es un control sin prueba sino una plataforma sin
