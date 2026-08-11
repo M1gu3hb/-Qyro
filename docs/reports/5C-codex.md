@@ -765,6 +765,12 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 5: corregí el comentario falso de `header.rs`, renombré el round-trip con
   el nombre exigido, añadí el tamper específico de `transfer_id` y sustituí las
   aserciones por campo del layout por un vector literal único de 48 bytes.
+- Fase 6: añadí `assert_no_assertion_compares_a_call_to_itself` al análisis
+  compartido. Recorre módulos de test e integración, reconoce `assert!`,
+  `assert_eq!` y `assert_ne!`, y compara operandos tras quitar espacios.
+- Fase 6: la guarda se activa automáticamente en los seis crates que incluyen
+  el archivo compartido. Una tautología real temporal en `qyro_fs` produjo el
+  fallo nominal con ruta, línea y operando; después quedó restaurada.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -797,6 +803,11 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - La superficie mínima es la ya compatible. Retirar uno de los dos builders
   públicos rompería callers; añadir setters o `FrameIdentifiers` duplicaría
   capacidad. El formato y todos los offsets siguen siendo los de QYRO/1.
+- La guarda de Fase 6 es deliberadamente sintáctica: cubre `X == X`, `X != X`
+  y los dos primeros argumentos idénticos de `assert_eq!`/`assert_ne!`, no
+  intenta equivalencia semántica general. Ignora comentarios y literales al
+  analizar delimitadores. Las excepciones exigen crate, archivo, operando y
+  argumento escrito; hoy la lista está vacía y no existe un allow global.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -827,11 +838,14 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 5: CI 31534316575 falló sólo en `documentation` porque `STATUS.md` quedó
   11 commits por delante del ancla permitida; los otros seis jobs pasaron. La
   actualización mínima de fecha/commit restauró el checker en 31534679436.
+- Fase 6: al extraer el total del step exacto de Rust encontré que el informe
+  llevaba un test Linux de más desde Fase 3. QYR-0104 corrige 391/392/393 a
+  390/391/392; no altera los totales Windows ni resultados de los runs.
 
 ## 5. Errores arreglados y no arreglados
 
-- QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101 y QYR-0102 están cerrados.
-  QYR-0103 queda abierto y asignado a la guarda de errores de Fase 9.
+- QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101, QYR-0102 y QYR-0104 están
+  cerrados. QYR-0103 queda abierto y asignado a la guarda de errores de Fase 9.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -861,6 +875,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   decisión, los comentarios y pruebas con lo que un crate externo ya compila.
 - QYR-0103 permite a un caller hacer `match` sobre un rechazo que ningún byte ni
   constructor provoca; hasta Fase 9 permanece deuda explícita, no garantía.
+- QYR-0104 hacía que el informe atribuyera al CI una prueba que no ejecutó. La
+  extracción por step preserva la diferencia real entre Linux y Windows y evita
+  sumar otra vez `--all-features` o doc tests.
 
 ## 7. Resultado contra cada objetivo
 
@@ -876,7 +893,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   `transfer_id`: **cumplido** mediante la salida A y QYR-0101.
 - Congelar e implementar ADR-0029, cerrar QYR-0068 y demostrar autenticación y
   layout: **cumplido**, corrigiendo la premisa mediante QYR-0102.
-- Fases 6–10: **no empezadas** al cerrar Puerta 5.
+- Instalar y ver fallar la guarda contra aserciones tautológicas en todos los
+  consumidores del análisis compartido: **cumplido**.
+- Fases 7–10: **no empezadas** al cerrar Puerta 6.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -904,6 +923,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   CI 31534679436. El round-trip y el tamper ejercen AEAD real en memoria; no son
   red ni hardware. Los runners macOS/Windows de CI sólo ejecutan el guard de
   filesystem y no cuentan como evidencia del protocolo en esta fase.
+- Guarda antitautologías: contratos del parser y seis instancias del test
+  compartido en Windows local y Ubuntu CI 31536398365. Mutación temporal en
+  `qyro_fs/src/tests.rs`: fallo nominal en línea 652; restaurada antes del commit.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -986,7 +1008,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - `cargo fmt --all --check`: PASS local y CI 31531259815.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
   el warning Windows base sigue asignado a Fase 8, como exige el protocolo.
-- `cargo test --workspace`: PASS. Linux 391 passed/2 ignored; Windows local
+- `cargo test --workspace`: PASS. Linux 390 passed/2 ignored; Windows local
   396 passed/2 ignored. `qyro_fs` ejecutó 15/15 en Windows.
 - Mutaciones: `read_to_end` y el literal `HASH_BUFFER_LEN` rompieron
   `building_a_manifest_from_disk_does_not_load_the_file`; contar la solicitud
@@ -1011,7 +1033,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - `cargo fmt --all --check`: PASS local y CI 31532723390.
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
   el warning Windows base sigue asignado a Fase 8.
-- `cargo test --workspace`: PASS. Linux 392 passed/2 ignored; Windows local
+- `cargo test --workspace`: PASS. Linux 391 passed/2 ignored; Windows local
   397 passed/2 ignored. `qyro_fs` ejecutó 16/16 en Windows.
 - Mutaciones: sin `set_len`, la cola dejó 262243 bytes en vez de 131072; sin la
   lectura de `.qyro-resume`, la reanudación terminó en `DigestMismatch`; sin
@@ -1041,7 +1063,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
   Clippy de `qyro_protocol` y `qyro_crypto` PASS en Windows. El warning base del
   smoke Windows sigue asignado a Fase 8.
-- `cargo test --workspace`: PASS. Linux 393 passed/2 ignored; Windows local
+- `cargo test --workspace`: PASS. Linux 392 passed/2 ignored; Windows local
   398 passed/2 ignored. El único test nuevo es el tamper específico.
 - Mutaciones: fijar `transfer_id` a cero rompió el round-trip; excluir offsets
   24–39 del AAD permitió autenticar el ID alterado; serializar `item_id` en el
@@ -1061,9 +1083,33 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Gate escrito antes de empezar Fase 6. ADR `b4faf2e` precede al código
   `62c82b8`; CI restaurado 31534679436: **success** en siete jobs.
 
-### Puerta 6
+### Puerta 6 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local y CI 31536398365.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
+  Clippy con `-D warnings` de los seis crates consumidores PASS en Windows. El
+  warning global del smoke Windows sigue reservado para Fase 8.
+- `cargo test --workspace`: PASS. Linux 398 passed/2 ignored; Windows local
+  404 passed/2 ignored. Son seis instancias nuevas, una por crate consumidor.
+- Mutación: añadí temporalmente a `qyro_fs/src/tests.rs`
+  `assert_eq!(source.read_at(...), source.read_at(...))`; falló
+  `guards::assert_no_assertion_compares_a_call_to_itself` con archivo, línea y
+  operando normalizado. La mutación quedó restaurada.
+- Aserciones: los contratos distinguen `X == X`, `assert_eq!(X, X)` y
+  `assert_ne!(X, X)` de dos llamadas distintas, comentarios, strings y
+  lifetimes. La guarda recorre módulos gated e integration tests reales.
+- Contadores: ninguno nuevo; los tres de filesystem conservan sus contratos.
+- Nombres: el test tiene exactamente el nombre exigido y se ejecuta en
+  `qyro_crypto`, `qyro_fs`, `qyro_identity_store`, `qyro_manifest`,
+  `qyro_protocol` y `qyro_transfer` mediante el único `include!` compartido.
+- Delta desde `15934aa`: añade sólo `rust/guards/source_guard.rs`; no edita el
+  crate reservado `qyro_transfer`, red, FFI, app, Cargo raíz ni Cargo.lock.
+- `check_docs_consistency.sh`: PASS local y Bash/PowerShell 7 PASS en CI
+  31536398365; QYR-0104 registra el recuento corregido.
+- Coherencia: §2–§8 y §10–§14 registran el alcance sintáctico, la mutación, los
+  seis consumidores, los conteos exactos y ambos runs nuevos.
+- Gate escrito antes de empezar Fase 7. Código `0982e24`; CI 31536398365:
+  **success** en siete jobs.
 
 ### Puerta 7
 
@@ -1101,6 +1147,7 @@ Pendiente.
 | 5 | asignación pública de identificadores | sustituir `self.transfer_id = transfer_id` por cero | Falló `aead::tests::identifiers_survive_a_seal_and_open_round_trip`: `0`, esperado `4386` | Mutación local restaurada |
 | 5 | identificadores dentro del AAD | poner a cero offsets 24–39 en `associated_data` | Falló `aead::tests::altering_an_identifier_in_flight_breaks_the_tag`: el opener devolvió `Ok(AuthenticatedFrame)` | Mutación local restaurada |
 | 5 | layout fijo de 48 bytes | escribir `item_id` en el offset 32 de `stream_id` | Falló `the_forty_eight_byte_layout_is_unchanged` contra el vector literal | Mutación local restaurada |
+| 6 | prohibición de aserciones tautológicas | añadir `assert_eq!(source.read_at(...), source.read_at(...))` a `qyro_fs/src/tests.rs` | Falló `guards::assert_no_assertion_compares_a_call_to_itself`: `src/tests.rs:652`, operando `source.read_at(1,0,&mutfirst)` | Mutación local restaurada |
 
 ## 11. Tests antes y después
 
@@ -1109,21 +1156,24 @@ Pendiente.
 - Después de Fase 2, Linux: 389 passed, 0 failed, 2 ignored.
 - Después de Fase 2, Windows normal: 394 passed, 0 failed, 2 ignored; el test
   privilegiado adicional pasó 1/1 en el job Windows dedicado.
-- Después de Fase 3, Linux: 391 passed, 0 failed, 2 ignored.
+- Después de Fase 3, Linux: 390 passed, 0 failed, 2 ignored.
 - Después de Fase 3, Windows normal: 396 passed, 0 failed, 2 ignored;
   `qyro_fs` pasó de 13 a 15 tests por los dos contratos nuevos.
-- Después de Fase 4, Linux: 392 passed, 0 failed, 2 ignored.
+- Después de Fase 4, Linux: 391 passed, 0 failed, 2 ignored.
 - Después de Fase 4, Windows normal: 397 passed, 0 failed, 2 ignored;
   `qyro_fs` pasó de 15 a 16 tests por el caso de transferencia discordante.
-- Después de Fase 5, Linux: 393 passed, 0 failed, 2 ignored.
+- Después de Fase 5, Linux: 392 passed, 0 failed, 2 ignored.
 - Después de Fase 5, Windows normal: 398 passed, 0 failed, 2 ignored; el cambio
   neto es el tamper dedicado, porque los otros dos contratos fueron renombrados
   o endurecidos sin duplicar pruebas.
+- Después de Fase 6, Linux: 398 passed, 0 failed, 2 ignored (CI 31536398365).
+- Después de Fase 6, Windows normal: 404 passed, 0 failed, 2 ignored. El delta
+  de seis es una instancia del test compartido en cada crate consumidor.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 5: 61.
+- Paquetes después de Fase 6: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
 - `git diff 15934aae3dda7f469b5496c8341eb78d9e32f335 -- Cargo.lock`: vacío.
@@ -1148,6 +1198,7 @@ rust/crates/qyro_fs/src/tests.rs
 rust/crates/qyro_protocol/src/frame.rs
 rust/crates/qyro_protocol/src/header.rs
 rust/crates/qyro_protocol/tests/wire_contract.rs
+rust/guards/source_guard.rs
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
 scripts/tests/docs_consistency_contract_test.ps1
@@ -1174,8 +1225,10 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31533293790 | 0bcd1384dcc4984e5ec9d6d7251513242abcef94 | CI | workflow_dispatch | success; ledger e informe de Puerta 4, siete jobs PASS |
 | 31534316575 | 62c82b8b4fdb3695790975367fee075e173c8c0b | CI | workflow_dispatch | failure global; seis jobs PASS incluido `rust`, `documentation` FAIL por `STATUS.md` a 11 commits del ancla |
 | 31534679436 | b97163c33bbd0a5e9d6b824598c49ba4187585e3 | CI | workflow_dispatch | success; ancla de STATUS restaurada, ADR-0029 y contratos de identificadores, siete jobs PASS |
+| 31535319037 | c5aa973f43dbfcb522abf978b98f1b86d253d9c2 | CI | workflow_dispatch | success; informe y ledger de Puerta 5, siete jobs PASS |
+| 31536398365 | 0982e24a7641d43690bd48e17866b01be30dabc8 | CI | workflow_dispatch | success; guarda antitautologías activa en seis crates, siete jobs PASS |
 
-Lista reconstruida por API al cerrar la Fase 5. No hubo runs cancelados; todos
+Lista reconstruida por API al cerrar la Fase 6. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
@@ -1189,8 +1242,10 @@ puede usar `Frame::with_identifiers(SessionId, u64, u32, u32)`; el sealer
 sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
 del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
 rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
-no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–5 están
-cerradas. Los
+no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–6 están
+cerradas. `rust/guards/source_guard.rs` añade automáticamente la guarda
+antitautologías a todo crate que lo incluya; cualquier consumidor nuevo debe
+mantener verdes sus contratos o usar una excepción exacta con argumento. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
 la enmienda fechada de ADR-0027 que define metadata de otro `transfer_id`,
 las líneas de escaneo de rangos en ambos checkers y sus contratos. En

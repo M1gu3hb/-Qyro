@@ -1611,3 +1611,20 @@
 - Evidencia: `rg -n 'InvalidIdentifier|IdentifierField' rust/crates/qyro_protocol`
   sólo devuelve `error.rs` y el reexport de `lib.rs`; ninguna rama productiva
   devuelve la variante
+
+## QYR-0104 — El informe sumaba un test Linux inexistente desde Fase 3
+
+- Plataforma: documentación y CI Linux
+- Severidad: P3
+- Esperado: §9 y §11 copian los totales que produce cada ejecución normal de
+  `cargo test --workspace`, distinguidos por plataforma y obtenidos del log
+- Actual: el informe decía 391/392/393 pruebas Linux tras Fases 3/4/5; los logs
+  de los runs 31531722569, 31533293790 y 31535319037 contienen respectivamente
+  390/391/392. Los totales Windows 396/397/398 sí eran correctos
+- Resolución: se recontaron sólo las líneas `test result` del step exacto
+  `Run cargo test --workspace`, excluyendo `--all-features` y doc tests. El
+  informe corrige las tres cifras y fija Fase 6 en 398 Linux/404 Windows
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: extracción por API de los logs de CI; implementación de Fase 6 en
+  31536398365: 38 resúmenes, 398 passed, 0 failed, 2 ignored
