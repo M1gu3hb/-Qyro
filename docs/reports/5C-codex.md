@@ -747,6 +747,12 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   Windows local no tiene privilegio de symlink (error 1314); el runner Windows
   sí creó el fixture y lo pasó. La mutación Linux `O_NOFOLLOW = 0` hizo fallar
   el test nominal en CI y después quedó restaurada.
+- Fase 3: moví la medición del builder dentro de `digest_of`, exactamente al
+  `count` devuelto por `Read::read`; corregí `FileSource` para contar `filled`
+  y `FileSink` para contar sólo después de una escritura aceptada y terminada.
+- Fase 3: cada contador tiene ahora una prueba de dos tamaños con desigualdad
+  estricta. Además, el sink prueba que un `item_id` rechazado deja el pico en
+  cero. Las cuatro mutaciones locales hicieron fallar pruebas con nombre.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -762,6 +768,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - El fixture Windows es opt-in (`windows-reparse-test`) porque inventar un pass
   cuando falta el privilegio habría repetido el defecto de evidencia. El job
   dedicado lo ejecuta explícitamente; no añade paquetes.
+- `PEAK_BUILDER_READ` es `thread_local`: la medida sigue fuera del producto y
+  un test paralelo que calcule otro digest no puede inflar el pico observado.
+  Se leyó `qyro_transfer/src/session.rs` como modelo, sin modificar ese crate.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -783,8 +792,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 
 ## 5. Errores arreglados y no arreglados
 
-- QYR-0073 está cerrado. QYR-0074/75 y QYR-0068 siguen abiertos hasta sus fases
-  funcionales.
+- QYR-0073 y QYR-0074 están cerrados. QYR-0075 y QYR-0068 siguen abiertos
+  hasta sus fases funcionales.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -800,6 +809,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0073 permitía retirar el único control atómico del componente final sin
   que una suite observara la escritura fuera del destino. El nuevo test cae con
   ese control retirado y además fija el error tipado.
+- QYR-0074 permitía sustituir una lectura acotada por una carga completa o
+  registrar constantes/solicitudes no realizadas sin que la suite lo notara.
+  Los contadores ahora describen operaciones completadas y sus pruebas separan
+  valores reales mediante entradas pequeñas y grandes.
 
 ## 7. Resultado contra cada objetivo
 
@@ -809,7 +822,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   31528757962.
 - Cerrar QYR-0073 con prueba real, mutación y evidencia multiplataforma:
   **cumplido**.
-- Fases 3–10: **no empezadas** al cerrar Puerta 2.
+- Cerrar QYR-0074 midiendo los tres contadores y mutando cada contrato:
+  **cumplido**.
+- Fases 4–10: **no empezadas** al cerrar Puerta 3.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -825,6 +840,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   31529521600/31529821869. Android e iOS sólo compilan el código de plataforma;
   no se presenta eso como ejecución. Mutación ejecutada en Ubuntu,
   CI 31529689978.
+- QYR-0074: tres pruebas unitarias en Windows local; dos son nuevas y una fue
+  reescrita. Linux ejecutó el workspace, Clippy y doc tests sobre `f56435c` en
+  CI 31531259815. Las cuatro mutaciones se ejecutaron localmente y se
+  restauraron antes del commit.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -902,9 +921,30 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   Ubuntu, macOS y Windows; no hay evidencia de ejecución Android/iOS ni hardware
   físico.
 
-### Puerta 3
+### Puerta 3 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local y CI 31531259815.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
+  el warning Windows base sigue asignado a Fase 8, como exige el protocolo.
+- `cargo test --workspace`: PASS. Linux 391 passed/2 ignored; Windows local
+  396 passed/2 ignored. `qyro_fs` ejecutó 15/15 en Windows.
+- Mutaciones: `read_to_end` y el literal `HASH_BUFFER_LEN` rompieron
+  `building_a_manifest_from_disk_does_not_load_the_file`; contar la solicitud
+  en vez de `filled` rompió el test de `FileSource`; contar antes de `part_for`
+  rompió el test de `FileSink`. Todas quedaron restauradas.
+- Aserciones: los valores esperados provienen de tamaños de fixture conocidos,
+  no de volver a leer el contador; los picos pequeño y grande pueden diferir.
+- Contadores: builder usa `count`, source usa `filled` y sink usa `bytes.len()`
+  sólo tras `write_all`; cada prueba rechaza también un contador constante.
+- Nombres: los tres tests enuncian la operación medida y cada uno la ejecuta;
+  el caso sink prueba adicionalmente que una escritura rechazada no cuenta.
+- Delta desde `15934aa`: sin archivos de Claude Code, `qyro_net`, `qyro_ffi`,
+  app, `qyro_transfer`, Cargo raíz ni Cargo.lock (§13).
+- `check_docs_consistency.sh`: PASS; el ledger cierra QYR-0074 sin duplicarla.
+- Coherencia: §5–§8, §10–§14 y §16 reflejan los contadores, los nuevos
+  conteos, el archivo `manifest_builder.rs` y todos los runs conocidos.
+- Gate escrito antes de empezar Fase 4. CI 31531259815: **success** con todas
+  las suites, doc tests, audit, scripts y los siete jobs en verde.
 
 ### Puerta 4
 
@@ -943,6 +983,10 @@ Pendiente.
 | 1/M3 | descarte de huérfano largo | `.qyro-part` de 8192 bytes frente a contenido de 2048, sin metadata | Falló `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy` con `DigestMismatch { item_id: 1 }` | Mutación local restaurada |
 | 1/M4 | lectura productiva de `ResumeState::decode` | `rg -n 'ResumeState::decode' rust/crates/qyro_fs/src -g '*.rs'`, excluyendo `tests.rs` | Cero llamantes productivos | N/A |
 | 2 | `O_NOFOLLOW` Linux/Android | `libc_o_nofollow()` devuelve `0` | Falló `tests::a_symlink_at_the_final_part_component_is_refused_without_touching_its_target`: FileSink devolvió `Ok(())` | `fc0c780`, restaurado en `a9f21a9` |
+| 3 | lectura acotada de `digest_of` | sustituir el bucle por `read_to_end` sin registrar lecturas | Falló `tests::building_a_manifest_from_disk_does_not_load_the_file`: pico pequeño `0`, esperado `1024` | Mutación local restaurada |
+| 3 | medida real del builder | sustituir `count` por el literal `HASH_BUFFER_LEN` | Falló `tests::building_a_manifest_from_disk_does_not_load_the_file`: pico pequeño `65536`, esperado `1024` | Mutación local restaurada |
+| 3 | medida real de `FileSource` | contar la solicitud antes de leer, con `HASH_BUFFER_LEN` | Falló `tests::file_source_peak_is_the_largest_completed_read_not_the_request`: `65536`, esperado `1024` | Mutación local restaurada |
+| 3 | medida de escrituras aceptadas de `FileSink` | contar `HASH_BUFFER_LEN` antes de resolver el item | Falló `tests::file_sink_peak_is_the_largest_successful_write_not_a_constant`: una escritura rechazada dejó pico `65536`, esperado `0` | Mutación local restaurada |
 
 ## 11. Tests antes y después
 
@@ -951,11 +995,14 @@ Pendiente.
 - Después de Fase 2, Linux: 389 passed, 0 failed, 2 ignored.
 - Después de Fase 2, Windows normal: 394 passed, 0 failed, 2 ignored; el test
   privilegiado adicional pasó 1/1 en el job Windows dedicado.
+- Después de Fase 3, Linux: 391 passed, 0 failed, 2 ignored.
+- Después de Fase 3, Windows normal: 396 passed, 0 failed, 2 ignored;
+  `qyro_fs` pasó de 13 a 15 tests por los dos contratos nuevos.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 2: 61.
+- Paquetes después de Fase 3: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
 - `git diff origin/claude/qyro-filesystem-5b1...HEAD -- Cargo.lock`: vacío.
@@ -972,6 +1019,7 @@ docs/reports/5C-codex.md
 rust/crates/qyro_fs/Cargo.toml
 rust/crates/qyro_fs/src/error.rs
 rust/crates/qyro_fs/src/io.rs
+rust/crates/qyro_fs/src/manifest_builder.rs
 rust/crates/qyro_fs/src/tests.rs
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
@@ -992,6 +1040,8 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31529521600 | 05fe684f0730dfef5ba478c2e417560a0758a7e2 | CI | workflow_dispatch | success; siete jobs PASS, incluido el test final-component en tres SO |
 | 31529689978 | fc0c780184c8e39fc5f368436c285b82f5fe03d5 | CI | workflow_dispatch | failure esperado: test nominal y workspace Linux FAIL con `O_NOFOLLOW = 0`; documentation además detectó STATUS a 11 commits |
 | 31529821869 | a9f21a968e21f47c43caad738261839160c6a170 | CI | workflow_dispatch | success; control restaurado, STATUS fresco y siete jobs PASS |
+| 31530421925 | adaf2128cbd0b515ac876cda5ada7a1c48675dd0 | CI | workflow_dispatch | success; informe y ledger de Puerta 2 coherentes, siete jobs PASS |
+| 31531259815 | f56435ccb48e0d3169281f09e67e3f277fffd077 | CI | workflow_dispatch | success; implementación de Fase 3, siete jobs PASS |
 
 Lista reconstruida por API al cerrar la Fase 2. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
@@ -1003,7 +1053,7 @@ Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
 El sprint todavía no cambió la superficie de cabecera. El bloqueo documental y
-las Puertas 1 y 2 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
+las Puertas 1–3 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
 documentará el API exacto para el agente de red. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
 las líneas de escaneo de rangos en ambos checkers y sus contratos. En

@@ -1490,17 +1490,23 @@
 - Esperado: el contador de lectura del constructor registra los bytes que cada
   llamada real a `Read::read` devuelve, y la prueba distingue entradas pequeñas
   de grandes sin cargar el archivo completo
-- Actual: `PEAK_BUILDER_READ` registra `HASH_BUFFER_LEN`, la misma constante que
-  después comprueba la prueba. Reemplazar el bucle acotado de `digest_of` por
-  `read_to_end` no hizo fallar
-  `tests::building_a_manifest_from_disk_does_not_load_the_file`
-- Resolución: pendiente; mover la medición al resultado de `read`, comparar dos
-  tamaños y demostrar que tanto `read_to_end` como un contador constante rompen
-  la prueba nominal
-- Estado: abierto
+- Actual: corregido. `digest_of` registra el `count` devuelto por cada
+  `Read::read`; `FileSource` registra los bytes realmente leídos y `FileSink`
+  sólo registra una escritura después de que se haya completado con éxito.
+  Las tres pruebas comparan tamaños distintos y exigen un pico estrictamente
+  menor para la operación pequeña
+- Resolución: la medición del builder se movió al bucle de lectura real y se
+  aisló por hilo para que hashes paralelos no contaminen el pico. Se añadieron
+  contratos equivalentes para source y sink; `read_to_end`, un contador
+  constante y contar operaciones rechazadas rompen pruebas nominales
+- Estado: cerrado
 - Fecha: 2026-08-11
-- Evidencia: mutación local M2 reproducida sobre `983ca71`; la prueba nominal
-  pasó 1/1 después de retirar la lectura acotada
+- Evidencia: M2 original reproducida sobre `983ca71`; cierre en `f56435c`. Los
+  barridos locales posteriores hicieron fallar
+  `building_a_manifest_from_disk_does_not_load_the_file`,
+  `file_source_peak_is_the_largest_completed_read_not_the_request` y
+  `file_sink_peak_is_the_largest_successful_write_not_a_constant` al retirar o
+  sustituir por constantes sus mediciones; todas las mutaciones se restauraron
 
 ## QYR-0075 — La política de recuperación congelada en ADR-0027 no se lee
 
