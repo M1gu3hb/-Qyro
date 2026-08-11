@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-11T20:00:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: @@SHA@@
+- Verified commit: 647184877042820ba4e70670a0c1956161ee2025
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez

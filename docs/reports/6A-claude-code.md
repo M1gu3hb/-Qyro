@@ -620,9 +620,57 @@ El arreglo es un tercer tamaño, **muy por debajo de la ventana** (128 KiB, dos
 chunks), y la aserción `peak_tiny < peak_small`. Un número constante falla esa
 desigualdad. Con ella, la mutación muere.
 
-### Puertas 5 y 6
+### Puerta 5 — 2026-08-11 — **PASADA**
 
-Pendientes.
+Las **once** comprobaciones del protocolo ampliado del segundo prompt.
+
+| # | Comprobación | Resultado |
+|---|---|---|
+| 1 | `cargo fmt --all --check`, por código de salida | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings`, por código de salida | PASS — exit 0 |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — **416** passed, 0 failed, **2 ignored** |
+| 4 | Barrido de mutación de la fase | PARCIAL, y dicho como tal: E1 muerta; E2 **cuelga** la prueba en vez de hacerla fallar (QYR-0090); E3 no llegó a correr porque el barrido se quedó sin tiempo con E2. Se rehace entero en la Fase 6, que es donde el prompt pide el barrido completo del crate |
+| 5 | Lectura de aserciones | PASS |
+| 6 | Lectura de contadores | No aplica: la Fase 5 no añade contadores |
+| 7 | Lectura de nombres de test | PASS |
+| 8 | `git diff --name-only 15934aa..HEAD` sin archivos de Codex | PASS — filtrado por `qyro_fs/`, `header.rs` y `source_guard.rs`: ninguno |
+| 9 | Coherencia del informe | PASS — §12 corregida (QYR-0091), §1 rehecha, §4 y §5 con su ficha al lado |
+| 10 | `check_docs_consistency` en Bash | PASS |
+| 11 | Resultado escrito antes de la fase siguiente | PASS — esto |
+
+**La comprobación 4 no pasó del todo y la fase no se declara limpia por ello.** E2
+—neutralizar el `Drop` de `PendingSlot`— hace que el contador de pendientes no baje
+nunca, el listener acabe rechazando todo, y la prueba del diluvio espere para siempre
+una conexión que no llega. La propiedad **sí** está cubierta: el comportamiento
+cambia de forma observable. Lo que falla es la forma de fallar. Está registrado como
+QYR-0090 y el barrido completo, con límite de tiempo por mutación, es la Fase 6.
+
+Los cinco finales de ADR-0028 §5, cada uno provocado de verdad, con su prueba:
+
+| Final | Prueba | Cómo se provoca |
+|---|---|---|
+| El emisor cancela a mitad | `a_sender_that_cancels_mid_transfer_tells_the_receiver` | `request_cancel()` real, frame sellado real, socket real, con la transferencia en marcha |
+| El receptor rechaza | `a_receiver_that_refuses_stops_the_sender` | El rechazo que **existe**; ver QYR-0089 |
+| El proceso remoto muere | `a_remote_process_killed_mid_transfer_is_a_typed_end_not_a_hang` | `Child::kill()` sobre un hijo de verdad, tras el handshake |
+| La conexión se corta | `a_connection_cut_mid_transfer_is_a_typed_end` | `shutdown` desde el otro extremo |
+| Un peer que abre y calla | `a_peer_that_opens_connections_without_speaking_does_not_exhaust_the_listener` | Tres veces el presupuesto en sockets silenciosos, con el número de la ADR §3 |
+
+Y los recursos: `no_thread_and_no_descriptor_survives_a_finished_session` cuenta
+`/proc/self/task` y `/proc/self/fd` sobre cuatro sesiones, y viene con
+`a_descriptor_leak_would_be_visible_to_this_measurement`, que filtra cuatro
+descriptores a propósito para comprobar que la medida los ve. Una medida de recursos
+que no puede ver una fuga no es evidencia de que no la haya.
+
+Más `.qyro-part`: ninguno sobrevive a un cancelado ni a un rechazo, comprobado en el
+destino y no supuesto.
+
+### Puertas 6 a 10
+
+Pendientes. **Aquí es donde se detuvo esta sesión**, después de una puerta y no a
+mitad de una fase. Lo que falta: el barrido completo y las guardas de `qyro_net`
+(Fase 6), Windows de verdad para cerrar QYR-0078 (Fase 7), ADR-0030 y el FFI del
+motor (Fase 8), el progreso hasta Dart y la transferencia conducida desde Dart
+(Fase 9), y el repaso final de la documentación (Fase 10).
 
 ---
 
