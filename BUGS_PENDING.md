@@ -1332,25 +1332,25 @@
   autenticados** de cada frame sellado. Estar en la AAD significa que el peer no
   los puede alterar sin romper el tag, que es exactamente la propiedad por la
   que valdría la pena ponerlos ahí
-- Actual: `Frame::new` los fija en `0` y **no hay ninguna forma pública de
-  cambiarlos**. `FrameHeader::within_limits` los pone a cero y
-  `clone_for_envelope` los copia tal cual. Todo frame construido por la API
-  pública los lleva a cero, así que hoy son tres campos autenticados que no
-  dicen nada
+- Actual: corregido el registro. `Frame::new` los inicia en cero, pero
+  `Frame::with_identifiers` y `FrameHeader::with_identifiers` ya eran públicas
+  desde `cc38554`; ADR-0029 congela esa API real y define cero como valor sin
+  ámbito asignado por la capa superior
 - Cómo se encontró: escribiendo ADR-0026 §1 decidí repetir `item_id` en el
   cuerpo de `DataChunk`, y al implementarlo descubrí que la cabecera ya lo
   llevaba. Es el desajuste que el sprint 5A existía para destapar: dos piezas
   probadas por separado, con un campo que una declara y la otra no puede usar
-- Lo que **no** se hizo: añadir setters a `qyro_protocol` ni mover `item_id` a la
-  cabecera. Ensanchar una superficie congelada como efecto secundario de otro
-  sprint es cómo se pierde el control de un formato. ADR-0026 mantiene el
-  `item_id` en el cuerpo, cuesta cuatro bytes por chunk, y esta entrada dice por
-  qué está duplicado en vez de dejar que parezca un descuido
-- Decisión pendiente: o los campos se pueden rellenar y el motor los usa —y
-  entonces el `item_id` del cuerpo sobra—, o no aportan y hay que decir en
-  ADR-0016 que están reservados. Hoy la cabecera promete algo que la API niega
-- Estado: abierto
+- Lo que **no** se hizo: no se añadió un tercer setter ni `FrameIdentifiers`, y
+  no se movió `item_id` fuera del cuerpo de `DataChunk`; eso pertenece al
+  contrato de ADR-0026 y a un crate fuera del alcance de esta fase
+- Resolución: ADR-0029 fue congelada en `b4faf2e` antes del código. Los tres
+  campos sobreviven al seal/open, alterar `transfer_id` rompe el tag y el layout
+  se compara contra un vector literal de 48 bytes. Los IDs desconocidos se
+  rechazan con errores tipados en la capa receptora después de autenticar
+- Estado: cerrado
 - Fecha: 2026-08-08
+- Evidencia: contratos nominales en `62c82b8`; las mutaciones de setter, AAD y
+  offset hicieron fallar cada prueba con nombre. CI 31534679436 pasó
 
 ## QYR-0069 — Un crate externo no puede construir un handshake determinista
 
@@ -1582,14 +1582,16 @@
   identificadores, pero `Frame::with_identifiers` y
   `FrameHeader::with_identifiers` son públicos desde `cc38554`; pruebas de
   integración y `qyro_crypto_smoke` ya los llaman con valores no cero
-- Resolución: pendiente; ADR-0029 congela la API real antes de tocar código. La
-  fase debe corregir el comentario, convertir la evidencia existente en los
-  tres contratos nominales y actualizar QYR-0068 sin inventar una API duplicada
-- Estado: abierto
+- Resolución: ADR-0029 congela la API real sin duplicarla; `header.rs` y
+  `frame.rs` documentan cero, el sealer y el límite de autenticación. La
+  evidencia genérica se convirtió en tres contratos nominales y QYR-0068 quedó
+  corregida con el historial preservado
+- Estado: cerrado
 - Fecha: 2026-08-11
 - Evidencia: `git show 15934aa:rust/crates/qyro_protocol/src/header.rs` contiene
   `pub const fn with_identifiers`; `rg -n 'with_identifiers'` encuentra usos en
-  tests externos y `rust/tools/qyro_crypto_smoke/src/lib.rs`
+  tests externos y `rust/tools/qyro_crypto_smoke/src/lib.rs`. ADR `b4faf2e`,
+  contratos `62c82b8` y CI verde 31534679436
 
 ## QYR-0103 — `FrameError::InvalidIdentifier` no tiene construcción posible
 

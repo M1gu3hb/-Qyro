@@ -759,6 +759,12 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 4: reescribí los dos tests existentes para sacar la política del harness:
   la reanudación deja una cola no confirmada y los huérfanos corto/largo se
   observan tras una escritura de un byte. Añadí el caso de `transfer_id` ajeno.
+- Fase 5: congelé ADR-0029 en `b4faf2e` antes del commit de código. La auditoría
+  demostró que las APIs públicas `Frame::with_identifiers` y
+  `FrameHeader::with_identifiers` ya existían en la base; no añadí una tercera.
+- Fase 5: corregí el comentario falso de `header.rs`, renombré el round-trip con
+  el nombre exigido, añadí el tamper específico de `transfer_id` y sustituí las
+  aserciones por campo del layout por un vector literal único de 48 bytes.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -784,6 +790,13 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   como QYR-0101 y añadí una enmienda fechada: sólo el mismo transfer y una
   entrada para el item describen el parcial; metadata malformada sigue siendo
   error tipado, no ausencia.
+- ADR-0029 decide que cero es válido y significa «sin ámbito asignado» en
+  framing. Los enteros autenticados no son por ello correctos ni conocidos: la
+  capa receptora debe comprobarlos después de `open` y devolver errores tipados
+  de routing, nunca `Io`. No se tocó `qyro_transfer` ni la rama de red.
+- La superficie mínima es la ya compatible. Retirar uno de los dos builders
+  públicos rompería callers; añadir setters o `FrameIdentifiers` duplicaría
+  capacidad. El formato y todos los offsets siguen siendo los de QYRO/1.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -805,11 +818,20 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 4: ADR-0027 no definía si metadata válida de otro `transfer_id`
   describía el parcial. QYR-0101 y la enmienda fechada fijan que no: se trata
   como huérfano, sin reinterpretar metadata malformada como ausencia.
+- Fase 5: QYR-0068 y el comentario de `header.rs` negaban una API pública que
+  ya existía en la base y era usada por tests externos y el smoke. QYR-0102
+  registra y cierra la contradicción sin inventar una API duplicada.
+- Fase 5: `FrameError::InvalidIdentifier` y `IdentifierField` no tienen ningún
+  sitio de construcción. ADR-0029 confirma que framing acepta todo el rango;
+  QYR-0103 queda abierto para resolver compatibilidad en Fase 9.
+- Fase 5: CI 31534316575 falló sólo en `documentation` porque `STATUS.md` quedó
+  11 commits por delante del ancla permitida; los otros seis jobs pasaron. La
+  actualización mínima de fecha/commit restauró el checker en 31534679436.
 
 ## 5. Errores arreglados y no arreglados
 
-- QYR-0073, QYR-0074, QYR-0075 y QYR-0101 están cerrados. QYR-0068 sigue
-  abierto hasta su fase funcional.
+- QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101 y QYR-0102 están cerrados.
+  QYR-0103 queda abierto y asignado a la guarda de errores de Fase 9.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
 
@@ -834,6 +856,11 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   ahora conserva sólo el prefijo confirmado o empieza desde un parcial vacío.
 - QYR-0101 dejaba sin definir qué hacer con metadata de otro transfer. Confiarla
   mezclaría estados; tratarla como huérfana mantiene el límite de transferencia.
+- QYR-0068/QYR-0102 hacían que el plan de trabajo partiera de una superficie
+  pública imaginaria y podían producir una API redundante. ADR-0029 alinea la
+  decisión, los comentarios y pruebas con lo que un crate externo ya compila.
+- QYR-0103 permite a un caller hacer `match` sobre un rechazo que ningún byte ni
+  constructor provoca; hasta Fase 9 permanece deuda explícita, no garantía.
 
 ## 7. Resultado contra cada objetivo
 
@@ -847,7 +874,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   **cumplido**.
 - Implementar ADR-0027 §5, cerrar QYR-0075 y decidir la discordancia de
   `transfer_id`: **cumplido** mediante la salida A y QYR-0101.
-- Fases 5–10: **no empezadas** al cerrar Puerta 4.
+- Congelar e implementar ADR-0029, cerrar QYR-0068 y demostrar autenticación y
+  layout: **cumplido**, corrigiendo la premisa mediante QYR-0102.
+- Fases 6–10: **no empezadas** al cerrar Puerta 5.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -871,6 +900,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   31532723390. El job dedicado macOS/Windows de ese run sólo ejecutó el guard de
   enlace final; no se presenta como evidencia de reanudación en esos hosts.
   Las cuatro mutaciones de reanudación se ejecutaron localmente en Windows.
+- ADR-0029/QYR-0068: pruebas unitarias e integración en Windows local y Ubuntu
+  CI 31534679436. El round-trip y el tamper ejercen AEAD real en memoria; no son
+  red ni hardware. Los runners macOS/Windows de CI sólo ejecutan el guard de
+  filesystem y no cuentan como evidencia del protocolo en esta fase.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -1002,9 +1035,31 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   lectura de `.qyro-resume`— hizo fallar con nombre la reanudación; CI
   31532723390: **success** en siete jobs.
 
-### Puerta 5
+### Puerta 5 — 2026-08-11 — PASS
 
-Pendiente.
+- `cargo fmt --all --check`: PASS local y CI 31534679436.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS Linux en CI;
+  Clippy de `qyro_protocol` y `qyro_crypto` PASS en Windows. El warning base del
+  smoke Windows sigue asignado a Fase 8.
+- `cargo test --workspace`: PASS. Linux 393 passed/2 ignored; Windows local
+  398 passed/2 ignored. El único test nuevo es el tamper específico.
+- Mutaciones: fijar `transfer_id` a cero rompió el round-trip; excluir offsets
+  24–39 del AAD permitió autenticar el ID alterado; serializar `item_id` en el
+  offset de `stream_id` rompió el vector literal. Todas quedaron restauradas.
+- Aserciones: el round-trip compara tres valores elegidos con los autenticados;
+  el tamper exige `AuthenticationFailed`; el layout compara dos arrays de 48
+  bytes independientes, no longitud ni slices construidos por el mismo código.
+- Contadores: ninguno nuevo; los tres de filesystem conservan sus contratos.
+- Nombres: coinciden exactamente con los tres exigidos y ejecutan seal/open,
+  alteración en vuelo y layout fijo, respectivamente.
+- Delta desde `15934aa`: sin archivos de Claude Code, `qyro_net`, `qyro_ffi`,
+  app, `qyro_transfer`, Cargo raíz ni Cargo.lock (§13).
+- `check_docs_consistency.sh`: PASS local y Bash/PowerShell 7 PASS en CI
+  31534679436; QYR-0068/0102 cerrados y QYR-0103 registrado.
+- Coherencia: §2–§8, §10–§14 y §16 explican que la API preexistía, registran el
+  run fallido 31534316575 y no presentan routing o red como implementados.
+- Gate escrito antes de empezar Fase 6. ADR `b4faf2e` precede al código
+  `62c82b8`; CI restaurado 31534679436: **success** en siete jobs.
 
 ### Puerta 6
 
@@ -1043,6 +1098,9 @@ Pendiente.
 | 4 | lector productivo de metadata | sustituir el resultado de `committed_progress` por `None` | Falló `tests::an_interrupted_transfer_resumes_from_its_metadata` con `DigestMismatch { item_id: 1 }` | Mutación local restaurada |
 | 4 | descarte de huérfanos | reutilizar el handle existente en vez de borrar y recrear | Falló `tests::a_leftover_part_file_is_recovered_or_discarded_by_policy`: longitud `17`, esperada `1` | Mutación local restaurada |
 | 4 | límite entre transferencias | retirar la comparación de `transfer_id` | Falló `tests::resume_metadata_for_another_transfer_makes_the_part_an_orphan`: longitud `4096`, esperada `1` | Mutación local restaurada |
+| 5 | asignación pública de identificadores | sustituir `self.transfer_id = transfer_id` por cero | Falló `aead::tests::identifiers_survive_a_seal_and_open_round_trip`: `0`, esperado `4386` | Mutación local restaurada |
+| 5 | identificadores dentro del AAD | poner a cero offsets 24–39 en `associated_data` | Falló `aead::tests::altering_an_identifier_in_flight_breaks_the_tag`: el opener devolvió `Ok(AuthenticatedFrame)` | Mutación local restaurada |
+| 5 | layout fijo de 48 bytes | escribir `item_id` en el offset 32 de `stream_id` | Falló `the_forty_eight_byte_layout_is_unchanged` contra el vector literal | Mutación local restaurada |
 
 ## 11. Tests antes y después
 
@@ -1057,11 +1115,15 @@ Pendiente.
 - Después de Fase 4, Linux: 392 passed, 0 failed, 2 ignored.
 - Después de Fase 4, Windows normal: 397 passed, 0 failed, 2 ignored;
   `qyro_fs` pasó de 15 a 16 tests por el caso de transferencia discordante.
+- Después de Fase 5, Linux: 393 passed, 0 failed, 2 ignored.
+- Después de Fase 5, Windows normal: 398 passed, 0 failed, 2 ignored; el cambio
+  neto es el tamper dedicado, porque los otros dos contratos fueron renombrados
+  o endurecidos sin duplicar pruebas.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 4: 61.
+- Paquetes después de Fase 5: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
 - `git diff 15934aae3dda7f469b5496c8341eb78d9e32f335 -- Cargo.lock`: vacío.
@@ -1075,12 +1137,17 @@ El delta propio desde la base exacta es:
 BUGS_PENDING.md
 STATUS.md
 docs/adr/ADR-0027-filesystem-materialisation.md
+docs/adr/ADR-0029-header-identifiers.md
 docs/reports/5C-codex.md
+rust/crates/qyro_crypto/src/aead/tests.rs
 rust/crates/qyro_fs/Cargo.toml
 rust/crates/qyro_fs/src/error.rs
 rust/crates/qyro_fs/src/io.rs
 rust/crates/qyro_fs/src/manifest_builder.rs
 rust/crates/qyro_fs/src/tests.rs
+rust/crates/qyro_protocol/src/frame.rs
+rust/crates/qyro_protocol/src/header.rs
+rust/crates/qyro_protocol/tests/wire_contract.rs
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
 scripts/tests/docs_consistency_contract_test.ps1
@@ -1104,8 +1171,11 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31531259815 | f56435ccb48e0d3169281f09e67e3f277fffd077 | CI | workflow_dispatch | success; implementación de Fase 3, siete jobs PASS |
 | 31531722569 | 2bae9343654ed3c1c7da0444186db40bb5ed8ec8 | CI | workflow_dispatch | success; ledger e informe de Puerta 3, siete jobs PASS |
 | 31532723390 | 4d7b6fd29114b4483cec7c8ade4859bfc0087255 | CI | workflow_dispatch | success; política productiva de reanudación y QYR-0101, siete jobs PASS |
+| 31533293790 | 0bcd1384dcc4984e5ec9d6d7251513242abcef94 | CI | workflow_dispatch | success; ledger e informe de Puerta 4, siete jobs PASS |
+| 31534316575 | 62c82b8b4fdb3695790975367fee075e173c8c0b | CI | workflow_dispatch | failure global; seis jobs PASS incluido `rust`, `documentation` FAIL por `STATUS.md` a 11 commits del ancla |
+| 31534679436 | b97163c33bbd0a5e9d6b824598c49ba4187585e3 | CI | workflow_dispatch | success; ancla de STATUS restaurada, ADR-0029 y contratos de identificadores, siete jobs PASS |
 
-Lista reconstruida por API al cerrar la Fase 4. No hubo runs cancelados; todos
+Lista reconstruida por API al cerrar la Fase 5. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
@@ -1114,9 +1184,13 @@ Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay 
 
 ## 16. Documentación desfasada y handoff al sprint siguiente
 
-El sprint todavía no cambió la superficie de cabecera. El bloqueo documental y
-las Puertas 1–4 están cerrados. Cuando la Fase 5 congele e implemente ADR-0029, §16
-documentará el API exacto para el agente de red. Los
+ADR-0029 congela la superficie de cabecera que ya existía: el agente de red
+puede usar `Frame::with_identifiers(SessionId, u64, u32, u32)`; el sealer
+sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
+del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
+rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
+no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–5 están
+cerradas. Los
 cambios compartidos actuales son las entradas añadidas al final del ledger y
 la enmienda fechada de ADR-0027 que define metadata de otro `transfer_id`,
 las líneas de escaneo de rangos en ambos checkers y sus contratos. En
