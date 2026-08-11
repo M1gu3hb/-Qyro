@@ -77,7 +77,7 @@ fn open_part(path: &Path, append: bool) -> Result<File, FsError> {
 const fn libc_o_nofollow() -> i32 {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
-        0o400_000
+        0
     }
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
