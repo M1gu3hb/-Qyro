@@ -21,7 +21,7 @@ use qyro_manifest::TransferManifest;
 use qyro_transfer::ContentSource as _;
 
 use crate::error::FsError;
-use crate::io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of};
+use crate::io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of, open_part};
 use crate::manifest_builder::{PlannedFile, manifest_from_disk};
 use crate::resume::ResumeState;
 use crate::safe_path;
@@ -330,6 +330,27 @@ fn a_symlink_in_the_destination_cannot_redirect_a_write() {
     assert!(
         fs::read_dir(&elsewhere.dir).unwrap().next().is_none(),
         "content was written through the link, outside the destination root"
+    );
+}
+
+#[test]
+fn an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed() {
+    let root = Scratch::new("post-open-root");
+    let outside = Scratch::new("post-open-outside");
+    let part = outside.path("a.bin.qyro-part");
+    let original = b"receiver-owned bytes outside the destination";
+    fs::write(&part, original).unwrap();
+
+    let canonical_root = fs::canonicalize(&root.dir).unwrap();
+    let outcome = open_part(&canonical_root, &part, false);
+    assert!(
+        matches!(outcome, Err(FsError::EscapesRoot { .. })),
+        "an opened part outside the root was not rejected: {outcome:?}"
+    );
+    assert_eq!(
+        fs::read(part).unwrap(),
+        original,
+        "the post-open containment check changed an outside file"
     );
 }
 

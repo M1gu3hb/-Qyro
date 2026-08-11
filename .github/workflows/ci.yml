@@ -83,6 +83,11 @@ jobs:
           cargo test -p qyro_fs ${{ matrix.feature_args }}
           tests::a_symlink_at_the_final_part_component_is_refused_without_touching_its_target
           -- --exact
+      - name: Reject an opened part outside the destination root
+        run: >-
+          cargo test -p qyro_fs ${{ matrix.feature_args }}
+          tests::an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed
+          -- --exact
 
   flutter:
     runs-on: ubuntu-latest

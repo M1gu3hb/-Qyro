@@ -41,7 +41,7 @@ pub const HASH_BUFFER_LEN: usize = 65_536;
 /// This is the half of the policy with **no** race: the check and the open are
 /// one syscall, so nothing can be substituted between them. The intermediate
 /// components are the half that still has one (QYR-0072).
-fn open_part(path: &Path, append: bool) -> Result<File, FsError> {
+pub(crate) fn open_part(root: &Path, path: &Path, append: bool) -> Result<File, FsError> {
     let mut options = OpenOptions::new();
     options.write(true).create(true).append(append);
     if !append {
@@ -63,21 +63,37 @@ fn open_part(path: &Path, append: bool) -> Result<File, FsError> {
         options.custom_flags(0x0020_0000);
     }
 
-    match options.open(path) {
+    let file = match options.open(path) {
         Ok(file) if metadata_is_link_or_reparse_point(&file.metadata()?) => {
-            Err(final_component_link(path))
+            return Err(final_component_link(path));
         }
-        Ok(file) => Ok(file),
+        Ok(file) => file,
         Err(error) => match fs::symlink_metadata(path) {
             // Unix reports ELOOP before returning a handle. Classify that
             // refusal by inspecting the path *after* the atomic open failed;
             // this check only chooses the error variant and is not the control.
             Ok(metadata) if metadata_is_link_or_reparse_point(&metadata) => {
-                Err(final_component_link(path))
+                return Err(final_component_link(path));
             }
-            _ => Err(error.into()),
+            _ => return Err(error.into()),
         },
+    };
+
+    // ADR-0027 §1.5. This is deliberately after the handle exists and before
+    // callers can truncate, delete or write. It catches a parent substitution
+    // that persists through the check; QYR-0072 records why a double swap still
+    // needs descriptor-relative operations to close the race completely.
+    let parent = path.parent().ok_or_else(|| FsError::EscapesRoot {
+        resolved: path.to_string_lossy().into_owned(),
+    })?;
+    let canonical_parent = fs::canonicalize(parent)?;
+    if !canonical_parent.starts_with(root) {
+        return Err(FsError::EscapesRoot {
+            resolved: canonical_parent.to_string_lossy().into_owned(),
+        });
     }
+
+    Ok(file)
 }
 
 fn final_component_link(path: &Path) -> FsError {
@@ -222,6 +238,7 @@ impl FileSink {
     /// [`FsError::Io`] when `root` cannot be canonicalised.
     pub fn new(root: &Path, manifest: &qyro_manifest::TransferManifest) -> Result<Self, FsError> {
         fs::create_dir_all(root)?;
+        let root = fs::canonicalize(root)?;
         let mut plan = BTreeMap::new();
         for item in manifest.items() {
             plan.insert(
@@ -234,7 +251,7 @@ impl FileSink {
             );
         }
         Ok(Self {
-            root: root.to_path_buf(),
+            root,
             plan,
             open: BTreeMap::new(),
             transfer_id: manifest.transfer_id(),
@@ -296,17 +313,17 @@ impl FileSink {
             let (handle, written) = if part_exists {
                 // Opening first applies the atomic final-component link/reparse
                 // guard before either truncating or removing the prior file.
-                let handle = open_part(&resolved.part_path, false)?;
+                let handle = open_part(&self.root, &resolved.part_path, false)?;
                 if let Some(bytes_committed) = committed {
                     handle.set_len(bytes_committed)?;
                     (handle, bytes_committed)
                 } else {
                     drop(handle);
                     fs::remove_file(&resolved.part_path)?;
-                    (open_part(&resolved.part_path, false)?, 0)
+                    (open_part(&self.root, &resolved.part_path, false)?, 0)
                 }
             } else {
-                (open_part(&resolved.part_path, false)?, 0)
+                (open_part(&self.root, &resolved.part_path, false)?, 0)
             };
             self.open.insert(
                 item_id,
