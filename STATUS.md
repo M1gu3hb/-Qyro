@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-08T03:40:00Z
-- Branch: claude/qyro-filesystem-5b1
-- Verified commit: e3fbaf10073faef91c21350937356be5d861c666
+- Updated UTC: 2026-08-11T19:49:00Z
+- Branch: codex/qyro-gap-closure-5c
+- Verified commit: d6701a149fc3a3249c446cf65ffe01b7fc62e986
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
