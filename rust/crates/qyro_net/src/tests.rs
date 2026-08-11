@@ -700,3 +700,37 @@ fn a_flipped_bit_after_the_handshake_poisons_the_session() {
     }
     assert!(responder.is_poisoned());
 }
+
+#[test]
+fn a_plain_frame_after_the_handshake_is_refused_and_poisons() {
+    // Found by the Phase 3 mutation sweep: making `recv` return Ok(None) for a
+    // plain frame instead of refusing it broke nothing, because no test ever
+    // put an unsealed frame on an established session.
+    //
+    // The property is not cosmetic. After the handshake every frame is sealed,
+    // so accepting a plain one means accepting bytes that nothing
+    // authenticated -- on a connection whose whole purpose is that everything
+    // on it is authenticated.
+    let (mut responder, mut initiator, _, _) = handshaken_pair();
+
+    // write_sealed writes bytes verbatim. Handing it a *plain* frame is exactly
+    // the abuse the receiving end has to catch, and needs no test-only door.
+    let plain = Frame::new(MessageType::ChunkAck, payload_of(16, 21))
+        .unwrap()
+        .encode();
+    initiator.write_sealed(&plain).unwrap();
+
+    let error = match responder.recv() {
+        Ok(Some(frame)) => panic!("an unsealed frame was delivered as {frame:?}"),
+        Ok(None) => panic!("an unsealed frame was silently ignored rather than refused"),
+        Err(error) => error,
+    };
+    assert_eq!(error, NetError::NotAuthenticated);
+    assert!(error.poisons());
+    assert!(responder.is_poisoned());
+
+    // And it is not recoverable, same as a flipped bit.
+    let honest = Frame::new(MessageType::ChunkAck, payload_of(8, 22)).unwrap();
+    initiator.send(&honest).unwrap();
+    assert!(matches!(responder.recv(), Err(NetError::NotAuthenticated)));
+}

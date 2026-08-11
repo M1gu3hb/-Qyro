@@ -70,7 +70,7 @@ tocado: es byte a byte lo que se recibió, y el SHA-256 de arriba lo fija.
 | 0 | Línea base reproducida por mí, no heredada | **Hecha.** Puerta 0 pasada, §9 |
 | 1 | ADR-0028 congelada antes de una sola línea de código | **Hecha.** Puerta 1, §9. Commiteada en `db3ce79`, antes de que existiera ningún `.rs` |
 | 2 | `qyro_net`: listener, dialer, `FrameStream`, errores tipados, seis pruebas sobre sockets reales | **Hecha.** Puerta 2, §9. Once pruebas, no seis |
-| 3 | El handshake de cuatro mensajes sobre socket real, cuatro pruebas | Pendiente |
+| 3 | El handshake de cuatro mensajes sobre socket real, cuatro pruebas | **Hecha.** Puerta 3, §9. Seis pruebas, no cuatro |
 | 4 | Dos procesos de sistema operativo, ≥8 MiB byte a byte, tres pruebas, diez ejecuciones seguidas | Pendiente |
 | 5 | Los cinco finales provocados de verdad, más hilos y descriptores | Pendiente |
 | 6 | Guardas, barrido de mutación completo, informe, seis workflows en verde | Pendiente |
@@ -209,6 +209,8 @@ dos como final rompería toda transferencia en una de las dos plataformas**.
 | 6A-2 | Falso verde propio al reproducir la línea base: `&&` tras una tubería lee el estado de salida de `tail`, no el de `rustfmt`, y la ruta `rust/Cargo.toml` no existe —el workspace está en la raíz—. El comando fallaba e imprimía `FMT_PASS` | 0 | Baja — instrumento de medida, detectado y rehecho en la misma fase | §2 |
 | 6A-3 | **`qyro_net` no se ejecuta en Windows en ningún workflow.** `cargo test --workspace` corre sólo en `ubuntu-latest` (`ci.yml:33,47`); los trabajos de Windows prueban `qyro_crypto` y `qyro_win_dpapi` y nada más. Y este crate es precisamente donde el comportamiento diverge entre plataformas | 2 | **Alta** para lo que se pueda afirmar de Windows; nula para Linux | §8, §15 |
 | 6A-4 | Un control que sobrevivió a su propio borrado, encontrado por el barrido: quitar `TimedOut` de `is_read_timeout` no rompía nada, porque en Linux un `read` vencido da `WouldBlock` y sólo Windows da `TimedOut`. La mitad de Windows de esa rama no la defendía nadie. Es 6A-3 con consecuencias concretas | 2 | Media — habría roto **toda** transferencia en Windows sin que ninguna prueba lo dijera | §10 |
+| 6A-7 | Segundo control superviviente, encontrado por el barrido de la Fase 3: **nada comprobaba que un frame sin sellar llegado después del handshake se rechace.** Cambiar esa rama a `Ok(None)` no rompía ninguna prueba | 3 | **Alta.** Es aceptar bytes que nada autenticó, en una conexión cuyo propósito entero es que todo en ella esté autenticado | §10 |
+| 6A-8 | Me comí un fallo de clippy leyendo mal mi propia comprobación: canalicé la salida a `grep -c`, leí «4» como informativo y commiteé en rojo. El código de salida era 101 | 3 | Baja — un commit en rojo, detectado y enmendado antes de empujar | §9 |
 | 6A-6 | **El criterio de §10 `git diff --name-only origin/main...HEAD` no puede pasar en esta rama, por diseño.** `origin/main` está en `e0041de`, anterior al sprint 4A, y esta rama se apoya en cuatro ramas de sprint sin fusionar, así que ese diff devuelve 319 archivos de cinco sprints — incluidos los cinco de la lista prohibida, ninguno tocado por este run | 2 | Baja para el producto, **alta para auditar este informe**: la comprobación literal alarma sin motivo | §13 |
 | 6A-5 | Una mutación mal apuntada mía (M4): mutó sólo la rama autenticada de `read_window`, y la prueba que debía matarla usa una conexión sin autenticar, así que «sobrevivió» sin significar nada. Rehecha como M4b | 2 | Baja — error de instrumento, no de producto | §10 |
 
@@ -224,6 +226,8 @@ Pendiente de ampliar conforme avancen las fases.
 | 6A-2 | Sí | Medición rehecha capturando `$?` de cada proceso por separado. La tabla de la línea base de §2 sale de esa segunda medición, no de la primera |
 | 6A-3 | **No, y no puedo.** | El arreglo es añadir `qyro_net` a un trabajo de Windows, y `.github/workflows/**` está en la lista prohibida de §5. No lo toco «sólo un poco». Queda para el supervisor, y hasta entonces **ninguna afirmación de este informe sobre Windows tiene clase de evidencia mejor que «compilado»** — ni siquiera eso, porque tampoco se compila allí |
 | 6A-4 | Sí, la mitad que se puede | Añadida `a_read_timeout_is_a_heartbeat_on_both_platforms`, que prueba el **mapeo**: quitar cualquiera de las dos ramas ahora rompe una prueba con nombre. Lo que **no** cierra, y la prueba lo dice en su propio comentario, es que Windows se comporte como se describe: eso necesita ejecutar el crate allí, que es 6A-3 |
+| 6A-7 | Sí | Añadida `a_plain_frame_after_the_handshake_is_refused_and_poisons`, que mete un frame sin sellar por `write_sealed` —que escribe bytes tal cual— y comprueba variante, envenenamiento y que no se recupera |
+| 6A-8 | Sí | Commit enmendado con la corrección (`map_err` → `inspect_err`), y desde entonces **compruebo el código de salida, no el recuento de líneas**. Es la misma forma de error que 6A-2: mirar la salida de un comando en vez de su estado |
 | 6A-6 | **No es mío que arreglar** | El arreglo es fusionar las ramas de sprint a `main`, o cambiar el criterio para que use la rama base. Las dos son decisiones del supervisor. Lo que sí hago es dar en §13 **las dos** salidas, con la explicación de por qué la literal no dice nada de este sprint, en vez de pegar sólo la que me favorece |
 | 6A-5 | Sí | Rehecha como M4b, mutando `read_window` entera. La mataron dos pruebas. Las dos filas quedan en la tabla de §10: esconder la mutación que no significaba nada dejaría la tabla más limpia y menos cierta |
 
@@ -463,7 +467,57 @@ Por cada prueba, ¿el cuerpo ejerce lo que el nombre dice? La trampa es
 | `authenticating_releases_the_listener_budget_and_grows_the_buffer` | Suelta y crece | Comprueba `pending()` 1→0 y el búfer 4096→65 536 alrededor de la llamada |
 | `a_dial_to_a_closed_port_is_typed_and_is_not_a_generic_io_error` | Tipado, no genérico | Marca a un puerto sin nadie; comprueba que la variante es una de las dos tipadas |
 
-### Puertas 3 a 6
+### Puerta 3 — 2026-08-11 — **PASADA**
+
+| # | Comprobación de §12 | Resultado |
+|---|---|---|
+| 1 | `cargo fmt --all --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0. **Falló primero**: ver 6A-8 |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — **405** passed, 0 failed, **2 ignored** |
+| 4 | Barrido de mutación de la fase | PASS tras cerrar un superviviente real (6A-7). Tabla en §10 |
+| 5 | Lectura de aserciones | PASS — ver abajo |
+| 6 | Lectura de contadores | **No aplica.** La Fase 3 no añade contadores |
+| 7 | Lectura de nombres de test | PASS — ver abajo |
+| 8 | `git diff --name-only` sin archivos prohibidos | PASS — §13 |
+| 9 | Resultado escrito antes de la fase siguiente | PASS — esto |
+
+`cargo test --doc --workspace`: PASS. Los cuatro `check_*`: PASS. Paquetes: **62**,
+sin cambio — `qyro_crypto` era una arista nueva, no un paquete nuevo. Suite de
+`qyro_net` **diez veces seguidas: 10/10**.
+
+#### Comprobación 5 — lectura de aserciones
+
+La aserción central de esta fase es la de acuerdo de sesión, y es exactamente donde
+vive la trampa 1 de §11 —dos lados que son la misma llamada—. Cómo se evita aquí:
+
+- `assert_eq!(responder.session_id(), initiator.session_id())`. Son **dos objetos
+  distintos, construidos en dos hilos distintos**, cada uno derivando el id de su
+  propia vista del transcript. Preguntarle a una sesión su id dos veces no probaría
+  nada; esto sí.
+- Y además `assert_ne!(responder.session_id(), SessionId::ZERO)`, porque dos ceros
+  también comparan iguales. Sin esta línea, un `session_id()` que devolviera el valor
+  por defecto pasaría la comparación anterior.
+- Las huellas se comparan **en cruz**: la del peer que ve el iniciador contra la
+  huella del que escucha, calculada por la prueba **antes** de que corriera el
+  handshake. Una sesión que devolviera su propia identidad fallaría. Y
+  `assert_ne!(listening_print, dialling_print)` cierra el caso de dos identidades
+  iguales, con el que la comparación cruzada no diría nada.
+- En la prueba de firma corrupta, `assert_ne!(tampered, responder_hello)` comprueba
+  que la manipulación **cambió un byte de verdad** antes de mandarla.
+- En la del bit volteado, `assert_ne!(flipped, sealed)` hace lo mismo.
+
+#### Comprobación 7 — lectura de nombres
+
+| Prueba | El nombre dice | El cuerpo hace |
+|---|---|---|
+| `two_endpoints_over_a_real_socket_agree_on_a_session_key` | Dos extremos, socket real, acuerdo | Dos hilos, dos identidades Ed25519 reales, handshake completo sobre 127.0.0.1, y compara valores derivados por caminos distintos |
+| `a_sealed_frame_crosses_a_real_socket_and_opens` | Cruza y abre | Sella con el sellador real, cruza el socket, abre y compara el payload. En las dos direcciones |
+| `a_peer_with_a_wrong_signature_never_reaches_the_application` | Firma mala, nada llega | Calcula un `ResponderHello` **real** y voltea un bit de su firma Ed25519; todo lo demás intacto, así que lo único rechazable es la firma. Comprueba las tres cosas: variante tipada, que no existe `Session` alguna —y `Session` es lo único que puede mandar frames de aplicación—, y que al otro lado no llegó nada |
+| `a_handshake_that_stalls_is_cut_by_the_deadline` | El plazo lo corta | Acepta y calla. Comprueba la variante, que el plazo es el pasado, que esperó **al menos** ese plazo, y que **no** esperó al de inactividad —que sería el plazo equivocado haciendo el trabajo— |
+| `a_flipped_bit_after_the_handshake_poisons_the_session` | Envenena | Las tres aserciones que pide §8: variante exacta `NotAuthenticated`, `is_poisoned()`, y que un frame legítimo posterior **tampoco** se entrega |
+| `a_plain_frame_after_the_handshake_is_refused_and_poisons` | Refusa y envenena | Mete un frame **sin sellar** por `write_sealed`, que escribe bytes tal cual. Nació del barrido (6A-7) |
+
+### Puertas 4 a 6
 
 Pendientes.
 
@@ -490,6 +544,23 @@ no tienen filas.
 | M6 | El búfer de 64 KiB no se asigna hasta que el peer se autentica | Se borra el `resize` de `mark_authenticated` | **Muerta** por `authenticating_releases_the_listener_budget_and_grows_the_buffer` |
 | M7 | `TimedOut` cuenta como latido, para Windows | Se quita `io::ErrorKind::TimedOut` de `is_read_timeout` | **SOBREVIVIÓ** en la primera pasada — hallazgo 6A-4. Tras añadir `a_read_timeout_is_a_heartbeat_on_both_platforms`: **muerta** por esa prueba |
 
+### Fase 3 — commit `3021cee`, más el arreglo de 6A-7
+
+| # | Propiedad | Mutación aplicada | Resultado |
+|---|---|---|---|
+| H1 | Un tag que no verifica envenena la sesión | Se borra `self.poisoned = true;` de la rama de error de `opener.open` | **Muerta** por `a_flipped_bit_after_the_handshake_poisons_the_session` |
+| H2 | Una sesión envenenada no vuelve a entregar nada | Se borra la comprobación `if self.poisoned` de la entrada de `recv` | **Muerta** por `a_flipped_bit_...` **y** `a_plain_frame_after_the_handshake_...` |
+| H3 | El plazo de handshake tiene variante propia y no se confunde con silencio | `HandshakeDeadlineExceeded` → `PeerSilent` | **Muerta** por `a_handshake_that_stalls_is_cut_by_the_deadline` |
+| H4 | El stream se marca autenticado al establecer la sesión | Se borran las dos llamadas a `mark_authenticated()` | **Muerta** por `two_endpoints_over_a_real_socket_agree_on_a_session_key` |
+| H5 | Un frame **sin sellar** después del handshake se rechaza | La rama de frame plano devuelve `Ok(None)` en vez de envenenar | **SOBREVIVIÓ** — hallazgo 6A-7. Tras añadir `a_plain_frame_after_the_handshake_is_refused_and_poisons`: **muerta** por esa prueba |
+
+**Nota sobre lo que este barrido no cubre.** La verificación de la firma en sí es de
+`qyro_crypto` y tiene su propio barrido allí; lo que se muta aquí es lo que yo
+escribí. Que el error de firma se **propague** en vez de tragarse no es mutable sin
+romper la compilación —el valor hace falta para continuar—, así que esa propiedad la
+sujeta `a_peer_with_a_wrong_signature_never_reaches_the_application` directamente y
+no por mutación.
+
 **Supervivientes sin cerrar al final de la Fase 2: ninguno.** M7 se cerró en cuanto a
 mapeo; lo que queda abierto no es un control sin prueba sino una plataforma sin
 ejecución, y eso es 6A-3, que no puedo arreglar porque vive en
@@ -506,8 +577,8 @@ corrección sin commitear junto con la mutación que debía deshacer.
 ## 11. Tests antes y después
 
 **Antes: 388 passed, 0 failed, 2 ignored** (medido, no heredado — §2).
-**Después de la Fase 2: 399 passed, 0 failed, 2 ignored.** Once nuevos, todos en
-`qyro_net`, ningún ignorado nuevo.
+**Después de la Fase 3: 405 passed, 0 failed, 2 ignored.** Diecisiete nuevos, todos
+en `qyro_net`, ningún ignorado nuevo. La Fase 2 aportó once y la Fase 3 seis.
 
 | Test nuevo | Qué prueba |
 |---|---|
@@ -522,6 +593,12 @@ corrección sin commitear junto con la mutación que debía deshacer.
 | `a_listener_reports_the_port_the_system_chose` | Que `bind` con puerto 0 informa del puerto real. Es lo que evita que estas pruebas sean intermitentes |
 | `authenticating_releases_the_listener_budget_and_grows_the_buffer` | Que autenticarse devuelve el hueco al presupuesto y sólo entonces se asigna el búfer de 64 KiB |
 | `a_dial_to_a_closed_port_is_typed_and_is_not_a_generic_io_error` | Que marcar a un puerto sin nadie da una variante tipada |
+| `two_endpoints_over_a_real_socket_agree_on_a_session_key` | Que dos extremos, en dos hilos, sobre un socket real, derivan **el mismo** id de sesión por caminos distintos, y que cada uno aprendió la identidad **del otro** |
+| `a_sealed_frame_crosses_a_real_socket_and_opens` | Que después del handshake un frame sellado cruza y abre con su payload intacto, en las dos direcciones |
+| `a_peer_with_a_wrong_signature_never_reaches_the_application` | Que una firma Ed25519 con un bit cambiado se rechaza con error tipado, que no se crea ninguna `Session`, y que al otro lado no llega nada |
+| `a_handshake_that_stalls_is_cut_by_the_deadline` | Que un peer que conecta y calla se corta por el plazo de handshake — y no por el de inactividad, que sería el plazo equivocado haciendo el trabajo |
+| `a_flipped_bit_after_the_handshake_poisons_the_session` | Las tres cosas que pide §8: la variante exacta, la sesión envenenada, y que un frame legítimo posterior tampoco se entrega |
+| `a_plain_frame_after_the_handshake_is_refused_and_poisons` | Que un frame **sin sellar** en una sesión establecida se rechaza. Nació del barrido (6A-7) |
 
 ---
 
