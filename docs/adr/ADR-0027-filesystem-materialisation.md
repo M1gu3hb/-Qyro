@@ -181,3 +181,37 @@ el formato de §3. Los metadatos describen un `.qyro-part` sólo cuando su
 `item_id`. Un `transfer_id` distinto o una entrada ausente hacen que el parcial
 sea huérfano y se descarte antes de escribir. Metadatos presentes pero mal
 formados siguen produciendo su error tipado; no se reinterpretan como ausencia.
+
+## Enmienda 2026-08-11 — carrera de componentes intermedios (QYR-0072)
+
+Se adopta la opción **(c), mitigación parcial sin dependencias**, y no se
+presenta como cierre de la carrera. La raíz se canonicaliza y almacena al crear
+`FileSink`. Cada apertura de un `.qyro-part` vuelve a canonicalizar su padre
+**después de obtener el handle y antes de truncar, borrar o escribir**; si ya no
+está bajo la raíz, devuelve `FsError::EscapesRoot`. Esto implementa por fin el
+paso 5 de §1, que la ADR original exigía pero el código no ejecutaba.
+
+Las alternativas se evaluaron así:
+
+- **(a), resolución por descriptor:** es la única que cierra la carrera. En
+  Unix necesita recorrer con `openat`/`O_NOFOLLOW` y operar después mediante
+  descriptores; en Windows necesita la semántica equivalente relativa a un
+  handle. No está en `std`. `libc` añadiría una dependencia —que este sprint no
+  puede incorporar sin confirmación— y `extern` manual añadiría otro crate con
+  `unsafe`, además de una segunda implementación de plataforma. No se finge que
+  proteger sólo el `open` arreglaría los `rename`/`remove` posteriores.
+- **(b), aceptar sin mitigación:** conserva cero dependencias, pero deja sin
+  implementar una comprobación ya congelada en §1.5 y permite que un cambio de
+  padre persistente llegue hasta la primera escritura. Se descarta.
+- **(c), canonicalización post-open:** detecta el cambio simple y persistente
+  antes de escribir o truncar y se expresa igual con `std` en todos los hosts.
+  Es la mejora proporcionada al alcance y al modelo actuales.
+
+Lo que sigue **sin cubrir** es concreto: un atacante que pueda cambiar el padre
+puede dirigir el `open` fuera y restaurarlo antes de la canonicalización; el
+handle exterior pasaría la comprobación basada en nombre. La creación del
+`.qyro-part` puede dejar un archivo vacío fuera antes del rechazo. Además,
+`digest`, `rename` y `remove_file` siguen resolviendo nombres y conservan sus
+propias ventanas. Cerrar esas tres propiedades requiere la opción (a) completa,
+no otra comprobación de ruta. QYR-0072 queda resuelta como decisión de riesgo y
+mitigación, no como garantía de ausencia de TOCTOU.
