@@ -28,9 +28,12 @@ use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use qyro_protocol::{Frame, HEADER_LEN, MAX_PAYLOAD_LEN, MessageType};
+use qyro_crypto::handshake::ResponderStart;
+use qyro_crypto::{DeviceIdentity, IdentityFingerprint};
+use qyro_protocol::{Frame, HEADER_LEN, MAX_PAYLOAD_LEN, MessageType, SessionId};
 
 use crate::error::NetError;
+use crate::handshake::{Session, initiate, initiate_within, respond};
 use crate::limits::MAX_PREAUTH_BYTES;
 use crate::listener::{Listener, dial};
 use crate::stream::FrameStream;
@@ -200,7 +203,10 @@ fn a_peer_that_sends_nothing_times_out_and_says_so() {
     let waited = started.elapsed();
 
     match ending {
-        NetError::PeerSilent { idle_secs: _ } => {}
+        NetError::PeerSilent { idle } => assert!(
+            idle >= deadline,
+            "reported {idle:?} of silence against a {deadline:?} deadline"
+        ),
         other => panic!("silence must be PeerSilent, got {other:?}"),
     }
     // Not an `Io`, and not confused with a peer that closed.
@@ -447,4 +453,250 @@ fn a_dial_to_a_closed_port_is_typed_and_is_not_a_generic_io_error() {
         other => panic!("dialling a closed port must be typed, got {other:?}"),
     }
     assert!(!error.poisons());
+}
+
+// ----------------------------------------------- Phase 3: the real handshake
+//
+// Every test below runs the four-message handshake of ADR-0021 across a real
+// 127.0.0.1 socket, between two threads, with real Ed25519 identities. There is
+// no crypto double anywhere: a double would prove the transport works with
+// something that is not the handshake.
+
+/// Both ends of a completed handshake, each in its own thread over one socket.
+fn handshaken_pair() -> (Session, Session, IdentityFingerprint, IdentityFingerprint) {
+    let listening_id = DeviceIdentity::generate().unwrap();
+    let dialling_id = DeviceIdentity::generate().unwrap();
+    let listening_print = *listening_id.fingerprint();
+    let dialling_print = *dialling_id.fingerprint();
+
+    let listener = Listener::bind(loopback()).unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let initiator = thread::spawn(move || {
+        let stream = dial(addr).unwrap();
+        initiate(stream, &dialling_id).unwrap()
+    });
+    let accepted = listener.accept().unwrap();
+    let responder = respond(accepted, &listening_id).unwrap();
+    let initiator = initiator.join().unwrap();
+
+    (responder, initiator, listening_print, dialling_print)
+}
+
+#[test]
+fn two_endpoints_over_a_real_socket_agree_on_a_session_key() {
+    let (responder, initiator, listening_print, dialling_print) = handshaken_pair();
+
+    // The session id is derived independently at each end, from that end's own
+    // view of the transcript. These are two values computed by two different
+    // paths in two different threads, which is the only reason comparing them
+    // means anything -- asking one session for its id twice would not.
+    assert_eq!(
+        responder.session_id(),
+        initiator.session_id(),
+        "the two ends derived different session ids"
+    );
+    assert_ne!(
+        responder.session_id(),
+        SessionId::ZERO,
+        "a zero session id would compare equal without either end deriving anything"
+    );
+
+    // And each end learned the *other's* identity, not its own. Compared
+    // crosswise against fingerprints computed by the test before the handshake
+    // ran, so a session that echoed back the local identity fails.
+    assert_eq!(initiator.peer_fingerprint(), &listening_print);
+    assert_eq!(responder.peer_fingerprint(), &dialling_print);
+    assert_ne!(
+        listening_print, dialling_print,
+        "two generated identities must differ, or the check above proves nothing"
+    );
+
+    assert!(!responder.is_poisoned());
+    assert!(!initiator.is_poisoned());
+    assert!(responder.stream().is_authenticated());
+    assert!(initiator.stream().is_authenticated());
+}
+
+#[test]
+fn a_sealed_frame_crosses_a_real_socket_and_opens() {
+    // The happy path the refusals must not swallow: after the handshake, a
+    // sealed frame goes over the wire and opens with its payload intact.
+    let (mut responder, mut initiator, _, _) = handshaken_pair();
+
+    let payload = payload_of(2048, 11);
+    let frame = Frame::new(MessageType::Manifest, payload.clone()).unwrap();
+    initiator.send(&frame).unwrap();
+
+    let opened = responder.recv().unwrap().unwrap();
+    assert_eq!(opened.message_type(), MessageType::Manifest);
+    assert_eq!(opened.payload(), payload.as_slice());
+
+    // Both directions, so neither is accidentally special.
+    let back = Frame::new(MessageType::ChunkAck, payload_of(8, 12)).unwrap();
+    responder.send(&back).unwrap();
+    let echoed = initiator.recv().unwrap().unwrap();
+    assert_eq!(echoed.message_type(), MessageType::ChunkAck);
+    assert_eq!(echoed.payload(), payload_of(8, 12).as_slice());
+}
+
+#[test]
+fn a_peer_with_a_wrong_signature_never_reaches_the_application() {
+    let listening_id = DeviceIdentity::generate().unwrap();
+    let dialling_id = DeviceIdentity::generate().unwrap();
+
+    let listener = Listener::bind(loopback()).unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    // The initiator is entirely honest and entirely normal.
+    let initiator = thread::spawn(move || {
+        let stream = dial(addr).unwrap();
+        initiate_within(stream, &dialling_id, Duration::from_secs(5))
+    });
+
+    // The responder computes a real ResponderHello and then corrupts one byte
+    // of its Ed25519 signature. Everything else -- lengths, prefix, ephemeral
+    // key, nonce, identity -- stays exactly as qyro_crypto produced it, so the
+    // only thing the initiator can be rejecting is the signature.
+    let mut server = listener.accept().unwrap();
+    let hello_frame = server.next_frame().unwrap();
+    let hello = hello_frame.as_plain().unwrap().payload().to_vec();
+    let (responder_hello, _awaiting) = ResponderStart::new(&listening_id)
+        .receive_initiator_hello_from_system(&hello)
+        .unwrap();
+
+    let mut tampered = responder_hello.to_vec();
+    let last = tampered.len() - 1;
+    tampered[last] ^= 0x01;
+    assert_ne!(
+        tampered.as_slice(),
+        responder_hello.as_slice(),
+        "the tampering must actually change a byte"
+    );
+    server
+        .write_frame(&Frame::new(MessageType::Hello, tampered).unwrap().encode())
+        .unwrap();
+    server.flush().unwrap();
+
+    let outcome = initiator.join().unwrap();
+
+    // 1. The initiator refused, with the handshake's own typed error.
+    let error = match outcome {
+        Ok(_) => panic!("a corrupted signature established a session"),
+        Err(error) => error,
+    };
+    match error {
+        NetError::Handshake(_) => {}
+        other => panic!("a bad signature must be a Handshake error, got {other:?}"),
+    }
+
+    // 2. Nothing reached the application, and the type system is what
+    //    guarantees it: no Session exists, and Session is the only thing that
+    //    can send or receive application frames. There is no path from a failed
+    //    initiate() to a sealed frame.
+    //
+    // 3. And nothing arrived here either. The initiator dropped its socket on
+    //    the way out, so the next read is an ending rather than a frame.
+    server.set_idle_timeout(Duration::from_millis(600));
+    match server.next_frame() {
+        Ok(frame) => panic!("the refused peer still sent {frame:?}"),
+        Err(ending) => assert!(
+            ending.is_peer_gone(),
+            "expected the refused peer to be gone, got {ending:?}"
+        ),
+    }
+}
+
+#[test]
+fn a_handshake_that_stalls_is_cut_by_the_deadline() {
+    let dialling_id = DeviceIdentity::generate().unwrap();
+    let listener = Listener::bind(loopback()).unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    // Ten seconds is the production number and cannot be waited out in a suite.
+    // The deadline under test is the one passed in; that it defaults to
+    // HANDSHAKE_DEADLINE is asserted separately below.
+    let deadline = Duration::from_millis(1500);
+
+    let initiator = thread::spawn(move || {
+        let stream = dial(addr).unwrap();
+        let started = Instant::now();
+        let outcome = initiate_within(stream, &dialling_id, deadline);
+        (outcome, started.elapsed())
+    });
+
+    // Accepted, and then nothing. Not a close: a peer that connects and simply
+    // never speaks, which is the cheapest denial of service there is.
+    let _accepted = listener.accept().unwrap();
+    let (outcome, waited) = initiator.join().unwrap();
+
+    let error = match outcome {
+        Ok(_) => panic!("a silent peer established a session"),
+        Err(error) => error,
+    };
+    match error {
+        NetError::HandshakeDeadlineExceeded { limit } => assert_eq!(limit, deadline),
+        other => panic!("a stalled handshake must hit its deadline, got {other:?}"),
+    }
+    // It waited, rather than giving up on the first heartbeat. Two independent
+    // values: one the test chose, one the test measured.
+    assert!(
+        waited >= deadline,
+        "gave up after {waited:?}, before the {deadline:?} deadline"
+    );
+    // And it did not wait for the idle timeout instead, which would mean the
+    // handshake deadline was doing nothing.
+    assert!(
+        waited < crate::limits::IDLE_TIMEOUT,
+        "waited {waited:?}, which is the idle timeout rather than the handshake deadline"
+    );
+    // The number ADR-0028 froze is what the deadline-less entry points use.
+    assert_eq!(crate::limits::HANDSHAKE_DEADLINE, Duration::from_secs(10));
+}
+
+#[test]
+fn a_flipped_bit_after_the_handshake_poisons_the_session() {
+    let (mut responder, mut initiator, _, _) = handshaken_pair();
+
+    // Sealed by the real sealer, then one bit of ciphertext flipped in flight.
+    // Sealing and writing are separate operations precisely so a caller can
+    // hand bytes to a writer thread -- which is what makes this interception
+    // possible without a test-only back door.
+    let frame = Frame::new(MessageType::DataChunk, payload_of(512, 13)).unwrap();
+    let sealed = initiator.seal(&frame).unwrap();
+    let mut flipped = sealed.clone();
+    let target = HEADER_LEN + 1;
+    flipped[target] ^= 0x01;
+    assert_ne!(flipped, sealed, "the flip must actually change a byte");
+
+    initiator.write_sealed(&flipped).unwrap();
+
+    // 1. The exact variant.
+    let error = match responder.recv() {
+        Ok(_) => panic!("a frame with a flipped bit was accepted"),
+        Err(error) => error,
+    };
+    assert_eq!(error, NetError::NotAuthenticated);
+    assert!(
+        error.poisons(),
+        "a tag that does not verify is a lie, so it must poison"
+    );
+    assert!(
+        !error.is_peer_gone(),
+        "a flipped bit is not a peer that left"
+    );
+
+    // 2. The session is poisoned.
+    assert!(responder.is_poisoned());
+
+    // 3. Nothing was delivered -- not the tampered frame, and not a legitimate
+    //    one sent afterwards. Poisoning that a later good frame could undo
+    //    would not be poisoning.
+    let honest = Frame::new(MessageType::ChunkAck, payload_of(8, 14)).unwrap();
+    initiator.send(&honest).unwrap();
+    match responder.recv() {
+        Ok(_) => panic!("the poisoned session delivered a later frame"),
+        Err(error) => assert_eq!(error, NetError::NotAuthenticated),
+    }
+    assert!(responder.is_poisoned());
 }

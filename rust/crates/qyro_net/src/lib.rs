@@ -41,6 +41,7 @@
 )]
 
 mod error;
+mod handshake;
 mod limits;
 mod listener;
 mod stream;
@@ -49,6 +50,7 @@ mod stream;
 mod tests;
 
 pub use error::{NetError, SocketOp};
+pub use handshake::{Session, initiate, initiate_within, respond, respond_within};
 pub use limits::{
     CONNECT_TIMEOUT, HANDSHAKE_DEADLINE, IDLE_TIMEOUT, MAX_ESTABLISHED_SESSIONS,
     MAX_PENDING_HANDSHAKES, MAX_PREAUTH_BYTES, READ_BUFFER_LEN, READ_TIMEOUT,

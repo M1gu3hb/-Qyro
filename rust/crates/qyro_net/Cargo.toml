@@ -13,4 +13,8 @@ path = "src/lib.rs"
 # exists. `qyro_protocol` is first-party and already in the audited graph, so
 # this crate adds one package to Cargo.lock and that package is itself.
 [dependencies]
+# A new edge into the audited graph, not a new package: qyro_crypto is already
+# there. The handshake and the AEAD are its business, and this crate only moves
+# their bytes.
+qyro_crypto = { path = "../qyro_crypto" }
 qyro_protocol = { path = "../qyro_protocol" }

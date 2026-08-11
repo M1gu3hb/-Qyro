@@ -25,9 +25,12 @@
 )]
 
 use core::fmt;
+use core::time::Duration;
 use std::io;
 
-use qyro_protocol::FrameError;
+use qyro_crypto::HandshakeError;
+use qyro_crypto::aead::AeadError;
+use qyro_protocol::{FrameError, MessageType};
 
 /// Which socket operation failed, for the cases nothing else explains.
 ///
@@ -105,7 +108,7 @@ pub enum NetError {
     ///
     /// Neither a close nor a reset: silence. Typical of a suspended machine or
     /// a dropped link, where nobody is left to send anything at all.
-    PeerSilent { idle_secs: u64 },
+    PeerSilent { idle: Duration },
 
     // ------------------------------------ refusals before the peer is known
     /// An unauthenticated peer tried to push past its byte allowance.
@@ -118,7 +121,7 @@ pub enum NetError {
     ///
     /// ADR-0028 §3.2. Whole-handshake, so a peer that dribbles cannot restart
     /// it.
-    HandshakeDeadlineExceeded { limit_secs: u64 },
+    HandshakeDeadlineExceeded { limit: Duration },
 
     /// The listener already holds as many unauthenticated connections as it
     /// will.
@@ -129,14 +132,44 @@ pub enum NetError {
 
     /// The far end did not answer the dial inside
     /// [`CONNECT_TIMEOUT`](crate::CONNECT_TIMEOUT).
-    ConnectTimedOut { limit_secs: u64 },
+    ConnectTimedOut { limit: Duration },
+
+    /// The handshake refused: a signature that did not verify, a MAC that did
+    /// not match, a message of the wrong length.
+    ///
+    /// Does **not** report `poisons()`, and the reason is not that it is
+    /// harmless — it is that there is no session to poison. A handshake that
+    /// fails leaves no session at all: `initiate` and `respond` consume the
+    /// stream, so a peer that fails to prove who it is cannot be continued
+    /// with. That is stronger than poisoning, not weaker.
+    Handshake(HandshakeError),
+
+    /// A frame arrived where a handshake message was expected.
+    ///
+    /// `None` means the frame was encrypted or of an unimplemented type, so it
+    /// had no message type this version can name.
+    UnexpectedHandshakeMessage { got: Option<MessageType> },
+
+    /// This end could not seal a frame it was asked to send.
+    ///
+    /// Ours, not the peer's, which is why it is separate from
+    /// [`Self::NotAuthenticated`].
+    Sealing(AeadError),
 
     // ------------------------------------------------- the bytes lied: poison
+    /// A sealed frame did not authenticate.
+    ///
+    /// Carries no detail on purpose, exactly as `TransferError::NotAuthenticated`
+    /// does: a frame whose tag does not verify has **no known sender**, so
+    /// nothing in it can be reported as fact — not its type, not its length, not
+    /// which session it claimed to belong to.
+    NotAuthenticated,
+
     /// Framing itself was refused.
     ///
-    /// The only variant that poisons. The decoder is poisoned by its own rules
-    /// (ADR-0018) and `reset()` is never called, because there is nothing to
-    /// resume: a stream whose framing is untrustworthy has no next frame.
+    /// One of the two variants that poison. The decoder is poisoned by its own
+    /// rules (ADR-0018) and `reset()` is never called, because there is nothing
+    /// to resume: a stream whose framing is untrustworthy has no next frame.
     Framing(FrameError),
 
     // --------------------------------------------------------- the catch-all
@@ -153,12 +186,15 @@ pub enum NetError {
 impl NetError {
     /// Whether this ending means the session must be treated as poisoned.
     ///
-    /// True only for framing: see the module comment. This is a method rather
+    /// True for the two ways bytes can lie — framing that is structurally
+    /// invalid, and a tag that does not verify. See the module comment for why
+    /// a close, a reset and a silence are not on this list. This is a method
+    /// rather
     /// than a comment so that the rule can be tested, and so that adding a
     /// variant forces a decision about it instead of inheriting one.
     #[must_use]
     pub const fn poisons(self) -> bool {
-        matches!(self, Self::Framing(_))
+        matches!(self, Self::Framing(_) | Self::NotAuthenticated)
     }
 
     /// Whether this ending means the peer stopped, as opposed to misbehaved.
@@ -189,22 +225,29 @@ impl fmt::Display for NetError {
             Self::PeerVanished { kind } => {
                 write!(f, "the peer's socket stopped existing ({kind:?})")
             }
-            Self::PeerSilent { idle_secs } => {
-                write!(f, "no byte arrived from the peer in {idle_secs} seconds")
+            Self::PeerSilent { idle } => {
+                write!(f, "no byte arrived from the peer in {idle:?}")
             }
             Self::PreAuthByteLimitExceeded { attempted, limit } => write!(
                 f,
                 "an unauthenticated peer sent {attempted} bytes against a limit of {limit}"
             ),
-            Self::HandshakeDeadlineExceeded { limit_secs } => {
-                write!(f, "the handshake did not finish in {limit_secs} seconds")
+            Self::HandshakeDeadlineExceeded { limit } => {
+                write!(f, "the handshake did not finish in {limit:?}")
             }
             Self::TooManyPendingConnections { limit } => {
                 write!(f, "already holding {limit} unauthenticated connections")
             }
-            Self::ConnectTimedOut { limit_secs } => {
-                write!(f, "the peer did not answer in {limit_secs} seconds")
+            Self::ConnectTimedOut { limit } => {
+                write!(f, "the peer did not answer in {limit:?}")
             }
+            Self::Handshake(error) => write!(f, "the handshake refused: {error}"),
+            Self::UnexpectedHandshakeMessage { got } => match got {
+                Some(message) => write!(f, "{message:?} arrived during the handshake"),
+                None => f.write_str("an unreadable frame arrived during the handshake"),
+            },
+            Self::Sealing(error) => write!(f, "could not seal a frame: {error}"),
+            Self::NotAuthenticated => f.write_str("the frame did not authenticate"),
             Self::Framing(error) => write!(f, "framing refused: {error}"),
             Self::SocketFailed { operation, kind } => {
                 write!(f, "socket {operation} failed ({kind:?})")

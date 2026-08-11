@@ -186,7 +186,7 @@ pub fn dial(addr: SocketAddr) -> Result<FrameStream, NetError> {
         Ok(socket) => FrameStream::new(socket),
         Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
             Err(NetError::ConnectTimedOut {
-                limit_secs: CONNECT_TIMEOUT.as_secs(),
+                limit: CONNECT_TIMEOUT,
             })
         }
         Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => {

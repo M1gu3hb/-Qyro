@@ -326,6 +326,7 @@ dependencies = [
 name = "qyro_net"
 version = "0.0.1"
 dependencies = [
+ "qyro_crypto",
  "qyro_protocol",
 ]
 

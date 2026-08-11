@@ -334,9 +334,7 @@ impl FrameStream {
                 Err(error) if is_read_timeout(error.kind()) => {
                     let idle = self.last_byte_at.elapsed();
                     if idle >= self.idle_timeout {
-                        return Err(NetError::PeerSilent {
-                            idle_secs: idle.as_secs(),
-                        });
+                        return Err(NetError::PeerSilent { idle });
                     }
                     return Ok(None);
                 }
