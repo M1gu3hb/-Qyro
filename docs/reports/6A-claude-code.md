@@ -68,8 +68,8 @@ tocado: es byte a byte lo que se recibió, y el SHA-256 de arriba lo fija.
 | Fase | Objetivo de §8 | Estado |
 |---|---|---|
 | 0 | Línea base reproducida por mí, no heredada | **Hecha.** Puerta 0 pasada, §9 |
-| 1 | ADR-0028 congelada antes de una sola línea de código | Pendiente |
-| 2 | `qyro_net`: listener, dialer, `FrameStream`, errores tipados, seis pruebas sobre sockets reales | Pendiente |
+| 1 | ADR-0028 congelada antes de una sola línea de código | **Hecha.** Puerta 1, §9. Commiteada en `db3ce79`, antes de que existiera ningún `.rs` |
+| 2 | `qyro_net`: listener, dialer, `FrameStream`, errores tipados, seis pruebas sobre sockets reales | **Hecha.** Puerta 2, §9. Once pruebas, no seis |
 | 3 | El handshake de cuatro mensajes sobre socket real, cuatro pruebas | Pendiente |
 | 4 | Dos procesos de sistema operativo, ≥8 MiB byte a byte, tres pruebas, diez ejecuciones seguidas | Pendiente |
 | 5 | Los cinco finales provocados de verdad, más hilos y descriptores | Pendiente |
@@ -207,6 +207,10 @@ dos como final rompería toda transferencia en una de las dos plataformas**.
 |---|---|---|---|---|
 | 6A-1 | **Tres reglas del propio sprint no pueden cumplirse a la vez.** §13.1 exige el prompt verbatim en el informe; el prompt cita el identificador del primero de los tres huecos de prueba de `qyro_fs` de su §9; `check_docs_consistency` bloquea todo identificador citado sin ficha en `BUGS_PENDING.md`; y §5 prohíbe a los dos agentes tocar `BUGS_PENDING.md`. Alcanza además a §13.5, que exige proponer identificadores para los hallazgos no arreglados: cada uno que acuñara dispararía el mismo bloqueo | 1 | Media — bloquea `ci.yml`, no afecta al producto | §1 |
 | 6A-2 | Falso verde propio al reproducir la línea base: `&&` tras una tubería lee el estado de salida de `tail`, no el de `rustfmt`, y la ruta `rust/Cargo.toml` no existe —el workspace está en la raíz—. El comando fallaba e imprimía `FMT_PASS` | 0 | Baja — instrumento de medida, detectado y rehecho en la misma fase | §2 |
+| 6A-3 | **`qyro_net` no se ejecuta en Windows en ningún workflow.** `cargo test --workspace` corre sólo en `ubuntu-latest` (`ci.yml:33,47`); los trabajos de Windows prueban `qyro_crypto` y `qyro_win_dpapi` y nada más. Y este crate es precisamente donde el comportamiento diverge entre plataformas | 2 | **Alta** para lo que se pueda afirmar de Windows; nula para Linux | §8, §15 |
+| 6A-4 | Un control que sobrevivió a su propio borrado, encontrado por el barrido: quitar `TimedOut` de `is_read_timeout` no rompía nada, porque en Linux un `read` vencido da `WouldBlock` y sólo Windows da `TimedOut`. La mitad de Windows de esa rama no la defendía nadie. Es 6A-3 con consecuencias concretas | 2 | Media — habría roto **toda** transferencia en Windows sin que ninguna prueba lo dijera | §10 |
+| 6A-6 | **El criterio de §10 `git diff --name-only origin/main...HEAD` no puede pasar en esta rama, por diseño.** `origin/main` está en `e0041de`, anterior al sprint 4A, y esta rama se apoya en cuatro ramas de sprint sin fusionar, así que ese diff devuelve 319 archivos de cinco sprints — incluidos los cinco de la lista prohibida, ninguno tocado por este run | 2 | Baja para el producto, **alta para auditar este informe**: la comprobación literal alarma sin motivo | §13 |
+| 6A-5 | Una mutación mal apuntada mía (M4): mutó sólo la rama autenticada de `read_window`, y la prueba que debía matarla usa una conexión sin autenticar, así que «sobrevivió» sin significar nada. Rehecha como M4b | 2 | Baja — error de instrumento, no de producto | §10 |
 
 Pendiente de ampliar conforme avancen las fases.
 
@@ -218,6 +222,10 @@ Pendiente de ampliar conforme avancen las fases.
 |---|---|---|
 | 6A-1 | **Sí, en lo que me toca. La causa de fondo, no.** | El prompt se archiva verbatim en `docs/reports/6A-prompt.txt`, que ninguno de los dos comprobadores escanea (la lista es `*.md`, `*.rs`, `*.sh`, `*.ps1`, `*.yml` en las dos implementaciones), y los hallazgos de este informe se numeran `6A-n` en vez de acuñar identificadores que no puedo registrar. Con eso `ci.yml` queda en verde sin debilitar ningún control ni tocar ningún archivo ajeno. **Lo que no está arreglado es el choque de reglas**, que sigue ahí para el siguiente sprint que trabaje con el ledger fuera de su alcance. La decisión de fondo es del supervisor y está razonada en §1 |
 | 6A-2 | Sí | Medición rehecha capturando `$?` de cada proceso por separado. La tabla de la línea base de §2 sale de esa segunda medición, no de la primera |
+| 6A-3 | **No, y no puedo.** | El arreglo es añadir `qyro_net` a un trabajo de Windows, y `.github/workflows/**` está en la lista prohibida de §5. No lo toco «sólo un poco». Queda para el supervisor, y hasta entonces **ninguna afirmación de este informe sobre Windows tiene clase de evidencia mejor que «compilado»** — ni siquiera eso, porque tampoco se compila allí |
+| 6A-4 | Sí, la mitad que se puede | Añadida `a_read_timeout_is_a_heartbeat_on_both_platforms`, que prueba el **mapeo**: quitar cualquiera de las dos ramas ahora rompe una prueba con nombre. Lo que **no** cierra, y la prueba lo dice en su propio comentario, es que Windows se comporte como se describe: eso necesita ejecutar el crate allí, que es 6A-3 |
+| 6A-6 | **No es mío que arreglar** | El arreglo es fusionar las ramas de sprint a `main`, o cambiar el criterio para que use la rama base. Las dos son decisiones del supervisor. Lo que sí hago es dar en §13 **las dos** salidas, con la explicación de por qué la literal no dice nada de este sprint, en vez de pegar sólo la que me favorece |
+| 6A-5 | Sí | Rehecha como M4b, mutando `read_window` entera. La mataron dos pruebas. Las dos filas quedan en la tabla de §10: esconder la mutación que no significaba nada dejaría la tabla más limpia y menos cierta |
 
 ---
 
@@ -242,6 +250,33 @@ un documento externo, o que los informes de sprint no acuñen identificadores y 
 haga sólo la consolidación. Esta rama implementa de hecho la tercera, pero sin
 escribirla en ningún sitio canónico, porque no puede: los seis documentos raíz están
 fuera de alcance.
+
+**6A-3 — `qyro_net` sin Windows.** Qué se rompía: nada todavía; lo que falta es la
+comprobación. Para quién: para cualquiera que lea «el transporte funciona» y asuma
+que eso incluye la plataforma en la que Qyro tiene un instalador. En qué escenario:
+en cuanto el transporte llegue a un usuario de Windows. Este crate es el peor sitio
+posible para no ejecutar las pruebas, porque es donde el sistema operativo asoma —
+códigos de error, semántica de `shutdown` sobre un `read` bloqueado, `SO_RCVTIMEO`—.
+6A-4 es la demostración de que no es un riesgo teórico: el barrido encontró una rama
+de Windows que llevaba escrita desde el primer commit del crate y que nadie defendía.
+
+**6A-4 — el `TimedOut` sin cubrir.** Qué se rompía: si alguien hubiera «limpiado»
+esa rama por parecer redundante, **toda** transferencia en Windows habría muerto en
+el primer cuarto de segundo de espera, porque el latido se habría interpretado como
+un final. Para quién: para todos los usuarios de Windows, que es la única plataforma
+con paquete hoy. En qué escenario: cualquiera; no hace falta ni un fallo de red, sólo
+una pausa normal. Y ninguna prueba lo habría dicho, en ningún sistema operativo,
+porque en Linux esa rama es inalcanzable. Es el ejemplo exacto de por qué el barrido
+de mutación existe: la línea estaba escrita, comentada y era correcta, y aun así no
+estaba cubierta.
+
+**6A-5 — la mutación mal apuntada.** Qué se rompía: mi propia tabla de mutación.
+Para quién: para quien la lea y cuente los supervivientes. En qué escenario: si no
+llego a mirar por qué sobrevivió, habría registrado un hueco de cobertura que no
+existe —y peor, habría dejado sin comprobar el control que sí importa—. Un
+superviviente puede significar dos cosas muy distintas, «la propiedad no está
+cubierta» o «la mutación no tocó la propiedad», y no distinguirlas hace inútil el
+barrido entero.
 
 **6A-2 — el falso verde de la línea base.** Qué se rompía: nada en el producto; el
 defecto estaba en mi propio instrumento de medida. Para quién: para el siguiente
@@ -275,6 +310,14 @@ emulador** / **probado en simulador** / **probado en hardware físico**.
 | `origin/claude/qyro-filesystem-5b1` está en `15934aae3dda7f469b5496c8341eb78d9e32f335` | **Comprobado**, `git rev-parse` |
 | La firma de entrada del decodificador incremental es `push(&mut self, bytes: &[u8]) -> Result<(), FrameError>` | **Leído en el fuente**, `rust/crates/qyro_protocol/src/decoder.rs:268`. No es una afirmación de comportamiento en red |
 | Los seis workflows que 5B.1 declara sobre `e3fbaf1` | **No verificada por mí.** Ver §14 |
+| ADR-0028 está congelada antes del primer commit de código | **Comprobable en el historial.** `db3ce79` precede a `a77e657`, y en `db3ce79` no existe ningún `.rs` en la rama |
+| Un frame partido en tres lecturas se reensambla; tres frames de una lectura salen los tres | **Probado en integración sobre sockets reales de 127.0.0.1**, en Linux. Ambas propiedades con recuento de lecturas medido, no supuesto |
+| Un peer sin autenticar no consigue que el proceso acepte más de 4096 bytes ni reserve el megabyte que declara | **Probado en integración sobre socket real**, en Linux. Dos contadores medidos: bytes devueltos por `read`, y capacidad releída del decodificador |
+| El silencio, el cierre en frontera, el cierre a mitad de frame y el puerto cerrado producen cuatro variantes tipadas distintas | **Probado en integración sobre sockets reales**, en Linux |
+| `WouldBlock` y `TimedOut` cuentan como latido | **Probado en unidad, sobre la función de mapeo.** *No* probado en Windows: nada de este crate se ejecuta allí (6A-3) |
+| La suite de `qyro_net` no es intermitente | **Probado en integración, diez ejecuciones consecutivas, 10/10**, en Linux, en una sola máquina |
+| Todo lo relativo a Windows, macOS, Android, iOS | **No probado.** Ni ejecutado ni compilado allí en este run |
+| Dos procesos de sistema operativo se pasan un archivo | **No hecho todavía.** Es la Fase 4. A fecha de la Puerta 2 nada ha cruzado entre dos procesos |
 
 Nada de este sprint se ha ejecutado todavía en Windows, macOS, Android, iOS ni en
 hardware físico. Los cuatro `check_*` se han corrido en Bash; **no** en PowerShell.
@@ -341,7 +384,86 @@ Puerta 2: cada número que ADR-0028 fija —4096, 10 s, 8, 250 ms, 60 s, 65 536�
 que aparecer en el código de la Fase 2 y tener una prueba que lo ejerza, y ahí sí hay
 mutación. Una ADR cuyos números no aparecen en ninguna prueba es prosa.
 
-### Puertas 2 a 6
+### Puerta 2 — 2026-08-11 — **PASADA**
+
+| # | Comprobación de §12 | Resultado |
+|---|---|---|
+| 1 | `cargo fmt --all --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0, cero líneas `^warning`/`^error` |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — **399** passed, 0 failed, **2 ignored** (los mismos dos) |
+| 4 | Barrido de mutación de la fase | PASS tras dos correcciones. Tabla completa en §10: siete mutaciones, un superviviente real (6A-4) cerrado, una mutación mal apuntada (6A-5) rehecha |
+| 5 | Lectura de aserciones | PASS — leídas una a una, ver abajo |
+| 6 | Lectura de contadores | PASS — tres contadores nuevos, ver abajo |
+| 7 | Lectura de nombres de test | PASS — ver abajo |
+| 8 | `git diff --name-only` sin archivos prohibidos | PASS — §13 |
+| 9 | Resultado escrito en el informe antes de la fase siguiente | PASS — esto |
+
+Y `cargo test --doc --workspace`: PASS. Los cuatro `check_*`: PASS los cuatro.
+Paquetes en `Cargo.lock`: **62**, y el que entró es `qyro_net`.
+
+**Extra que no pide §12 pero sí piden estas pruebas.** Son pruebas de red, y una que
+pasa una vez y falla a la tercera es peor que no tenerla. La suite de `qyro_net` se
+corrió **diez veces seguidas: 10/10**. La Fase 4 tiene esta exigencia por escrito;
+adelantarla aquí es más barato que descubrir la intermitencia dos fases después.
+
+#### Comprobación 5 — lectura de aserciones
+
+Cada aserción nueva, leída para ver que sus dos lados pueden diferir. La trampa es
+una aserción cuyos dos términos son la misma llamada, y este proyecto la ha cometido
+cinco veces.
+
+- Los payloads se comparan contra `payload_of(len, tag)`, que **recalcula** el patrón
+  con la misma fórmula pero por un camino distinto del que construyó el frame. Los dos
+  lados son valores independientes: si `plaintext()` devolviera basura, o el payload de
+  otro frame, o un `None`, la comparación falla.
+- `assert_eq!(stream.bytes_read(), HEADER_LEN + 600)`: contador medido contra suma
+  aritmética que la prueba calcula.
+- `assert!(reserved < declared)`: capacidad leída del decodificador contra el megabyte
+  que el peer declaró. Dos números de origen distinto, y ésa es la aserción central de
+  la prueba de memoria.
+- `assert_ne!(ending, NetError::PeerClosedMidFrame { buffered: 0 })` en la prueba de
+  cierre en frontera: existe justamente para que las dos variantes no colapsen en una.
+- `assert!(waited >= deadline)`: reloj medido contra plazo que la prueba fijó.
+- En `a_read_timeout_is_a_heartbeat_on_both_platforms` hay aserciones positivas **y**
+  negativas sobre las dos funciones de mapeo. Sin las negativas, una función que
+  devolviera `true` para todo pasaría.
+
+#### Comprobación 6 — lectura de contadores
+
+Tres contadores `cfg(test)` nuevos en `FrameStream`. La trampa es un contador que
+registra la constante que esperabas en vez de lo medido; este proyecto la cometió con
+`PEAK_BUILDER_READ.fetch_max(HASH_BUFFER_LEN, ...)` seguido de
+`assert_eq!(peak, HASH_BUFFER_LEN)`.
+
+| Contador | De dónde sale el valor | Contra qué se compara |
+|---|---|---|
+| `bytes_read` | `count` devuelto por `socket.read(..)`, sumado | Suma aritmética de la prueba, y `MAX_PREAUTH_BYTES` |
+| `read_calls` | Incrementado donde `read` devolvió `Ok(count)` con `count > 0` | 3 y 3, valores que la prueba elige |
+| `peak_decoder_capacity` | `self.decoder.buffer_capacity()`, **releído del decodificador** después de cada `push` | El megabyte declarado por el peer, y la asignación |
+
+Ninguno se asigna desde una constante de límite. `peak_decoder_capacity` es el que más
+importa y es el que en 5B.1 se hizo mal: aquí el valor no se escribe, se pregunta.
+
+#### Comprobación 7 — lectura de nombres
+
+Por cada prueba, ¿el cuerpo ejerce lo que el nombre dice? La trampa es
+`a_symlink_at_the_final_component_is_refused`, que nunca abrió un archivo.
+
+| Prueba | El nombre dice | El cuerpo hace |
+|---|---|---|
+| `a_frame_split_across_three_reads_is_reassembled` | Tres lecturas | Tres `write_all` con 80 ms de separación, y **asserta `read_calls() >= 3`**: si el kernel los uniera, la prueba falla en vez de pasar sin probar nada |
+| `three_frames_in_one_read_are_all_delivered` | Una lectura, tres entregados | Un `write_all` con los tres concatenados; comprueba los tres payloads y `read_calls() < 3` |
+| `a_peer_that_sends_nothing_times_out_and_says_so` | No manda nada, vence, y lo dice | El peer no escribe un byte; comprueba la variante, que hubo **latidos previos**, y que esperó al menos el plazo |
+| `a_peer_that_disconnects_mid_frame_is_a_typed_end` | A mitad de frame | Manda `HEADER_LEN + 10` de un frame de 100 de payload y cierra; comprueba `buffered == 58` |
+| `a_peer_that_disconnects_on_a_boundary_is_a_different_typed_end` | Otra variante | Cierra sin mandar nada; comprueba que **no** es la variante de la prueba anterior |
+| `a_peer_cannot_make_us_buffer_more_than_the_declared_limit` | Declarar no es reservar | Cabecera legítima que declara 1 MiB, hecha con `Frame::new` sin parchear un byte, y luego un diluvio; mide lo reservado y lo aceptado |
+| `a_legitimate_frame_still_round_trips` | Los rechazos no rechazan todo | Dos `FrameStream` reales, un frame en cada dirección |
+| `a_read_timeout_is_a_heartbeat_on_both_platforms` | Las dos plataformas | Las dos `io::ErrorKind`, más las que no deben confundirse. **No** prueba Windows: el comentario de la prueba lo dice y §8 lo clasifica |
+| `a_listener_reports_the_port_the_system_chose` | Informa del puerto | `bind` con puerto 0 y `assert_ne!(port, 0)` |
+| `authenticating_releases_the_listener_budget_and_grows_the_buffer` | Suelta y crece | Comprueba `pending()` 1→0 y el búfer 4096→65 536 alrededor de la llamada |
+| `a_dial_to_a_closed_port_is_typed_and_is_not_a_generic_io_error` | Tipado, no genérico | Marca a un puerto sin nadie; comprueba que la variante es una de las dos tipadas |
+
+### Puertas 3 a 6
 
 Pendientes.
 
@@ -349,33 +471,146 @@ Pendientes.
 
 ## 10. Tabla de mutación
 
-Pendiente. Una fila por control de producción: propiedad → mutación aplicada → test
-que falló → commit. Los controles que sobrevivan a su propio borrado se registran con
-ID de ledger, no se ocultan.
+Una fila por control de producción: propiedad → mutación aplicada → test que falló.
+Los supervivientes están en la tabla, no escondidos.
 
-La Fase 0 no añade controles de producción, así que no tiene filas.
+Las fases 0 y 1 no añaden controles de producción —una línea base y una ADR— así que
+no tienen filas.
+
+### Fase 2 — commit `a77e657`, más el arreglo de 6A-4
+
+| # | Propiedad | Mutación aplicada | Resultado |
+|---|---|---|---|
+| M1 | Un peer sin autenticar no consigue que el proceso acepte más de 4096 bytes | `read_window` devuelve `self.buffer.len()` siempre: la asignación deja de acotar la lectura | **Muerta** por `a_peer_cannot_make_us_buffer_more_than_the_declared_limit` |
+| M2 | Un cierre a mitad de frame es una variante distinta de un cierre en frontera | `orderly_close` devuelve siempre `PeerClosedEarly` | **Muerta** por `a_peer_that_disconnects_mid_frame_is_a_typed_end` |
+| M3 | Un `read` vencido es un latido, no un final | La rama de vencimiento devuelve siempre `PeerSilent`, sin mirar el plazo | **Muerta** por `a_peer_that_sends_nothing_times_out_and_says_so` (falla en `heartbeats >= 1`) |
+| M4 | *(mal apuntada — 6A-5)* | `read_window` devuelve `1` **sólo en la rama autenticada** | **Sobrevivió, y no significa nada**: la prueba que debía matarla usa una conexión sin autenticar, que toma la otra rama. Rehecha como M4b |
+| M4b | El decodificador se drena antes de volver al socket, así que varios frames de una lectura salen todos | `read_window` devuelve `1` siempre | **Muerta** por `three_frames_in_one_read_are_all_delivered` **y** `a_peer_cannot_make_us_buffer_more_than_the_declared_limit` |
+| M5 | Autenticarse devuelve el hueco al presupuesto del listener | Se borra `self.pending_slot = None;` de `mark_authenticated` | **Muerta** por `authenticating_releases_the_listener_budget_and_grows_the_buffer` |
+| M6 | El búfer de 64 KiB no se asigna hasta que el peer se autentica | Se borra el `resize` de `mark_authenticated` | **Muerta** por `authenticating_releases_the_listener_budget_and_grows_the_buffer` |
+| M7 | `TimedOut` cuenta como latido, para Windows | Se quita `io::ErrorKind::TimedOut` de `is_read_timeout` | **SOBREVIVIÓ** en la primera pasada — hallazgo 6A-4. Tras añadir `a_read_timeout_is_a_heartbeat_on_both_platforms`: **muerta** por esa prueba |
+
+**Supervivientes sin cerrar al final de la Fase 2: ninguno.** M7 se cerró en cuanto a
+mapeo; lo que queda abierto no es un control sin prueba sino una plataforma sin
+ejecución, y eso es 6A-3, que no puedo arreglar porque vive en
+`.github/workflows/**`.
+
+**Cómo se corrió.** Cada mutación se aplica sobre el árbol ya commiteado, se corre
+`cargo test -p qyro_net`, se anota el nombre del test que falló, y se restaura el
+archivo desde la copia en memoria antes de la siguiente. Commitear antes de mutar no
+es ceremonia: en dos sprints anteriores un `git checkout --` se llevó por delante una
+corrección sin commitear junto con la mutación que debía deshacer.
 
 ---
 
 ## 11. Tests antes y después
 
 **Antes: 388 passed, 0 failed, 2 ignored** (medido, no heredado — §2).
-Después: pendiente. Una línea por test nuevo diciendo qué prueba.
+**Después de la Fase 2: 399 passed, 0 failed, 2 ignored.** Once nuevos, todos en
+`qyro_net`, ningún ignorado nuevo.
+
+| Test nuevo | Qué prueba |
+|---|---|
+| `a_frame_split_across_three_reads_is_reassembled` | Que un frame partido en tres escrituras separadas por 80 ms sale del otro lado como **uno solo** e íntegro — y que de verdad llegó en tres lecturas, no en una |
+| `three_frames_in_one_read_are_all_delivered` | El caso contrario: tres frames concatenados en una escritura salen los tres, en orden, con sus payloads distintos, en menos lecturas que frames |
+| `a_peer_that_sends_nothing_times_out_and_says_so` | Que el silencio produce `PeerSilent` y no un `Io` — y, lo que importa más, que **antes** hubo latidos `Ok(None)`: sin ellos no habría dónde comprobar una cancelación |
+| `a_peer_that_disconnects_mid_frame_is_a_typed_end` | Que cerrar a mitad de frame produce `PeerClosedMidFrame` con el número exacto de bytes varados |
+| `a_peer_that_disconnects_on_a_boundary_is_a_different_typed_end` | Que ese caso **no** es el mismo que un cierre limpio: las dos variantes no colapsan |
+| `a_peer_cannot_make_us_buffer_more_than_the_declared_limit` | Que una cabecera legítima declarando 1 MiB no reserva 1 MiB, y que el proceso nunca acepta más de 4096 bytes de un desconocido. Las dos cifras medidas |
+| `a_legitimate_frame_still_round_trips` | Que los rechazos anteriores no funcionan rechazándolo todo. Un frame en cada dirección entre dos `FrameStream` reales |
+| `a_read_timeout_is_a_heartbeat_on_both_platforms` | Que `WouldBlock` **y** `TimedOut` cuentan como latido, y que un reset no. Nació de que el barrido encontró la rama de Windows sin defender (6A-4) |
+| `a_listener_reports_the_port_the_system_chose` | Que `bind` con puerto 0 informa del puerto real. Es lo que evita que estas pruebas sean intermitentes |
+| `authenticating_releases_the_listener_budget_and_grows_the_buffer` | Que autenticarse devuelve el hueco al presupuesto y sólo entonces se asigna el búfer de 64 KiB |
+| `a_dial_to_a_closed_port_is_typed_and_is_not_a_generic_io_error` | Que marcar a un puerto sin nadie da una variante tipada |
 
 ---
 
 ## 12. Delta de dependencias
 
 **Antes: 61 paquetes en `Cargo.lock`** (medido con `grep -c '^\[\[package\]\]'`).
-Después: pendiente. El objetivo de §10 es 62, y el que entra debe ser `qyro_net`.
-Cero dependencias externas nuevas.
+**Después: 62.** El que entró es `qyro_net`, y es el diff entero:
+
+```
++[[package]]
++name = "qyro_net"
++version = "0.0.1"
++dependencies = [
++ "qyro_protocol",
++]
+```
+
+**Cero dependencias externas nuevas**, que es el criterio de §10. `qyro_net` depende
+de `qyro_protocol` y de `std`, y de nada más. No hay runtime async, no hay `socket2`,
+no hay `mio`. La Fase 3 añadirá una arista a `qyro_crypto`, que ya está en el grafo
+auditado: una arista nueva, no un paquete nuevo.
 
 ---
 
 ## 13. `git diff --name-only origin/main...HEAD`
 
-Salida literal, pendiente hasta que haya commits. La Fase 0 no modificó ningún
-archivo del repositorio.
+**El criterio de §10 nombra una base que no sirve para lo que quiere comprobar, y hay
+que decirlo antes de pegar nada.** Es el hallazgo 6A-6.
+
+`origin/main` está en `e0041de` («Rename qyro-logo.png to no usar este logo»), que es
+**anterior al sprint 4A**. Esta rama se apoya en cuatro ramas de sprint que nunca se
+fusionaron a `main`, así que `origin/main...HEAD` devuelve **319 archivos**: cinco
+sprints de trabajo acumulado. Entre ellos están, inevitablemente,
+`.github/workflows/**`, `STATUS.md`, `rust/crates/qyro_fs/**`,
+`qyro_protocol/src/header.rs` y `rust/guards/source_guard.rs` — los cinco de la lista
+prohibida de §5, ninguno tocado por este run, todos heredados de sprints anteriores.
+
+Es decir: **la comprobación literal de §10 no puede pasar en esta rama, y su fallo no
+significa nada sobre este sprint.** Pegar sólo esa lista sería alarmante y falso;
+pegar sólo la útil sería omitir lo que se pidió. Van las dos.
+
+### La comprobación que sí responde a la pregunta
+
+Lo que §5 quiere saber es si pisé al otro agente. La base correcta para eso es la
+rama de la que salgo:
+
+```
+$ git diff --name-only origin/claude/qyro-filesystem-5b1..HEAD
+Cargo.lock
+Cargo.toml
+docs/adr/ADR-0028-network-transport.md
+docs/reports/6A-claude-code.md
+docs/reports/6A-prompt.txt
+rust/crates/qyro_net/Cargo.toml
+rust/crates/qyro_net/src/error.rs
+rust/crates/qyro_net/src/lib.rs
+rust/crates/qyro_net/src/limits.rs
+rust/crates/qyro_net/src/listener.rs
+rust/crates/qyro_net/src/stream.rs
+rust/crates/qyro_net/src/tests.rs
+```
+
+Doce archivos. Los doce están en la lista de «archivos que TÚ tocas» de §5:
+`rust/crates/qyro_net/**` entero, el `Cargo.toml` de la raíz (una línea), su efecto en
+`Cargo.lock`, la ADR y el informe. `docs/reports/6A-prompt.txt` es el archivo hermano
+del informe que explica §1.
+
+Filtrado explícito contra la lista prohibida:
+
+```
+$ git diff --name-only origin/claude/qyro-filesystem-5b1..HEAD \
+    | grep -E "qyro_fs/|qyro_protocol/src/header.rs|guards/source_guard.rs|\
+^STATUS.md|^HANDOFF.md|^NEXT_STEPS.md|^CHANGELOG.md|^BUGS_PENDING.md|\
+^DECISIONS.md|^\.github/"
+NONE — clean
+```
+
+Y los commits de esta rama, para que se pueda comprobar que no hay ninguno más:
+
+```
+$ git log --oneline origin/claude/qyro-filesystem-5b1..HEAD
+a77e657 feat(net): a frame stream over a real socket, with typed ends
+f6964c7 docs(report): sprint 6A gate 1, and a clash between three of the sprint's own rules
+db3ce79 docs: freeze ADR-0028 before opening a single socket
+79ffa9b docs(report): sprint 6A, baseline reproduced and gate 0
+```
+
+`git status --short`: limpio. Sin commits en `main`, sin merge, sin PR, sin
+force-push.
 
 ---
 

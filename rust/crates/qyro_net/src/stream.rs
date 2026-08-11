@@ -38,12 +38,12 @@ use crate::listener::PendingSlot;
 /// the platform it was written on and break every transfer on the other, which
 /// is exactly the class of bug that only appears on the platform nobody ran.
 /// ADR-0028 §8 lists this first among the known Windows risks.
-const fn is_read_timeout(kind: io::ErrorKind) -> bool {
+pub(crate) const fn is_read_timeout(kind: io::ErrorKind) -> bool {
     matches!(kind, io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut)
 }
 
 /// Whether an error means the peer's socket stopped existing.
-const fn is_peer_gone(kind: io::ErrorKind) -> bool {
+pub(crate) const fn is_peer_gone(kind: io::ErrorKind) -> bool {
     matches!(
         kind,
         io::ErrorKind::ConnectionReset

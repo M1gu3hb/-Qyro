@@ -396,6 +396,44 @@ fn authenticating_releases_the_listener_budget_and_grows_the_buffer() {
 }
 
 #[test]
+fn a_read_timeout_is_a_heartbeat_on_both_platforms() {
+    // Found by the Phase 2 mutation sweep: deleting `TimedOut` from
+    // `is_read_timeout` broke nothing, because Linux raises `WouldBlock` for an
+    // expired `SO_RCVTIMEO` and Windows raises `TimedOut`. Nothing on Linux can
+    // produce the Windows kind, so nothing on Linux was defending it.
+    //
+    // Be clear about what this closes and what it does not. It proves the
+    // **mapping** treats both kinds as the heartbeat, so removing either arm now
+    // fails a named test. It does **not** prove Windows behaves as described,
+    // and it is not a substitute for running this crate there — which CI does
+    // not do at all today. See the report, finding 6A-3.
+    assert!(crate::stream::is_read_timeout(
+        std::io::ErrorKind::WouldBlock
+    ));
+    assert!(crate::stream::is_read_timeout(std::io::ErrorKind::TimedOut));
+
+    // And the kinds that must never be mistaken for one. A heartbeat that
+    // swallowed a reset would turn a dead peer into an eternal wait.
+    assert!(!crate::stream::is_read_timeout(
+        std::io::ErrorKind::ConnectionReset
+    ));
+    assert!(!crate::stream::is_read_timeout(
+        std::io::ErrorKind::UnexpectedEof
+    ));
+
+    // The other mapping, for the same reason: three kinds mean the socket is
+    // gone, and only those three.
+    assert!(crate::stream::is_peer_gone(
+        std::io::ErrorKind::ConnectionReset
+    ));
+    assert!(crate::stream::is_peer_gone(
+        std::io::ErrorKind::ConnectionAborted
+    ));
+    assert!(crate::stream::is_peer_gone(std::io::ErrorKind::BrokenPipe));
+    assert!(!crate::stream::is_peer_gone(std::io::ErrorKind::WouldBlock));
+}
+
+#[test]
 fn a_dial_to_a_closed_port_is_typed_and_is_not_a_generic_io_error() {
     // Bind, learn the port, then drop the listener so nothing is there.
     let addr = {
