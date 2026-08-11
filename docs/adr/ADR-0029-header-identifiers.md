@@ -121,3 +121,25 @@ nueva del formato.
 - No elimina la duplicación de `item_id` en el cuerpo de `DataChunk`.
 - No cambia la protección de replay, que sigue gobernada por `sequence`.
 - No aporta evidencia de hardware físico.
+
+## Enmienda 2026-08-11 — retirar el rechazo de framing inalcanzable
+
+Fase 9 instaló en `qyro_protocol` la misma guarda de sitios de construcción que
+ya protegía otros errores. Falló exactamente con
+`FrameError::InvalidIdentifier`: ningún constructor ni byte puede producirlo.
+
+Se retiran esa variante y su tipo auxiliar `IdentifierField`. La decisión es
+compatible con el contrato semántico de esta ADR por tres razones:
+
+1. `FrameError` es `#[non_exhaustive]`; un consumidor ya debe conservar una rama
+   comodín y no puede hacer un `match` exhaustivo que dependa de la variante.
+2. Construir manualmente el error no demuestra que framing lo produzca y no es
+   una capacidad que deba conservarse como promesa falsa.
+3. El rango completo, incluido cero, sigue siendo válido en framing. El rechazo
+   de IDs desconocidos ocurre después del AEAD en routing y necesita estado que
+   `qyro_protocol` deliberadamente no tiene.
+
+No se reutiliza la variante para hacer real algo en la capa equivocada y no se
+la exime de la guarda: ambas salidas perpetuarían una API que afirma un control
+inexistente. El wire, los offsets, los builders y los errores tipados futuros de
+routing permanecen sin cambios.
