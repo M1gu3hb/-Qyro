@@ -293,6 +293,19 @@ if [[ -f "$ledger" ]]; then
       "$finding has $count entries in BUGS_PENDING.md; a finding has one state, not two"
     blockers=$((blockers + 1))
   done <<< "$duplicates"
+
+  # BUGS_PENDING is an operating queue. Once it grows past a screenful of
+  # unresolved work, raw tool output has displaced prioritised findings and the
+  # ledger no longer tells a human what to act on. Sprint 5D establishes 59 as
+  # the hard ceiling; mutation inventories belong in reports, grouped here by
+  # behaviour and severity.
+  open_finding_limit=59
+  open_finding_count="$(grep -cE '^- Estado:[[:space:]]*abierto([;[:space:]]|$)' "$ledger" || true)"
+  if [[ "$open_finding_count" -gt "$open_finding_limit" ]]; then
+    report "BLOCKER" "Finding ledger" \
+      "$open_finding_count open findings exceed the ledger limit of $open_finding_limit"
+    blockers=$((blockers + 1))
+  fi
 fi
 
 # --------------------------------------------------- workflow branch triggers

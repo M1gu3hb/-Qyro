@@ -120,6 +120,33 @@ try {
     Add-Content (Join-Path $concreteFinding 'README.md') "$missingId is a concrete missing finding." -Encoding UTF8
     Assert-FailsWith $concreteFinding "$missingId is cited but has no entry"
 
+    # The ledger is an operational list, not an unbounded tool-output sink.
+    # The boundary itself remains usable; the next open record must fail.
+    $atOpenLimit = New-Fixture; $fixtures += $atOpenLimit
+    $ledgerLines = [System.Collections.Generic.List[string]]::new()
+    foreach ($index in 1..59) {
+        $ledgerLines.Add("## QYR-$($index.ToString('0000')) - human-readable fixture $index")
+        $ledgerLines.Add('')
+        $ledgerLines.Add('- Estado: abierto')
+        $ledgerLines.Add('')
+    }
+    $ledgerLines | Set-Content -LiteralPath (Join-Path $atOpenLimit 'BUGS_PENDING.md') -Encoding UTF8
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $atOpenLimit 2>&1
+    if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
+        throw "Ledger boundary fixture failed: $($output -join [Environment]::NewLine)"
+    }
+
+    $tooManyOpen = New-Fixture; $fixtures += $tooManyOpen
+    $ledgerLines = [System.Collections.Generic.List[string]]::new()
+    foreach ($index in 1..60) {
+        $ledgerLines.Add("## QYR-$($index.ToString('0000')) - human-readable fixture $index")
+        $ledgerLines.Add('')
+        $ledgerLines.Add('- Estado: abierto')
+        $ledgerLines.Add('')
+    }
+    $ledgerLines | Set-Content -LiteralPath (Join-Path $tooManyOpen 'BUGS_PENDING.md') -Encoding UTF8
+    Assert-FailsWith $tooManyOpen '60 open findings exceed the ledger limit of 59'
+
     # A commit recorded one revision back is normal: STATUS cannot contain the SHA
     # of the very commit that introduces it.
     $fresh = New-GitFixture; $fixtures += $fresh
