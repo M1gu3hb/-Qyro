@@ -36,7 +36,7 @@ function Write-Failure([string] $Message) {
 # --- nothing the product builds may name the harness -------------------------
 
 foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'qyro_manifest', 'qyro_transfer', 'qyro_fs')) {
-    $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
+    $manifest = [System.IO.Path]::Combine('rust', 'crates', $crate, 'Cargo.toml')
     foreach ($harness in $harnesses) {
         if ((Get-Content -LiteralPath $manifest -Raw) -match [regex]::Escape($harness)) {
             Write-Failure "$manifest depends on the test harness $harness"
@@ -53,7 +53,7 @@ foreach ($crate in @('qyro_ffi', 'qyro_core', 'qyro_crypto', 'qyro_protocol', 'q
 # dropped first (sprint 4C.2, QYR-0031). A target-specific dependency table is
 # still caught: it is not a comment.
 foreach ($crate in @('qyro_ffi', 'qyro_core')) {
-    $manifest = Join-Path 'rust' 'crates' $crate 'Cargo.toml'
+    $manifest = [System.IO.Path]::Combine('rust', 'crates', $crate, 'Cargo.toml')
     $declarations = (Get-Content -LiteralPath $manifest) |
         Where-Object { $_ -notmatch '^\s*#' }
     if (($declarations -join "`n") -match 'qyro_crypto') {
@@ -83,8 +83,8 @@ if (Test-Path -LiteralPath $appRoot) {
 # bundle. A file here goes into the product whatever any manifest says.
 
 foreach ($staged in @(
-        (Join-Path 'apps' 'qyro' 'android' 'app' 'src' 'main' 'jniLibs'),
-        (Join-Path 'apps' 'qyro' 'ios' 'Native'))) {
+        ([System.IO.Path]::Combine([string[]]@('apps', 'qyro', 'android', 'app', 'src', 'main', 'jniLibs'))),
+        ([System.IO.Path]::Combine('apps', 'qyro', 'ios', 'Native')))) {
     if (-not (Test-Path -LiteralPath $staged)) { continue }
     foreach ($library in Get-ChildItem -LiteralPath $staged -Recurse -File) {
         if ($harnesses | Where-Object { $library.Name -match [regex]::Escape($_) }) {
@@ -102,7 +102,7 @@ foreach ($staged in @(
 # --- the harness must declare itself unshippable -----------------------------
 
 foreach ($harness in $harnesses) {
-    $harnessManifest = Join-Path 'rust' 'tools' $harness 'Cargo.toml'
+    $harnessManifest = [System.IO.Path]::Combine('rust', 'tools', $harness, 'Cargo.toml')
     if (-not (Test-Path -LiteralPath $harnessManifest)) {
         Write-Failure "the manifest for $harness is missing"
     }
