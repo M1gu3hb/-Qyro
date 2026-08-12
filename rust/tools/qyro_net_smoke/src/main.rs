@@ -38,6 +38,9 @@ use std::process::ExitCode;
 use std::sync::mpsc;
 use std::thread;
 
+#[cfg(test)]
+mod guards;
+
 use qyro_crypto::DeviceIdentity;
 use qyro_fs::{FileSink, FileSource, PlannedFile, manifest_from_disk};
 use qyro_net::{FrameStream, Listener, dial, initiate, respond};

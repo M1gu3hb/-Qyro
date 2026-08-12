@@ -90,20 +90,10 @@ fn declares_forbid_unsafe(source: &str) -> bool {
 /// coordinated `claude/qyro-net-6a` branch with their own guards. Their entries
 /// expire as soon as those members exist here: a merge must inspect their real
 /// guard set rather than inheriting an exemption written before the files did.
-const MINIMUM_GUARD_SET_EXCEPTIONS: [(&str, &str); 3] = [
-    (
-        "qyro_ffi",
-        "reserved to the claude/qyro-net-6a branch; its C ABI has dedicated contract tests",
-    ),
-    (
-        "qyro_net",
-        "absent here; arrives with guards from the claude/qyro-net-6a branch",
-    ),
-    (
-        "qyro_net_smoke",
-        "absent here; arrives with guards from the claude/qyro-net-6a branch",
-    ),
-];
+const MINIMUM_GUARD_SET_EXCEPTIONS: [(&str, &str); 1] = [(
+    "qyro_ffi",
+    "reserved to the claude/qyro-net-6a branch; its C ABI has dedicated contract tests",
+)];
 
 #[test]
 fn every_workspace_crate_has_the_minimum_structural_guards_or_an_exact_exception() {

@@ -47,6 +47,8 @@ mod listener;
 mod stream;
 
 #[cfg(test)]
+mod guards;
+#[cfg(test)]
 mod tests;
 
 pub use error::{NetError, SocketOp};
