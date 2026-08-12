@@ -391,7 +391,7 @@ comando normal en 264.6 s con 80/0/20/0. No hubo run mutacional cancelado.
 
 ## 10. Puerta 8 — documentación y CI final
 
-Pendiente sólo de evidencia remota. `DECISIONS.md` ya incorpora ADR-0031 y
+Cerrada sobre el candidato ejecutable `ccc54ae`. `DECISIONS.md` incorpora ADR-0031 y
 `STATUS.md` cambió lo mínimo necesario: rama/ancla, confianza, historial, las
 fronteras que siguen sin UI/red y la siguiente tarea. El ledger continúa en 99
 fichas/18 abiertas, diez nuevas de 5D. `Cargo.lock` conserva el hash
@@ -433,7 +433,25 @@ fallidas se presenta como evidencia verde.
 
 ## 11. Runs de CI de la rama
 
-Todavía no existe ningún run de `codex/qyro-trust-5d`.
+La consulta `gh run list --branch codex/qyro-trust-5d --limit 100` devolvió
+exactamente estos seis runs al cerrar el informe. Todos son
+`workflow_dispatch`, apuntan al SHA completo
+`ccc54ae4f5d74fcb63188139ae4796154f9952fd` y terminaron `success`:
+
+| Workflow | Run | Jobs | Conclusión |
+|---|---:|---:|---|
+| CI | 31563755263 | 8/8 | success; 487/0/2 Linux y 494/0/2 Windows |
+| Platform builds | 31563756867 | 3/3 | success |
+| Crypto platform | 31563758336 | 4/4 | success |
+| Crypto fuzz | 31563759613 | 6/6 | success |
+| Android runtime ABI | 31563761200 | 1/1 | success |
+| iOS runtime ABI | 31563762494 | 1/1 | success |
+
+No hubo workflow fallido ni cancelado en la rama. Después de despachar los seis,
+una consulta de presentación falló porque esta versión de `gh` interpretó el
+pipe de `--jq` como subcomando; los runs ya existían y una consulta JSON sin
+formateador recuperó los seis. No se cuenta como workflow ni se oculta como
+orquestación local fallida.
 
 ## 12. Qué no debe leerse como progreso
 

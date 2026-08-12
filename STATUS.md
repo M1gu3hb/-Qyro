@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-12T04:22:28Z
+- Updated UTC: 2026-08-12T04:48:49Z
 - Branch: codex/qyro-trust-5d
-- Verified commit: 07f0570cf977214a8204bc7c761612d1e929b31d
+- Verified commit: ccc54ae4f5d74fcb63188139ae4796154f9952fd
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
@@ -351,17 +351,22 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
   `ebdffb9` y conserva 61 paquetes.
 - Esto no añade red, descubrimiento, FFI, UI, selector de archivos ni política
   interactiva. Ninguna parte de 5D se ha ejecutado en hardware físico.
+- Los seis workflows manuales sobre `ccc54ae` terminaron en success: CI
+  31563755263, Platform builds 31563756867, Crypto platform 31563758336,
+  Crypto fuzz 31563759613, Android runtime ABI 31563761200 e iOS runtime ABI
+  31563762494. CI ejecutó 487/0/2 tests en Linux y 494/0/2 en Windows.
 
 ## Real tests
 
-Evidencia actual: Linux en CI y Windows local, ambos con Rust 1.88.0. **El host
+Evidencia actual: Linux y Windows en CI, además de Windows local, con Rust
+1.88.0. **El host
 local no trae Flutter ni Dart**, así que todo lo que los necesita se ejecutó en
 CI y no aquí:
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS. Rama actual: **428 passed en Linux CI y 434
-  passed en Windows CI** (run 31547866384), 0 failed y 2 ignored en ambos. La base era 388/394.
+- `cargo test --workspace`: PASS. Rama actual: **487 passed en Linux CI y 494
+  passed en Windows CI** (run 31563755263), 0 failed y 2 ignored en ambos. La base era 388/394.
   El delta Windows +6 está explicado test por test: Windows añade los ocho
   `qyro_win_dpapi::tests::{a_data_blob_that_lies_does_not_round_trip,
   a_single_flipped_byte_is_a_typed_error_against_dpapi,
@@ -380,7 +385,7 @@ CI y no aquí:
   4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
   crate de plataforma.
-- `cargo test --workspace --all-features`: PASS, **428 passed en Linux**, 0
+- `cargo test --workspace --all-features`: PASS, **487 passed en Linux**, 0
   failed, 2 ignored. `qyro_fs` declara una feature de fixture Windows; no añade
   una prueba al conjunto Linux
 - `cargo test --doc --workspace`: PASS
@@ -416,9 +421,10 @@ CI y no aquí:
   es `doctor_contract_test`, porque `doctor` reporta `BLOCKER` por Flutter y Dart
   ausentes. **No es una regresión**: es el comportamiento correcto de `doctor` en
   un entorno sin Flutter, y el contrato pasa en CI, donde Flutter existe
-- Los cuatro scripts `check_*` en **Bash y en PowerShell**: PASS los ocho. Este
-  contenedor sí trae `pwsh` 7.4.6, a diferencia del de los sprints 4C.2 y 4C.3,
-  cuyas secciones más abajo dicen lo contrario de sus propios contenedores
+- Los cuatro scripts `check_*` en **Bash y Windows PowerShell 5.1**: PASS las
+  ocho invocaciones. Dos rondas previas encontraron y corrigieron usos de
+  `Join-Path` que sólo aceptaba PowerShell Core; el contrato criptográfico
+  también se ejecutó completo bajo 5.1
 - `flutter analyze`, `flutter test`, `dart format` y el generador de branding:
   ejecutados solo en CI, run 31041949268
 
