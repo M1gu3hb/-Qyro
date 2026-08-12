@@ -1399,7 +1399,40 @@ miembros, la excepción caduca y se inspecciona su conjunto real. No se crearon.
 
 ### Puerta 10
 
-Pendiente.
+**Contenido verificado; workflow del commit documental pendiente.**
+
+- `BUGS_PENDING.md`: QYR-0068, QYR-0073, QYR-0074 y QYR-0075 están cerradas;
+  QYR-0072 conserva la resolución parcial exacta; QYR-0110–QYR-0287 pertenecen
+  al rango de este trabajo. La auditoría de headings da 178 entradas sin huecos
+  ni duplicados; los 136 supervivientes y 12 timeouts que siguen abiertos no se
+  presentan como cierre.
+- `DECISIONS.md`: registra la enmienda fechada de ADR-0027, la opción (c) para
+  QYR-0072 con su carrera residual y ADR-0029 con cero válido, layout de 48 bytes
+  y separación entre autenticación y routing.
+- `STATUS.md`: ancla `dc7725e`, publica 428 Linux/434 Windows con dos ignorados
+  en cada plataforma y contiene una sección mínima de sprint 5C.
+- Relectura: §2–§8, §10–§16 y el handoff ya usan los resultados de Fases 2–9;
+  no queda un «Después: pendiente» fuera del prompt verbatim. §12 conserva 61
+  paquetes y cero dependencias nuevas.
+- `cargo fmt --all --check`, Clippy estricto y `cargo test --workspace`: PASS
+  local Windows. `cargo test --doc --workspace`: PASS local.
+- `cargo test --workspace --all-features` local llegó a la prueba de symlink de
+  `qyro_fs` y falló con error Windows 1314 («el cliente no dispone de un
+  privilegio requerido»): el host no puede crear el fixture. No se oculta ni se
+  cuenta como regresión; el mismo comando PASS en Linux CI y el job Windows
+  privilegiado `fs final-component guard` PASS en 31548923637.
+- La primera invocación local `cargo audit --deny warnings` falló porque el
+  subcomando no estaba instalado. Se instaló `cargo-audit 0.22.2` fuera del
+  repositorio; una primera invocación directa desde `rust/` falló por no hallar
+  el lockfile raíz y la invocación corregida desde la raíz PASS sobre 61
+  dependencias, sin warnings. CI 31548923637 también ejecutó auditoría: PASS.
+- `check_docs_consistency`: PASS después de esta consolidación tanto con Bash
+  explícito como con Windows PowerShell 5.1. `git diff --check`: PASS; el delta
+  prohibido y el de `Cargo.lock` están vacíos, y el recuento sigue en 61.
+- CI 31548923637 sobre `dc7725e`: **success**, nueve jobs; Linux y Windows,
+  all-features, doc tests, audit, Flutter, scripts, documentación y guardas FS.
+  Falta únicamente ejecutar el workflow sobre el commit que contiene esta
+  consolidación; su resultado se registrará antes de declarar la puerta cerrada.
 
 ## 10. Tabla completa de mutaciones
 
@@ -1491,6 +1524,7 @@ El delta propio desde la base exacta es:
 ```text
 .github/workflows/ci.yml
 BUGS_PENDING.md
+DECISIONS.md
 docs/adr/ADR-0027-filesystem-materialisation.md
 docs/adr/ADR-0029-header-identifiers.md
 docs/reports/5C-codex.md
@@ -1564,6 +1598,7 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31542583869 | 1241e1bb0dc1f752bbcda821b97eb21bcc83df1c | CI | workflow_dispatch | success; base estructural, 422/2 Linux y 428/2 Windows, ocho jobs PASS |
 | 31547557731 | 7c33dc85ba6d32dd732bccb13ad7e63dc4ee0cac | CI | workflow_dispatch | success de CI, pero evidencia de mutación inválida: `-o` no existía, 0 mutantes y sin artefacto |
 | 31547866384 | 3cbd220c060a9a2f041935d83b192668b75860cb | CI | workflow_dispatch | success; nueve jobs, 428/2 Linux, 434/2 Windows y 87/87 mutantes FS Linux con JSON |
+| 31548923637 | dc7725ea7778f65008a863d7930f48b4f47409a2 | CI | workflow_dispatch | success; nueve jobs, incluido workspace Linux/Windows, all-features, audit, documentación y guardas FS en tres SO |
 
 Lista reconstruida por API durante Fase 9. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
@@ -1586,7 +1621,7 @@ sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
 del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
 rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
 no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–9 están
-cerradas.
+cerradas; la Puerta 10 sólo espera el workflow del commit documental.
 `rust/guards/source_guard.rs` añade automáticamente fin-de-análisis y
 antitautología a todo consumidor; Fase 9 además corrige raíz `main.rs` y el gate
 `cfg(all(windows, test))`. La meta-guarda vive en `qyro_identity_store`: un
@@ -1606,6 +1641,7 @@ La API que red puede usar sigue siendo
 `Frame::with_identifiers(SessionId, u64, u32, u32)`: el sealer reemplaza
 `session_id`, conserva `transfer_id`, `stream_id` e `item_id` dentro del AAD y
 routing debe rechazarlos después de autenticar. `InvalidIdentifier` ya no
-existe en framing. `STATUS.md` ancla `3cbd220` y publica 428/434 por plataforma.
-Las Puertas 1–9 están cerradas; Fase 10 debe consolidar sin convertir las fichas
-que permanecen abiertas dentro de QYR-0115–QYR-0287 en progreso inexistente.
+existe en framing. `STATUS.md` ancla `dc7725e` y publica 428/434 por plataforma.
+Fase 10 consolidó sin convertir las fichas que permanecen abiertas dentro de
+QYR-0115–QYR-0287 en progreso inexistente; su commit documental queda sujeto al
+workflow final.

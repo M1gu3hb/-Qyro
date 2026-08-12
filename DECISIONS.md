@@ -112,3 +112,23 @@ terminar un item en la coma de un campo. Desde 5A, la guarda anti-pánico cubrí
 el 43 % de `session.rs` mientras decía cubrirlo entero. Cuarta guarda que dejó de
 guardar en este proyecto, y la primera cuyo fallo estaba en el análisis que todas
 comparten.
+
+El sprint 5C enmienda ADR-0027 con fecha 2026-08-11. Implementa la política de
+reanudación de §5: sólo metadata del mismo `transfer_id` y con entrada para el
+item describe un `.qyro-part`; se trunca al prefijo confirmado y cualquier otro
+parcial es huérfano. Metadata malformada sigue siendo error, no ausencia.
+
+La misma enmienda resuelve QYR-0072 con la opción (c), mitigación parcial sin
+dependencia ni `unsafe`: después de abrir el componente final se canonicaliza
+su padre y se comprueba contención antes de escribir. Detecta el cambio que
+persiste, pero no cierra un doble swap ni las operaciones posteriores por
+nombre. El cierre completo sigue requiriendo resolución por descriptor/handle
+en Unix y Windows.
+
+El sprint 5C añade ADR-0029: los identificadores de la cabecera QYRO/1 usan la
+API pública preexistente `Frame::with_identifiers`/`FrameHeader::with_identifiers`.
+Cero es válido y significa «sin ámbito asignado» en framing; los 48 bytes y sus
+offsets no cambian. AEAD autentica los IDs que puso el emisor, pero no demuestra
+que un transfer/item exista: routing debe comprobarlo después de abrir el
+frame. Por esa separación se eliminan `FrameError::InvalidIdentifier` e
+`IdentifierField`, variantes inalcanzables que framing no debía prometer.
