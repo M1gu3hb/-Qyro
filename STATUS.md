@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-12T00:17:39Z
+- Updated UTC: 2026-08-12T00:25:45Z
 - Branch: codex/qyro-gap-closure-5c
-- Verified commit: dc7725ea7778f65008a863d7930f48b4f47409a2
+- Verified commit: 5736077ddce13aea1a33a18dbb3cbdfbe9df9ac5
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
@@ -310,7 +310,7 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
 
 ## Sprint 5C — cierre de gaps y deuda estructural
 
-- Las Puertas 1–9 están cerradas. Fase 9 instaló un mínimo estructural común en
+- Las Puertas 1–10 están cerradas. Fase 9 instaló un mínimo estructural común en
   diez de los once miembros del workspace; `qyro_ffi` conserva la única
   excepción presente, por su contrato ABI C dedicado. La meta-guarda falla si
   un crate no exceptuado pierde el archivo, su activación, la lista productiva,
@@ -322,9 +322,9 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
   QYR-0276–QYR-0287. No se presentan los abiertos como cobertura lograda.
 - Esto endurece evidencia y contratos; no añade red, FFI del motor, UI,
   selector de archivos ni persistencia móvil.
-- Fase 10 consolidó el ledger, las decisiones, este estado y el informe. El
-  workflow sobre el commit documental final sigue pendiente; no se anticipa su
-  resultado aquí.
+- Fase 10 consolidó el ledger, las decisiones, este estado y el informe. CI
+  31549905688 sobre el commit documental `5736077` terminó en success con sus
+  ocho jobs.
 
 ## Real tests
 
