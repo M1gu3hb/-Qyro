@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-11T20:00:00Z
+- Updated UTC: 2026-08-12T01:00:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: 647184877042820ba4e70670a0c1956161ee2025
+- Verified commit: 20f85733eef3a91ccf8fafc4a23ece3c44e283bd
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
@@ -17,7 +17,12 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   son dos dispositivos en una Wi-Fi. La persistencia de identidad sigue
   **IMPLEMENTED sólo en Windows y NOT_IMPLEMENTED en Android y en iOS**
 
-### Sprint 6A — `qyro_net`, hasta la Puerta 5
+### Sprint 6A — `qyro_net`, hasta la Puerta 5 y la rama de Codex fusionada
+
+**Esta rama contiene ya el trabajo de los dos agentes.**
+`codex/qyro-gap-closure-5c` se fusionó en `157bd9f`: los dos únicos conflictos
+fueron `BUGS_PENDING.md` y `STATUS.md`, resueltos conservando ambos lados. Las
+secciones de Codex de este documento siguen abajo, intactas.
 
 **Lo que existe y está ejecutado en Linux:**
 

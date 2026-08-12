@@ -664,11 +664,63 @@ que no puede ver una fuga no es evidencia de que no la haya.
 Más `.qyro-part`: ninguno sobrevive a un cancelado ni a un rechazo, comprobado en el
 destino y no supuesto.
 
+### Fase 6 — **EN CURSO, sin puerta.** Dos de cuatro partes hechas
+
+**Esta fase no está cerrada y no se declara cerrada.** Lo hecho está verde y
+commiteado; lo que falta es la mitad que más valor tiene.
+
+**Hecho:**
+
+1. **La fusión de `codex/qyro-gap-closure-5c`** (`157bd9f`). Los dos únicos
+   conflictos —`BUGS_PENDING.md` y `STATUS.md`— resueltos conservando ambos lados.
+   Medido sobre el árbol fusionado: 456 passed, 0 failed, 2 ignored; 63 paquetes;
+   `fmt`, `clippy` y los cuatro `check_*` en exit 0
+2. **El conjunto mínimo de guardas** en `qyro_net` y `qyro_net_smoke`, y las dos
+   entradas de `MINIMUM_GUARD_SET_EXCEPTIONS` borradas (`20f8573`). Tras esto:
+   468 passed, 0 failed, 2 ignored
+
+Bytes analizados por `assert_analysis_reached_the_end`, **impresos por la guarda**
+y no sólo asertados, porque QYR-0071 fue un análisis que paró antes de tiempo y
+aun así devolvió fuente bien formada:
+
+| Archivo | Analizados | Crudos |
+|---|---|---|
+| `qyro_net/src/lib.rs` | 688 | 735 |
+| `qyro_net/src/error.rs` | 4285 | 4285 |
+| `qyro_net/src/handshake.rs` | 6626 | 6626 |
+| `qyro_net/src/limits.rs` | 464 | 464 |
+| `qyro_net/src/listener.rs` | 3638 | 3638 |
+| `qyro_net/src/stream.rs` | 7600 | 8748 |
+| `qyro_net_smoke/src/main.rs` | 11295 | 11319 |
+
+Donde el analizado es menor que el crudo, la diferencia son items `cfg(test)`
+que el análisis quita a propósito — eso es el análisis funcionando. Lo que dice
+que no se tragó nada es que la comprobación de fin de archivo pasó en los siete.
+
+Y la guarda anti-tautología de Codex corre ya sobre los dos crates: **ninguna
+aserción de `qyro_net` ni de `qyro_net_smoke` compara una llamada consigo misma.**
+
+**Una discrepancia de la autorización, señalada en vez de rodeada.** El prompt
+autoriza editar `rust/guards/source_guard.rs` para borrar las dos entradas de
+`MINIMUM_GUARD_SET_EXCEPTIONS`. Esa lista **no está ahí**: vive en
+`qyro_identity_store/src/guards.rs`, que sí está en la lista de archivos de Codex.
+La intención era inequívoca y el diseño auto-caducante no deja otra ruta —añadir
+`guards.rs` sin borrar la entrada deja el árbol en rojo—, así que hice exactamente
+la edición autorizada en ese archivo y nada más. `rust/guards/source_guard.rs` no
+se ha tocado.
+
+**Lo que falta de la Fase 6, y es lo que impide la Puerta 6:**
+
+- El barrido completo con `cargo-mutants` sobre `qyro_net` y `qyro_net_smoke`, con
+  límite por mutante, y su salida en `docs/reports/6A-mutation-sweep.md` con el
+  alcance declarado
+- La investigación de los timeouts que ese barrido produzca
+- Las fichas de las familias de supervivientes, a mano, máximo siete, en el rango
+
 ### Puertas 6 a 10
 
-Pendientes. **Aquí es donde se detuvo esta sesión**, después de una puerta y no a
-mitad de una fase. Lo que falta: el barrido completo y las guardas de `qyro_net`
-(Fase 6), Windows de verdad para cerrar QYR-0078 (Fase 7), ADR-0030 y el FFI del
+Pendientes. **Aquí se detuvo esta sesión.** Falta: cerrar la Fase 6 con el barrido
+(arriba), Windows de verdad para cerrar QYR-0078 (Fase 7), ADR-0030 y el FFI del
 motor (Fase 8), el progreso hasta Dart y la transferencia conducida desde Dart
 (Fase 9), y el repaso final de la documentación (Fase 10).
 
