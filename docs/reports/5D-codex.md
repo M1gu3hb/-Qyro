@@ -100,10 +100,11 @@ La pregunta prioritaria tiene respuesta negativa en el código real: `parse`
 acepta sólo `header_len == 48`, limita payload/trailer y `total_len` suma esos
 tres valores. No existe una cabecera aceptada con total cero ni menor que su
 propia cabecera, por lo que no se halló el P0 remoto planteado. Sí había un hueco
-de prueba: diez binarios mutados podían repetir trabajo ante input controlado por
-un peer, y los bucles de drenaje no tenían presupuesto propio. Ahora todo drenaje
-está limitado por frames/bytes disponibles; generación vacía y constantes
-infladas también fallan sin escalar el workload.
+de prueba: diez binarios mutados repetían trabajo cuando un input alcanzaba la
+rama alterada, pero ningún peer puede crear esa alteración interna en el código
+real. Los bucles de drenaje tampoco tenían presupuesto propio. Ahora todo
+drenaje está limitado por frames/bytes disponibles; generación vacía y
+constantes infladas también fallan sin escalar el workload.
 
 Enmienda P2: aunque hoy esa longitud inválida no es alcanzable desde wire, el
 decodificador ya no depende implícitamente de ello. `require_frame_progress`
@@ -390,7 +391,45 @@ comando normal en 264.6 s con 80/0/20/0. No hubo run mutacional cancelado.
 
 ## 10. Puerta 8 — documentación y CI final
 
-Pendiente.
+Pendiente sólo de evidencia remota. `DECISIONS.md` ya incorpora ADR-0031 y
+`STATUS.md` cambió lo mínimo necesario: rama/ancla, confianza, historial, las
+fronteras que siguen sin UI/red y la siguiente tarea. El ledger continúa en 99
+fichas/18 abiertas, diez nuevas de 5D. `Cargo.lock` conserva el hash
+`307d09269e6738b06d9d59123c354d405fe1e540`, 61 paquetes y cero cambios desde
+`ebdffb9`.
+
+La validación local Windows está completa: fmt y Clippy por código 0;
+`cargo test --workspace` 494/0/2; doc tests 3/0/0; `cargo audit --deny warnings`
+escaneó 61 dependencias sin warning. Los cuatro `check_*` pasan tanto en Git
+Bash como en Windows PowerShell 5.1: ocho invocaciones verdes. El contrato del
+checker criptográfico acepta el fixture completo y rechaza por nombre cada una
+de sus once omisiones/regresiones.
+
+La primera ronda de ocho checkers falló en la sexta invocación:
+`check_crypto_platform_evidence.ps1` usaba el `Join-Path` variádico que sólo
+existe en PowerShell Core. Su contrato, ejecutado por primera vez bajo 5.1,
+nació RED por la misma causa. Tras corregir rutas y hacer que el contrato use el
+host actual, éste pasó. La segunda ronda llegó a 7/8 y encontró otras tres rutas
+variádicas en `check_harness_isolation.ps1`; se corrigieron sin `allow` ni
+fallback. La tercera ronda completa terminó 8/8. Ninguna de las dos rondas
+fallidas se presenta como evidencia verde.
+
+### Doce comprobaciones locales
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 494 passed, 0 failed, 2 ignored ya existentes |
+| 4 | Mutación con límite | Puerta 7 final sigue vigente: 209 mutantes, 180/0/29/0; Fase 8 no cambió Rust productivo |
+| 5 | Lectura de aserciones | DECISIONS/STATUS concuerdan con los tres veredictos y las dos fronteras locales; el contrato PS distingue aceptación de once rechazos |
+| 6 | Lectura de contadores | 99/18/10 derivan del ledger; 494/2 y 3/0 de `test result`; 61 de `Cargo.lock`/audit |
+| 7 | La medida se ve fallar | Las dos rondas PS 5.1 fallidas prueban la incompatibilidad; el contrato provoca once fallos del checker |
+| 8 | Lectura de nombres | Cada omisión del contrato nombra workflow, plataforma, harness, publicación o cruce FFI que retira realmente |
+| 9 | Ledger legible | 18 abiertas; cero fichas nuevas en la fase y diez en todo 5D |
+| 10 | Alcance desde `ebdffb9` | Salida prohibida vacía; STATUS/DECISIONS compartidos sólo en la consolidación mínima autorizada |
+| 11 | Coherencia del informe | Informe 5D releído entero después de los cambios; inventario humano y resultados finales releídos contra código/JSON |
+| 12 | `check_docs_consistency` | PASS Git Bash y PASS Windows PowerShell 5.1 dentro de la ronda final 8/8 |
 
 ## 11. Runs de CI de la rama
 
@@ -400,5 +439,5 @@ Todavía no existe ningún run de `codex/qyro-trust-5d`.
 
 No hay red, sockets, descubrimiento, FFI nuevo, UI, selector ni política
 interactiva de emparejamiento. Nada de este sprint se ha probado en hardware
-físico. El mecanismo de confianza y el historial aún no existen al abrir este
-informe.
+físico. El mecanismo de confianza y el historial existen como módulos locales;
+ninguno está conectado a una aplicación o a un transporte.

@@ -132,3 +132,14 @@ offsets no cambian. AEAD autentica los IDs que puso el emisor, pero no demuestra
 que un transfer/item exista: routing debe comprobarlo después de abrir el
 frame. Por esa separación se eliminan `FrameError::InvalidIdentifier` e
 `IdentifierField`, variantes inalcanzables que framing no debía prometer.
+
+El sprint 5D añade ADR-0031: confianza explícita después del handshake. El
+handshake puede completarse para revelar la identidad, pero ninguna operación de
+aplicación queda autorizada hasta que una política externa acepte el veredicto.
+Un peer nuevo es `New`, nunca confiable por omisión; una clave conocida que
+cambia es `KnownAndChanged`, nunca una actualización silenciosa. La comparación
+humana usa 128 bits en cuatro grupos hexadecimales: preimagen dirigida de
+aproximadamente 2^128 y colisión genérica de aproximadamente 2^64, mientras la
+decisión usa la clave Ed25519 completa. El almacén `QYRO-KPS` es versionado,
+acotado y se envuelve como la identidad; sin wrapper no hay fallback a claro.
+5D implementa el mecanismo, no la UI ni la política interactiva.

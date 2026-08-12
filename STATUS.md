@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-12T00:25:45Z
-- Branch: codex/qyro-gap-closure-5c
-- Verified commit: 5736077ddce13aea1a33a18dbb3cbdfbe9df9ac5
+- Updated UTC: 2026-08-12T04:22:28Z
+- Branch: codex/qyro-trust-5d
+- Verified commit: 07f0570cf977214a8204bc7c761612d1e929b31d
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
@@ -47,6 +47,13 @@ cuatro quedan abiertos y registrados, no omitidos.
 
 ## Implemented
 
+- Confianza explícita de peers (ADR-0031): almacén `QYRO-KPS` versionado y
+  envuelto, huella humana de 128 bits y veredictos tipados
+  `KnownAndMatches`/`KnownAndChanged`/`New`: IMPLEMENTED como mecanismo puro,
+  sin UI ni autorización automática para un peer nuevo.
+- Historial local append-only `QYRO-HST`: IMPLEMENTED en `qyro_fs`, con CRC por
+  registro, recuperación truncando el primer tail inválido y consultas por
+  últimos N, peer y estado. No hay sincronización, base de datos ni UI.
 - Flutter runners Android, iOS y Windows: IMPLEMENTED
 - Rust qyro_core y qyro_ffi QYRO/1 mínima: IMPLEMENTED
 - Native bridge Dart→Rust con fallos tipados: IMPLEMENTED, EJECUTADO en Linux y
@@ -227,18 +234,19 @@ cuatro quedan abiertos y registrados, no omitidos.
 - Campaña **exhaustiva** de fuzzing: NOT_IMPLEMENTED. Hay una acotada, semanal,
   de dos minutos por target, en `crypto-fuzz.yml`.
 - Transporte, sockets y TLS: NOT_IMPLEMENTED
-- File transfer: NOT_IMPLEMENTED
+- Transferencia de producto por red/UI: NOT_IMPLEMENTED. El motor y el
+  filesystem local sí mueven una transferencia entre directorios.
 - Selección de archivos e integración del manifest con el filesystem:
   NOT_IMPLEMENTED. **El manifest sí existe** y está probado
   (`qyro_manifest`, ADR-0017/0019); lo que falta es elegir archivos reales y
   construirlo desde el disco.
 - LAN/discovery/manual IP: NOT_IMPLEMENTED
-- Resume: NOT_IMPLEMENTED
-- Emparejamiento y dispositivos de confianza: NOT_IMPLEMENTED. La identidad
-  existe (`DeviceIdentity`, Ed25519, ADR-0020), el handshake la autentica y desde
-  este sprint **sobrevive al cierre del proceso en Windows**; lo que falta es el
-  paso de confianza, y que sobreviva también en Android y en iOS.
-- Database/history: NOT_IMPLEMENTED
+- Reanudación por red/UI: NOT_IMPLEMENTED. Los metadatos locales de
+  `.qyro-resume` sí sobreviven entre procesos y `qyro_fs` los aplica.
+- UI y política interactiva de emparejamiento: NOT_IMPLEMENTED. El mecanismo de
+  confianza y el rechazo tipado de cambio de clave sí existen (ADR-0031).
+- Base de datos o historial sincronizado: NOT_IMPLEMENTED. El historial local
+  append-only sí existe y deliberadamente usa `Vec<T>` con iteradores.
 - Optical QR/RaptorQ: NOT_IMPLEMENTED
 - Wi-Fi Direct/Multipeer/Bluetooth transports: NOT_IMPLEMENTED
 - Share Target Android, Share Extension iOS, drag and drop Windows: NOT_IMPLEMENTED
@@ -325,6 +333,24 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
 - Fase 10 consolidó el ledger, las decisiones, este estado y el informe. CI
   31549905688 sobre el commit documental `5736077` terminó en success con sus
   ocho jobs.
+
+## Sprint 5D — ledger legible, confianza e historial
+
+- El ledger conserva 99 fichas y 18 abiertas. Las 188 entradas mecánicas del
+  barrido anterior se sustituyeron por diez fichas humanas QYR-0289–QYR-0298;
+  el inventario completo de 939 mutantes vive en el informe de mutación.
+- ADR-0031 y `qyro_identity_store` implementan la decisión local de confianza
+  sin bool ni TOFU silencioso. Una clave conocida que cambia se rechaza por
+  nombre y un peer nuevo se reporta como nuevo, no como confiable.
+- `qyro_fs` implementa un historial local append-only con recuperación real de
+  un registro escrito a medias. 10 000 registros ocuparon 720 012 bytes y se
+  parsearon en 72.6051 ms en Windows debug; el test de falsabilidad rechaza
+  deliberadamente 500 ms + 1 ns.
+- El barrido final sobre todo el código nuevo produjo 209 mutantes: 180 caught,
+  0 missed, 29 unviable y 0 timeout. `Cargo.lock` sigue byte-idéntico a
+  `ebdffb9` y conserva 61 paquetes.
+- Esto no añade red, descubrimiento, FFI, UI, selector de archivos ni política
+  interactiva. Ninguna parte de 5D se ha ejecutado en hardware físico.
 
 ## Real tests
 
@@ -1175,26 +1201,12 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**Sprint 5B: el filesystem.** El motor mueve búferes; 5B es donde empieza a mover
-archivos. En orden:
-
-1. Selección de archivos en Android y en Windows.
-2. El manifest **construido desde disco**, leyendo por partes. Hoy se construye a
-   mano; el digest de un archivo grande no puede exigir tenerlo entero en RAM,
-   igual que el motor no lo exige.
-3. `.qyro-part`, verificación del digest al cerrar y rename atómico. El orden
-   importa: renombrar antes de verificar publica un archivo que todavía no se
-   sabe si es el que se mandó.
-4. Colisiones de ruta contra lo que ya existe en el destino.
-5. Los metadatos que hacen posible reanudar **después de cerrar el proceso**, que
-   es lo que 5A deliberadamente no hace.
-
-`ContentSource` y `ContentSink` son la costura por la que entra todo eso, y **no
-deberían cambiar**. Si cambian para acomodar el disco, estaban mal y eso es el
-hallazgo, igual que `SecretWrapper` aguantó la segunda plataforma en 4D.2a.
-
-Después: LAN Android↔Windows, UI, y entonces se retoma 4D.2 con ADR-0025 tal como
-quedó.
+**Descubrimiento LAN y conexión del producto.** El mecanismo local ya tiene
+identidad, handshake, confianza, motor, filesystem, reanudación e historial,
+pero nada los conecta a sockets, FFI o UI. El siguiente tramo debe abordar
+descubrimiento Android/Windows con entrada manual o QR de fallback, luego el
+selector de archivos y la UI de emparejamiento/transferencia. Android Keystore
+e iOS Keychain siguen siendo trabajos separados gobernados por ADR-0025.
 
 ## Provisional values
 
