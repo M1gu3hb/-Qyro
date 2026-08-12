@@ -16,7 +16,13 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 3] = ["lib.rs", "blob.rs", "error.rs"];
+const PRODUCTION_FILES: [&str; 5] = [
+    "lib.rs",
+    "blob.rs",
+    "error.rs",
+    "known_peer_types.rs",
+    "known_peers.rs",
+];
 
 #[test]
 fn no_production_path_can_panic() {
@@ -43,6 +49,28 @@ fn every_store_error_has_a_construction_site_or_a_platform_argument() {
         "StoreError",
         13,
         &STORE_ERRORS_CONSTRUCTED_BY_PLATFORM_IMPLEMENTATIONS,
+    );
+}
+
+#[test]
+fn every_known_peer_store_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "known_peer_types.rs",
+        "KnownPeerStoreError",
+        22,
+        &[],
+    );
+}
+
+#[test]
+fn every_trust_verdict_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "known_peer_types.rs",
+        "TrustVerdict",
+        3,
+        &[],
     );
 }
 

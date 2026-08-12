@@ -126,6 +126,39 @@ Finalmente, el mutante de replay es equivalente: `record` ejecuta `check`
 primero; si `sequence == highest`, el bit cero ya existe y se retorna
 `ReplayDetected` antes de evaluar `>` o `>=` en el `match`.
 
+## Fase 5 — módulo de confianza y peers conocidos
+
+Alcance declarado: únicamente los dos archivos de producción nuevos de
+`qyro_identity_store`, no el crate histórico entero:
+
+```text
+cargo-mutants 27.1.0 mutants -p qyro_identity_store \
+  --file rust/crates/qyro_identity_store/src/known_peers.rs \
+  --file rust/crates/qyro_identity_store/src/known_peer_types.rs \
+  --timeout 30 --test-workspace false -j 4
+```
+
+| Run | Árbol probado | CAUGHT | MISSED | UNVIABLE | TIMEOUT | Veredicto |
+|---|---|---:|---:|---:|---:|---|
+| Intento de salida relativa | implementación inicial | 0 | 0 | 0 | 0 | Falló antes del baseline: el padre `work/` no existía; ningún mutante ejecutado |
+| Primer barrido completo | siete contratos de aceptación | 73 | 39 | 12 | 0 | RED útil: faltaban fronteras, duplicados, timestamps, entropía y accesores |
+| Segundo barrido completo | 17 contratos y constantes de wire explícitas | 95 | 0 | 9 | 0 | PASS; 104 mutantes en 5 min |
+| Barrido final completo | mismo código más zeroización del cuerpo claro | 95 | 0 | 9 | 0 | PASS; 104 mutantes en 5 min, baseline 26 s build + 3 s test |
+
+El inventario bajó de 124 a 104 porque las cuentas que definen constantes del
+wire (`2 MiB`, 51/52/306 bytes y 1 269 764 bytes) se sustituyeron por sus
+valores literales congelados. No se excluyó ningún operador ni función del
+barrido final. Los contratos añadidos ejercen ambos lados de cada límite, dos
+clases de duplicado, tiempos negativos/invertidos, el dominio de entropía,
+accesores, representación humana y display de error. El store con 4096 peers se
+construye de verdad y `len()` devuelve el resultado medido; 4097 se rechaza.
+
+El control que importa se ejecutó también fuera de la herramienta: se retiró
+temporalmente `known.identity == candidate.identity` y el test exacto
+`a_known_peer_whose_key_changed_is_refused_by_name` falló con
+`left: KnownAndMatches`, `right: KnownAndChanged`. La comparación se restauró
+antes del barrido final. No se creó ninguna ficha de ledger por este barrido.
+
 ## Inventario completo
 
 | Crate | Archivo:línea | Mutación literal | Windows | Linux |

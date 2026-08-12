@@ -218,7 +218,58 @@ interactiva.
 
 ## 7. Puerta 5 — confianza implementada
 
-Pendiente.
+Cerrada. `qyro_identity_store` contiene el módulo nuevo sin crate ni
+dependencia nueva. La API pública separa `KnownAndMatches`,
+`KnownAndChanged` y `New`; la decisión pura localiza por el nombre local
+esperado y compara la identidad pública completa. El primer test escrito no
+compiló por los nueve símbolos todavía ausentes, que fue el RED correcto.
+
+El store aplica el formato congelado: cabecera `QYRO-KPS`, versión/wrapper
+tipados, reservado cero, cuerpo envuelto máximo 2 MiB, máximo 4096 registros,
+longitud exacta por registro, identidad pública canónica, nombre UTF-8 de
+1–255 bytes y tiempos válidos. Rechaza duplicados de nombre o clave y parsea
+todo-o-nada. El cuerpo claro se mantiene en `Zeroizing` durante el sellado y el
+wrapper ya devuelve un buffer zeroizing al abrir. `HumanFingerprint` muestra
+exactamente 16 bytes en cuatro grupos hexadecimales; la confianza no usa ese
+prefijo.
+
+El primer barrido completo encontró 124 mutantes: 73 caught, 39 missed, 12
+unviable y cero timeouts. Los contratos de frontera redujeron el árbol final a
+104 mutantes materiales/generables; los dos barridos completos posteriores
+terminaron **95 caught, 0 missed, 9 unviable, 0 timeouts** en 5 min. El último
+corresponde al código final con zeroización. Además se retiró literalmente la
+comparación de claves: el test requerido falló `KnownAndMatches` frente a
+`KnownAndChanged`, y después de restaurarla vuelve a pasar.
+
+### Doce comprobaciones
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 478 passed, 0 failed, 2 ignored ya existentes; +19 tests frente a Puerta 4 |
+| 4 | Mutación con límite | Final: 95 caught, 0 missed, 9 unviable, 0 timeout; `--timeout 30`, sólo los dos módulos nuevos |
+| 5 | Lectura de aserciones | Match/cambio/nuevo son tres valores; exacto/uno más, duplicado nombre/clave y tiempos válido/inválido pueden diferir |
+| 6 | Lectura de contadores | `len()` se observa con 0, 2 y un store realmente construido con 4096 peers; 4097 se rechaza |
+| 7 | La medida se ve fallar | No hay benchmark nuevo; la falsabilidad material es la comparación retirada, que produce el RED literal exigido |
+| 8 | Lectura de nombres | Los tests nombran y ejercen cambio de clave, nuevo no trusted, positivo, versión futura, truncado, límites, duplicados, timestamps y entropía |
+| 9 | Ledger legible | 18 abiertas; cero fichas nuevas en la fase y diez en todo 5D |
+| 10 | Alcance desde `ebdffb9` | Sólo crate propio, ADR, ledger/checkers heredados e informes; sin Cargo, crate excluido, archivo de Claude Code ni constante prohibida |
+| 11 | Coherencia del informe | Releídas secciones 0–7 y las secciones humanas del informe de mutación contra el código final y sus tres `outcomes.json` |
+| 12 | `check_docs_consistency` | PASS Git Bash (13.9 s) y PASS Windows PowerShell 5.1 (47.5 s) después del último cambio de documentación pública |
+
+Runs fallidos que se conservan: RED de compilación por imports ausentes; primer
+crate completo con dos guardas estructurales mal apuntadas; primer intento de
+mutación sin padre de salida; barrido 73/39/12; y RED deliberado al retirar la
+comparación. El error de guardas se corrigió separando declaraciones y sitios de
+construcción, no eximiendo variantes. Un intento final lanzó Cargo y los
+checkers en paralelo; PowerShell enumeró un lock incremental de `target/` que
+Cargo retiró antes de `Get-Content` y falló por la carrera. Se repitió después
+de terminar Cargo y ambos checkers pasaron. No hubo run cancelado.
+
+La puerta también comprobó el contrato de dependencias: `Cargo.lock` conserva
+el blob exacto `307d09269e6738b06d9d59123c354d405fe1e540` de `ebdffb9` y contiene 61
+secciones `[[package]]`.
 
 ## 8. Puerta 6 — historial local
 
