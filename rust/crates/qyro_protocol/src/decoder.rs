@@ -454,7 +454,7 @@ mod cost_tests {
     use super::{FrameDecoder, HEADER_LEN, MAX_BUFFER_LEN};
     use crate::error::FrameError;
     use crate::frame::Frame;
-    use crate::limits::MAX_PAYLOAD_LEN;
+    use crate::limits::{MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MAX_TRAILER_LEN};
     use crate::message::MessageType;
 
     /// The smallest well-formed frame: a header and nothing else.
@@ -464,8 +464,34 @@ mod cost_tests {
             .encode()
     }
 
+    // Keep test work independent from MAX_FRAME_LEN itself. A mutation that
+    // turns the sum into a multiplication used to expand four cost tests by
+    // three orders of magnitude and exhaust the runner before the assertion
+    // naming the broken invariant could execute.
+    const EXPECTED_MAX_FRAME_LEN: usize = MAX_HEADER_LEN + MAX_PAYLOAD_LEN + MAX_TRAILER_LEN;
+
+    fn assert_small_reservation_is_bounded() {
+        let mut decoder = FrameDecoder::new();
+        let first_read = [0u8; HEADER_LEN];
+        decoder.push(&first_read).expect("the first read fits");
+        let first_capacity = decoder.buffer_capacity();
+        decoder.push(&first_read).expect("the second read fits");
+        assert!(
+            decoder.buffer_capacity() <= first_capacity.saturating_mul(2),
+            "two equal reads expanded capacity from {first_capacity} to {}; \
+             reservation growth must stay geometric",
+            decoder.buffer_capacity()
+        );
+    }
+
+    #[test]
+    fn the_frame_ceiling_is_the_sum_of_its_parts() {
+        assert_eq!(MAX_FRAME_LEN, EXPECTED_MAX_FRAME_LEN);
+    }
+
     #[test]
     fn draining_a_full_buffer_copies_a_bounded_number_of_bytes() {
+        assert_small_reservation_is_bounded();
         // QYR-0024. `next_frame` reclaimed the frame it had just yielded with
         // `drain(..total)`, which memmoves the entire rest of the buffer. Filling
         // the buffer with minimal frames and draining it therefore costs
@@ -478,19 +504,21 @@ mod cost_tests {
         let frame = minimal_frame();
         let mut decoder = FrameDecoder::new();
 
+        let frames = EXPECTED_MAX_FRAME_LEN / frame.len();
         let mut pushed = 0usize;
-        while pushed + frame.len() <= MAX_BUFFER_LEN {
+        for _ in 0..frames {
             decoder.push(&frame).expect("within the ceiling");
             pushed += frame.len();
         }
-        let frames = pushed / frame.len();
         assert!(frames > 20_000, "the buffer should hold many frames");
 
-        while decoder
-            .next_frame()
-            .expect("every frame is well formed")
-            .is_some()
-        {}
+        for _ in 0..frames {
+            decoder
+                .next_frame()
+                .expect("every frame is well formed")
+                .expect("one buffered frame must be consumed per call");
+        }
+        assert_eq!(decoder.next_frame().expect("well formed"), None);
         assert_eq!(decoder.buffered_len(), 0, "everything was consumed");
 
         // The bound: reclaiming space may copy each pushed byte a small constant
@@ -508,6 +536,7 @@ mod cost_tests {
 
     #[test]
     fn the_cost_of_draining_does_not_grow_with_the_buffer() {
+        assert_small_reservation_is_bounded();
         // The same bound at five sizes, which is what makes it a bound rather
         // than a threshold somebody tuned until one case passed. With a
         // `drain` per frame the moved count grows with the square of the
@@ -520,15 +549,22 @@ mod cost_tests {
             128 * 1024,
             256 * 1024,
             512 * 1024,
-            MAX_BUFFER_LEN,
+            EXPECTED_MAX_FRAME_LEN,
         ] {
             let mut decoder = FrameDecoder::with_max_buffer_len(ceiling);
             let mut pushed = 0u64;
-            while pushed as usize + frame.len() <= ceiling {
+            let frames = ceiling / frame.len();
+            for _ in 0..frames {
                 decoder.push(&frame).expect("within the ceiling");
                 pushed += frame.len() as u64;
             }
-            while decoder.next_frame().expect("well formed").is_some() {}
+            for _ in 0..frames {
+                decoder
+                    .next_frame()
+                    .expect("well formed")
+                    .expect("one buffered frame must be consumed per call");
+            }
+            assert_eq!(decoder.next_frame().expect("well formed"), None);
 
             assert_eq!(decoder.buffered_len(), 0, "everything was consumed");
             assert!(
@@ -543,6 +579,7 @@ mod cost_tests {
 
     #[test]
     fn a_socket_loop_with_a_backlog_stays_bounded() {
+        assert_small_reservation_is_bounded();
         // The shape a transport actually produces, and the one that matters:
         // fill-then-drain never compacts at all, so it cannot show that
         // compaction is amortized. Here a backlog is held while frames keep
@@ -577,13 +614,15 @@ mod cost_tests {
 
     #[test]
     fn a_buffer_filled_one_byte_at_a_time_still_yields_its_frames() {
+        assert_small_reservation_is_bounded();
         // Byte-at-a-time delivery is what a slow or hostile peer produces, and
         // it is the path that walked the capacity past the ceiling.
         let frame = minimal_frame();
         let mut decoder = FrameDecoder::new();
         let mut pushed = 0usize;
 
-        while pushed + frame.len() <= MAX_BUFFER_LEN {
+        let frames = EXPECTED_MAX_FRAME_LEN / frame.len();
+        for _ in 0..frames {
             for byte in &frame {
                 decoder
                     .push(core::slice::from_ref(byte))
@@ -593,16 +632,20 @@ mod cost_tests {
             assert!(decoder.buffer_capacity() <= MAX_BUFFER_LEN);
         }
 
-        let mut yielded = 0usize;
-        while decoder.next_frame().expect("well formed").is_some() {
-            yielded += 1;
+        for _ in 0..frames {
+            decoder
+                .next_frame()
+                .expect("well formed")
+                .expect("one buffered frame must be consumed per call");
         }
-        assert_eq!(yielded, pushed / frame.len(), "every frame came back out");
+        assert_eq!(decoder.next_frame().expect("well formed"), None);
+        assert_eq!(frames, pushed / frame.len(), "every frame came back out");
         assert!(decoder.bytes_moved() <= 2 * pushed as u64);
     }
 
     #[test]
     fn a_maximum_frame_dripped_one_byte_at_a_time_arrives_whole() {
+        assert_small_reservation_is_bounded();
         // One frame the size of the whole ceiling, delivered in the worst
         // possible shape. The cursor must not confuse "nothing consumed yet"
         // with "nothing buffered", and the capacity must still not overshoot.
@@ -615,7 +658,7 @@ mod cost_tests {
             decoder
                 .push(core::slice::from_ref(byte))
                 .expect("the frame fits under the ceiling");
-            assert!(decoder.buffer_capacity() <= MAX_BUFFER_LEN);
+            assert!(decoder.buffer_capacity() <= EXPECTED_MAX_FRAME_LEN);
         }
 
         let decoded = decoder
@@ -632,6 +675,7 @@ mod cost_tests {
 
     #[test]
     fn a_frame_larger_than_a_custom_ceiling_is_refused_not_awaited() {
+        assert_small_reservation_is_bounded();
         // A small ceiling and a header declaring far more than it. The decoder
         // must refuse and poison rather than wait for bytes it would never
         // accept — a wait here is a connection that hangs for ever.
@@ -658,6 +702,7 @@ mod cost_tests {
 
     #[test]
     fn poisoning_and_reset_survive_the_cursor() {
+        assert_small_reservation_is_bounded();
         // The compaction change is internal, and this is the invariant most
         // likely to break silently if it were not: a structural failure still
         // poisons, `reset` is still the only way out, and the cursor does not
@@ -689,6 +734,7 @@ mod cost_tests {
 
     #[test]
     fn the_buffer_never_reserves_more_than_its_limit() {
+        assert_small_reservation_is_bounded();
         // QYR-0027. `push` bounds `len`, and `Vec::extend_from_slice` grows
         // `capacity` geometrically, so dripping one byte at a time walks the
         // capacity past the ceiling the decoder exists to enforce: measured at
@@ -699,18 +745,18 @@ mod cost_tests {
         let mut decoder = FrameDecoder::new();
         let byte = [0u8; 1];
 
-        while decoder.buffered_len() < MAX_BUFFER_LEN {
+        for _ in 0..EXPECTED_MAX_FRAME_LEN {
             decoder
                 .push(&byte)
                 .expect("one byte at a time, under the ceiling");
             assert!(
-                decoder.buffer_capacity() <= MAX_BUFFER_LEN,
+                decoder.buffer_capacity() <= EXPECTED_MAX_FRAME_LEN,
                 "capacity reached {} at {} buffered bytes, past the \
-                 MAX_BUFFER_LEN of {MAX_BUFFER_LEN}",
+                 expected limit of {EXPECTED_MAX_FRAME_LEN}",
                 decoder.buffer_capacity(),
                 decoder.buffered_len()
             );
         }
-        assert_eq!(decoder.buffered_len(), MAX_BUFFER_LEN);
+        assert_eq!(decoder.buffered_len(), EXPECTED_MAX_FRAME_LEN);
     }
 }

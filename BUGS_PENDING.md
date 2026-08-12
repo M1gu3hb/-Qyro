@@ -1961,6 +1961,12 @@
   o si sólo la mutación viola una invariante interna
 - Actual: doce suites excedieron 90 s; el caso `FrameHeader::total_len -> 0`
   quedó mezclado con once resultados sin juicio
-- Estado: abierto
+- Resolución: el total de toda cabecera aceptada es estructuralmente al menos 48;
+  diez mutantes eran disparables por entrada pero no representaban un defecto
+  presente. Se acotaron todos los drenajes por frames/bytes y los doce mutantes
+  pasan de `TIMEOUT` a `CAUGHT`; los dos sólo locales también quedan nombrados
+- Estado: resuelto
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- Evidencia: barrido focal a 30 s: primera pasada amplia 22 caught, 1 unviable y
+  1 timeout; reejecución exacta del restante, 1 caught en 12 s

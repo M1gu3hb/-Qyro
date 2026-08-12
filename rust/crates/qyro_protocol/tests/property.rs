@@ -109,7 +109,14 @@ fn incremental_delivery_always_matches_whole_delivery() {
         let mut whole = FrameDecoder::new();
         whole.push(&stream).expect("within buffer");
         let mut expected = Vec::new();
-        while let Some(frame) = whole.next_frame().expect("valid stream") {
+        for _ in 0..=frames.len() {
+            let Some(frame) = whole.next_frame().expect("valid stream") else {
+                break;
+            };
+            assert!(
+                expected.len() < frames.len(),
+                "case {case} did not make forward progress"
+            );
             expected.push(expect_message(frame));
         }
 
@@ -123,7 +130,14 @@ fn incremental_delivery_always_matches_whole_delivery() {
                 .push(&stream[offset..offset + take])
                 .expect("within buffer");
             offset += take;
-            while let Some(frame) = incremental.next_frame().expect("valid stream") {
+            for _ in 0..=frames.len() {
+                let Some(frame) = incremental.next_frame().expect("valid stream") else {
+                    break;
+                };
+                assert!(
+                    actual.len() < frames.len(),
+                    "case {case} did not make forward progress"
+                );
                 actual.push(expect_message(frame));
             }
         }

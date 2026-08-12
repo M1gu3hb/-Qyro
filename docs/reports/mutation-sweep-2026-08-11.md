@@ -46,6 +46,39 @@ clasificación creó ocho fichas de deuda; la reparación del ledger y la conclu
 de los timeouts usan otras dos. En total son diez fichas nuevas, no un volcado de
 188 resultados.
 
+## Investigación individual de los doce `TIMEOUT`
+
+Hay dos preguntas distintas. En el código real, `FrameHeader::total_len` es
+`48 + payload + trailer`; `parse` exige exactamente 48 bytes de cabecera y acota
+los otros dos sumandos antes de construir el valor. Por tanto **no existe** una
+cabecera de 48 bytes aceptada cuyo total real sea cero o menor que 48: no hay un
+P0 presente en esta revisión. En el binario mutado, en cambio, diez cambios sí
+pueden ser disparados por bytes de un peer y los antiguos tests entraban en un
+bucle sin presupuesto. Esa carencia de observabilidad se corrigió.
+
+| # | Mutación que agotó 90 s | ¿Peer dispara el binario mutado? | Argumento estructural / límite focal | Reejecución |
+|---:|---|---|---|---|
+| 1 | `decoder.rs:269:9 push -> Ok(())` | Sí: cualquier lectura | `push` real extiende tras comprobar `checked_add`; los tests tienen número finito de pushes y exigen el cambio de longitud | CAUGHT |
+| 2 | `decoder.rs:360:27 += -> *=` | Sí: tipo desconocido bien formado | `read` nace en cero; multiplicarlo no consume. El drenaje admite como máximo el número de frames derivado del buffer | CAUGHT |
+| 3 | `decoder.rs:375:23 += -> *=` | Sí: envelope cifrado bien formado | Mismo argumento, en la rama `Encrypted`; el presupuesto de frames convierte la repetición en fallo | CAUGHT |
+| 4 | `decoder.rs:388:19 += -> *=` | Sí: frame plano bien formado | Mismo argumento, en la rama `Message`; una llamada extra debe devolver `None` | CAUGHT |
+| 5 | `decoder.rs:423:40 + -> *` | Sí: dos lecturas de 48 bytes | No crea un total de wire inválido; amplifica la reserva. La medida focal compara la capacidad tras dos lecturas iguales contra crecimiento geométrico | CAUGHT en la segunda reejecución |
+| 6 | `frame.rs:144:9 encode -> vec![]` | No: es construcción local de salida | Un peer no invoca `Frame::encode`; los workloads derivados ya no pueden iterar según una longitud cero | CAUGHT |
+| 7 | `header.rs:293:9 FrameHeader::total_len -> 0` | Sí en el binario mutado: cualquier cabecera conocida | En producción es imposible: `48 + u32 + u8 >= 48`. El test focal exige total 48 para el frame mínimo y consumo completo en una llamada | CAUGHT |
+| 8 | `header.rs:293:27 + -> *` | Sí: frame conocido vacío | En el mutante `48 * 0 + 0 = 0`; en producción el primer operador es suma. Mismo test focal y drenajes acotados | CAUGHT |
+| 9 | `header.rs:536:9 ParsedHeader::total_len -> 0` | Sí: cualquier cabecera aceptada | El enum real sólo delega a los dos totales que incluyen 48; el límite de drenaje ve la repetición | CAUGHT |
+| 10 | `header.rs:546:9 UnknownHeader::total_len -> 0` | Sí: tipo desconocido bien formado | El valor real es `48 + u32 + u8`; el drenaje de desconocidos está limitado por frames disponibles | CAUGHT |
+| 11 | `header.rs:546:27 + -> *` | Sí: tipo desconocido con payload vacío | El mutante puede producir cero; el operador real no. El mismo presupuesto detecta la falta de progreso | CAUGHT |
+| 12 | `limits.rs:49:49 + -> *` | No: un peer no cambia constantes de compilación | El mutante agrandaba los workloads a ~1 GiB. Los tests trabajan con la suma independiente y exigen que `MAX_FRAME_LEN` sea exactamente esa suma | CAUGHT |
+
+La primera reejecución focal usó un regex de líneas, seleccionó 24 mutantes
+(los doce originales más doce variantes vecinas) y terminó `22 caught, 1
+unviable, 1 timeout` bajo `--timeout 30`; el único timeout restante fue el #5.
+Esto se registra como run fallido, no como éxito parcial. Tras añadir la medida
+de dos lecturas iguales, la reejecución exacta del #5 terminó `1 caught` en 12 s.
+En consecuencia, los doce resultados originales son ahora `CAUGHT`, ninguno
+queda como ausencia de veredicto y no se abrió una ficha por mutante.
+
 ## Inventario completo
 
 | Crate | Archivo:línea | Mutación literal | Windows | Linux |

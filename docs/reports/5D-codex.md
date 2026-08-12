@@ -93,7 +93,42 @@ pasado. No se presenta ninguno como evidencia y no hubo run cancelado.
 
 ## 4. Puerta 2 — timeouts
 
-Pendiente.
+Cerrada. La tabla individual y los argumentos estructurales viven junto al
+inventario en `mutation-sweep-2026-08-11.md`.
+
+La pregunta prioritaria tiene respuesta negativa en el código real: `parse`
+acepta sólo `header_len == 48`, limita payload/trailer y `total_len` suma esos
+tres valores. No existe una cabecera aceptada con total cero ni menor que su
+propia cabecera, por lo que no se halló el P0 remoto planteado. Sí había un hueco
+de prueba: diez binarios mutados podían repetir trabajo ante input controlado por
+un peer, y los bucles de drenaje no tenían presupuesto propio. Ahora todo drenaje
+está limitado por frames/bytes disponibles; generación vacía y constantes
+infladas también fallan sin escalar el workload.
+
+La primera reejecución a 30 s seleccionó por error de regex 24 mutantes en vez de
+doce y terminó con `22 caught, 1 unviable, 1 timeout`; permanece registrada como
+fallida. El restante era `reserve_for: + -> *`: aunque tres tests ya fallaban,
+otros seguían gastando el presupuesto. La medida focal de dos lecturas de 48
+bytes verifica que la capacidad crece como máximo geométricamente. La
+reejecución exacta terminó `1 caught` en 12 s. Cruzados los nombres contra el
+JSON original, los doce antiguos `TIMEOUT` son ahora `CAUGHT`.
+
+### Doce comprobaciones
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 436 passed, 0 failed, 2 ignored ya existentes; +2 tests frente al baseline |
+| 4 | Mutación con límite | Primera pasada amplia falló 22/1/1; reejecución focal del único timeout: 1 CAUGHT bajo 30 s. Los doce originales quedan CAUGHT |
+| 5 | Lectura de aserciones | Cada presupuesto distingue `Some` que consume de repetición; el mínimo distingue 48 de 0; reserva distingue crecimiento geométrico de multiplicativo |
+| 6 | Lectura de contadores | Límites derivados de `frames.len()`, `data.len() / HEADER_LEN`, bytes empujados y capacidad observada |
+| 7 | La medida se ve fallar | Los JSON/logs originales prueban doce timeouts; el primer rerun prueba que la nueva medida de reserva aún era insuficiente; el segundo mata ese mutante |
+| 8 | Lectura de nombres | El test de cabecera ejerce total y consumo; el de suma ejerce la suma; corpus/property ejercen progreso acotado |
+| 9 | Ledger legible | 21 abiertas; no se añadió ficha y QYR-0298 quedó resuelta con una conclusión |
+| 10 | Alcance desde `ebdffb9` | Sólo protocolo propio, ledger, checkers/contratos e informes; ningún archivo de Claude Code ni constante prohibida |
+| 11 | Coherencia del informe | Releídas secciones 0–4 y la clasificación/timeouts del inventario contra código y JSON de ambos reruns |
+| 12 | `check_docs_consistency` | PASS Git Bash y PASS Windows PowerShell 5.1 |
 
 ## 5. Puerta 3 — supervivientes importantes
 
