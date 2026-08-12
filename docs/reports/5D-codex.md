@@ -339,7 +339,54 @@ RED→GREEN y 5/5 mutantes focales atrapados.
 
 ## 9. Puerta 7 — barrido y guardas
 
-Pendiente.
+Cerrada. El árbol final de 5D tiene tres superficies productivas nuevas o
+endurecidas y las tres se barrieron con 30 s por mutante: 104 mutantes de peers
+conocidos, 100 del historial y 5 de la guarda de progreso. El agregado es
+**209 mutantes: 180 caught, 0 missed, 29 unviable y 0 timeout**. No se excluyó
+ningún operador ni función dentro de esos módulos y no se creó ninguna ficha:
+los `unviable` no compilan y no hay superviviente material que clasificar.
+
+Las guardas mínimas enumeran `known_peers.rs` y `known_peer_types.rs` en
+`qyro_identity_store`, `history.rs` y `history_types.rs` en `qyro_fs`; ambos
+crates pasan prohibición de panic, inventario completo de archivos y sitios de
+construcción para sus errores/veredictos. `qyro_protocol` elevó a 16 el mínimo
+de variantes de `FrameError` y construye `DecoderNoProgress` en producción. No
+se añadió `allow`, no se editó `source_guard.rs` y no se tocó
+`MINIMUM_GUARD_SET_EXCEPTIONS`.
+
+La revisión histórica de `ci: require filesystem mutation evidence` encontró
+que el job de `3cbd220` no fallaba por `MISSED`: el barrido llevaba
+`continue-on-error` y la puerta sólo exigía `outcomes.json` y el artefacto. Era
+un recolector puntual de evidencia y `dc7725e` lo retiró después del run válido.
+Si vuelve como guarda recurrente, el umbral decidido es **cero identidades
+nuevas en `MISSED ∪ TIMEOUT` sobre una línea base explícita por plataforma**,
+no cero supervivientes totales. Así los supervivientes históricos ya
+clasificados no bloquean cada merge, pero un simple conteo tampoco permite que
+un superviviente nuevo se esconda porque otro antiguo desapareció. Los
+`UNVIABLE` quedan fuera del umbral; son fallos de compilación del mutante.
+
+### Doce comprobaciones
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 494 passed, 0 failed, 2 ignored ya existentes |
+| 4 | Mutación con límite | 209 mutantes bajo 30 s: 180 caught, 0 missed, 29 unviable, 0 timeout |
+| 5 | Lectura de aserciones | Confianza distingue tres veredictos y todos los bordes del formato; historia distingue prefijo válido/tail; progreso distingue 47/48 |
+| 6 | Lectura de contadores | Store deriva 4096/4097 entradas; historia mide bytes y trabajo 10/20; progreso usa `HEADER_LEN` real |
+| 7 | La medida se ve fallar | Comparación de clave retirada falla por nombre; 500 ms + 1 ns falla el presupuesto; cinco mutantes de progreso fallan |
+| 8 | Lectura de nombres | Los contratos nombran clave cambiada, peer nuevo, versión futura, truncado, recuperación, filtros y error tipado que ejercen |
+| 9 | Ledger legible | 18 abiertas; cero fichas nuevas en la fase y diez en todo 5D |
+| 10 | Alcance desde `ebdffb9` | Salida prohibida vacía; sin Cargo, workflows, crates ajenos ni excepción mínima |
+| 11 | Coherencia del informe | Releídas secciones 0–9 y ambos informes contra los tres `outcomes.json`, guardas y workflow histórico/final |
+| 12 | `check_docs_consistency` | PASS Git Bash y PASS Windows PowerShell 5.1 |
+
+Run de orquestación conservado: el wrapper del barrido final de identidad agotó
+su espera local de 120 s con código 124 cuando iban 36 outcomes; no canceló el
+proceso hijo. `cargo-mutants` continuó y cerró su JSON a los 277 s con los
+104/104 mutantes clasificados 95/0/9/0. El barrido de historia terminó por su
+comando normal en 264.6 s con 80/0/20/0. No hubo run mutacional cancelado.
 
 ## 10. Puerta 8 — documentación y CI final
 

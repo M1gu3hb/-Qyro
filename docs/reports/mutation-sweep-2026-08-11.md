@@ -197,6 +197,36 @@ inyecta 500 ms + 1 ns y exige que el detector falle, y otro prueba que el
 contador de trabajo crece de 10 a 20 cuando crece el archivo. No se añadió
 ninguna ficha al ledger por estos 100 mutantes.
 
+## Fase 7 — barrido final de todo lo nuevo
+
+La superficie final se volvió a medir por módulo, con el mismo límite de 30 s
+por mutante y sin ejecutar consumidores ajenos al crate. Los denominadores son
+los mutantes que `cargo-mutants --list` generó para cada alcance, no el número
+de tests ni una constante escrita a mano:
+
+| Alcance final | Potenciales | CAUGHT | MISSED | UNVIABLE | TIMEOUT |
+|---|---:|---:|---:|---:|---:|
+| `known_peers.rs` + `known_peer_types.rs` | 104 | 95 | 0 | 9 | 0 |
+| `history.rs` + `history_types.rs` | 100 | 80 | 0 | 20 | 0 |
+| `require_frame_progress` | 5 | 5 | 0 | 0 | 0 |
+| **Total 5D** | **209** | **180** | **0** | **29** | **0** |
+
+El run final de identidad empezó a las 04:08:39Z y cerró su JSON a las
+04:13:16Z. El wrapper que lo lanzó perdió la espera a los 120 s (código 124),
+pero el proceso hijo no fue cancelado y terminó los 104 mutantes; se conserva
+el fallo de orquestación y no se confunde con un timeout de mutante. Historia
+terminó los 100 en 264.6 s. La guarda de progreso terminó sus cinco en 31 s.
+No apareció ningún `MISSED` o `TIMEOUT`, por lo que este barrido añade cero
+fichas al ledger.
+
+La revisión del antiguo job `mutation-fs-linux-phase9` fijó la política para una
+eventual guarda recurrente: permitir exactamente el conjunto histórico
+clasificado por plataforma y fallar por cualquier identidad nueva en
+`MISSED ∪ TIMEOUT`. Un umbral de cero resultados totales bloquearía por deuda
+conocida; un mero umbral numérico permitiría intercambiar un superviviente por
+otro sin detectarlo. El job puntual de `3cbd220` sólo exigía JSON/artefacto y fue
+retirado en `dc7725e`; 5D no toca el workflow ajeno.
+
 ## Inventario completo
 
 | Crate | Archivo:línea | Mutación literal | Windows | Linux |
