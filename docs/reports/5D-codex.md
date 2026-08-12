@@ -105,6 +105,13 @@ un peer, y los bucles de drenaje no tenían presupuesto propio. Ahora todo drena
 está limitado por frames/bytes disponibles; generación vacía y constantes
 infladas también fallan sin escalar el workload.
 
+Enmienda P2: aunque hoy esa longitud inválida no es alcanzable desde wire, el
+decodificador ya no depende implícitamente de ello. `require_frame_progress`
+rechaza con `FrameError::DecoderNoProgress` cualquier total menor que los 48
+bytes de cabecera que hubo que leer para calcularlo. La prueba nació RED por la
+ausencia de función y variante, pasó después del cambio, y los cinco mutantes
+focales de la guarda terminaron **5 caught, 0 missed, 0 timeout** en 31 s.
+
 La primera reejecución a 30 s seleccionó por error de regex 24 mutantes en vez de
 doce y terminó con `22 caught, 1 unviable, 1 timeout`; permanece registrada como
 fallida. El restante era `reserve_for: + -> *`: aunque tres tests ya fallaban,
@@ -120,7 +127,7 @@ JSON original, los doce antiguos `TIMEOUT` son ahora `CAUGHT`.
 | 1 | `cargo fmt --all --check` | PASS por código 0 |
 | 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
 | 3 | `cargo test --workspace` | PASS Windows: 436 passed, 0 failed, 2 ignored ya existentes; +2 tests frente al baseline |
-| 4 | Mutación con límite | Primera pasada amplia falló 22/1/1; reejecución focal del único timeout: 1 CAUGHT bajo 30 s. Los doce originales quedan CAUGHT |
+| 4 | Mutación con límite | Primera pasada amplia falló 22/1/1; reejecución focal del único timeout: 1 CAUGHT bajo 30 s. Los doce originales quedan CAUGHT; la enmienda de progreso terminó 5/0/0 |
 | 5 | Lectura de aserciones | Cada presupuesto distingue `Some` que consume de repetición; el mínimo distingue 48 de 0; reserva distingue crecimiento geométrico de multiplicativo |
 | 6 | Lectura de contadores | Límites derivados de `frames.len()`, `data.len() / HEADER_LEN`, bytes empujados y capacidad observada |
 | 7 | La medida se ve fallar | Los JSON/logs originales prueban doce timeouts; el primer rerun prueba que la nueva medida de reserva aún era insuficiente; el segundo mata ese mutante |
@@ -325,9 +332,10 @@ fixture de recuperación Win32 5; guarda de `InvalidTimestamp`; Clippy por
 
 `Cargo.lock` conserva el blob exacto de la base
 `307d09269e6738b06d9d59123c354d405fe1e540` y 61 paquetes. La corrección del
-usuario recibida durante esta fase no cambia ni reinicia lo ya cerrado: confirma
-que `total_len -> 0` no es P0 porque el valor real es `48 + u32 + u8`; queda una
-enmienda P2 separada para hacer explícito el rechazo de falta de progreso.
+usuario recibida durante esta fase no cambió ni reinició lo ya cerrado: confirmó
+que `total_len -> 0` no es P0 porque el valor real es `48 + u32 + u8`. La
+enmienda P2 quedó cerrada después de Puerta 6 con un error tipado, una prueba
+RED→GREEN y 5/5 mutantes focales atrapados.
 
 ## 9. Puerta 7 — barrido y guardas
 

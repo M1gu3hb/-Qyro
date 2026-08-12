@@ -20,6 +20,16 @@ use crate::header::{ParsedHeader, UnknownHeader};
 use crate::limits::{HEADER_LEN, MAX_BUFFER_LEN};
 use crate::message::MessageType;
 
+fn require_frame_progress(total: usize) -> Result<usize, FrameError> {
+    if total < HEADER_LEN {
+        return Err(FrameError::DecoderNoProgress {
+            declared: total,
+            already_consumed: HEADER_LEN,
+        });
+    }
+    Ok(total)
+}
+
 /// A frame the peer sent whose type this version does not implement.
 ///
 /// Carries enough to answer `Error` without re-parsing bytes, and deliberately
@@ -341,6 +351,10 @@ impl FrameDecoder {
                 limit: self.max_buffer_len as u64,
             }));
         };
+        let total = match require_frame_progress(total) {
+            Ok(total) => total,
+            Err(error) => return Err(self.poison(error)),
+        };
 
         if total > self.max_buffer_len {
             return Err(self.poison(FrameError::BufferLimitExceeded {
@@ -451,7 +465,7 @@ impl FrameDecoder {
     reason = "a test that cannot assert or index reports failures worse"
 )]
 mod cost_tests {
-    use super::{FrameDecoder, HEADER_LEN, MAX_BUFFER_LEN};
+    use super::{FrameDecoder, HEADER_LEN, MAX_BUFFER_LEN, require_frame_progress};
     use crate::error::FrameError;
     use crate::frame::Frame;
     use crate::limits::{MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MAX_TRAILER_LEN};
@@ -469,6 +483,18 @@ mod cost_tests {
     // three orders of magnitude and exhaust the runner before the assertion
     // naming the broken invariant could execute.
     const EXPECTED_MAX_FRAME_LEN: usize = MAX_HEADER_LEN + MAX_PAYLOAD_LEN + MAX_TRAILER_LEN;
+
+    #[test]
+    fn a_total_shorter_than_the_consumed_header_is_a_typed_progress_error() {
+        assert_eq!(
+            require_frame_progress(HEADER_LEN - 1),
+            Err(FrameError::DecoderNoProgress {
+                declared: HEADER_LEN - 1,
+                already_consumed: HEADER_LEN,
+            })
+        );
+        assert_eq!(require_frame_progress(HEADER_LEN), Ok(HEADER_LEN));
+    }
 
     fn assert_small_reservation_is_bounded() {
         let mut decoder = FrameDecoder::new();

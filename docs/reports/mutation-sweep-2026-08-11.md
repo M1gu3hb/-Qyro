@@ -56,19 +56,27 @@ P0 presente en esta revisión. En el binario mutado, en cambio, diez cambios sí
 pueden ser disparados por bytes de un peer y los antiguos tests entraban en un
 bucle sin presupuesto. Esa carencia de observabilidad se corrigió.
 
-| # | Mutación que agotó 90 s | ¿Peer dispara el binario mutado? | Argumento estructural / límite focal | Reejecución |
+La columna siguiente no atribuye al peer la capacidad de cambiar el binario:
+pregunta si el código real admite el estado defectuoso. Para los doce casos la
+respuesta es no. Algunos inputs alcanzan la rama afectada en un binario mutado,
+pero la condición de falta de progreso exige primero esa regresión interna. Como
+defensa P2 adicional, `require_frame_progress` convierte todo total inferior a
+la cabecera ya leída en `FrameError::DecoderNoProgress`; sus cinco mutantes
+focales terminaron 5 caught en 31 s.
+
+| # | Mutación que agotó 90 s | ¿Peer produce la condición en código real? | Argumento estructural / límite focal | Reejecución |
 |---:|---|---|---|---|
-| 1 | `decoder.rs:269:9 push -> Ok(())` | Sí: cualquier lectura | `push` real extiende tras comprobar `checked_add`; los tests tienen número finito de pushes y exigen el cambio de longitud | CAUGHT |
-| 2 | `decoder.rs:360:27 += -> *=` | Sí: tipo desconocido bien formado | `read` nace en cero; multiplicarlo no consume. El drenaje admite como máximo el número de frames derivado del buffer | CAUGHT |
-| 3 | `decoder.rs:375:23 += -> *=` | Sí: envelope cifrado bien formado | Mismo argumento, en la rama `Encrypted`; el presupuesto de frames convierte la repetición en fallo | CAUGHT |
-| 4 | `decoder.rs:388:19 += -> *=` | Sí: frame plano bien formado | Mismo argumento, en la rama `Message`; una llamada extra debe devolver `None` | CAUGHT |
-| 5 | `decoder.rs:423:40 + -> *` | Sí: dos lecturas de 48 bytes | No crea un total de wire inválido; amplifica la reserva. La medida focal compara la capacidad tras dos lecturas iguales contra crecimiento geométrico | CAUGHT en la segunda reejecución |
+| 1 | `decoder.rs:269:9 push -> Ok(())` | No: requiere que `push` deje de insertar | `push` real extiende tras comprobar `checked_add`; los tests tienen número finito de pushes y exigen el cambio de longitud | CAUGHT |
+| 2 | `decoder.rs:360:27 += -> *=` | No: requiere cambiar el operador de avance | `read` nace en cero; multiplicarlo no consume. El drenaje admite como máximo el número de frames derivado del buffer | CAUGHT |
+| 3 | `decoder.rs:375:23 += -> *=` | No: requiere cambiar el operador de avance | Mismo argumento, en la rama `Encrypted`; el presupuesto de frames convierte la repetición en fallo | CAUGHT |
+| 4 | `decoder.rs:388:19 += -> *=` | No: requiere cambiar el operador de avance | Mismo argumento, en la rama `Message`; una llamada extra debe devolver `None` | CAUGHT |
+| 5 | `decoder.rs:423:40 + -> *` | No: requiere cambiar la aritmética de reserva | No crea un total de wire inválido; amplifica la reserva. La medida focal compara la capacidad tras dos lecturas iguales contra crecimiento geométrico | CAUGHT en la segunda reejecución |
 | 6 | `frame.rs:144:9 encode -> vec![]` | No: es construcción local de salida | Un peer no invoca `Frame::encode`; los workloads derivados ya no pueden iterar según una longitud cero | CAUGHT |
-| 7 | `header.rs:293:9 FrameHeader::total_len -> 0` | Sí en el binario mutado: cualquier cabecera conocida | En producción es imposible: `48 + u32 + u8 >= 48`. El test focal exige total 48 para el frame mínimo y consumo completo en una llamada | CAUGHT |
-| 8 | `header.rs:293:27 + -> *` | Sí: frame conocido vacío | En el mutante `48 * 0 + 0 = 0`; en producción el primer operador es suma. Mismo test focal y drenajes acotados | CAUGHT |
-| 9 | `header.rs:536:9 ParsedHeader::total_len -> 0` | Sí: cualquier cabecera aceptada | El enum real sólo delega a los dos totales que incluyen 48; el límite de drenaje ve la repetición | CAUGHT |
-| 10 | `header.rs:546:9 UnknownHeader::total_len -> 0` | Sí: tipo desconocido bien formado | El valor real es `48 + u32 + u8`; el drenaje de desconocidos está limitado por frames disponibles | CAUGHT |
-| 11 | `header.rs:546:27 + -> *` | Sí: tipo desconocido con payload vacío | El mutante puede producir cero; el operador real no. El mismo presupuesto detecta la falta de progreso | CAUGHT |
+| 7 | `header.rs:293:9 FrameHeader::total_len -> 0` | No: `48 + u32 + u8 >= 48` | El test focal exige total 48 para el frame mínimo y consumo completo en una llamada; la guarda P2 rechaza una regresión futura | CAUGHT |
+| 8 | `header.rs:293:27 + -> *` | No: el operador real es suma | En el mutante `48 * 0 + 0 = 0`; en producción el primer operador es suma. Mismo test focal y drenajes acotados | CAUGHT |
+| 9 | `header.rs:536:9 ParsedHeader::total_len -> 0` | No: delega a totales de al menos 48 | El enum real sólo delega a los dos totales que incluyen 48; el límite de drenaje ve la repetición | CAUGHT |
+| 10 | `header.rs:546:9 UnknownHeader::total_len -> 0` | No: `48 + u32 + u8 >= 48` | El valor real incluye siempre 48; el drenaje de desconocidos está limitado por frames disponibles | CAUGHT |
+| 11 | `header.rs:546:27 + -> *` | No: el operador real es suma | El mutante puede producir cero; el operador real no. El mismo presupuesto detecta la falta de progreso | CAUGHT |
 | 12 | `limits.rs:49:49 + -> *` | No: un peer no cambia constantes de compilación | El mutante agrandaba los workloads a ~1 GiB. Los tests trabajan con la suma independiente y exigen que `MAX_FRAME_LEN` sea exactamente esa suma | CAUGHT |
 
 La primera reejecución focal usó un regex de líneas, seleccionó 24 mutantes

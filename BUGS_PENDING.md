@@ -1975,18 +1975,20 @@
 ## QYR-0298 — Doce mutaciones de progreso agotaron el tiempo sin veredicto de alcanzabilidad
 
 - Plataforma: Windows, análisis portable
-- Severidad: P1
+- Severidad: P2
 - Familia consolidada: fichas heredadas 0276–0287
 - Esperado: cada timeout dice si un peer puede producir el estado que no avanza
   o si sólo la mutación viola una invariante interna
 - Actual: doce suites excedieron 90 s; el caso `FrameHeader::total_len -> 0`
   quedó mezclado con once resultados sin juicio
 - Resolución: el total de toda cabecera aceptada es estructuralmente al menos 48;
-  diez mutantes eran disparables por entrada pero no representaban un defecto
-  presente. Se acotaron todos los drenajes por frames/bytes y los doce mutantes
-  pasan de `TIMEOUT` a `CAUGHT`; los dos sólo locales también quedan nombrados
+  ningún peer puede producir el estado observado sin una regresión interna. Se
+  acotaron todos los drenajes por frames/bytes, los doce mutantes pasan de
+  `TIMEOUT` a `CAUGHT` y el decodificador rechaza con `DecoderNoProgress` todo
+  total que alguna regresión calcule por debajo de la cabecera ya consumida
 - Estado: resuelto
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
 - Evidencia: barrido focal a 30 s: primera pasada amplia 22 caught, 1 unviable y
-  1 timeout; reejecución exacta del restante, 1 caught en 12 s
+  1 timeout; reejecución exacta del restante, 1 caught en 12 s; la guarda de
+  progreso y sus cinco mutantes focales terminaron 5 caught en 31 s
