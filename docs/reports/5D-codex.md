@@ -173,7 +173,48 @@ symlink con feature falló por privilegio 1314. Ninguno se presenta como PASS.
 
 ## 6. Puerta 4 — ADR-0031
 
-Pendiente.
+Cerrada. `docs/adr/ADR-0031-trust-and-pairing.md` queda congelada antes de
+cualquier código de confianza. La decisión combina TOFU explícito con
+comparación opcional fuera de banda: un primer contacto es `New`, nunca
+«trusted» automático; una clave distinta para el registro local esperado es
+`KnownAndChanged` y termina la sesión sin sobrescribir nada.
+
+La forma humana son los primeros 128 bits de la huella SHA-256 canónica,
+codificados como cuatro grupos de ocho hexadecimales minúsculos. Un match
+dirigido cuesta en esperanza `2^128 ≈ 3.40 × 10^38` claves; la colisión por
+cumpleaños ronda `2^64 ≈ 1.84 × 10^19`. La decisión de confianza sigue
+comparando la identidad pública completa, no el prefijo mostrado.
+
+El formato queda fijado antes de implementarlo: cabecera exterior de 16 bytes
+con magic `QYRO-KPS`, versión y wrapper rechazados por nombre, reservado cero y
+cuerpo envuelto limitado a 2 MiB; cuerpo todo-o-nada con máximo 4096 registros,
+longitud por registro, identidad pública canónica, nombre local UTF-8 acotado y
+fechas de primer/último contacto. No hay fallback en claro. Windows usa DPAPI
+en `%LOCALAPPDATA%`; Android/iOS quedan sin persistencia hasta tener los
+wrappers de plataforma que este sprint excluye.
+
+Se completa primero el handshake para autenticar la clave que se muestra, pero
+el estado establecido queda en cuarentena: no hay manifest, transferencia ni
+datos de aplicación antes del veredicto y una negativa destruye la sesión. La
+ADR declara explícitamente que sin UI sólo existe el mecanismo, no la política
+interactiva.
+
+### Doce comprobaciones
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 459 passed, 0 failed, 2 ignored ya existentes; la fase no cambió ejecutables |
+| 4 | Mutación con límite | No aplica: la fase sólo añade una ADR y no existe módulo Rust nuevo que mutar |
+| 5 | Lectura de aserciones | No aplica: no se añadieron aserciones; la evidencia exigida se congela por nombre para Fase 5 |
+| 6 | Lectura de contadores | Los límites 4096/255/2 MiB son cotas de formato, no resultados fingidos de una operación |
+| 7 | La medida se ve fallar | No hay medición nueva: `2^128` y `2^64` son costes analíticos del ancho elegido, no benchmarks |
+| 8 | Lectura de nombres | Los cinco contratos exigidos nombran literalmente match, cambio, nuevo, versión futura y truncado que deberán ejercer |
+| 9 | Ledger legible | 18 abiertas por el contador canónico; cero fichas nuevas en la fase y diez en todo 5D |
+| 10 | Alcance desde `ebdffb9` | La fase añade ADR-0031 e informe; no toca archivo de Claude Code, crate excluido, Cargo ni `MINIMUM_GUARD_SET_EXCEPTIONS` |
+| 11 | Coherencia del informe | Releídas secciones 0–6 y el informe de mutación; nada de Fases 1–3 queda invalidado por una decisión documental |
+| 12 | `check_docs_consistency` | PASS Git Bash (16 s) y PASS Windows PowerShell 5.1 (51.3 s) |
 
 ## 7. Puerta 5 — confianza implementada
 
