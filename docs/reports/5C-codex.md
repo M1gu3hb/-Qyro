@@ -768,9 +768,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 6: añadí `assert_no_assertion_compares_a_call_to_itself` al análisis
   compartido. Recorre módulos de test e integración, reconoce `assert!`,
   `assert_eq!` y `assert_ne!`, y compara operandos tras quitar espacios.
-- Fase 6: la guarda se activa automáticamente en los seis crates que incluyen
-  el archivo compartido. Una tautología real temporal en `qyro_fs` produjo el
-  fallo nominal con ruta, línea y operando; después quedó restaurada.
+- Fase 6: la guarda se activó entonces en los seis crates que incluían el
+  archivo compartido. Una tautología real temporal en `qyro_fs` produjo el
+  fallo nominal con ruta, línea y operando; Fase 9 amplió los consumidores a
+  diez y añadió una meta-guarda para que el conjunto no vuelva a encogerse.
 - Fase 7: evalué las tres salidas de QYR-0072 y congelé la opción (c) en
   `01133a8`: mitigación post-open con `std`, sin dependencia ni `unsafe`, y sin
   llamarla cierre de TOCTOU.
@@ -789,6 +790,27 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Fase 8: al ejecutar toda la puerta en 5.1, el checker documental confundió
   de nuevo 0076/0099 por encoding, luego tropezó con stderr de Git y CRLF. El
   contrato rojo→verde de QYR-0109 fija las tres diferencias entre 5.1 y 7.
+- Fase 9: inventarié los once miembros del workspace. Diez activan el análisis
+  compartido; `qyro_ffi` es la única excepción presente y conserva sus
+  contratos ABI. `qyro_net` y `qyro_net_smoke` sólo tienen excepciones
+  pre-merge que caducan en cuanto aparezcan como miembros.
+- Fase 9: llevé el mínimo común a `qyro_core`, `qyro_win_dpapi`,
+  `qyro_crypto_smoke` y `qyro_store_smoke`; añadí guardas de construcción a los
+  errores públicos de crypto, identity, manifest y protocolo. La meta-guarda
+  exige archivo, activación, lista productiva, anti-panic y construcción; al
+  quitar `mod guards;` falló nombrando `qyro_core`.
+- Fase 9: la guarda de construcción encontró QYR-0103. ADR-0029 ya decidía que
+  framing acepta todos los identificadores, así que eliminé la variante y tipo
+  inalcanzables después de congelar la enmienda, no los reutilicé para routing.
+- Fase 9: ejecuté cargo-mutants 27.1.0 con `--no-config`, cuatro workers,
+  baseline ya validado y 90 s por control sobre los 939/939 mutantes
+  potenciales de los cinco crates propios. El bruto Windows fue 590 caught,
+  157 missed, 180 unviable y 12 timeout; el barrido Linux adicional de
+  filesystem convirtió su unión en 161 supervivientes únicos.
+- Fase 9: registré cada superviviente en QYR-0115–QYR-0275 y cada timeout en
+  QYR-0276–QYR-0287. Veinticinco supervivientes quedaron cerrados: trece por
+  contratos nuevos y reruns focales, doce por ser detectados en la plataforma
+  complementaria. Los otros 136 y los doce timeouts siguen abiertos.
 
 ## 3. Cómo lo hice y decisiones
 
@@ -842,6 +864,19 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   que la necesite y Windows incluye PowerShell 5.1. El timeout Bash tampoco era
   coste inherente al repositorio: era un proceso `tr` por segmento y desapareció
   con la conversión nativa `${stem^^}`.
+- Para el barrido amplié el denominador más allá de “controles de seguridad”:
+  `cargo mutants --list` produjo 939 mutantes potenciales, incluidos getters,
+  `Display`, código de fuzzing y mutantes no compilables. Esto permite afirmar
+  939/939 ejecutados sin llamar a cada mutante un control de seguridad; la
+  severidad individual del ledger conserva esa distinción.
+- El barrido principal se hizo en Windows. Para no presentar ramas Unix como
+  supervivientes reales, ejecuté además los 87 mutantes de `qyro_fs` en Ubuntu
+  y tomé la unión por nombre: 16 sobrevivieron en ambos, 12 sólo donde su
+  control no estaba cubierto y fueron `CAUGHT` en la plataforma complementaria.
+- No añadí `cargo-mutants` al proyecto ni al lock: el binario local vive fuera
+  del repositorio y el job Linux fue temporal. El primer run temporal creó mal
+  la ruta de salida y no produjo JSON; el segundo exigió `outcomes.json`, subió
+  el artefacto y permitió retirar el job antes del estado final.
 
 ## 4. Errores detectados fuera del prompt
 
@@ -875,7 +910,7 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   registra y cierra la contradicción sin inventar una API duplicada.
 - Fase 5: `FrameError::InvalidIdentifier` y `IdentifierField` no tienen ningún
   sitio de construcción. ADR-0029 confirma que framing acepta todo el rango;
-  QYR-0103 queda abierto para resolver compatibilidad en Fase 9.
+  Fase 9 cerró QYR-0103 eliminándolos después de una enmienda fechada.
 - Fase 5: CI 31534316575 falló sólo en `documentation` porque `STATUS.md` quedó
   11 commits por delante del ancla permitida; los otros seis jobs pasaron. La
   actualización mínima de fecha/commit restauró el checker en 31534679436.
@@ -893,15 +928,32 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   declaraba lo contrario: lectura ANSI de UTF-8, stderr nativo convertido en
   excepción y headings CRLF estrictos. QYR-0109 se descubrió al repetir la
   puerta completa y quedó cubierto por el contrato PowerShell en el host real.
+- Fase 9: `source_guard` trataba sólo `lib.rs` como raíz y no reconocía
+  `cfg(all(windows, test))`; QYR-0110/0111 registran ambos fallos rojos antes de
+  corregir el parser compartido.
+- Fase 9: cuatro crates carecían del mínimo común y siete enums públicos de
+  error no tenían una política uniforme de construcción. QYR-0112/0113
+  registran el inventario, incluida la excepción argumentada de cuatro
+  `StoreError` producidos por backends.
+- Fase 9: la primera meta-guarda aceptaba un `guards.rs` huérfano. Retirar
+  `mod guards;` siguió verde, hallazgo QYR-0114; exigir la activación convirtió
+  la misma mutación en un fallo que nombra `qyro_core`.
+- Fase 9: el primer job temporal de mutación FS, run 31547557731, quedó verde
+  por `continue-on-error` aunque `cargo-mutants` no creó su directorio de
+  salida. El run 31547866384 añadió una precondición, exigió JSON/artefacto y sí
+  ejecutó 87/87; el fallo de setup no se cuenta como barrido.
 
 ## 5. Errores arreglados y no arreglados
 
 - QYR-0072 está resuelto por decisión explícita y mitigación, con la TOCTOU
   residual documentada. QYR-0073, QYR-0074, QYR-0075, QYR-0068, QYR-0101,
   QYR-0102, QYR-0104, QYR-0105, QYR-0106, QYR-0107, QYR-0108 y QYR-0109 están
-  cerrados. QYR-0103 queda abierto para Fase 9.
+  cerrados. QYR-0103 y QYR-0110–QYR-0114 también están cerrados en Fase 9.
 - Fase 1bis resolvió el conflicto reporte/ledger y QYR-0100. No presenta ese
   cierre documental como corrección de O_NOFOLLOW, memoria, reanudación o API.
+- El barrido Fase 9 deja 136 supervivientes abiertos en QYR-0115–QYR-0275 y
+  doce timeouts abiertos en QYR-0276–QYR-0287. Veinticinco fichas del primer
+  rango están cerradas; no se presentan las abiertas como trabajo arreglado.
 
 ## 6. Impacto de cada defecto
 
@@ -927,8 +979,9 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0068/QYR-0102 hacían que el plan de trabajo partiera de una superficie
   pública imaginaria y podían producir una API redundante. ADR-0029 alinea la
   decisión, los comentarios y pruebas con lo que un crate externo ya compila.
-- QYR-0103 permite a un caller hacer `match` sobre un rechazo que ningún byte ni
-  constructor provoca; hasta Fase 9 permanece deuda explícita, no garantía.
+- QYR-0103 permitía a un caller hacer `match` sobre un rechazo que ningún byte
+  ni constructor provocaba. Eliminarlo alinea la API con la decisión: framing
+  autentica IDs; routing, fuera de este crate, decide si son conocidos.
 - QYR-0104 hacía que el informe atribuyera al CI una prueba que no ejecutó. La
   extracción por step preserva la diferencia real entre Linux y Windows y evita
   sumar otra vez `--all-features` o doc tests.
@@ -945,6 +998,13 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
   además que las fixtures llegaran al componente bajo prueba en ese host.
 - QYR-0109 hacía que bajar el requisito fuera una promesa parcial: el checker
   documental seguía interpretando contenido y procesos con semántica de 7.
+- QYR-0110–QYR-0114 muestran que una guarda puede existir y aun así no cubrir
+  un crate, un módulo gated, una familia de errores o siquiera estar compilada.
+  La meta-guarda convierte esos cuatro modos de pérdida en fallos del workspace.
+- Los 161 supervivientes de mutación miden deuda de test heterogénea: algunos
+  cambian rechazos de peer, confinamiento o zeroization; otros sólo getters,
+  `Debug`/`Display` o helpers de fuzzing. El ledger individual evita que una
+  tasa agregada les asigne el mismo impacto.
 
 ## 7. Resultado contra cada objetivo
 
@@ -967,7 +1027,10 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - Resolver los tres hallazgos Windows de Fase 0, asignarles fichas y decidir la
   cobertura CI: **cumplido**; Puerta 8 cerró con ocho jobs verdes en
   31540971698, incluido el workspace completo Windows.
-- Fases 9–10: **no empezadas** al cerrar Puerta 8.
+- Inventariar guardas, instalar la meta-guarda y barrer los cinco crates propios:
+  **cumplido** en Fase 9. Alcance 939/939, unión FS Windows/Linux, 161 fichas de
+  supervivientes y 12 de timeout, sin dependencia ni crate nuevo.
+- Fase 10: **pendiente** hasta consolidar documentos y ejecutar el CI final.
 
 ## 8. Clase de evidencia por afirmación
 
@@ -1004,8 +1067,8 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0105: Clippy y workspace completos en Windows local. Retirar el `cfg`
   exacto reproduce `dead_code`; CI 31540971698 confirmó Clippy y 405/2 en el
   primer job completo `windows-latest`.
-- QYR-0106: comparación nominal de los 407 tests listados en Windows (405
-  passed/2 ignored) con 401 en Linux (399/2). Sólo Windows:
+- QYR-0106, recontado tras Fase 9: 436 tests listados en Windows (434
+  passed/2 ignored) frente a 430 en Linux (428/2), run 31547866384. Sólo Windows:
   `a_data_blob_that_lies_does_not_round_trip`,
   `a_single_flipped_byte_is_a_typed_error_against_dpapi`,
   `a_wrapped_secret_needs_the_same_entropy`,
@@ -1021,6 +1084,22 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 - QYR-0109: checker real PowerShell 5.1 rojo por QYR-0076–QYR-0099; el contrato
   descubrió después los fallos de stderr de Git y CRLF. Tras la corrección,
   checker real y contrato completo devolvieron 0 en 42.6 s.
+- Guardas Fase 9: rojo inicial de la meta-guarda con cuatro crates; rojos de
+  lista productiva en smoke/DPAPI; rojo de construcción para
+  `FrameError::InvalidIdentifier`; mutación de activación primero superviviente
+  y luego roja nombrando `qyro_core`. Todo restaurado; commit `1241e1b` y CI
+  31542583869 verdes en ocho jobs.
+- Barrido ampliado Windows: cinco comandos `cargo-mutants 27.1.0 mutants
+  --no-config -p <crate> -j 4 --baseline skip --timeout 90`; 939/939
+  potenciales, 590 caught, 157 missed, 180 unviable y 12 timeout. El binario y
+  los resultados están fuera del repositorio.
+- Barrido FS Linux: run 31547557731 sólo prueba el fallo de setup y no cuenta;
+  run 31547866384 ejecutó 87/87, produjo artefacto y clasificó 59 caught, 20
+  missed y 8 unviable. La unión con Windows es 28 missed únicos: 16 comunes y
+  12 detectados por la plataforma complementaria.
+- Reruns después de `ca4a1e2`: crypto focal 50/50, de 11 a 2 missed; identity
+  29/29, de 2 a 1; manifest focal 18/18, de 4 a 1. En total trece
+  supervivientes originales pasaron a caught por contratos nuevos.
 
 ## 9. Las diez puertas de trabajo y la línea base
 
@@ -1265,7 +1344,58 @@ Y lo que ya no está prohibido, para que no vuelvas a pararte: editar cualquier 
 
 ### Puerta 9
 
-Pendiente.
+Inventario verificado sobre los once `members` actuales. «Común» reúne
+`no_production_path_can_panic`, lista productiva exacta,
+`assert_analysis_reached_the_end` y antitautología: las dos últimas se ejecutan
+desde las funciones compartidas, no como copias por crate.
+
+| Crate | Común activo | Construcción `Error`/`Verdict` | Política `unsafe` | Egreso de claves | Estado / excepción exacta |
+|---|---:|---|---|---|---|
+| `qyro_core` | sí | no aplica: no declara esa familia pública | `forbid`, vigilado globalmente | no aplica | completo; añadido en Fase 9 |
+| `qyro_crypto` | sí | `IdentityError`, `AeadError`, `HandshakeError` | `forbid`, vigilado globalmente | sí, lista exacta; además `Drop` de arrays secretos | completo; construcción añadida en Fase 9 |
+| `qyro_ffi` | no | contrato ABI dedicado | excepción global argumentada por `no_mangle` | no aplica | única excepción presente al mínimo; reservada a la rama coordinada |
+| `qyro_fs` | sí | `FsError` | `forbid`, vigilado globalmente | no aplica | completo |
+| `qyro_identity_store` | sí | `StoreError`; cuatro backends por nombre | aloja la lista global de tres excepciones | no aplica | completo; aloja meta-guarda |
+| `qyro_manifest` | sí | `PathError`, `ManifestError` | `forbid`, vigilado globalmente | no aplica | completo; construcción añadida en Fase 9 |
+| `qyro_protocol` | sí | `FrameError` | `forbid`, vigilado globalmente | no aplica | completo; la guarda cerró QYR-0103 |
+| `qyro_transfer` | sí | `TransferError`, `ItemVerdict` | `forbid`, vigilado globalmente | no aplica | completo; leído, no modificado |
+| `qyro_win_dpapi` | sí | no declara enum propio | excepción global y lista local de bloques `unsafe` | no aplica | completo; común añadido en Fase 9 |
+| `qyro_crypto_smoke` | sí | no aplica | excepción global por export de smoke | no aplica | completo; común añadido en Fase 9 |
+| `qyro_store_smoke` | sí | no aplica | `forbid`, vigilado globalmente | no aplica | completo; común añadido en Fase 9 |
+
+`qyro_net` y `qyro_net_smoke` no son miembros en esta rama. La meta-guarda sólo
+acepta su ausencia con el argumento `claude/qyro-net-6a`; si aparecen como
+miembros, la excepción caduca y se inspecciona su conjunto real. No se crearon.
+
+- `cargo fmt --all --check`: PASS local Windows y Linux CI 31547866384.
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASS local y en los
+  jobs completos Linux/Windows de 31547866384.
+- `cargo test --workspace`: PASS local; CI exacto: Linux 428 passed/2 ignored,
+  Windows 434/2, 0 failed en ambos.
+- Mutación: 939/939 potenciales del barrido principal. Clasificación bruta:
+  590 caught, 157 missed, 180 unviable, 12 timeout. Con la unión FS Linux:
+  161 supervivientes únicos; 25 cerrados, 136 abiertos, todos con ficha; los
+  doce timeouts tienen ficha separada.
+- Mutaciones de propiedades nuevas: la meta-guarda falló al perder activación;
+  el límite blob, límites manifest, prefijo handshake, zeroization, delta y
+  acarreo fallaron con nombres. Los reruns convirtieron trece missed en caught.
+- Aserciones: cada nueva aserción compara entrada/resultado o dos secuencias
+  distintas; el workspace completo ejecuta la antitautología en diez crates.
+- Contadores: ninguno nuevo; los tres FS conservan valores derivados y sus
+  desigualdades de Fase 3.
+- Nombres: `an_exactly_header_sized_blob_reaches_length_validation`,
+  `exact_maximum_path_and_mime_lengths_round_trip`,
+  `the_prefix_guard_itself_rejects_a_message_one_byte_short`,
+  `advancing_from_a_nonzero_sequence_uses_the_delta` y
+  `a_recorded_bit_crosses_a_bitmap_word_boundary` ejercen literalmente su caso.
+- Delta desde `15934aa`: ninguna ruta de Claude Code, Cargo raíz ni Cargo.lock;
+  `qyro_transfer` sólo se leyó. Sigue en 61 paquetes y cero dependencias nuevas.
+- `check_docs_consistency`: PASS en Bash y PowerShell 5.1 después de registrar
+  QYR-0110–QYR-0287 y actualizar STATUS/informe.
+- Coherencia: §2–§8 y §10–§16 usan 428/434, distinguen 939 potenciales de 161
+  supervivientes únicos y no cuentan el run de setup 31547557731 como barrido.
+- Gate escrito antes de empezar Fase 10. Base estructural `1241e1b`, cierres
+  críticos `ca4a1e2`; CI de evidencia 31542583869 y 31547866384: **success**.
 
 ### Puerta 10
 
@@ -1296,6 +1426,23 @@ Pendiente.
 | 8 | alcance de `UNSUPPORTED_PLATFORM` | retirar `#[cfg(not(windows))]` | `cargo clippy -p qyro_store_smoke --all-targets -- -D warnings` falló: `constant UNSUPPORTED_PLATFORM is never used` | Mutación local restaurada |
 | 8 | coste del checker Bash | restaurar `printf | tr` por cada segmento | El checker siguió activo a los 120 s y fue terminado; con `${stem^^}` termina en 0.860 s | Mutación inicial restaurada por la corrección |
 | 8 | compatibilidad documental PowerShell 5.1 | leer UTF-8 implícito, promover stderr de Git y exigir headings LF | Checker real falló por QYR-0076–QYR-0099; el contrato falló después por Git y nueve headings CRLF | Mutaciones corregidas; contrato 5.1 PASS |
+| 9/meta | activación del mínimo estructural | retirar `mod guards;` de `qyro_core` | Primera meta-guarda sobrevivió; tras QYR-0114 falló nombrando `qyro_core` | `ca4a1e2`, mutación restaurada |
+| 9/protocolo | todo `qyro_protocol` | 281 mutantes potenciales | 176 caught, 54 missed, 39 unviable, 12 timeout; fichas QYR-0115–QYR-0168 y QYR-0276–QYR-0287 | Barrido local aislado |
+| 9/manifest | todo `qyro_manifest` | 220 mutantes potenciales | 146 caught, 44 missed, 30 unviable; QYR-0169–QYR-0212 | Barrido local aislado |
+| 9/identity | todo `qyro_identity_store` | 29 mutantes potenciales | 23 caught, 2 missed, 4 unviable; QYR-0213–QYR-0214 | Barrido local aislado |
+| 9/filesystem Windows | todo `qyro_fs` | 87 mutantes potenciales | 55 caught, 24 missed, 8 unviable | Barrido local aislado |
+| 9/filesystem Linux | mismos 87 en Ubuntu | plataforma complementaria | 59 caught, 20 missed, 8 unviable; unión 28, 16 comunes y 12 caught al otro lado; QYR-0215–QYR-0242 | CI 31547866384 |
+| 9/crypto | todo `qyro_crypto` | 322 mutantes potenciales | 190 caught, 33 missed, 99 unviable; QYR-0243–QYR-0275 | Barrido local aislado |
+| 9/rerun crypto | zeroization, prefix, replay record/shift | 50 mutantes focales | 44 caught, 2 missed, 4 unviable; 9 supervivientes originales cerrados | `ca4a1e2` |
+| 9/rerun manifest | path, MIME y length-prefix | 18 mutantes focales | 14 caught, 1 missed, 3 unviable; 3 supervivientes originales cerrados | `ca4a1e2` |
+| 9/rerun identity | crate completo | 29 mutantes | 24 caught, 1 missed, 4 unviable; límite de blob cerrado | `ca4a1e2` |
+
+Alcance declarado: el denominador principal es **939/939 mutantes potenciales**
+(281 + 220 + 29 + 87 + 322), no 939 controles de seguridad distintos. De
+ellos 759 compilaron y terminaron o agotaron timeout; 180 fueron no viables. La
+unión multiplataforma produce **161 supervivientes únicos: 25 cerrados y 136
+abiertos**, cada uno con ficha. Los **12 timeouts** no se disfrazan de caught ni
+missed y tienen fichas separadas.
 
 ## 11. Tests antes y después
 
@@ -1322,11 +1469,17 @@ Pendiente.
   adicional también pasó por separado en Ubuntu, macOS y Windows.
 - Después de Fase 8 local, Linux permanece en 399/2 y Windows en 405/2: no se
   añadió un test Rust; se añadió la obligación de ejecutar el conjunto Windows.
+- Después de la base estructural de Fase 9: Linux 422 passed/2 ignored y
+  Windows 428/2, extraídos de CI 31542583869.
+- Después de los cierres críticos de mutación: Linux **428 passed**, 0 failed,
+  2 ignored; Windows **434 passed**, 0 failed, 2 ignored, extraídos del step
+  normal exacto de CI 31547866384. El delta +6 sigue siendo ocho DPAPI Windows
+  menos dos symlink Unix.
 
 ## 12. Delta de dependencias
 
 - Paquetes antes: 61.
-- Paquetes después de Fase 8: 61.
+- Paquetes después de Fase 9: 61.
 - Dependencias externas nuevas: ninguna. La feature de fixture Windows no añade
   código ni paquetes al producto.
 - `git diff 15934aae3dda7f469b5496c8341eb78d9e32f335 -- Cargo.lock`: vacío.
@@ -1338,21 +1491,37 @@ El delta propio desde la base exacta es:
 ```text
 .github/workflows/ci.yml
 BUGS_PENDING.md
-STATUS.md
 docs/adr/ADR-0027-filesystem-materialisation.md
 docs/adr/ADR-0029-header-identifiers.md
 docs/reports/5C-codex.md
+rust/crates/qyro_core/src/guards.rs
+rust/crates/qyro_core/src/lib.rs
+rust/crates/qyro_crypto/src/aead/replay.rs
 rust/crates/qyro_crypto/src/aead/tests.rs
+rust/crates/qyro_crypto/src/guards.rs
+rust/crates/qyro_crypto/src/handshake/tests.rs
 rust/crates/qyro_fs/Cargo.toml
 rust/crates/qyro_fs/src/error.rs
 rust/crates/qyro_fs/src/io.rs
 rust/crates/qyro_fs/src/lib.rs
 rust/crates/qyro_fs/src/manifest_builder.rs
 rust/crates/qyro_fs/src/tests.rs
+rust/crates/qyro_identity_store/src/guards.rs
+rust/crates/qyro_identity_store/src/tests.rs
+rust/crates/qyro_manifest/src/guards.rs
+rust/crates/qyro_manifest/tests/manifest_contract.rs
+rust/crates/qyro_protocol/src/error.rs
 rust/crates/qyro_protocol/src/frame.rs
+rust/crates/qyro_protocol/src/guards.rs
 rust/crates/qyro_protocol/src/header.rs
+rust/crates/qyro_protocol/src/lib.rs
 rust/crates/qyro_protocol/tests/wire_contract.rs
+rust/crates/qyro_win_dpapi/src/guards.rs
 rust/guards/source_guard.rs
+rust/tools/qyro_crypto_smoke/src/guards.rs
+rust/tools/qyro_crypto_smoke/src/lib.rs
+rust/tools/qyro_crypto_smoke/src/tests.rs
+rust/tools/qyro_store_smoke/src/guards.rs
 rust/tools/qyro_store_smoke/src/main.rs
 scripts/check_docs_consistency.ps1
 scripts/check_docs_consistency.sh
@@ -1362,6 +1531,7 @@ scripts/tests/docs_consistency_contract_test.ps1
 scripts/tests/docs_consistency_contract_test.sh
 scripts/tests/repo_portability_contract_test.ps1
 scripts/tests/repo_portability_contract_test.sh
+STATUS.md
 ```
 
 No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agente. `Cargo.lock` y el `Cargo.toml` raíz permanecen idénticos a la base.
@@ -1390,8 +1560,12 @@ No contiene `CLAUDE.md`, `.claude/**` ni ningún archivo reservado al otro agent
 | 31537833116 | 5deb51a5d9ebe203d661a7da0ad806441f59a87c | CI | workflow_dispatch | success; mitigación post-open en Ubuntu, macOS y Windows, siete jobs PASS |
 | 31538490463 | 754093de6e52fe9a7e9dc5cf0968ccf616a4b917 | CI | workflow_dispatch | success; informe de Puerta 7 coherente, siete jobs PASS |
 | 31540971698 | 26af47a9eabd1c816d4388a1c115a1855d210ede | CI | workflow_dispatch | success; ocho jobs PASS, incluido Clippy y 405/2 del workspace Windows |
+| 31541524258 | cf7faef029157d94cfb583eba78b05461111fc23 | CI | workflow_dispatch | success; Puerta 8 escrita y ocho jobs PASS |
+| 31542583869 | 1241e1bb0dc1f752bbcda821b97eb21bcc83df1c | CI | workflow_dispatch | success; base estructural, 422/2 Linux y 428/2 Windows, ocho jobs PASS |
+| 31547557731 | 7c33dc85ba6d32dd732bccb13ad7e63dc4ee0cac | CI | workflow_dispatch | success de CI, pero evidencia de mutación inválida: `-o` no existía, 0 mutantes y sin artefacto |
+| 31547866384 | 3cbd220c060a9a2f041935d83b192668b75860cb | CI | workflow_dispatch | success; nueve jobs, 428/2 Linux, 434/2 Windows y 87/87 mutantes FS Linux con JSON |
 
-Lista reconstruida por API al cerrar la Fase 8. No hubo runs cancelados; todos
+Lista reconstruida por API durante Fase 9. No hubo runs cancelados; todos
 los fallos se conservan y no se filtran.
 
 ## 15. Qué NO debe leerse como progreso
@@ -1399,7 +1573,8 @@ los fallos se conservan y no se filtran.
 Este sprint no mueve el producto: cierra deuda de pruebas y de contrato. No hay
 red, sockets, descubrimiento, FFI del motor ni selector de archivos; Enviar y
 Recibir siguen deshabilitados. No hay persistencia de identidad en Android ni
-iOS. QYR-0072 está decidida con mitigación parcial; no se declara cerrada la
+iOS. Los 136 supervivientes y 12 timeouts abiertos de Fase 9 tampoco son avance
+de producto. QYR-0072 está decidida con mitigación parcial; no se declara cerrada la
 carrera, que requeriría resolución por descriptor. Nada se ha probado en
 hardware físico.
 
@@ -1410,16 +1585,27 @@ puede usar `Frame::with_identifiers(SessionId, u64, u32, u32)`; el sealer
 sustituye `session_id` y conserva `transfer_id`, `stream_id` e `item_id` dentro
 del AAD. Cero es válido como valor sin ámbito en framing. Un receptor debe
 rechazar IDs no reconocidos después de autenticar, con error tipado de routing,
-no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–8 están
+no `Io`; ese routing no se implementa en esta rama. Las Puertas 1–9 están
 cerradas.
-`rust/guards/source_guard.rs` añade automáticamente la guarda
-antitautologías a todo crate que lo incluya; cualquier consumidor nuevo debe
-mantener verdes sus contratos o usar una excepción exacta con argumento. Los
-cambios compartidos actuales son las entradas añadidas al final del ledger y
-la enmienda fechada de ADR-0027 que define metadata de otro `transfer_id`,
-las líneas de escaneo de rangos en ambos checkers y sus contratos. En
-`.github/workflows/ci.yml` se tocaron el comentario de `--all-features`, el job
-`fs-final-component` y el nuevo job completo `rust-windows`; el otro agente debe
-resolver ese último bloque con su job Windows, no conservar dos suites completas
-redundantes. `STATUS.md` cambia el ancla y califica por plataforma los conteos
-que antes presentaba como universales.
+`rust/guards/source_guard.rs` añade automáticamente fin-de-análisis y
+antitautología a todo consumidor; Fase 9 además corrige raíz `main.rs` y el gate
+`cfg(all(windows, test))`. La meta-guarda vive en `qyro_identity_store`: un
+crate nuevo necesita archivo **y activación**, lista productiva, anti-panic y
+construcción de cada `Error`/`Verdict`, o una excepción por nombre y argumento.
+No se añadió un allow global.
+
+Los cambios compartidos actuales son las entradas añadidas al final del ledger,
+la enmienda fechada de ADR-0027, ADR-0029 y los checkers/contratos. En
+`.github/workflows/ci.yml` quedan el comentario de `--all-features`, el job
+`fs-final-component` y el job completo `rust-windows`; el job
+`mutation-fs-linux-phase9` existió sólo en `7c33dc8`/`3cbd220` para producir la
+evidencia y está retirado del estado final. El otro agente debe resolver el job
+Windows con el suyo, no conservar suites completas redundantes.
+
+La API que red puede usar sigue siendo
+`Frame::with_identifiers(SessionId, u64, u32, u32)`: el sealer reemplaza
+`session_id`, conserva `transfer_id`, `stream_id` e `item_id` dentro del AAD y
+routing debe rechazarlos después de autenticar. `InvalidIdentifier` ya no
+existe en framing. `STATUS.md` ancla `3cbd220` y publica 428/434 por plataforma.
+Las Puertas 1–9 están cerradas; Fase 10 debe consolidar sin convertir las fichas
+que permanecen abiertas dentro de QYR-0115–QYR-0287 en progreso inexistente.

@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-11T21:50:26Z
+- Updated UTC: 2026-08-11T23:58:50Z
 - Branch: codex/qyro-gap-closure-5c
-- Verified commit: 754093de6e52fe9a7e9dc5cf0968ccf616a4b917
+- Verified commit: 3cbd220c060a9a2f041935d83b192668b75860cb
 - Milestone: **un archivo de cinco megabytes viaja entre dos directorios y llega
   byte a byte idéntico**, leído y escrito del disco de verdad. **No hay selector
   de archivos, no hay red, y los botones Enviar y Recibir siguen
@@ -308,6 +308,21 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
   móvil, que son justo los casos que ADR-0024 §2 no puede ejercitar allí.
 - Interactive Windows application smoke: NO
 
+## Sprint 5C — cierre de gaps y deuda estructural
+
+- Las Puertas 1–8 están cerradas. Fase 9 instaló un mínimo estructural común en
+  diez de los once miembros del workspace; `qyro_ffi` conserva la única
+  excepción presente, por su contrato ABI C dedicado. La meta-guarda falla si
+  un crate no exceptuado pierde el archivo, su activación, la lista productiva,
+  anti-panic, fin-de-análisis, antitautología o construcción de errores/veredictos.
+- El barrido ampliado ejecutó 939/939 mutantes potenciales de `qyro_fs`,
+  `qyro_protocol`, `qyro_manifest`, `qyro_identity_store` y `qyro_crypto`.
+  La unión Windows/Linux contiene 161 supervivientes únicos: 25 cerrados y 136
+  abiertos en QYR-0115–QYR-0275; 12 timeouts separados siguen abiertos en
+  QYR-0276–QYR-0287. No se presentan los abiertos como cobertura lograda.
+- Esto endurece evidencia y contratos; no añade red, FFI del motor, UI,
+  selector de archivos ni persistencia móvil.
+
 ## Real tests
 
 Evidencia actual: Linux en CI y Windows local, ambos con Rust 1.88.0. **El host
@@ -316,8 +331,8 @@ CI y no aquí:
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS. Rama actual: **399 passed en Linux CI y 405
-  passed en Windows local**, 0 failed y 2 ignored en ambos. La base era 388/394.
+- `cargo test --workspace`: PASS. Rama actual: **428 passed en Linux CI y 434
+  passed en Windows CI** (run 31547866384), 0 failed y 2 ignored en ambos. La base era 388/394.
   El delta Windows +6 está explicado test por test: Windows añade los ocho
   `qyro_win_dpapi::tests::{a_data_blob_that_lies_does_not_round_trip,
   a_single_flipped_byte_is_a_typed_error_against_dpapi,
@@ -336,7 +351,7 @@ CI y no aquí:
   4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
   crate de plataforma.
-- `cargo test --workspace --all-features`: PASS, **399 passed en Linux**, 0
+- `cargo test --workspace --all-features`: PASS, **428 passed en Linux**, 0
   failed, 2 ignored. `qyro_fs` declara una feature de fixture Windows; no añade
   una prueba al conjunto Linux
 - `cargo test --doc --workspace`: PASS
