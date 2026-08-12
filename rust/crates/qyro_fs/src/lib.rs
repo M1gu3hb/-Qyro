@@ -16,7 +16,8 @@
 //! `RelativePath` validates a string. Traversal bites when that string is joined
 //! to a root and opened, and the destination may already contain symbolic links
 //! the manifest cannot describe. See [`safe_path`] and ADR-0027 §1, including
-//! what `O_NOFOLLOW` closes and what it does not (QYR-0072).
+//! what `O_NOFOLLOW` closes, the post-open containment mitigation and the
+//! descriptor-relative race that remains outside its guarantee (QYR-0072).
 
 #![forbid(unsafe_code)]
 #![deny(

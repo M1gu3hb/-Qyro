@@ -170,6 +170,57 @@ fn every_public_path_returning_key_material_is_listed() {
 }
 
 #[test]
+fn every_plain_secret_array_is_zeroized_on_drop() {
+    let source = format!(
+        "{}\n{}",
+        production_source("aead/mod.rs"),
+        production_source("handshake/schedule.rs")
+    );
+    let compact: String = source
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect();
+
+    for (secret_type, drop_body) in [
+        (
+            "DirectionalKeys",
+            "implDropforDirectionalKeys{fndrop(&mutself){self.nonce_prefix.zeroize();}}",
+        ),
+        (
+            "SessionKey",
+            "implDropforSessionKey{fndrop(&mutself){self.0.zeroize();}}",
+        ),
+    ] {
+        assert!(
+            compact.contains(drop_body),
+            "{secret_type} must keep an explicit Drop implementation that zeroizes its plain secret array"
+        );
+    }
+}
+
+#[test]
+fn every_identity_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "error.rs",
+        "IdentityError",
+        9,
+        &[],
+    );
+}
+
+#[test]
+fn every_aead_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "aead/error.rs",
+        "AeadError",
+        12,
+        &[],
+    );
+}
+
+#[test]
 fn every_handshake_error_has_a_construction_site() {
     // "An error nobody can provoke documents a check that is not there" is the
     // rule `aead/error.rs` already states. `HandshakeError` broke it four times:
@@ -179,49 +230,13 @@ fn every_handshake_error_has_a_construction_site() {
     // so a caller could match on a control that did not exist.
     //
     // Declaring a variant is free; the point of this test is that producing one
-    // is not.
-    let declaration = production_source("handshake/error.rs");
-    let body = declaration
-        .split("pub enum HandshakeError {")
-        .nth(1)
-        .expect("HandshakeError is declared in handshake/error.rs");
-
-    let variants: Vec<&str> = body
-        .lines()
-        .take_while(|line| !line.starts_with('}'))
-        // Variants sit at four spaces; the `Display` match arms are deeper, and
-        // struct fields inside a variant deeper still.
-        .filter(|line| line.starts_with("    ") && !line.starts_with("     "))
-        .map(str::trim)
-        .filter(|line| line.chars().next().is_some_and(char::is_uppercase))
-        .map(|line| {
-            line.trim_end_matches(',')
-                .split([' ', '{', '('])
-                .next()
-                .unwrap_or(line)
-        })
-        .collect();
-
-    assert!(
-        variants.len() > 5,
-        "the parse found {} variants, which means it stopped reading the enum \
-         rather than that the enum shrank",
-        variants.len()
+    // is not. Use the shared parser so the meta-guard can prove this check did
+    // not stay behind as a crypto-only implementation again.
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "handshake/error.rs",
+        "HandshakeError",
+        13,
+        &[],
     );
-
-    let elsewhere: String = PRODUCTION_FILES
-        .iter()
-        .filter(|file| **file != "handshake/error.rs")
-        .map(|file| production_source(file))
-        .collect();
-
-    for variant in variants {
-        assert!(
-            elsewhere.contains(&format!("HandshakeError::{variant}")),
-            "HandshakeError::{variant} is declared but nothing constructs it. A \
-             variant a peer can never see is a check that is not there, and a \
-             caller matching on it believes otherwise. Either produce it or \
-             delete it."
-        );
-    }
 }

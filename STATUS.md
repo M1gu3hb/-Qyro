@@ -341,25 +341,55 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
   móvil, que son justo los casos que ADR-0024 §2 no puede ejercitar allí.
 - Interactive Windows application smoke: NO
 
+## Sprint 5C — cierre de gaps y deuda estructural
+
+- Las Puertas 1–10 están cerradas. Fase 9 instaló un mínimo estructural común en
+  diez de los once miembros del workspace; `qyro_ffi` conserva la única
+  excepción presente, por su contrato ABI C dedicado. La meta-guarda falla si
+  un crate no exceptuado pierde el archivo, su activación, la lista productiva,
+  anti-panic, fin-de-análisis, antitautología o construcción de errores/veredictos.
+- El barrido ampliado ejecutó 939/939 mutantes potenciales de `qyro_fs`,
+  `qyro_protocol`, `qyro_manifest`, `qyro_identity_store` y `qyro_crypto`.
+  La unión Windows/Linux contiene 161 supervivientes únicos: 25 cerrados y 136
+  abiertos en QYR-0115–QYR-0275; 12 timeouts separados siguen abiertos en
+  QYR-0276–QYR-0287. No se presentan los abiertos como cobertura lograda.
+- Esto endurece evidencia y contratos; no añade red, FFI del motor, UI,
+  selector de archivos ni persistencia móvil.
+- Fase 10 consolidó el ledger, las decisiones, este estado y el informe. CI
+  31549905688 sobre el commit documental `5736077` terminó en success con sus
+  ocho jobs.
+
 ## Real tests
 
-Host Linux, Rust 1.88.0, Python 3 y PowerShell 7.4.6. **Este contenedor no trae
-Flutter ni Dart**, así que todo lo que los necesita se ejecutó en CI y no aquí:
+Evidencia actual: Linux en CI y Windows local, ambos con Rust 1.88.0. **El host
+local no trae Flutter ni Dart**, así que todo lo que los necesita se ejecutó en
+CI y no aquí:
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS, **388 tests**, 0 failed, 2 ignored. Eran 369 al
+- `cargo test --workspace`: PASS. Rama actual: **428 passed en Linux CI y 434
+  passed en Windows CI** (run 31547866384), 0 failed y 2 ignored en ambos. La base era 388/394.
+  El delta Windows +6 está explicado test por test: Windows añade los ocho
+  `qyro_win_dpapi::tests::{a_data_blob_that_lies_does_not_round_trip,
+  a_single_flipped_byte_is_a_typed_error_against_dpapi,
+  a_wrapped_secret_needs_the_same_entropy,
+  an_unreadable_store_is_not_an_absent_one, delete_leaves_nothing_loadable,
+  load_on_an_empty_store_is_a_typed_absence, rotate_replaces_exactly_one_identity,
+  two_creates_do_not_lose_data}`; Unix añade los dos
+  `qyro_fs::tests::{a_symlink_at_the_final_part_component_is_refused_without_touching_its_target,
+  a_symlink_in_the_destination_cannot_redirect_a_write}`. La novena prueba de
+  DPAPI, `guards::the_unsafe_blocks_are_the_ones_we_listed`, corre en ambos y no
+  altera la diferencia. Eran 369 al
   empezar el sprint 5B.1: quince del filesystem y cuatro de las guardas y los
   veredictos. Eran 352 al empezar el sprint 5A; las diecisiete nuevas son las del motor de transferencia,
   y cuatro de ellas existen porque el barrido de mutación encontró sin cubrir
   cuatro negativas de ADR-0026 §4. Eran 350 al empezar 4D.2a, y 323 al empezar
   4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
-  crate de plataforma. **Las nueve pruebas de `qyro_win_dpapi` no están en esa
-  cuenta**: el crate entero es `cfg(windows)` y en este host no compila ninguna.
-  Corren en CI, y ese es su único sitio
-- `cargo test --workspace --all-features`: PASS, **388 tests**. Ningún crate
-  declara features, así que los dos conjuntos no pueden divergir
+  crate de plataforma.
+- `cargo test --workspace --all-features`: PASS, **428 passed en Linux**, 0
+  failed, 2 ignored. `qyro_fs` declara una feature de fixture Windows; no añade
+  una prueba al conjunto Linux
 - `cargo test --doc --workspace`: PASS
 - `cargo audit --deny warnings`: PASS, 0 vulnerabilidades sobre **61 crates**.
   La entrada nueva del sprint 5B.1 es **`qyro_fs`, de primera parte**: el diff de

@@ -17,21 +17,21 @@ if (-not (Test-Path -LiteralPath $statusPath)) {
     Write-Status 'BLOCKER' 'STATUS fields' 'STATUS.md is missing'
     exit 1
 }
-$status = Get-Content -LiteralPath $statusPath -Raw
+$status = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8
 $required = @(
     '(?m)^- Updated UTC:',
     '(?m)^- Branch:',
     '(?m)^- Verified commit:',
     '(?m)^- Milestone:',
-    '(?m)^## Implemented$',
-    '(?m)^## Not implemented$',
-    '(?m)^## Platforms compiled$',
-    '(?m)^## Platforms executed$',
-    '(?m)^## Real tests$',
-    '(?m)^## Artifacts$',
-    '(?m)^## Blockers$',
-    '(?m)^## Next task$',
-    '(?m)^## Provisional values$'
+    '(?m)^## Implemented\r?$',
+    '(?m)^## Not implemented\r?$',
+    '(?m)^## Platforms compiled\r?$',
+    '(?m)^## Platforms executed\r?$',
+    '(?m)^## Real tests\r?$',
+    '(?m)^## Artifacts\r?$',
+    '(?m)^## Blockers\r?$',
+    '(?m)^## Next task\r?$',
+    '(?m)^## Provisional values\r?$'
 )
 $missing = @($required | Where-Object { $status -notmatch $_ })
 if ($missing.Count -gt 0) {
@@ -49,9 +49,16 @@ if ($env:QYRO_MAX_STATUS_COMMIT_LAG) {
 
 function Invoke-Git {
     param([string[]] $Arguments)
+    # Windows PowerShell 5.1 promotes a native process' redirected stderr to a
+    # terminating error under Stop. A non-zero Git status is data for this
+    # checker (for example, a non-Git fixture), so capture it explicitly.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $output = & git @Arguments 2>$null
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
     return [pscustomobject]@{
-        ExitCode = $LASTEXITCODE
+        ExitCode = $exitCode
         Output   = ($output | Out-String).Trim()
     }
 }
@@ -92,7 +99,7 @@ foreach ($doc in $canonicalDocs) {
         $blockers++
         continue
     }
-    $content = Get-Content -LiteralPath $path -Raw
+    $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
     if ($content -match '(?i)(commit (actual|current|verificado|comprobado)|current commit)[^0-9a-f]*[0-9a-f]{40}') {
         Write-Status 'BLOCKER' 'Stale current commit' "$doc declares a current commit outside STATUS.md"
         $blockers++
@@ -103,7 +110,7 @@ $agentsPath = Join-Path $RepoRoot 'AGENTS.md'
 $requiredScripts = @('doctor.sh', 'bootstrap.sh', 'test_all.sh') |
     ForEach-Object { Test-Path -LiteralPath (Join-Path $RepoRoot "scripts/$_") }
 if (($requiredScripts -notcontains $false) -and (Test-Path -LiteralPath $agentsPath)) {
-    $agents = Get-Content -LiteralPath $agentsPath -Raw
+    $agents = Get-Content -LiteralPath $agentsPath -Raw -Encoding UTF8
     if ($agents -match '(?i)((doctor|bootstrap|test_all).*(pending|pendiente)|(pending|pendiente).*(doctor|bootstrap|test_all))') {
         Write-Status 'BLOCKER' 'AGENTS script state' 'existing scripts are described as pending'
         $blockers++
@@ -113,7 +120,7 @@ if (($requiredScripts -notcontains $false) -and (Test-Path -LiteralPath $agentsP
 foreach ($doc in @('PROJECT_CONTEXT.md', 'README.md', 'HANDOFF.md', 'TESTING.md')) {
     $path = Join-Path $RepoRoot $doc
     if (-not (Test-Path -LiteralPath $path)) { continue }
-    $content = Get-Content -LiteralPath $path -Raw
+    $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
     if ($content -match '(?i)(file transfer|transferencia de archivos)\s*:\s*(implemented|complete|ready|implementada|completa|lista)') {
         Write-Status 'BLOCKER' 'Pending capability claim' "$doc marks file transfer implemented"
         $blockers++
@@ -125,7 +132,7 @@ $textFiles = Get-ChildItem -LiteralPath $RepoRoot -Recurse -File |
         $_.FullName -notmatch '[\\/](\.git|build|target)[\\/]' -and
         $_.Extension -in @('.md', '.json', '.yaml', '.yml', '.dart', '.toml', '.gradle', '.kts', '.sh', '.ps1')
     }
-$allText = ($textFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue }) -join [Environment]::NewLine
+$allText = ($textFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 -ErrorAction SilentlyContinue }) -join [Environment]::NewLine
 if ($allText.Contains('REPLACE_WITH_') -and -not $status.Contains('REPLACE_WITH_')) {
     Write-Status 'BLOCKER' 'Provisional markers' 'REPLACE_WITH_* exists but is absent from STATUS.md'
     $blockers++
@@ -158,7 +165,7 @@ if (Test-Path -LiteralPath $handshakeModule) {
                        'docs/security/device-identity.md')) {
         $path = Join-Path $RepoRoot $doc
         if (-not (Test-Path -LiteralPath $path)) { continue }
-        $content = Get-Content -LiteralPath $path -Raw
+        $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
         if ($content -match '(?i)no (handshake|X25519|HKDF)|(sin|ni) handshake|no hay handshake|no existe handshake') {
             Write-Status 'BLOCKER' 'Capability drift' "$doc says there is no handshake, but rust/crates/qyro_crypto/src/handshake exists"
             $blockers++
@@ -167,7 +174,7 @@ if (Test-Path -LiteralPath $handshakeModule) {
 
     $nextSteps = Join-Path $RepoRoot 'NEXT_STEPS.md'
     if (Test-Path -LiteralPath $nextSteps) {
-        $pending = (Get-Content -LiteralPath $nextSteps -Raw) -split '(?m)^## Completado' | Select-Object -First 1
+        $pending = (Get-Content -LiteralPath $nextSteps -Raw -Encoding UTF8) -split '(?m)^## Completado' | Select-Object -First 1
         if ($pending -match '(?i)implementar el handshake|implement the handshake') {
             Write-Status 'BLOCKER' 'Capability drift' 'NEXT_STEPS.md still asks for the handshake, which is implemented'
             $blockers++
@@ -202,11 +209,11 @@ if ((Test-Path -LiteralPath (Join-Path $RepoRoot 'docs/security/test-vectors/han
 
 # ------------------------------------------------------------- unicode folding
 $pathRs = Join-Path $RepoRoot 'rust/crates/qyro_manifest/src/path.rs'
-if ((Test-Path -LiteralPath $pathRs) -and ((Get-Content -LiteralPath $pathRs -Raw) -match 'unicode_normalization')) {
+if ((Test-Path -LiteralPath $pathRs) -and ((Get-Content -LiteralPath $pathRs -Raw -Encoding UTF8) -match 'unicode_normalization')) {
     foreach ($doc in @('docs/protocols/manifest-format.md', 'docs/security/parser-threats.md')) {
         $path = Join-Path $RepoRoot $doc
         if (-not (Test-Path -LiteralPath $path)) { continue }
-        if (Test-UnquotedClaim (Get-Content -LiteralPath $path -Raw) '(?i)(pliega|folds|plegado de)[^.]*(ASCII|Latin-1)') {
+        if (Test-UnquotedClaim (Get-Content -LiteralPath $path -Raw -Encoding UTF8) '(?i)(pliega|folds|plegado de)[^.]*(ASCII|Latin-1)') {
             Write-Status 'BLOCKER' 'Folding claim' "$doc describes folding as ASCII/Latin-1 while path.rs uses unicode-normalization"
             $blockers++
         }
@@ -215,11 +222,11 @@ if ((Test-Path -LiteralPath $pathRs) -and ((Get-Content -LiteralPath $pathRs -Ra
 
 # ------------------------------------------------------------ dependency claims
 $lock = Join-Path $RepoRoot 'Cargo.lock'
-if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw) -match 'name = "ed25519-dalek"')) {
+if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw -Encoding UTF8) -match 'name = "ed25519-dalek"')) {
     foreach ($doc in @('SECURITY.md', 'STATUS.md')) {
         $path = Join-Path $RepoRoot $doc
         if (-not (Test-Path -LiteralPath $path)) { continue }
-        $content = Get-Content -LiteralPath $path -Raw
+        $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
         if (Test-UnquotedClaim $content '(?i)no tiene dependencias externas|sin dependencias externas|cero dependencias externas') {
             Write-Status 'BLOCKER' 'Dependency claim' "$doc says the workspace has no external dependencies, but Cargo.lock has ed25519-dalek"
             $blockers++
@@ -233,18 +240,30 @@ if ((Test-Path -LiteralPath $lock) -and ((Get-Content -LiteralPath $lock -Raw) -
 
 # ------------------------------------------------------------- finding ledger
 #
-# See the Bash half. An identifier with no entry is a finding whose state
-# nobody can look up (QYR-0043).
+# See the Bash half. A concrete identifier with no entry is a finding whose
+# state nobody can look up (QYR-0043). Ownership ranges are not findings: their
+# endpoints must not require placeholder records in somebody else's allocation
+# (QYR-0100).
 $ledger = Join-Path $RepoRoot 'BUGS_PENDING.md'
 if (Test-Path -LiteralPath $ledger) {
     $recorded = [System.Collections.Generic.HashSet[string]]::new()
-    foreach ($line in (Get-Content -LiteralPath $ledger)) {
+    foreach ($line in (Get-Content -LiteralPath $ledger -Encoding UTF8)) {
         if ($line -match '^##\s+(QYR-[0-9]{4})') { [void]$recorded.Add($Matches[1]) }
     }
     $cited = [System.Collections.Generic.HashSet[string]]::new()
     $extensions = @('*.md', '*.rs', '*.sh', '*.ps1', '*.yml')
     foreach ($file in (Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Include $extensions -ErrorAction SilentlyContinue)) {
-        foreach ($found in ([regex]::Matches((Get-Content -LiteralPath $file.FullName -Raw), 'QYR-[0-9]{4}'))) {
+        # `Get-Content -Raw` returns $null for an empty file. The fixtures keep
+        # intentionally empty scripts, and range normalisation must treat those
+        # as empty text rather than passing null to Regex.Replace.
+        $content = [string](Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8)
+        # Keep the source itself ASCII here: Windows PowerShell 5.1 decodes a
+        # BOM-less script with the legacy code page, while \u escapes are
+        # interpreted by the regex engine on every supported PowerShell.
+        $content = [regex]::Replace($content, 'QYR-[0-9]{4}\s*[-\u2013\u2014]\s*QYR-[0-9]{4}', '')
+        $content = [regex]::Replace($content, 'QYR-[0-9]{4}\s+(?:onward|onwards|en adelante)', '')
+        $content = [regex]::Replace($content, 'QYR-[0-9]{4}\+', '')
+        foreach ($found in ([regex]::Matches($content, 'QYR-[0-9]{4}'))) {
             [void]$cited.Add($found.Value)
         }
     }
@@ -260,7 +279,7 @@ if (Test-Path -LiteralPath $ledger) {
     # see that QYR-0036 was in the ledger twice with two different states
     # (QYR-0046). Counted here from the file rather than from the set.
     $headingCounts = @{}
-    foreach ($line in (Get-Content -LiteralPath $ledger)) {
+    foreach ($line in (Get-Content -LiteralPath $ledger -Encoding UTF8)) {
         if ($line -match '^##\s+(QYR-[0-9]{4})') {
             $id = $Matches[1]
             if ($headingCounts.ContainsKey($id)) { $headingCounts[$id]++ } else { $headingCounts[$id] = 1 }
@@ -283,7 +302,7 @@ if (Test-Path -LiteralPath $ledger) {
 $workflowDir = Join-Path (Join-Path $RepoRoot '.github') 'workflows'
 if (Test-Path -LiteralPath $workflowDir) {
     foreach ($workflow in (Get-ChildItem -LiteralPath $workflowDir -Filter '*.yml' -File)) {
-        foreach ($branchLine in (Get-Content -LiteralPath $workflow.FullName)) {
+        foreach ($branchLine in (Get-Content -LiteralPath $workflow.FullName -Encoding UTF8)) {
             if ($branchLine -notmatch '^\s*branches:') { continue }
             if ($branchLine -notmatch '^\s*branches:\s*\[(.*)\]') {
                 Write-Status 'BLOCKER' 'Workflow branch trigger' "$($workflow.Name) uses a branches: form this check cannot read; write an inline list"

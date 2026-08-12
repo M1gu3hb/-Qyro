@@ -45,8 +45,9 @@ jobs:
       # `cfg(test)` and crate-private, so they no longer need a feature flag and
       # can no longer be skipped by running the default set.
       - run: cargo test --workspace
-      # No crate declares a feature today. Kept so that adding one cannot ship
-      # untested: the day a feature exists, this line already covers it.
+      # qyro_fs has one opt-in feature for the privileged Windows reparse-point
+      # fixture. This line covers its Unix build; the matrix job below executes
+      # the Windows side on a runner that can create the link.
       - run: cargo test --workspace --all-features
       - run: cargo test --doc --workspace
       - name: Install cargo-audit
@@ -60,6 +61,47 @@ jobs:
       # not covered by cargo fmt --all above.
       - name: Check fuzz target formatting
         run: rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
+
+  rust-windows:
+    name: rust workspace (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: clippy
+      # The workspace has Windows-only production and eight cfg(windows) DPAPI
+      # tests; its ninth guard test runs everywhere. Linux cannot cover that
+      # production surface, which is how QYR-0105 survived until 5C.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  fs-final-component:
+    name: fs final-component guard (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            feature_args: ''
+          - os: macos-latest
+            feature_args: ''
+          - os: windows-latest
+            feature_args: '--features windows-reparse-test'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Refuse a final-component link without touching its target
+        run: >-
+          cargo test -p qyro_fs ${{ matrix.feature_args }}
+          tests::a_symlink_at_the_final_part_component_is_refused_without_touching_its_target
+          -- --exact
+      - name: Reject an opened part outside the destination root
+        run: >-
+          cargo test -p qyro_fs ${{ matrix.feature_args }}
+          tests::an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed
+          -- --exact
 
   flutter:
     runs-on: ubuntu-latest

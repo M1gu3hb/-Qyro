@@ -4,9 +4,8 @@
 //! that breaks one of them is a wire-compatibility break, not a refactor.
 
 use qyro_protocol::{
-    DecodedFrame, Flags, Frame, FrameDecoder, FrameError, FrameHeader, HEADER_LEN, MAGIC,
-    MAX_BUFFER_LEN, MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MessageType,
-    SUPPORTED_TRAILER_LEN, SessionId, VERSION_MAJOR, VERSION_MINOR,
+    DecodedFrame, Flags, Frame, FrameDecoder, FrameError, FrameHeader, HEADER_LEN, MAX_BUFFER_LEN,
+    MAX_FRAME_LEN, MAX_HEADER_LEN, MAX_PAYLOAD_LEN, MessageType, SessionId, VERSION_MAJOR,
 };
 
 fn encoded(message_type: MessageType, payload: Vec<u8>) -> Vec<u8> {
@@ -85,7 +84,7 @@ fn message_type_zero_is_reserved_so_a_zeroed_buffer_never_decodes() {
 }
 
 #[test]
-fn header_layout_is_frozen() {
+fn the_forty_eight_byte_layout_is_unchanged() {
     let header = FrameHeader::new(MessageType::DataChunk, 4)
         .expect("within limits")
         .with_transport_flags(Flags::END_OF_ITEM)
@@ -98,24 +97,14 @@ fn header_layout_is_frozen() {
         )
         .with_sequence(0x4142_4344_4546_4748);
 
+    let expected = [
+        0x51, 0x59, 0x52, 0x4F, 0x01, 0x00, 0x09, 0x01, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x04, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
+        0x17, 0x18, 0x21, 0x22, 0x23, 0x24, 0x31, 0x32, 0x33, 0x34, 0x41, 0x42, 0x43, 0x44, 0x45,
+        0x46, 0x47, 0x48,
+    ];
     let bytes = header.encode();
-    assert_eq!(bytes.len(), 48);
-    assert_eq!(&bytes[0..4], &MAGIC);
-    assert_eq!(&bytes[0..4], b"QYRO");
-    assert_eq!(bytes[4], VERSION_MAJOR);
-    assert_eq!(bytes[5], VERSION_MINOR);
-    assert_eq!(bytes[6], MessageType::DataChunk.to_wire());
-    assert_eq!(bytes[7], 0b0000_0001);
-    // Big-endian everywhere.
-    assert_eq!(&bytes[8..10], &[0x00, 0x30]);
-    assert_eq!(bytes[10], SUPPORTED_TRAILER_LEN as u8);
-    assert_eq!(bytes[11], 0);
-    assert_eq!(&bytes[12..16], &[0x00, 0x00, 0x00, 0x04]);
-    assert_eq!(&bytes[16..24], &0x0102_0304_0506_0708u64.to_be_bytes());
-    assert_eq!(&bytes[24..32], &0x1112_1314_1516_1718u64.to_be_bytes());
-    assert_eq!(&bytes[32..36], &0x2122_2324u32.to_be_bytes());
-    assert_eq!(&bytes[36..40], &0x3132_3334u32.to_be_bytes());
-    assert_eq!(&bytes[40..48], &0x4142_4344_4546_4748u64.to_be_bytes());
+    assert_eq!(bytes, expected, "the fixed wire vector changed");
 
     assert_eq!(FrameHeader::decode(&bytes).expect("round trip"), header);
 }

@@ -107,11 +107,6 @@ pub enum FrameError {
         /// Trailer length the peer declared.
         declared: u8,
     },
-    /// An identifier field held a value this protocol version forbids.
-    InvalidIdentifier {
-        /// Which identifier was rejected.
-        field: IdentifierField,
-    },
     /// A **plain** frame declared a trailer.
     ///
     /// Corrected in sprint 4C.2 (QYR-0031): this said "QYRO/1.0 accepts no
@@ -147,32 +142,6 @@ pub enum FrameError {
         /// Ceiling the decoder enforces.
         limit: usize,
     },
-}
-
-/// Identifier fields, so [`FrameError::InvalidIdentifier`] stays typed.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum IdentifierField {
-    /// `session_id`.
-    Session,
-    /// `transfer_id`.
-    Transfer,
-    /// `stream_id`.
-    Stream,
-    /// `item_id`.
-    Item,
-}
-
-impl fmt::Display for IdentifierField {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = match self {
-            Self::Session => "session_id",
-            Self::Transfer => "transfer_id",
-            Self::Stream => "stream_id",
-            Self::Item => "item_id",
-        };
-        formatter.write_str(name)
-    }
 }
 
 impl fmt::Display for FrameError {
@@ -237,9 +206,6 @@ impl fmt::Display for FrameError {
                 formatter,
                 "ENCRYPTED set with a trailer length of {declared}"
             ),
-            Self::InvalidIdentifier { field } => {
-                write!(formatter, "invalid identifier in {field}")
-            }
             Self::AuthenticationTrailerInvalid { declared, expected } => write!(
                 formatter,
                 "authentication trailer length {declared}, expected {expected}"

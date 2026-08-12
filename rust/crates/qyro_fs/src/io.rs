@@ -41,7 +41,7 @@ pub const HASH_BUFFER_LEN: usize = 65_536;
 /// This is the half of the policy with **no** race: the check and the open are
 /// one syscall, so nothing can be substituted between them. The intermediate
 /// components are the half that still has one (QYR-0072).
-fn open_part(path: &Path, append: bool) -> Result<File, FsError> {
+pub(crate) fn open_part(root: &Path, path: &Path, append: bool) -> Result<File, FsError> {
     let mut options = OpenOptions::new();
     options.write(true).create(true).append(append);
     if !append {
@@ -63,16 +63,67 @@ fn open_part(path: &Path, append: bool) -> Result<File, FsError> {
         options.custom_flags(0x0020_0000);
     }
 
-    Ok(options.open(path)?)
+    let file = match options.open(path) {
+        Ok(file) if metadata_is_link_or_reparse_point(&file.metadata()?) => {
+            return Err(final_component_link(path));
+        }
+        Ok(file) => file,
+        Err(error) => match fs::symlink_metadata(path) {
+            // Unix reports ELOOP before returning a handle. Classify that
+            // refusal by inspecting the path *after* the atomic open failed;
+            // this check only chooses the error variant and is not the control.
+            Ok(metadata) if metadata_is_link_or_reparse_point(&metadata) => {
+                return Err(final_component_link(path));
+            }
+            _ => return Err(error.into()),
+        },
+    };
+
+    // ADR-0027 §1.5. This is deliberately after the handle exists and before
+    // callers can truncate, delete or write. It catches a parent substitution
+    // that persists through the check; QYR-0072 records why a double swap still
+    // needs descriptor-relative operations to close the race completely.
+    let parent = path.parent().ok_or_else(|| FsError::EscapesRoot {
+        resolved: path.to_string_lossy().into_owned(),
+    })?;
+    let canonical_parent = fs::canonicalize(parent)?;
+    if !canonical_parent.starts_with(root) {
+        return Err(FsError::EscapesRoot {
+            resolved: canonical_parent.to_string_lossy().into_owned(),
+        });
+    }
+
+    Ok(file)
+}
+
+fn final_component_link(path: &Path) -> FsError {
+    FsError::SymlinkInPath {
+        component: path.to_string_lossy().into_owned(),
+    }
+}
+
+#[cfg(unix)]
+fn metadata_is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+#[cfg(windows)]
+fn metadata_is_link_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt as _;
+
+    // FILE_ATTRIBUTE_REPARSE_POINT. Looking at the metadata of the handle
+    // opened with FILE_FLAG_OPEN_REPARSE_POINT binds this decision to the
+    // object that would otherwise receive the write, not to a second path walk.
+    metadata.file_attributes() & 0x0000_0400 != 0
 }
 
 /// `O_NOFOLLOW` as a literal.
 ///
 /// Spelled out rather than pulled from `libc`, which this workspace does not
-/// depend on and which would be a new package for one integer. The value is
-/// fixed by the platform ABI, and `a_symlink_at_the_final_component_is_refused`
-/// is what proves the number is the right one: a wrong constant makes that test
-/// pass a write through the link, loudly.
+/// depend on and which would be a new package for one integer. The values are
+/// fixed by each platform ABI. The final-component integration test proves the
+/// value on every host where it runs: Linux and macOS in CI. Android and iOS
+/// compile these constants but still lack runtime filesystem evidence.
 #[cfg(unix)]
 const fn libc_o_nofollow() -> i32 {
     #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -152,7 +203,7 @@ impl ContentSource for FileSource {
     fn read_at(&self, item_id: u32, offset: u64, out: &mut [u8]) -> usize {
         let filled = self.try_read(item_id, offset, out).unwrap_or(0);
         #[cfg(test)]
-        self.peak_read.set(self.peak_read.get().max(out.len()));
+        self.peak_read.set(self.peak_read.get().max(filled));
         filled
     }
 }
@@ -187,6 +238,7 @@ impl FileSink {
     /// [`FsError::Io`] when `root` cannot be canonicalised.
     pub fn new(root: &Path, manifest: &qyro_manifest::TransferManifest) -> Result<Self, FsError> {
         fs::create_dir_all(root)?;
+        let root = fs::canonicalize(root)?;
         let mut plan = BTreeMap::new();
         for item in manifest.items() {
             plan.insert(
@@ -199,7 +251,7 @@ impl FileSink {
             );
         }
         Ok(Self {
-            root: root.to_path_buf(),
+            root,
             plan,
             open: BTreeMap::new(),
             transfer_id: manifest.transfer_id(),
@@ -212,6 +264,21 @@ impl FileSink {
     #[must_use]
     pub fn resume_path(root: &Path) -> PathBuf {
         root.join(".qyro-resume")
+    }
+
+    /// Returns the committed boundary when the destination metadata belongs to
+    /// this transfer and describes `item_id`.
+    fn committed_progress(&self, item_id: u32) -> Result<Option<u64>, FsError> {
+        let bytes = match fs::read(Self::resume_path(&self.root)) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let state = ResumeState::decode(&bytes)?;
+        if state.transfer_id != self.transfer_id {
+            return Ok(None);
+        }
+        Ok(state.progress_of(item_id))
     }
 
     /// Opens (or reopens) the part file for `item_id`.
@@ -233,8 +300,31 @@ impl FileSink {
                 });
             }
 
-            let handle = open_part(&resolved.part_path, false)?;
-            let written = handle.metadata().map(|m| m.len()).unwrap_or(0);
+            let part_exists = match fs::symlink_metadata(&resolved.part_path) {
+                Ok(_) => true,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+                Err(error) => return Err(error.into()),
+            };
+            let committed = if part_exists {
+                self.committed_progress(item_id)?
+            } else {
+                None
+            };
+            let (handle, written) = if part_exists {
+                // Opening first applies the atomic final-component link/reparse
+                // guard before either truncating or removing the prior file.
+                let handle = open_part(&self.root, &resolved.part_path, false)?;
+                if let Some(bytes_committed) = committed {
+                    handle.set_len(bytes_committed)?;
+                    (handle, bytes_committed)
+                } else {
+                    drop(handle);
+                    fs::remove_file(&resolved.part_path)?;
+                    (open_part(&self.root, &resolved.part_path, false)?, 0)
+                }
+            } else {
+                (open_part(&self.root, &resolved.part_path, false)?, 0)
+            };
             self.open.insert(
                 item_id,
                 PartFile {
@@ -255,15 +345,17 @@ impl FileSink {
     ///
     /// Whatever the path resolution or the filesystem reports.
     pub fn put(&mut self, item_id: u32, offset: u64, bytes: &[u8]) -> Result<(), FsError> {
+        {
+            let part = self.part_for(item_id)?;
+            part.handle.seek(SeekFrom::Start(offset))?;
+            part.handle.write_all(bytes)?;
+            let end = offset.saturating_add(bytes.len() as u64);
+            part.written = part.written.max(end);
+        }
         #[cfg(test)]
         {
             self.peak_write = self.peak_write.max(bytes.len());
         }
-        let part = self.part_for(item_id)?;
-        part.handle.seek(SeekFrom::Start(offset))?;
-        part.handle.write_all(bytes)?;
-        let end = offset.saturating_add(bytes.len() as u64);
-        part.written = part.written.max(end);
         Ok(())
     }
 
@@ -363,6 +455,10 @@ pub fn digest_of(path: &Path) -> Result<Vec<u8>, FsError> {
     let mut buffer = vec![0u8; HASH_BUFFER_LEN];
     loop {
         let count = file.read(&mut buffer)?;
+        #[cfg(test)]
+        crate::manifest_builder::PEAK_BUILDER_READ.with(|peak| {
+            peak.set(peak.get().max(count));
+        });
         if count == 0 {
             break;
         }

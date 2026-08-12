@@ -2,8 +2,8 @@
 
 use qyro_manifest::{
     Compression, HashAlgorithm, HashMetadata, ItemKind, MANIFEST_MAGIC, MAX_HASH_LEN, MAX_ITEMS,
-    MAX_PATH_LEN, MAX_SEGMENT_LEN, ManifestError, ManifestField, ManifestItem, PathError,
-    RelativePath, TransferManifest, codec,
+    MAX_MIME_LEN, MAX_PATH_LEN, MAX_SEGMENT_LEN, ManifestError, ManifestField, ManifestItem,
+    PathError, RelativePath, TransferManifest, codec,
 };
 
 /// Every file needs a final digest, so fixtures carry a deterministic one.
@@ -394,6 +394,35 @@ fn unicode_and_emoji_metadata_round_trips() {
     assert_eq!(
         decoded.items()[0].mime_type(),
         Some("text/plain; charset=utf-8")
+    );
+}
+
+#[test]
+fn exact_maximum_path_and_mime_lengths_round_trip() {
+    let path_text = [
+        "a".repeat(255),
+        "b".repeat(255),
+        "c".repeat(255),
+        "d".repeat(252),
+        "e".to_owned(),
+        "f".to_owned(),
+    ]
+    .join("/");
+    assert_eq!(path_text.len(), MAX_PATH_LEN);
+    let mime = "m".repeat(MAX_MIME_LEN);
+
+    let item = file(1, &path_text, 1)
+        .with_mime_type(&mime)
+        .expect("the exact MIME limit is valid");
+    let subject = manifest(vec![item]);
+    let bytes = codec::encode(&subject).expect("the exact path limit encodes");
+    let decoded = codec::decode(&bytes).expect("exact limits supplied by a peer decode");
+
+    assert_eq!(decoded, subject);
+    assert_eq!(decoded.items()[0].path().byte_len(), MAX_PATH_LEN);
+    assert_eq!(
+        decoded.items()[0].mime_type().map(str::len),
+        Some(MAX_MIME_LEN)
     );
 }
 

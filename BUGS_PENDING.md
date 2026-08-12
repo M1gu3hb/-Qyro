@@ -1332,25 +1332,25 @@
   autenticados** de cada frame sellado. Estar en la AAD significa que el peer no
   los puede alterar sin romper el tag, que es exactamente la propiedad por la
   que valdría la pena ponerlos ahí
-- Actual: `Frame::new` los fija en `0` y **no hay ninguna forma pública de
-  cambiarlos**. `FrameHeader::within_limits` los pone a cero y
-  `clone_for_envelope` los copia tal cual. Todo frame construido por la API
-  pública los lleva a cero, así que hoy son tres campos autenticados que no
-  dicen nada
+- Actual: corregido el registro. `Frame::new` los inicia en cero, pero
+  `Frame::with_identifiers` y `FrameHeader::with_identifiers` ya eran públicas
+  desde `cc38554`; ADR-0029 congela esa API real y define cero como valor sin
+  ámbito asignado por la capa superior
 - Cómo se encontró: escribiendo ADR-0026 §1 decidí repetir `item_id` en el
   cuerpo de `DataChunk`, y al implementarlo descubrí que la cabecera ya lo
   llevaba. Es el desajuste que el sprint 5A existía para destapar: dos piezas
   probadas por separado, con un campo que una declara y la otra no puede usar
-- Lo que **no** se hizo: añadir setters a `qyro_protocol` ni mover `item_id` a la
-  cabecera. Ensanchar una superficie congelada como efecto secundario de otro
-  sprint es cómo se pierde el control de un formato. ADR-0026 mantiene el
-  `item_id` en el cuerpo, cuesta cuatro bytes por chunk, y esta entrada dice por
-  qué está duplicado en vez de dejar que parezca un descuido
-- Decisión pendiente: o los campos se pueden rellenar y el motor los usa —y
-  entonces el `item_id` del cuerpo sobra—, o no aportan y hay que decir en
-  ADR-0016 que están reservados. Hoy la cabecera promete algo que la API niega
-- Estado: abierto
+- Lo que **no** se hizo: no se añadió un tercer setter ni `FrameIdentifiers`, y
+  no se movió `item_id` fuera del cuerpo de `DataChunk`; eso pertenece al
+  contrato de ADR-0026 y a un crate fuera del alcance de esta fase
+- Resolución: ADR-0029 fue congelada en `b4faf2e` antes del código. Los tres
+  campos sobreviven al seal/open, alterar `transfer_id` rompe el tag y el layout
+  se compara contra un vector literal de 48 bytes. Los IDs desconocidos se
+  rechazan con errores tipados en la capa receptora después de autenticar
+- Estado: cerrado
 - Fecha: 2026-08-08
+- Evidencia: contratos nominales en `62c82b8`; las mutaciones de setter, AAD y
+  offset hicieron fallar cada prueba con nombre. CI 31534679436 pasó
 
 ## QYR-0069 — Un crate externo no puede construir un handshake determinista
 
@@ -1438,7 +1438,7 @@
 - Estado: cerrado
 - Fecha: 2026-08-08
 
-## QYR-0072 — La carrera de los componentes intermedios de la ruta sigue abierta
+## QYR-0072 — La carrera intermedia no se cierra con comprobaciones por nombre
 
 - Plataforma: filesystem
 - Severidad: P2
@@ -1457,7 +1457,20 @@
   de destino **ya puede escribir lo que quiera ahí**. Lo que las comprobaciones
   impiden es que use Qyro para escribir **fuera** de ahí. La ventana devuelve
   parte de ese privilegio durante un instante
-- Estado: abierto
+- Decisión: opción (c), mitigación parcial sin dependencias. `FileSink` conserva
+  la raíz canonicalizada y `open_part` vuelve a canonicalizar el padre después
+  de obtener el handle y antes de truncar, borrar o escribir. Un padre que sigue
+  fuera produce `FsError::EscapesRoot`. La opción (a) por descriptor es la única
+  que cerraría la carrera, pero exige APIs fuera de `std` y dos implementaciones;
+  no se añadió `libc` ni un cuarto crate con `unsafe`. La opción (b) dejaría sin
+  implementar ADR-0027 §1.5 y se descartó
+- Límite aceptado: un atacante puede hacer un doble cambio —fuera durante el
+  `open`, dentro durante la canonicalización— y dejar un handle exterior que la
+  comprobación por nombre no detecta. La creación puede dejar un archivo vacío
+  fuera; `digest`, `rename` y `remove_file` conservan ventanas propias. Sólo la
+  opción (a) completa puede cerrar esas propiedades
+- Estado: resuelto por decisión de riesgo y mitigación; la TOCTOU no se declara
+  cerrada
 - Fecha: 2026-08-08
 
 ## QYR-0076 — Tres reglas del sprint 6A no podían cumplirse a la vez
@@ -1744,3 +1757,2266 @@
   de archivar un documento externo, o que los prompts no nombren identificadores
 - Estado: abierto
 - Fecha: 2026-08-11
+- Evidencia: enmienda congelada en `01133a8`, código `5deb51a`; sin la
+  comprobación post-open,
+  `an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed`
+  devolvió `Ok(File)` y falló. CI 31537833116 pasó en Ubuntu, macOS y Windows
+
+## QYR-0073 — `O_NOFOLLOW` no tiene una prueba que ejerza el enlace final
+
+- Plataforma: Linux, macOS y Windows probados en CI; Android e iOS sólo
+  compilados, sin ejecución de filesystem en dispositivo
+- Severidad: P1
+- Esperado: una transferencia real mediante `FileSink` rechaza un
+  `<destino>/<nombre>.qyro-part` que sea un enlace simbólico, no modifica el
+  objetivo externo y devuelve el error tipado correspondiente
+- Actual: la prueba existente compara dos veces el digest del mismo archivo y
+  no construye el enlace en la ruta que abre producción. Sustituir
+  temporalmente `O_NOFOLLOW` por `0` dejó las 388 pruebas Linux en verde
+- Resolución: la prueba usa `FileSink` y coloca el enlace en la ruta
+  `.qyro-part` que abre producción. Exige `SymlinkInPath`, conserva byte por
+  byte el objetivo externo y no produce el nombre final. `open_part` clasifica
+  el rechazo atómico Unix y el handle de reparse point Windows sin convertir
+  una segunda consulta de ruta en el control de seguridad
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: CI 31529521600 y 31529821869 pasaron el test real en Ubuntu, macOS
+  y Windows. Con `O_NOFOLLOW = 0`, CI 31529689978 falló el test nominal en
+  Ubuntu con `the real FileSink path returned the wrong typed error: Ok(())`;
+  el control quedó restaurado en `a9f21a9`
+
+## QYR-0074 — La prueba de memoria del manifest mide una constante
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: el contador de lectura del constructor registra los bytes que cada
+  llamada real a `Read::read` devuelve, y la prueba distingue entradas pequeñas
+  de grandes sin cargar el archivo completo
+- Actual: corregido. `digest_of` registra el `count` devuelto por cada
+  `Read::read`; `FileSource` registra los bytes realmente leídos y `FileSink`
+  sólo registra una escritura después de que se haya completado con éxito.
+  Las tres pruebas comparan tamaños distintos y exigen un pico estrictamente
+  menor para la operación pequeña
+- Resolución: la medición del builder se movió al bucle de lectura real y se
+  aisló por hilo para que hashes paralelos no contaminen el pico. Se añadieron
+  contratos equivalentes para source y sink; `read_to_end`, un contador
+  constante y contar operaciones rechazadas rompen pruebas nominales
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: M2 original reproducida sobre `983ca71`; cierre en `f56435c`. Los
+  barridos locales posteriores hicieron fallar
+  `building_a_manifest_from_disk_does_not_load_the_file`,
+  `file_source_peak_is_the_largest_completed_read_not_the_request` y
+  `file_sink_peak_is_the_largest_successful_write_not_a_constant` al retirar o
+  sustituir por constantes sus mediciones; todas las mutaciones se restauraron
+
+## QYR-0075 — La política de recuperación congelada en ADR-0027 no se lee
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `FileSink` lee `.qyro-resume`, reanuda sólo el `transfer_id`
+  coincidente truncando el parcial a `bytes_committed`, y elimina un parcial
+  huérfano antes de empezar una transferencia nueva
+- Actual: corregido. `FileSink::part_for` llama a `ResumeState::decode` cuando
+  existe un parcial, reanuda sólo metadata coincidente, trunca a
+  `bytes_committed` y elimina el parcial cuando ningún progreso lo describe
+- Resolución: `an_interrupted_transfer_resumes_from_its_metadata` deja una cola
+  no confirmada y exige que producción la trunque; la prueba de huérfanos
+  comprueba por longitud el descarte tanto de 17 como de 8192 bytes. QYR-0101
+  y la enmienda de ADR-0027 cubren el `transfer_id` discordante
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: M4 original encontró cero llamantes productivos y M3 falló por
+  digest. Cierre en `4d7b6fd`: retirar la lectura productiva volvió a causar
+  `DigestMismatch`; retirar `set_len` conservó 262243 bytes en vez de 131072;
+  reutilizar el huérfano conservó 17 bytes en vez de 1. CI 31532723390 pasó
+
+## QYR-0100 — El checker confunde límites de rangos reservados con hallazgos
+
+- Plataforma: documentación; Bash y PowerShell
+- Severidad: P2
+- Esperado: `check_docs_consistency` exige una ficha para cada cita concreta de
+  un hallazgo, pero acepta declaraciones de propiedad como
+  `QYR-0076–QYR-0099` o `QYR-0100 en adelante` sin inventar fichas para los
+  extremos
+- Actual: el escaneo extrae cualquier texto con forma `QYR-NNNN`; el segundo
+  prompt verbatim produjo tres bloqueos por 0076, 0099 y 0100 aunque sólo
+  describían rangos reservados y 0076–0099 pertenecen a otro agente
+- Resolución: ambos checkers eliminan del texto los rangos cerrados y los
+  límites `onward`/`en adelante`/`+` antes de extraer citas. Las pruebas de
+  contrato fijan que una reserva pasa y una cita concreta sin ficha sigue
+  fallando
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el contrato Bash falló antes del cambio en el fixture de rangos y
+  pasó después. CI 31528281381 hizo fallar el contrato PowerShell por el caso
+  vacío de `Get-Content -Raw`; tras convertir `$null` a texto vacío, Bash y
+  PowerShell 7 pasaron en CI 31528757962
+
+## QYR-0101 — Metadatos de otra transferencia no describen el parcial
+
+- Plataforma: todas
+- Severidad: P2
+- Esperado: `FileSink` sólo reanuda un `.qyro-part` cuando el `transfer_id` de
+  `.qyro-resume` coincide con el manifest actual; metadatos de otra transferencia
+  convierten el parcial en huérfano y se descartan antes de escribir
+- Actual: ADR-0027 §5 no definía la discordancia y producción no leía los
+  metadatos. Un parcial de 8192 bytes acompañado por progreso de la transferencia
+  99 se reutilizaba al iniciar la transferencia 42
+- Resolución: la enmienda fechada de ADR-0027 define «lo describa» y
+  `FileSink::committed_progress` exige el `transfer_id` actual antes de devolver
+  `bytes_committed`; en caso contrario `part_for` abre con el guard de enlaces,
+  elimina el parcial y crea uno nuevo
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes del cambio,
+  `resume_metadata_for_another_transfer_makes_the_part_an_orphan` falló con
+  longitud 8192 en vez de 1; al retirar después la comparación de
+  `transfer_id`, falló con longitud 4096 en vez de 1
+
+## QYR-0102 — QYR-0068 y `header.rs` negaban una API pública existente
+
+- Plataforma: protocolo y documentación
+- Severidad: P2
+- Esperado: el ledger, el comentario de `FrameHeader::new` y la ADR vigente
+  describen la superficie pública que un crate externo puede compilar y usar
+- Actual: QYR-0068 y `header.rs` afirman que nada público puede rellenar los
+  identificadores, pero `Frame::with_identifiers` y
+  `FrameHeader::with_identifiers` son públicos desde `cc38554`; pruebas de
+  integración y `qyro_crypto_smoke` ya los llaman con valores no cero
+- Resolución: ADR-0029 congela la API real sin duplicarla; `header.rs` y
+  `frame.rs` documentan cero, el sealer y el límite de autenticación. La
+  evidencia genérica se convirtió en tres contratos nominales y QYR-0068 quedó
+  corregida con el historial preservado
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: `git show 15934aa:rust/crates/qyro_protocol/src/header.rs` contiene
+  `pub const fn with_identifiers`; `rg -n 'with_identifiers'` encuentra usos en
+  tests externos y `rust/tools/qyro_crypto_smoke/src/lib.rs`. ADR `b4faf2e`,
+  contratos `62c82b8` y CI verde 31534679436
+
+## QYR-0103 — `FrameError::InvalidIdentifier` no tiene construcción posible
+
+- Plataforma: protocolo
+- Severidad: P3
+- Esperado: cada variante pública de `FrameError` corresponde a un rechazo que
+  el decoder o un constructor puede producir, o su ausencia está decidida y
+  documentada sin prometer un control inexistente
+- Actual: `InvalidIdentifier { field: IdentifierField }` sólo aparece en su
+  declaración, `Display` y reexport. Ningún código lo construye; ADR-0029 decide
+  además que framing acepta el rango entero, incluido cero
+- Resolución: la enmienda fechada de ADR-0029 decide que framing acepta todo el
+  dominio de identificadores y que routing rechaza desconocidos sólo después de
+  autenticar. Se eliminaron `InvalidIdentifier` e `IdentifierField`, ambos
+  inalcanzables; la guarda compartida exige ahora un sitio de construcción para
+  cada variante pública restante de `FrameError`
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes del cambio, la nueva guarda falló nominalmente con
+  `FrameError::InvalidIdentifier is declared and nothing constructs it`;
+  ADR `6d158d3`, eliminación y guarda en `1241e1b`, CI 31542583869 verde
+
+## QYR-0104 — El informe sumaba un test Linux inexistente desde Fase 3
+
+- Plataforma: documentación y CI Linux
+- Severidad: P3
+- Esperado: §9 y §11 copian los totales que produce cada ejecución normal de
+  `cargo test --workspace`, distinguidos por plataforma y obtenidos del log
+- Actual: el informe decía 391/392/393 pruebas Linux tras Fases 3/4/5; los logs
+  de los runs 31531722569, 31533293790 y 31535319037 contienen respectivamente
+  390/391/392. Los totales Windows 396/397/398 sí eran correctos
+- Resolución: se recontaron sólo las líneas `test result` del step exacto
+  `Run cargo test --workspace`, excluyendo `--all-features` y doc tests. El
+  informe corrige las tres cifras y fija Fase 6 en 398 Linux/404 Windows
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: extracción por API de los logs de CI; implementación de Fase 6 en
+  31536398365: 38 resúmenes, 398 passed, 0 failed, 2 ignored
+
+## QYR-0105 — El workspace no compilaba su superficie Windows en CI
+
+- Plataforma: Windows y CI
+- Severidad: P2
+- Esperado: Clippy estricto y las pruebas normales del workspace compilan y
+  corren tanto la superficie Linux como la superficie Windows en cada cambio
+- Actual: el único job completo usaba `ubuntu-latest`. En Windows,
+  `qyro_store_smoke::code::UNSUPPORTED_PLATFORM` quedaba sin usar y
+  `cargo clippy --workspace --all-targets -- -D warnings` fallaba por
+  `dead_code`; Linux no podía ver el defecto ni compilar el backend DPAPI
+- Resolución: `UNSUPPORTED_PLATFORM` sólo se compila fuera de Windows, que es
+  donde puede devolverse. CI añade un job `windows-latest` con el mismo Clippy
+  estricto y `cargo test --workspace`. El coste es un runner adicional y una
+  segunda suite; el beneficio es cubrir código productivo Windows y ocho tests
+  funcionales `cfg(windows)` que el job Linux no puede ejecutar
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: local Windows Rust 1.88.0: Clippy PASS y 405 passed/2 ignored; las
+  nueve pruebas de `qyro_win_dpapi` pasan, incluida la guarda de `unsafe` que
+  también corre en Linux. Al retirar el `cfg`, Clippy falló nominalmente con
+  `constant UNSUPPORTED_PLATFORM is never used`; restaurado después. CI
+  31540971698 ejecutó Clippy y 405/2 en `windows-latest`; los ocho jobs pasaron
+
+## QYR-0106 — STATUS presentaba un conteo Linux como universal
+
+- Plataforma: documentación, Linux y Windows
+- Severidad: P3
+- Esperado: cada total de pruebas dice la plataforma y cualquier diferencia por
+  `cfg` queda explicada por pruebas concretas
+- Actual: `STATUS.md` declaraba 388 como «el» total, pero la misma base ejecutaba
+  394 en Windows. La rama de Fase 7 ejecuta 399 en Linux y 405 en Windows
+- Resolución: STATUS publica ambos conteos. El delta exacto de +6 en Windows es
+  ocho tests funcionales DPAPI sólo Windows menos dos tests de symlinks sólo
+  Unix; la novena prueba DPAPI, la guarda de bloques `unsafe`, corre en ambos y
+  no contribuye al delta
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: comparación por nombre de `cargo test --workspace -- --list` en
+  Windows con el step Linux de CI 31537833116; lista nominal en STATUS y en el
+  informe 5C
+
+## QYR-0107 — Los checkers de portabilidad no eran portables al host Windows
+
+- Plataforma: Git Bash y Windows PowerShell
+- Severidad: P2
+- Esperado: ambos checkers y sus contratos terminan en el Windows incluido de
+  fábrica sin exigir instalar PowerShell 7 ni lanzar un proceso por segmento
+- Actual: los dos scripts PowerShell exigían 7.0 y Windows PowerShell 5.1 los
+  rechazaba antes de ejecutarlos. El checker Bash hacía `printf | tr` por cada
+  segmento versionado y agotó 120 s en Git Bash
+- Resolución: los scripts PowerShell declaran 5.1 y el contrato invoca el mismo
+  ejecutable que lo aloja; el Bash convierte mayúsculas con `${stem^^}`, sin
+  subprocesos por segmento
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes, Windows PowerShell 5.1 produjo
+  `ScriptRequiresUnmatchedPSVersion` y Bash siguió activo después de 120 s.
+  Después: checker/contrato PowerShell 0.731 s/27.409 s y checker/contrato Bash
+  0.860 s/19.262 s, todos con salida 0
+
+## QYR-0108 — Las fixtures de portabilidad dependían de PowerShell 7 y Unix Git
+
+- Plataforma: Git for Windows y Windows PowerShell 5.1
+- Severidad: P3
+- Esperado: el contrato llega a ejecutar el checker contra nombres hostiles
+  mantenidos sólo en el índice, y la construcción de su ruta raíz funciona en
+  PowerShell 5.1
+- Actual: `Join-Path $PSScriptRoot '..' '..'` usa una forma no aceptada por 5.1;
+  además Git for Windows rechazaba `NUL` antes de que el checker pudiera ser el
+  componente bajo prueba
+- Resolución: el contrato anida las dos llamadas `Join-Path`, reutiliza el
+  ejecutable PowerShell actual y fija `core.protectNTFS=false` sólo dentro de
+  cada repositorio temporal. El nombre hostil permanece únicamente en el índice
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: ambos contratos completos pasan en Windows; retirar cualquiera de
+  las adaptaciones reproduce respectivamente el error de parámetros de
+  `Join-Path` o el rechazo anticipado de Git for Windows
+
+## QYR-0109 — El checker documental leía UTF-8 y Git de forma distinta en PowerShell 5.1
+
+- Plataforma: Windows PowerShell 5.1
+- Severidad: P2
+- Esperado: el checker y su contrato aceptan el mismo repositorio y las mismas
+  reservas de rango que PowerShell 7, incluidos UTF-8 y finales CRLF
+- Actual: bajar el requisito de los scripts de portabilidad permitió ejecutar
+  el checker documental en el host real. Éste leyó UTF-8 sin declarar encoding,
+  no reconoció el en dash de `QYR-0076–QYR-0099` y exigió dos fichas ajenas.
+  Después, `ErrorActionPreference=Stop` convirtió el stderr esperado de Git en
+  excepción y los headings CRLF no satisficieron patrones anclados a `$`
+- Resolución: todas las lecturas textuales declaran UTF-8; el regex de rangos
+  usa escapes ASCII `\u2013`/`\u2014`; `Invoke-Git` captura salida y código sin
+  promover estados no cero a excepciones; los headings aceptan LF y CRLF. El
+  contrato usa el ejecutable PowerShell actual y fixtures UTF-8
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes, el repositorio real falló con QYR-0076–QYR-0099 sin ficha.
+  El contrato 5.1 reprodujo después el stderr nativo y los nueve headings CRLF;
+  tras las correcciones, checker real y contrato completo terminan con salida 0
+
+## QYR-0110 — La enumeración de módulos trataba `main.rs` como un subdirectorio
+
+- Plataforma: todos los hosts; crates binarios Rust
+- Severidad: P2
+- Esperado: la guarda compartida resuelve `mod guards;` desde `main.rs` igual
+  que desde `lib.rs`, y enumera `src/guards.rs` como archivo de nivel raíz
+- Actual: `module_directory` sólo reconocía `lib.rs`; en
+  `qyro_store_smoke`, convirtió el módulo en la ruta inexistente
+  `src/main/guards.rs` y la lista productiva quedó falsamente incompleta
+- Resolución: `source_guard::module_directory` reconoce ambas raíces de crate;
+  la meta-guarda incluye ahora el smoke binario en el mínimo común
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: `qyro_store_smoke::guards::every_production_file_is_listed` falló
+  primero nombrando `main/guards.rs`; pasa en `1241e1b` y CI 31542583869
+
+## QYR-0111 — El stripper no reconocía `cfg(all(windows, test))`
+
+- Plataforma: análisis de fuente; módulo DPAPI Windows
+- Severidad: P2
+- Esperado: todo módulo compilado sólo para tests se excluye del inventario
+  productivo aunque combine `test` con una plataforma
+- Actual: `GATE_MARKERS` no contenía `#[cfg(all(windows, test))]`, por lo que
+  `qyro_win_dpapi/src/tests.rs` se presentó como producción no listada
+- Resolución: se añadió el marcador exacto; no se creó un allow ni una
+  excepción por archivo
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: la guarda Windows falló primero diciendo que `tests.rs` era
+  producción; tras el cambio pasa localmente y en CI 31542583869
+
+## QYR-0112 — Cuatro miembros del workspace no tenían el mínimo compartido
+
+- Plataforma: workspace Rust
+- Severidad: P2
+- Esperado: cada crate no exceptuado activa lista productiva, anti-panic,
+  fin-de-análisis y antitautología desde `source_guard.rs`
+- Actual: la primera ejecución de la meta-guarda nombró exactamente
+  `qyro_core`, `qyro_win_dpapi`, `qyro_crypto_smoke` y `qyro_store_smoke`
+- Resolución: los cuatro activan `guards.rs` con lista productiva y las llamadas
+  comunes; los tests inline del smoke crypto pasaron a `tests.rs` sin cambiar
+  su contenido funcional
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: rojo nominal con la lista de cuatro; 23 contratos estructurales
+  nuevos pasan en `1241e1b`, CI 31542583869
+
+## QYR-0113 — Seis enums públicos de error carecían de guarda de construcción
+
+- Plataforma: crypto, identity store, manifest y protocolo
+- Severidad: P2
+- Esperado: todo `pub enum *Error` o `*Verdict` tiene una guarda compartida que
+  exige al menos un sitio de construcción por variante o una excepción exacta
+- Actual: `IdentityError`, `AeadError`, `HandshakeError`, `StoreError`,
+  `PathError`, `ManifestError` y `FrameError` no estaban cubiertos de forma
+  uniforme; la revisión de protocolo encontró además QYR-0103
+- Resolución: se añadieron guardas con el parser compartido. Las cuatro
+  variantes de `StoreError` construidas por backends se exceptúan por nombre y
+  argumento; las demás no tienen excepciones
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: la meta-guarda exige automáticamente la llamada y el nombre de
+  cada enum; workspace y CI 31542583869 verdes
+
+## QYR-0114 — Un `guards.rs` completo podía existir sin estar compilado
+
+- Plataforma: workspace Rust
+- Severidad: P2
+- Esperado: el mínimo estructural exige tanto el contenido de `guards.rs` como
+  su activación mediante `mod guards;` en una raíz `lib.rs` o `main.rs`
+- Actual: retirar temporalmente `mod guards;` de `qyro_core` dejó verde la
+  primera versión de la meta-guarda porque sólo leía el archivo huérfano
+- Resolución: `every_workspace_crate_has_the_minimum_structural_guards_or_an_exact_exception`
+  comprueba ahora que una raíz compilable declara el módulo
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: antes del arreglo la mutación pasó; después falló nombrando
+  `workspace crates missing ... ["qyro_core"]`; restaurada, la meta-prueba pasa
+## QYR-0115 — Superviviente de mutación 001 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:72:9: replace UnsupportedFrame::session_id -> u64 with 1»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0116 — Superviviente de mutación 002 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:72:9: replace UnsupportedFrame::session_id -> u64 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0117 — Superviviente de mutación 003 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:78:9: replace UnsupportedFrame::transfer_id -> u64 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0118 — Superviviente de mutación 004 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:78:9: replace UnsupportedFrame::transfer_id -> u64 with 1»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0119 — Superviviente de mutación 005 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:84:9: replace UnsupportedFrame::sequence -> u64 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0120 — Superviviente de mutación 006 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:84:9: replace UnsupportedFrame::sequence -> u64 with 1»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0121 — Superviviente de mutación 007 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:218:41: replace > with >= in FrameDecoder::with_max_buffer_len»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0122 — Superviviente de mutación 008 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:242:9: replace FrameDecoder::buffer_capacity -> usize with 1»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0123 — Superviviente de mutación 009 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:242:9: replace FrameDecoder::buffer_capacity -> usize with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0124 — Superviviente de mutación 010 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:293:22: replace > with >= in FrameDecoder::push»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0125 — Superviviente de mutación 011 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:294:49: replace > with == in FrameDecoder::push»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0126 — Superviviente de mutación 012 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:294:49: replace > with >= in FrameDecoder::push»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0127 — Superviviente de mutación 013 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:345:18: replace > with >= in FrameDecoder::next_frame»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0128 — Superviviente de mutación 014 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:406:30: replace += with *= in FrameDecoder::compact»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0129 — Superviviente de mutación 015 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:406:52: replace - with / in FrameDecoder::compact»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0130 — Superviviente de mutación 016 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/decoder.rs:424:19: replace <= with > in FrameDecoder::reserve_for»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0131 — Superviviente de mutación 017 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:78:29: replace > with == in EncryptedEnvelope::from_plain_frame»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0132 — Superviviente de mutación 018 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:78:29: replace > with >= in EncryptedEnvelope::from_plain_frame»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0133 — Superviviente de mutación 019 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:132:9: replace EncryptedEnvelope::associated_data -> [u8; HEADER_LEN] with [0; HEADER_LEN]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0134 — Superviviente de mutación 020 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:132:9: replace EncryptedEnvelope::associated_data -> [u8; HEADER_LEN] with [1; HEADER_LEN]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0135 — Superviviente de mutación 021 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:138:9: replace EncryptedEnvelope::ciphertext -> &[u8] with Vec::leak(Vec::new())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0136 — Superviviente de mutación 022 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:138:9: replace EncryptedEnvelope::ciphertext -> &[u8] with Vec::leak(vec![0])»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0137 — Superviviente de mutación 023 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:138:9: replace EncryptedEnvelope::ciphertext -> &[u8] with Vec::leak(vec![1])»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0138 — Superviviente de mutación 024 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:144:9: replace EncryptedEnvelope::tag -> &[u8] with Vec::leak(Vec::new())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0139 — Superviviente de mutación 025 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:144:9: replace EncryptedEnvelope::tag -> &[u8] with Vec::leak(vec![0])»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0140 — Superviviente de mutación 026 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:144:9: replace EncryptedEnvelope::tag -> &[u8] with Vec::leak(vec![1])»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0141 — Superviviente de mutación 027 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:166:55: replace || with && in EncryptedEnvelope::from_parts»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0142 — Superviviente de mutación 028 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:176:39: replace + with - in EncryptedEnvelope::from_parts»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0143 — Superviviente de mutación 029 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:176:39: replace + with * in EncryptedEnvelope::from_parts»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0144 — Superviviente de mutación 030 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:185:39: replace + with - in EncryptedEnvelope::from_parts»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0145 — Superviviente de mutación 031 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/envelope.rs:185:39: replace + with * in EncryptedEnvelope::from_parts»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0146 — Superviviente de mutación 032 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/error.rs:149:9: replace <impl fmt::Display for FrameError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0147 — Superviviente de mutación 033 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/frame.rs:64:49: replace || with && in Frame::from_parts»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0148 — Superviviente de mutación 034 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/frame.rs:94:9: replace Frame::into_payload -> Vec<u8> with vec![]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0149 — Superviviente de mutación 035 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/frame.rs:94:9: replace Frame::into_payload -> Vec<u8> with vec![0]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0150 — Superviviente de mutación 036 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/frame.rs:94:9: replace Frame::into_payload -> Vec<u8> with vec![1]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0151 — Superviviente de mutación 037 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:62:60: replace + with * in field»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0152 — Superviviente de mutación 038 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:276:45: replace > with == in FrameHeader::encrypted»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0153 — Superviviente de mutación 039 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:276:25: replace || with && in FrameHeader::encrypted»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0154 — Superviviente de mutación 040 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:276:45: replace > with >= in FrameHeader::encrypted»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0155 — Superviviente de mutación 041 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:381:47: replace > with >= in FrameHeader::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0156 — Superviviente de mutación 042 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:412:33: replace || with && in FrameHeader::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0157 — Superviviente de mutación 043 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:412:61: replace > with == in FrameHeader::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0158 — Superviviente de mutación 044 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:412:61: replace > with >= in FrameHeader::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0159 — Superviviente de mutación 045 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:492:18: replace > with == in FrameHeader::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0160 — Superviviente de mutación 046 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:492:18: replace > with >= in FrameHeader::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0161 — Superviviente de mutación 047 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/header.rs:546:53: replace + with - in UnknownHeader::total_len»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0162 — Superviviente de mutación 048 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/message.rs:122:42: replace << with >>»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0163 — Superviviente de mutación 049 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/message.rs:124:46: replace << with >>»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0164 — Superviviente de mutación 050 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/message.rs:146:9: replace Flags::protected_bits -> u8 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0165 — Superviviente de mutación 051 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/message.rs:191:21: replace | with ^ in Flags::union»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0166 — Superviviente de mutación 052 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/session.rs:79:9: replace <impl fmt::Display for SessionId>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0167 — Superviviente de mutación 053 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/session.rs:88:9: replace <impl From<u64> for SessionId>::from -> Self with Default::default()»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+## QYR-0168 — Superviviente de mutación 054 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_protocol/src/session.rs:94:9: replace <impl From<[u8; SESSION_ID_LEN]> for SessionId>::from -> Self with Default::default()»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 281/281: 176 caught, 54 missed, 39 unviable y 12 timeout
+
+<!-- phase9 survivor ledger: protocol QYR-0115–QYR-0168 complete -->
+## QYR-0169 — Superviviente de mutación 001 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:83:18: replace > with == in encoded_len»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0170 — Superviviente de mutación 002 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:83:18: replace > with >= in encoded_len»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0171 — Superviviente de mutación 003 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:176:20: replace > with == in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0172 — Superviviente de mutación 004 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:176:20: replace > with >= in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0173 — Superviviente de mutación 005 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:200:20: replace > with == in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0174 — Superviviente de mutación 006 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:200:20: replace > with >= in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0175 — Superviviente de mutación 007 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:210:23: replace > with >= in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0176 — Superviviente de mutación 008 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:59: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0177 — Superviviente de mutación 009 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:59: replace + with * in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0178 — Superviviente de mutación 010 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:55: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0179 — Superviviente de mutación 011 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:55: replace + with * in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0180 — Superviviente de mutación 012 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:51: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0181 — Superviviente de mutación 013 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:51: replace + with * in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0182 — Superviviente de mutación 014 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:47: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0183 — Superviviente de mutación 015 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:47: replace + with * in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0184 — Superviviente de mutación 016 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:43: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0185 — Superviviente de mutación 017 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:39: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0186 — Superviviente de mutación 018 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:39: replace + with * in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0187 — Superviviente de mutación 019 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:35: replace + with - in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0188 — Superviviente de mutación 020 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:219:35: replace + with * in decode»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0189 — Superviviente de mutación 021 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/codec.rs:380:19: replace > with >= in Reader<'a>::take_length_prefixed»
+- Resolución: el contrato exact_maximum_path_and_mime_lengths_round_trip ejerce el valor máximo válido a través de construcción, encode y decode
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: mutación manual roja y rerun focal de 18 mutantes: 14 caught, 1 missed y 3 unviable; commit ca4a1e2
+
+## QYR-0190 — Superviviente de mutación 022 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/error.rs:80:9: replace <impl fmt::Display for PathError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0191 — Superviviente de mutación 023 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/error.rs:295:9: replace <impl fmt::Display for ManifestField>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0192 — Superviviente de mutación 024 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/error.rs:310:9: replace <impl fmt::Display for ManifestError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0193 — Superviviente de mutación 025 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:10:53: replace * with +»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0194 — Superviviente de mutación 026 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:10:53: replace * with /»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0195 — Superviviente de mutación 027 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:10:46: replace * with +»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0196 — Superviviente de mutación 028 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:10:46: replace * with /»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0197 — Superviviente de mutación 029 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:10:39: replace * with +»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0198 — Superviviente de mutación 030 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:10:39: replace * with /»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0199 — Superviviente de mutación 031 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:31:45: replace * with +»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0200 — Superviviente de mutación 032 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/limits.rs:31:38: replace * with +»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0201 — Superviviente de mutación 033 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:105:9: replace Compression::to_wire -> u8 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0202 — Superviviente de mutación 034 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:358:28: replace > with >= in ManifestItem::with_mime_type»
+- Resolución: el contrato exact_maximum_path_and_mime_lengths_round_trip ejerce el valor máximo válido a través de construcción, encode y decode
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: mutación manual roja y rerun focal de 18 mutantes: 14 caught, 1 missed y 3 unviable; commit ca4a1e2
+
+## QYR-0203 — Superviviente de mutación 035 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:433:24: replace > with == in TransferManifest::from_sorted»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0204 — Superviviente de mutación 036 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:433:24: replace > with >= in TransferManifest::from_sorted»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0205 — Superviviente de mutación 037 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:507:64: replace || with && in validate_items»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0206 — Superviviente de mutación 038 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:516:18: replace > with >= in validate_items»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0207 — Superviviente de mutación 039 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:537:45: replace < with == in validate_items»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0208 — Superviviente de mutación 040 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:537:45: replace < with > in validate_items»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0209 — Superviviente de mutación 041 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/model.rs:537:45: replace < with <= in validate_items»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0210 — Superviviente de mutación 042 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/path.rs:113:28: replace > with >= in RelativePath::parse»
+- Resolución: el contrato exact_maximum_path_and_mime_lengths_round_trip ejerce el valor máximo válido a través de construcción, encode y decode
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: mutación manual roja y rerun focal de 18 mutantes: 14 caught, 1 missed y 3 unviable; commit ca4a1e2
+
+## QYR-0211 — Superviviente de mutación 043 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/path.rs:157:27: replace > with >= in RelativePath::parse»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+## QYR-0212 — Superviviente de mutación 044 en qyro_manifest
+
+- Plataforma: Windows; qyro_manifest
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_manifest/src/path.rs:225:9: replace <impl core::fmt::Display for RelativePath>::fmt -> core::fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 220/220: 146 caught, 44 missed y 30 unviable
+
+<!-- phase9 survivor ledger: manifest QYR-0169–QYR-0212 complete -->
+## QYR-0213 — Superviviente de mutación 001 en qyro_identity_store
+
+- Plataforma: Windows; qyro_identity_store
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_identity_store/src/blob.rs:106:20: replace < with <= in parse»
+- Resolución: an_exactly_header_sized_blob_reaches_length_validation prueba que 16 bytes completos no son truncamiento
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: mutación <= roja; rerun 29/29 pasó de 2 a 1 missed, con 24 caught y 4 unviable; commit ca4a1e2
+
+## QYR-0214 — Superviviente de mutación 002 en qyro_identity_store
+
+- Plataforma: Windows; qyro_identity_store
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_identity_store/src/error.rs:82:9: replace <impl fmt::Display for StoreError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; falta un contrato de representación que observe Display sin acoplar errores funcionales a texto
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, rerun 29/29: 24 caught, 1 missed y 4 unviable
+
+<!-- phase9 survivor ledger: identity QYR-0213–QYR-0214 complete -->
+## QYR-0215 — Superviviente de mutación 001 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P3
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/error.rs:55:9: replace <impl fmt::Display for FsError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0216 — Superviviente de mutación 002 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/error.rs:88:50: delete - in <impl From<std::io::Error> for FsError>::from»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0217 — Superviviente de mutación 003 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/io.rs:107:5: replace metadata_is_link_or_reparse_point -> bool with false»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0218 — Superviviente de mutación 004 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/io.rs:107:5: replace metadata_is_link_or_reparse_point -> bool with true»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0219 — Superviviente de mutación 005 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:112:5: replace metadata_is_link_or_reparse_point -> bool with false»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0220 — Superviviente de mutación 006 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Linux y CAUGHT en Windows: «rust/crates/qyro_fs/src/io.rs:112:5: replace metadata_is_link_or_reparse_point -> bool with true»
+- Resolución: cerrado por evidencia complementaria en Windows; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=CaughtMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0221 — Superviviente de mutación 007 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Linux y CAUGHT en Windows: «rust/crates/qyro_fs/src/io.rs:117:32: replace & with ^ in metadata_is_link_or_reparse_point»
+- Resolución: cerrado por evidencia complementaria en Windows; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=CaughtMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0222 — Superviviente de mutación 008 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Linux y CAUGHT en Windows: «rust/crates/qyro_fs/src/io.rs:117:32: replace & with | in metadata_is_link_or_reparse_point»
+- Resolución: cerrado por evidencia complementaria en Windows; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=CaughtMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0223 — Superviviente de mutación 009 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Linux y CAUGHT en Windows: «rust/crates/qyro_fs/src/io.rs:117:46: replace != with == in metadata_is_link_or_reparse_point»
+- Resolución: cerrado por evidencia complementaria en Windows; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=CaughtMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0224 — Superviviente de mutación 010 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/io.rs:129:5: replace libc_o_nofollow -> i32 with 0»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0225 — Superviviente de mutación 011 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/io.rs:129:5: replace libc_o_nofollow -> i32 with 1»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0226 — Superviviente de mutación 012 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/io.rs:129:5: replace libc_o_nofollow -> i32 with -1»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0227 — Superviviente de mutación 013 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:190:22: replace < with <= in FileSource::try_read»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0228 — Superviviente de mutación 014 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:274:27: replace match guard error.kind() == std::io::ErrorKind::NotFound with true in FileSink::committed_progress»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0229 — Superviviente de mutación 015 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:305:31: replace match guard error.kind() == std::io::ErrorKind::NotFound with true in FileSink::part_for»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0230 — Superviviente de mutación 016 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:439:9: replace <impl ContentSink for FileSink>::write_at with ()»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0231 — Superviviente de mutación 017 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:47:8: delete ! in open_part»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0232 — Superviviente de mutación 018 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:67:21: replace match guard metadata_is_link_or_reparse_point(&file.metadata()?) with false in open_part»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0233 — Superviviente de mutación 019 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/io.rs:75:29: replace match guard metadata_is_link_or_reparse_point(&metadata) with false in open_part»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0234 — Superviviente de mutación 020 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/io.rs:75:29: replace match guard metadata_is_link_or_reparse_point(&metadata) with true in open_part»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0235 — Superviviente de mutación 021 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/safe_path.rs:102:5: replace assert_not_a_symlink -> Result<(), FsError> with Ok(())»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0236 — Superviviente de mutación 022 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: figuró MISSED en Windows y CAUGHT en Linux: «rust/crates/qyro_fs/src/safe_path.rs:103:25: replace match guard metadata.file_type().is_symlink() with false in assert_not_a_symlink»
+- Resolución: cerrado por evidencia complementaria en Linux; no era un hueco común sino selección cfg/cobertura de plataforma
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=CaughtMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0237 — Superviviente de mutación 023 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/safe_path.rs:108:23: replace match guard error.kind() == std::io::ErrorKind::NotFound with true in assert_not_a_symlink»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0238 — Superviviente de mutación 024 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/safe_path.rs:122:5: replace is_inside -> Result<bool, FsError> with Ok(false)»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0239 — Superviviente de mutación 025 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P1
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/safe_path.rs:122:5: replace is_inside -> Result<bool, FsError> with Ok(true)»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0240 — Superviviente de mutación 026 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/safe_path.rs:73:27: replace match guard error.kind() == std::io::ErrorKind::AlreadyExists with false in resolve_under»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0241 — Superviviente de mutación 027 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/safe_path.rs:73:27: replace match guard error.kind() == std::io::ErrorKind::AlreadyExists with true in resolve_under»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+## QYR-0242 — Superviviente de mutación 028 en qyro_fs
+
+- Plataforma: Windows y Linux; qyro_fs
+- Severidad: P2
+- Esperado: al menos una suite de la plataforma que compila el control distingue esta mutación
+- Actual: sobrevivió en Windows y Linux «rust/crates/qyro_fs/src/safe_path.rs:73:40: replace == with != in resolve_under»
+- Resolución: pendiente; la evidencia cruzada confirma un hueco real y no sólo una rama cfg ausente
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: Windows=MissedMutant; Linux=MissedMutant. Windows 87/87: 55 caught, 24 missed, 8 unviable; Linux CI 31547866384: 59 caught, 20 missed, 8 unviable
+
+<!-- phase9 survivor ledger: filesystem QYR-0215–QYR-0242 complete -->
+## QYR-0243 — Superviviente de mutación 001 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/mod.rs:253:9: replace <impl Drop for DirectionalKeys>::drop with ()»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0244 — Superviviente de mutación 002 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/mod.rs:466:9: replace FrameSealer::fault_is -> bool with true»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0245 — Superviviente de mutación 003 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/mod.rs:562:9: replace <impl core::fmt::Debug for SealedFrame>::fmt -> core::fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0246 — Superviviente de mutación 004 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/mod.rs:729:9: replace AuthenticatedFrame::sequence -> u64 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0247 — Superviviente de mutación 005 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/error.rs:61:9: replace <impl fmt::Display for IdentityError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0248 — Superviviente de mutación 006 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fingerprint.rs:163:9: replace <impl fmt::Display for IdentityFingerprint>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0249 — Superviviente de mutación 007 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fingerprint.rs:157:9: replace <impl fmt::Debug for IdentityFingerprint>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0250 — Superviviente de mutación 008 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:54:5: replace entropy -> [u8; 64] with [1; 64]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0251 — Superviviente de mutación 009 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:54:5: replace entropy -> [u8; 64] with [0; 64]»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0252 — Superviviente de mutación 010 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:56:21: replace ^ with | in entropy»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0253 — Superviviente de mutación 011 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:56:21: replace ^ with & in entropy»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0254 — Superviviente de mutación 012 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:79:5: replace deterministic_session -> Option<FuzzSession> with Some(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0255 — Superviviente de mutación 013 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:79:5: replace deterministic_session -> Option<FuzzSession> with None»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0256 — Superviviente de mutación 014 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:114:5: replace plain_frame -> Option<Frame> with None»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0257 — Superviviente de mutación 015 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:114:5: replace plain_frame -> Option<Frame> with Some(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0258 — Superviviente de mutación 016 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/fuzzing.rs:123:5: replace replay_window -> crate::aead::FuzzReplayWindow with Default::default()»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0259 — Superviviente de mutación 017 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/handshake/mod.rs:227:9: replace <impl core::fmt::Debug for EphemeralKeyPair>::fmt -> core::fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0260 — Superviviente de mutación 018 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/handshake/mod.rs:276:22: replace < with > in check_prefix»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0261 — Superviviente de mutación 019 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/identity.rs:329:9: replace PublicIdentity::version -> u8 with 1»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0262 — Superviviente de mutación 020 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/identity.rs:329:9: replace PublicIdentity::version -> u8 with 0»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0263 — Superviviente de mutación 021 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P2
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/signature.rs:75:9: replace SignatureDomain::is_available -> bool with true»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0264 — Superviviente de mutación 022 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/signature.rs:150:9: replace <impl fmt::Debug for IdentitySignature>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0265 — Superviviente de mutación 023 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/error.rs:99:9: replace <impl fmt::Display for AeadError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0266 — Superviviente de mutación 024 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:128:39: replace > with >= in ReplayWindow::record»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0267 — Superviviente de mutación 025 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:129:40: replace - with + in ReplayWindow::record»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0268 — Superviviente de mutación 026 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:195:21: replace > with < in ReplayWindow::shift»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0269 — Superviviente de mutación 027 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:195:35: replace > with < in ReplayWindow::shift»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0270 — Superviviente de mutación 028 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:199:33: replace - with / in ReplayWindow::shift»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0271 — Superviviente de mutación 029 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:201:23: replace |= with &= in ReplayWindow::shift»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0272 — Superviviente de mutación 030 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/aead/replay.rs:201:35: replace >> with << in ReplayWindow::shift»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+## QYR-0273 — Superviviente de mutación 031 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/handshake/error.rs:101:9: replace <impl fmt::Display for HandshakeError>::fmt -> fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0274 — Superviviente de mutación 032 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P3
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/handshake/schedule.rs:78:9: replace <impl core::fmt::Debug for SessionKey>::fmt -> core::fmt::Result with Ok(Default::default())»
+- Resolución: pendiente; se conserva como deuda explícita y no se cambia producción sin un contrato que mate este mutante
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0, 322/322: 190 caught, 33 missed y 99 unviable
+
+## QYR-0275 — Superviviente de mutación 033 en qyro_crypto
+
+- Plataforma: Windows; qyro_crypto
+- Severidad: P1
+- Esperado: la suite distingue el control productivo original de esta mutación
+- Actual: sobrevivió «rust/crates/qyro_crypto/src/handshake/schedule.rs:72:9: replace <impl Drop for SessionKey>::drop with ()»
+- Resolución: contratos nominales cubren zeroization, prefijo de handshake, delta no cero o acarreo anti-replay según el control
+- Estado: cerrado
+- Fecha: 2026-08-11
+- Evidencia: el rerun focal de 50 pasó de 11 a 2 missed: 44 caught, 2 missed y 4 unviable; commit ca4a1e2
+
+<!-- phase9 survivor ledger: crypto QYR-0243–QYR-0275 complete -->
+## QYR-0276 — Timeout de mutación 001 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/decoder.rs:269:9: replace FrameDecoder::push -> Result<(), FrameError> with Ok(())»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0277 — Timeout de mutación 002 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/decoder.rs:360:27: replace += with *= in FrameDecoder::next_frame»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0278 — Timeout de mutación 003 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/decoder.rs:375:23: replace += with *= in FrameDecoder::next_frame»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0279 — Timeout de mutación 004 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/decoder.rs:388:19: replace += with *= in FrameDecoder::next_frame»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0280 — Timeout de mutación 005 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/decoder.rs:423:40: replace + with * in FrameDecoder::reserve_for»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0281 — Timeout de mutación 006 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/frame.rs:144:9: replace Frame::encode -> Vec<u8> with vec![]»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0282 — Timeout de mutación 007 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/header.rs:293:9: replace FrameHeader::total_len -> u64 with 0»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0283 — Timeout de mutación 008 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/header.rs:293:27: replace + with * in FrameHeader::total_len»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0284 — Timeout de mutación 009 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/header.rs:536:9: replace ParsedHeader::total_len -> u64 with 0»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0285 — Timeout de mutación 010 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/header.rs:546:9: replace UnknownHeader::total_len -> u64 with 0»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0286 — Timeout de mutación 011 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/header.rs:546:27: replace + with * in UnknownHeader::total_len»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+## QYR-0287 — Timeout de mutación 012 en qyro_protocol
+
+- Plataforma: Windows; qyro_protocol
+- Severidad: P2
+- Esperado: retirar el control termina con un fallo nominal dentro del límite del runner
+- Actual: compiló pero la suite excedió 90 s con «rust/crates/qyro_protocol/src/limits.rs:49:49: replace + with *»
+- Resolución: pendiente; requiere un test focal con timeout propio que convierta el bloqueo en rechazo observable
+- Estado: abierto
+- Fecha: 2026-08-11
+- Evidencia: cargo-mutants 27.1.0 lo clasificó Timeout; no se cuenta como caught ni como missed
+
+<!-- phase9 timeout ledger: protocol QYR-0276–QYR-0287 complete -->

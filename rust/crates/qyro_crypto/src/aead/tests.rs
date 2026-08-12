@@ -150,7 +150,7 @@ fn a_large_payload_round_trips() {
 }
 
 #[test]
-fn caller_metadata_survives_and_is_authenticated() {
+fn identifiers_survive_a_seal_and_open_round_trip() {
     let mut s = session();
     let frame = Frame::new(MessageType::ItemStart, b"metadata".to_vec())
         .expect("valid")
@@ -212,6 +212,37 @@ fn a_sealed_frame_survives_the_wire() {
 }
 
 // ------------------------------------------------------------- tampering
+
+#[test]
+fn altering_an_identifier_in_flight_breaks_the_tag() {
+    let mut s = session();
+    let frame = Frame::new(MessageType::DataChunk, b"routed".to_vec())
+        .expect("valid")
+        .with_identifiers(
+            SessionId::ZERO,
+            0x1122_3344_5566_7788,
+            0x99AA_BBCC,
+            0xDDEE_FF00,
+        );
+    let sealed = s.initiator_sealer.seal(&frame).expect("seals");
+    let mut tampered = sealed.encode();
+
+    // ADR-0016 freezes transfer_id at bytes 24..32. This changes a routing
+    // value while keeping the frame structurally valid, so only the tag may
+    // decide whether the altered value is accepted.
+    tampered[24] ^= 0x01;
+    let mut decoder = FrameDecoder::new();
+    decoder.push(&tampered).expect("within buffer");
+    let envelope = match decoder.next_frame() {
+        Ok(Some(DecodedFrame::Encrypted(envelope))) => envelope,
+        other => panic!("identifier tampering must preserve framing, got {other:?}"),
+    };
+    assert_eq!(
+        s.responder_opener.open(&envelope).unwrap_err(),
+        AeadError::AuthenticationFailed,
+        "an altered transfer_id authenticated"
+    );
+}
 
 #[test]
 fn every_byte_of_the_header_is_authenticated() {

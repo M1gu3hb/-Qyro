@@ -1,7 +1,8 @@
 //! The fixed 48-byte QYRO/1 frame header.
 //!
 //! Layout and rationale: `docs/adr/ADR-0016-qyro1-wire-framing.md`, amended by
-//! `docs/adr/ADR-0018-protocol-semantic-errors.md`.
+//! `docs/adr/ADR-0018-protocol-semantic-errors.md`; identifier semantics and
+//! public API: `docs/adr/ADR-0029-header-identifiers.md`.
 //!
 //! Every field is private. The only ways to build a header are the validated
 //! constructors below, so no public API can produce a header that this crate's
@@ -69,19 +70,12 @@ fn field<const OFFSET: usize, const WIDTH: usize>(bytes: &[u8; HEADER_LEN]) -> [
 impl FrameHeader {
     /// Builds a plain QYRO/1.0 header: no flags, no trailer.
     ///
-    /// **`transfer_id`, `stream_id` and `item_id` come out as zero and nothing
-    /// public can change them.** They are authenticated — they travel inside the
-    /// 48 bytes an encrypted envelope covers as associated data — so a peer
-    /// cannot alter them without breaking the tag, which is the property that
-    /// would make them worth carrying. Today no caller can populate them, so
-    /// they carry nothing.
-    ///
-    /// Sprint 5A found this by building a transfer engine that needed `item_id`
-    /// and put it in the message body instead. Recorded as QYR-0068 with the
-    /// decision left open: either these become settable and the body field goes,
-    /// or ADR-0016 should say they are reserved. This comment does not decide
-    /// it — widening a frozen surface as a side effect of another sprint is how
-    /// control of a format is lost.
+    /// `transfer_id`, `stream_id` and `item_id` start at zero. Zero is a valid
+    /// unscoped value at the framing layer; callers assign routing values with
+    /// [`FrameHeader::with_identifiers`] or [`crate::Frame::with_identifiers`].
+    /// The complete header is AEAD associated data, so alteration breaks the
+    /// tag, but authentication does not make an identifier known or correct.
+    /// The receiving routing layer checks that after opening (ADR-0029).
     ///
     /// # Errors
     ///
@@ -227,7 +221,11 @@ impl FrameHeader {
         })
     }
 
-    /// Sets the routing identifiers.
+    /// Sets the routing identifiers frozen by ADR-0029.
+    ///
+    /// Every integer value, including zero, is representable here. The sealer
+    /// replaces `session_id` with the cryptographic session it owns and keeps
+    /// the other three fields as authenticated caller metadata.
     #[must_use]
     pub const fn with_identifiers(
         mut self,

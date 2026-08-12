@@ -12,6 +12,9 @@
 #![forbid(unsafe_code)]
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+mod guards;
+
 /// Wire protocol implemented by this milestone.
 pub const fn protocol_version() -> &'static str {
     "QYRO/1"
