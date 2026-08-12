@@ -192,3 +192,36 @@ impl EncryptedEnvelope {
         })
     }
 }
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    reason = "a focused constructor contract reports invalid fixtures with context"
+)]
+mod tests {
+    use super::EncryptedEnvelope;
+    use crate::{Frame, FrameError, MessageType};
+
+    #[test]
+    fn body_length_errors_report_payload_plus_trailer_exactly() {
+        let template = Frame::new(MessageType::DataChunk, Vec::new()).expect("valid template");
+        let envelope = EncryptedEnvelope::from_plain_frame(&template, vec![1, 2, 3], vec![4, 5])
+            .expect("valid envelope");
+        let header = *envelope.header();
+
+        assert_eq!(
+            EncryptedEnvelope::from_parts(header, &[0; 4]),
+            Err(FrameError::TruncatedPayload {
+                available: 4,
+                required: 5,
+            })
+        );
+        assert_eq!(
+            EncryptedEnvelope::from_parts(header, &[0; 6]),
+            Err(FrameError::TruncatedPayload {
+                available: 6,
+                required: 5,
+            })
+        );
+    }
+}

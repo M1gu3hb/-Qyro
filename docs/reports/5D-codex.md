@@ -132,7 +132,44 @@ JSON original, los doce antiguos `TIMEOUT` son ahora `CAUGHT`.
 
 ## 5. Puerta 3 — supervivientes importantes
 
-Pendiente.
+Cerrada con un residual Windows explícito, no con una falsa declaración de
+cobertura. Los 63 nombres se recuperaron literalmente del ledger de `ebdffb9` y
+`cargo-mutants --list` confirmó 25 protocolo + 26 manifest + 11 filesystem + 1
+crypto.
+
+El intento inicial de usar todos los tests del workspace para protocolo agotó
+10 min; el JSON parcial 2 caught/15 timeout prueba que consumidores con loops no
+acotados oscurecen el control. Los reruns por crate a 30 s son la evidencia:
+protocolo 17 caught/8 equivalentes; manifest 24 caught/2 equivalentes;
+filesystem 6 caught/4 sin consecuencia de aceptación/1 pendiente; replay una
+equivalencia. QYR-0291, QYR-0293 y QYR-0297 quedan resueltas. QYR-0295 sigue P1
+con un único control material: inspección del handle de un symlink de archivo en
+Windows. El test real existe y CI lo ejecuta con feature, pero localmente la
+creación falla por privilegio (Win32 1314); se conserva abierto hasta poder
+mutarlo bajo ese fixture.
+
+### Doce comprobaciones
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 459 passed, 0 failed, 2 ignored ya existentes |
+| 4 | Mutación con límite | 17/8 protocolo, 24/2 manifest, 6/4/1 FS, replay equivalente; cada rerun `--timeout 30` y residual nombrado |
+| 5 | Lectura de aserciones | Cada frontera tiene lado exacto/uno más; contención tiene hijo/outsider; associated data no acepta placeholders |
+| 6 | Lectura de contadores | Counts/longitudes derivan de bytes, items y paths construidos; no se añadió medición de rendimiento |
+| 7 | La medida se ve fallar | Cada contrato está ligado a su diff de mutante; junction real mata `-> false`; el run workspace fallido demuestra el detector inadecuado |
+| 8 | Lectura de nombres | Los nombres describen ciphertext, trailer, offsets, límites, colisión, escritura, contención y junction ejercidos realmente |
+| 9 | Ledger legible | 18 abiertas; cero fichas nuevas en la fase, tres familias resueltas y una residual acotada |
+| 10 | Alcance desde `ebdffb9` | Sólo crates propios, ledger e informes; sin archivos de Claude Code ni constante prohibida |
+| 11 | Coherencia del informe | Releídas secciones 0–5 y las tres secciones humanas del informe de mutación contra JSON/código actual |
+| 12 | `check_docs_consistency` | PASS Git Bash y PASS Windows PowerShell 5.1 |
+
+Fallos conservados: run protocolo workspace con timeout externo; primer run
+protocolo local 16/9 antes del contrato de unknown+trailer; manifest 24/2 por
+equivalencia; FS 5/6 antes del fixture junction; test FS falló inicialmente por
+comparar un path canónico Windows con su spelling no canónico; el test de
+symlink con feature falló por privilegio 1314. Ninguno se presenta como PASS.
 
 ## 6. Puerta 4 — ADR-0031
 

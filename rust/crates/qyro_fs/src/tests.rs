@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use qyro_manifest::TransferManifest;
-use qyro_transfer::ContentSource as _;
+use qyro_transfer::{ContentSink, ContentSource as _};
 
 use crate::error::FsError;
 use crate::io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of, open_part};
@@ -258,6 +258,66 @@ fn file_sink_peak_is_the_largest_successful_write_not_a_constant() {
     );
 }
 
+#[test]
+fn the_content_sink_trait_really_writes_the_bytes_it_is_given() {
+    let from = Scratch::new("trait-write-from");
+    let to = Scratch::new("trait-write-to");
+    let bytes = b"written through ContentSink::write_at";
+    fs::write(from.path("a.bin"), bytes).unwrap();
+    let manifest =
+        manifest_from_disk(1, 0, &[plan(&from.path("a.bin"), "a.bin")]).expect("manifest");
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    ContentSink::write_at(&mut sink, 1, 0, bytes);
+    sink.finish_item(1).expect("the trait write must verify");
+
+    assert_eq!(fs::read(to.path("a.bin")).unwrap(), bytes);
+}
+
+#[test]
+fn opening_without_append_does_not_truncate_before_the_caller_decides() {
+    let root = Scratch::new("open-preserves");
+    let path = root.path("part.qyro-part");
+    let original = b"resume bytes already committed";
+    fs::write(&path, original).unwrap();
+    let canonical_root = fs::canonicalize(&root.dir).unwrap();
+
+    let handle = open_part(&canonical_root, &path, false).expect("plain part opens");
+    assert_eq!(handle.metadata().unwrap().len(), original.len() as u64);
+    drop(handle);
+    assert_eq!(fs::read(path).unwrap(), original);
+}
+
+#[test]
+fn containment_distinguishes_a_real_child_from_a_real_outsider() {
+    let root = Scratch::new("inside-root");
+    let outside = Scratch::new("inside-outside");
+    fs::create_dir(root.path("child")).unwrap();
+
+    assert!(safe_path::is_inside(&root.dir, &root.path("child")).unwrap());
+    assert!(!safe_path::is_inside(&root.dir, &outside.dir).unwrap());
+}
+
+#[test]
+fn resolving_through_an_existing_directory_is_the_normal_case() {
+    let root = Scratch::new("existing-directory");
+    fs::create_dir(root.path("already")).unwrap();
+
+    let resolved = safe_path::resolve_under(&root.dir, "already/file.bin")
+        .expect("AlreadyExists for a directory is not a refusal");
+    assert_eq!(
+        resolved.final_path.parent(),
+        Some(fs::canonicalize(root.path("already")).unwrap().as_path())
+    );
+    assert_eq!(
+        resolved
+            .final_path
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str),
+        Some("file.bin")
+    );
+}
+
 // ---------------------------------------------------------------- refusals
 
 #[test]
@@ -408,6 +468,42 @@ fn a_symlink_at_the_final_part_component_is_refused_without_touching_its_target(
         !to.path("a.bin").exists(),
         "a refused transfer still produced the final file"
     );
+}
+
+#[test]
+#[cfg(windows)]
+fn a_junction_at_the_final_component_is_classified_as_a_reparse_point() {
+    use std::os::windows::fs::MetadataExt as _;
+
+    // Directory junctions are NTFS reparse points and do not require the
+    // CreateSymbolicLink privilege. This gives the default Windows suite a real
+    // negative fixture even when the file-symlink matrix feature is unavailable.
+    let root = Scratch::new("junction-root");
+    let outside = Scratch::new("junction-target");
+    let junction = root.path("part.qyro-part");
+    let status = std::process::Command::new("cmd.exe")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&junction)
+        .arg(&outside.dir)
+        .status()
+        .expect("cmd.exe must create the junction fixture");
+    assert!(status.success(), "the junction fixture was not created");
+    assert_ne!(
+        fs::symlink_metadata(&junction).unwrap().file_attributes() & 0x0000_0400,
+        0,
+        "the fixture is not a reparse point"
+    );
+
+    let canonical_root = fs::canonicalize(&root.dir).unwrap();
+    let outcome = open_part(&canonical_root, &junction, false);
+    assert!(
+        matches!(outcome, Err(FsError::SymlinkInPath { .. })),
+        "the junction was not classified as a final-component link: {outcome:?}"
+    );
+
+    // Remove the link itself while both target directories still exist. On
+    // Windows RemoveDirectory removes a junction without traversing its target.
+    fs::remove_dir(&junction).unwrap();
 }
 
 #[test]

@@ -79,6 +79,53 @@ de dos lecturas iguales, la reejecución exacta del #5 terminó `1 caught` en 12
 En consecuencia, los doce resultados originales son ahora `CAUGHT`, ninguno
 queda como ausencia de veredicto y no se abrió una ficha por mutante.
 
+## Cierre focal de validación, rechazo e integridad
+
+Se reconstruyeron los 63 nombres literales desde el ledger del commit base y se
+comprobó con `cargo-mutants --list` que los regex exactos seleccionaban 25 de
+protocolo, 26 de manifest, 11 de filesystem y uno de crypto. El primer intento
+de protocolo con `--test-workspace true --timeout 45` agotó el límite externo de
+10 min: el JSON parcial contenía 2 caught y 15 timeout. Es un run fallido y
+demuestra que ejecutar consumidores con loops no acotados no es una prueba focal.
+
+| Familia | Alcance exacto | Resultado tras contratos | Equivalencias demostradas | Estado humano |
+|---|---:|---|---|---|
+| QYR-0291 framing | 25 | 17 caught | 8 | Resuelta |
+| QYR-0293 manifest hostil | 26 | 24 caught | 2 | Resuelta |
+| QYR-0295 materialización | 11 | 6 caught | 4 sin consecuencia de aceptación; 1 control Windows pendiente | Abierta y acotada |
+| QYR-0297 replay | 1 | 0 caught | 1 | Resuelta |
+
+En protocolo, el primer rerun local terminó 16 caught/9 missed. Un contrato de
+tipo desconocido cifrado añadió el trailer al caso observable y su mutante exacto
+terminó caught; los ocho restantes no distinguen estados construibles: defensas
+duplicadas detrás de headers ya validados, ramas posteriores a una igualdad que
+prueba el índice, un rango `zip` que toma exactamente `WIDTH` elementos aunque
+su extremo sea mayor, un check de total inalcanzable por las constantes, y
+`1 << 0 == 1 >> 0`.
+
+En manifest, los dos missed restantes también son equivalentes. Un
+`ManifestItem` de directorio con tamaño/hash de archivo no puede construirse, y
+los índices de dos entradas distintas producidos por `enumerate` nunca son
+iguales, por lo que `<` y `<=` dan el mismo orden. Los otros 24 murieron con
+fronteras explícitas para encoded bytes, total, item count, mínimo por item,
+límite de modelo, suma, colisión portable y segmentos.
+
+En filesystem, contratos reales observaron `ContentSink::write_at`, preservación
+al abrir sin append, contención dentro/fuera y `AlreadyExists`. En Windows se
+creó además una junction NTFS real —reparse point sin privilegio de symlink— y
+el mutante exacto `metadata_is_link_or_reparse_point -> false` terminó 1 caught
+en 41 s. Cuatro restantes no eluden contención: uno borra un `!` pero
+`OpenOptions` ya tiene `truncate(false)` por defecto, y tres sólo cambian la
+clasificación/propagación de un error que después vuelve a pasar por
+canonicalización o apertura atómica. La guarda del handle de un symlink de
+archivo sí importa y queda abierta: el test con `windows-reparse-test` existe,
+pero este host no posee `CreateSymbolicLink` (error 1314), así que no se inventa
+evidencia de mutación.
+
+Finalmente, el mutante de replay es equivalente: `record` ejecuta `check`
+primero; si `sequence == highest`, el bit cero ya existe y se retorna
+`ReplayDetected` antes de evaluar `>` o `>=` en el `match`.
+
 ## Inventario completo
 
 | Crate | Archivo:línea | Mutación literal | Windows | Linux |

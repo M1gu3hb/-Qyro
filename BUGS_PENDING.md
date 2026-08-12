@@ -1870,9 +1870,14 @@
 - Actual: 25 mutaciones sobrevivieron al test por paquete; algunas pueden ser
   detectadas sólo por consumidores del workspace, que el barrido original no
   ejecutó
-- Estado: abierto
+- Resolución: contratos focales de ciphertext/trailer, associated data, offsets,
+  extensión, flags y consumo mataron 17; las ocho restantes son equivalentes
+  por invariantes de tipos o ramas demostrablemente inalcanzables
+- Estado: resuelto
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- Evidencia: barrido exacto a 30 s terminó primero 16 caught/9 missed; el único
+  hueco real residual (`UnknownHeader` con trailer) terminó 1 caught al repetirlo
 
 ## QYR-0292 — Las cotas derivadas del manifest no distinguen todas sus fronteras
 
@@ -1896,9 +1901,13 @@
   rechazan ambos lados de cada frontera controlada por el peer
 - Actual: 26 mutaciones de parsing o validación sobrevivieron al barrido por
   paquete
-- Estado: abierto
+- Resolución: ocho contratos de fronteras mataron 24; las dos restantes son
+  equivalentes: un directorio inválido no puede construirse y dos índices de
+  `enumerate` distintos nunca son iguales
+- Estado: resuelto
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- Evidencia: barrido exacto a 30 s: 24 caught, 2 missed equivalentes, 0 timeout
 
 ## QYR-0294 — Los bordes de E/S del filesystem no están cubiertos por familia de error
 
@@ -1923,6 +1932,12 @@
   resolver colisiones falla si se borra cada control
 - Actual: once mutaciones sobrevivieron en Windows y Linux; varias sólo se
   ejercen desde `qyro_transfer`, fuera del paquete mutado
+- Avance: seis ya son caught, incluida la detección de reparse point con una
+  junction NTFS real sin privilegios; cuatro son equivalencias o sólo cambian
+  clasificación/propagación de un error sin eludir canonicalización
+- Pendiente exacto: la guarda sobre el handle de un symlink de archivo en
+  Windows requiere `CreateSymbolicLink`; el test real existe pero este host lo
+  rehúsa con error 1314, así que no se declara mutación cerrada
 - Estado: abierto
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
@@ -1948,9 +1963,14 @@
 - Esperado: la secuencia exactamente en el cambio de palabra se registra en el
   bit correcto y no puede reproducirse
 - Actual: cambiar `>` por `>=` en `ReplayWindow::record` sobrevivió
-- Estado: abierto
+- Resolución: equivalencia demostrada. `record` llama primero a `check`; para
+  `sequence == highest`, el bit cero ya está marcado y devuelve
+  `ReplayDetected`, por lo que ninguna de las dos comparaciones se alcanza
+- Estado: resuelto
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- Evidencia: lectura estructural de `check`/`record`; ningún test puede distinguir
+  dos ramas que reciben exactamente los mismos estados construibles
 
 ## QYR-0298 — Doce mutaciones de progreso agotaron el tiempo sin veredicto de alcanzabilidad
 
