@@ -19,9 +19,11 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 6] = [
+const PRODUCTION_FILES: [&str; 8] = [
     "lib.rs",
     "error.rs",
+    "history.rs",
+    "history_types.rs",
     "io.rs",
     "manifest_builder.rs",
     "resume.rs",
@@ -31,6 +33,19 @@ const PRODUCTION_FILES: [&str; 6] = [
 #[test]
 fn no_production_path_can_panic() {
     assert_no_production_path_can_panic(&PRODUCTION_FILES);
+}
+
+const HISTORY_ERRORS_CONSTRUCTED_ONLY_IN_THEIR_OWN_FILE: [&str; 1] = ["Io"];
+
+#[test]
+fn every_history_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "history_types.rs",
+        "HistoryError",
+        9,
+        &HISTORY_ERRORS_CONSTRUCTED_ONLY_IN_THEIR_OWN_FILE,
+    );
 }
 
 #[test]

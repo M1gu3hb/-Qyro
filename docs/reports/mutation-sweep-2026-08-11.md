@@ -159,6 +159,36 @@ temporalmente `known.identity == candidate.identity` y el test exacto
 `left: KnownAndMatches`, `right: KnownAndChanged`. La comparación se restauró
 antes del barrido final. No se creó ninguna ficha de ledger por este barrido.
 
+## Fase 6 — historial local append-only
+
+Alcance declarado: sólo los dos archivos nuevos de historia en `qyro_fs`:
+
+```text
+cargo-mutants 27.1.0 mutants -p qyro_fs \
+  --file rust/crates/qyro_fs/src/history.rs \
+  --file rust/crates/qyro_fs/src/history_types.rs \
+  --timeout 30 --test-workspace false -j 4
+```
+
+| Run | CAUGHT | MISSED | UNVIABLE | TIMEOUT | Veredicto |
+|---|---:|---:|---:|---:|---|
+| Primer barrido completo | 73 | 17 | 21 | 0 | RED útil: faltaban bordes de tamaño/tiempo, estados por wire y algunos accesores/diagnósticos |
+| Barrido final completo | 80 | 0 | 20 | 0 | PASS; 100 mutantes en 4 min, baseline 24 s build + 1 s test |
+
+Entre ambos runs, el máximo de 16 MiB se volvió una constante literal con una
+función de frontera probada en exacto/uno más; timestamps iguales y decrecientes
+se ejercen tanto al append como al parse; los tres estados y ambas direcciones
+atraviesan el wire; y la creación se redujo a una sola apertura atómica con
+`create(true), truncate(false)`, retirando ramas de carrera que no aportaban
+semántica al formato. No se excluyó operador ni función del barrido final.
+
+La medida asociada no depende de `cargo-mutants`: 10 000 registros ocupan
+exactamente 720 012 bytes y el run Windows con `--nocapture` midió 72.6051 ms
+en perfil debug frente a un presupuesto explícito de 500 ms. Un test separado
+inyecta 500 ms + 1 ns y exige que el detector falle, y otro prueba que el
+contador de trabajo crece de 10 a 20 cuando crece el archivo. No se añadió
+ninguna ficha al ledger por estos 100 mutantes.
+
 ## Inventario completo
 
 | Crate | Archivo:línea | Mutación literal | Windows | Linux |

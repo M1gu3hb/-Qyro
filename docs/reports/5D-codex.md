@@ -273,7 +273,61 @@ secciones `[[package]]`.
 
 ## 8. Puerta 6 — historial local
 
-Pendiente.
+Cerrada. `qyro_fs` incorpora un historial local sin crate ni
+dependencia nueva: cabecera `QYRO-HST`, versión 1, reservado cero y registros
+append-only de `length + 64 bytes + CRC32`. Cada registro retiene sólo tiempo,
+transfer ID, huella completa del peer, dirección, estado, número de items y
+bytes. La vista en memoria es `Vec<HistoryRecord>` ordenada y las consultas son
+iteradores para últimos N, peer y estado.
+
+El fixture de caída escribe realmente medio tercer registro. Al reabrir, los
+dos anteriores sobreviven, `HistoryRepair::TailDiscarded` dice cuántos bytes se
+retiraron y el archivo se trunca al último límite válido. Otro fixture corrompe
+el CRC del segundo de tres y comprueba que se descartan segundo y tercero. Una
+versión futura se rechaza por `UnsupportedHistoryVersion { found }`; no se
+«repara» una cabecera que este build no comprende.
+
+El primer intento de recuperación falló en Windows con Win32 5: el handle
+abierto con append no permitía `set_len`. Se corrigió abriendo con lectura y
+escritura, buscando el final sólo al append. El primer run completo del crate
+falló además porque `InvalidTimestamp` se construía junto a su declaración y la
+guarda no podía verlo; se movió el constructor al módulo de comportamiento sin
+eximir la variante. Clippy encontró luego un `panic!` en un helper de medición y
+se eliminó construyendo directamente el fixture, sin `allow`.
+
+La medida Windows debug de 10 000 registros fue **720 012 bytes y 72.6051 ms**
+de parseo, bajo presupuesto de 500 ms. `a_slow_parse_would_be_visible...`
+inyecta 500 ms + 1 ns y demuestra que el detector puede fallar; el contador de
+trabajo observa 10 y 20 registros en archivos de esos tamaños. El barrido final
+de los dos módulos nuevos terminó 80 caught, 0 missed, 20 unviable y 0 timeout
+sobre 100 mutantes.
+
+### Doce comprobaciones
+
+| # | Comprobación | Resultado |
+|---:|---|---|
+| 1 | `cargo fmt --all --check` | PASS por código 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS por código 0 |
+| 3 | `cargo test --workspace` | PASS Windows: 493 passed, 0 failed, 2 ignored ya existentes; +15 tests frente a Puerta 5 |
+| 4 | Mutación con límite | Final: 80 caught, 0 missed, 20 unviable, 0 timeout; `--timeout 30`, dos módulos nuevos |
+| 5 | Lectura de aserciones | Mitad de registro/anteriores, CRC segundo/tail, exacto/uno más, igual/decreciente y filtros con matches distintos |
+| 6 | Lectura de contadores | Tamaño deriva de bytes codificados; trabajo cuenta 10/20; `len()` observa registros realmente parseados |
+| 7 | La medida se ve fallar | 500 ms + 1 ns se rechaza explícitamente contra el presupuesto de 500 ms |
+| 8 | Lectura de nombres | Cada test ejerce append/reopen, futuro, mitad real, CRC real, queries, orden, timestamp, tamaño y detector que nombra |
+| 9 | Ledger legible | 18 abiertas; cero fichas nuevas en la fase y diez en todo 5D |
+| 10 | Alcance desde `ebdffb9` | Sólo crates propios, ADR, ledger/checkers e informes; salida prohibida vacía para Cargo, workflows, crates ajenos y excepción mínima |
+| 11 | Coherencia del informe | Releídas secciones 0–8 y las secciones humanas del informe de mutación contra código, dos JSON y gates finales |
+| 12 | `check_docs_consistency` | PASS Git Bash (12.4 s) y PASS Windows PowerShell 5.1 (45.1 s) |
+
+Runs fallidos conservados: RED de compilación por siete imports ausentes;
+fixture de recuperación Win32 5; guarda de `InvalidTimestamp`; Clippy por
+`panic!` de fixture; primer barrido 73/17/21. No hubo run cancelado.
+
+`Cargo.lock` conserva el blob exacto de la base
+`307d09269e6738b06d9d59123c354d405fe1e540` y 61 paquetes. La corrección del
+usuario recibida durante esta fase no cambia ni reinicia lo ya cerrado: confirma
+que `total_len -> 0` no es P0 porque el valor real es `48 + u32 + u8`; queda una
+enmienda P2 separada para hacer explícito el rechazo de falta de progreso.
 
 ## 9. Puerta 7 — barrido y guardas
 
