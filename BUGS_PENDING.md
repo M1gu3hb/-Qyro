@@ -2494,13 +2494,18 @@
 - Por qué P2 y no P1: hoy la propiedad se cumple, y el `catch_unwind` que protege
   todavía no existe —llega en el paso 4—. Sube a P1 en cuanto exista, porque
   entonces habrá código que confía en él
-- Lo que haría falta para cerrarla: una guarda que lea los perfiles del manifiesto
-  del workspace y falle ante `panic = "abort"`, escrita en el paso 4 junto al primer
-  `catch_unwind`
-- Estado: abierto
+- Resolución: hecha en el paso 4, junto al primer `catch_unwind`, tal como decía
+  esta ficha. La guarda es `qyro_ffi::guards::no_cargo_profile_sets_panic_abort`:
+  lee el manifiesto del workspace, descarta comentarios y falla ante
+  `panic = "abort"`. Lleva control positivo —afirma haber encontrado
+  `[workspace]`—, sin el cual pasaría leyendo una cadena vacía
+- Estado: cerrado
 - Fecha: 2026-08-13
-- Evidencia: `grep -rn 'panic *= *"abort"' --include=*.toml .` no da ninguna línea, y
-  `grep -rn 'panic.*abort' --include=*.rs rust/` tampoco: ni el ajuste ni su guarda
+- Evidencia: añadiendo `[profile.release]\npanic = "abort"` al `Cargo.toml` del
+  workspace, `cargo test -p qyro_ffi no_cargo_profile_sets_panic_abort` da exit
+  101; revertido, exit 0. Antes de la guarda,
+  `grep -rn 'panic.*abort' --include=*.rs rust/` no daba ninguna línea: ni el
+  ajuste ni nada que lo vigilara
 
 ## QYR-0306 — `qyro_ffi` es la única excepción al mínimo de guardas, justo antes de ganar seis funciones `extern "C"`
 
@@ -2519,13 +2524,18 @@
   árbol para no tener la guarda de pánico y la de sitios de construcción
 - Nota: `qyro_session`, que se añadió como miembro en este paso, **sí** lleva el
   mínimo y no necesitó excepción. La comprobación pasa sin tocar la lista
-- Lo que haría falta para cerrarla: darle a `qyro_ffi` el mínimo estructural y
-  vaciar la lista, en el paso 4, cuando exista el código que la guarda debe leer
-- Estado: abierto
+- Resolución: hecha en el paso 4. `qyro_ffi` incluye ya
+  `rust/guards/source_guard.rs` con el mínimo compartido —lista de producción,
+  análisis sin pánico, fin de análisis y antitautología— más dos guardas que
+  ningún otro crate necesita: que **toda** función `extern "C"` abre con `guard(`,
+  y QYR-0305. La lista quedó en `[(&str, &str); 0]`, que es el estado en que hay
+  que mantenerla
+- Estado: cerrado
 - Fecha: 2026-08-13
-- Evidencia: `cargo test -p qyro_identity_store every_workspace_crate_has_the_minimum`
-  pasa con `qyro_session` ya como miembro; la lista tiene longitud 1 y el tipo lo
-  fija, `[(&str, &str); 1]`
+- Evidencia: `cargo test --workspace` pasa con la lista vacía, 563 tests. La guarda
+  de `extern "C"` se vio fallar: quitando el `guard(` de `qyro_session_close`, exit
+  101 nombrando la función. Lleva además suelo de conteo —afirma ver al menos ocho
+  funciones—, sin el cual pasaría en un crate sin ABI ninguna
 
 ## QYR-0307 — ADR-0032 §4 dice que el doble cierre *es* la comprobación de generación, y no lo es
 
@@ -2563,3 +2573,32 @@
   `cargo test -p qyro_ffi a_double_close_is_an_error_and_not_a_crash` daba exit 0
   antes del refuerzo y da exit 101 después, con
   «close must advance the generation», left 1, right 2
+
+## QYR-0308 — La guarda de workspace confunde una cadena literal con la declaración de un enum
+
+- Plataforma: todas; `rust/crates/qyro_identity_store/src/guards.rs:198`
+- Severidad: P3
+- Esperado: la guarda que exige comprobación de sitios de construcción se dispara
+  para el crate que **declara** un enum de error
+- Actual: decide quién lo declara partiendo el **código fuente en bruto** por la
+  cadena `"pub enum "`. No descarta módulos de test ni cadenas literales, así que
+  cualquier archivo que **mencione** `pub enum X` entre comillas pasa a «declarar»
+  X. `qyro_ffi` lo disparó por una guarda propia que lee el enum de `qyro_session`
+  para vigilar su propio brazo `_` de `#[non_exhaustive]`: una cadena dentro de un
+  test hizo creer a la guarda que `qyro_ffi` declara `SessionError`
+- Consecuencia: exige a un crate una guarda sobre un enum que no es suyo, y la
+  única salida es no escribir la cadena. Es fallo cerrado, no abierto — molesta,
+  no deja pasar nada— pero enseña a evitar la frase en vez de a arreglar la causa
+- Resolución: se evitó localmente, montando la cadena con `concat!`. **No se tocó
+  la guarda compartida**: la usan varios crates, y cambiar cómo decide quién
+  declara qué es un cambio con alcance propio que no cabe de paso en un paso de
+  implementación
+- Lo que haría falta para cerrarla: que la detección lea la fuente ya despojada de
+  tests —`production_source` ya existe y hace justo eso— o que exija `pub enum` a
+  principio de línea
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `cargo test --workspace` daba exit 101 con «qyro_ffi declares
+  SessionError but its structural guards do not check every variant for a
+  construction site»; `grep -rn 'pub enum' rust/crates/qyro_ffi/src/` mostraba dos
+  apariciones, una real —`HandleError`— y otra dentro de un `.contains(...)`

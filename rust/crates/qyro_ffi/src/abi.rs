@@ -49,6 +49,36 @@ pub const QYRO_ERR_PANIC: i32 = -3;
 /// A required out-parameter was null.
 pub const QYRO_ERR_NULL_OUT: i32 = -4;
 
+/// The table lock was poisoned by a panic in an earlier call.
+pub const QYRO_ERR_POISONED: i32 = -5;
+
+// One code per `SessionError` variant. They are a flat translation on purpose:
+// collapsing two of them here would hide from Dart a distinction qyro_session
+// already decided was worth keeping.
+
+/// The address, port or path was not usable.
+pub const QYRO_ERR_BAD_ARGUMENT: i32 = -6;
+/// The peer could not be reached, or the wire ended.
+pub const QYRO_ERR_PEER_UNREACHABLE: i32 = -7;
+/// The peer did not authenticate. Never retry this one blindly.
+pub const QYRO_ERR_NOT_AUTHENTICATED: i32 = -8;
+/// The transfer was refused.
+pub const QYRO_ERR_TRANSFER_REFUSED: i32 = -9;
+/// The destination refused the content.
+pub const QYRO_ERR_STORAGE_REFUSED: i32 = -10;
+/// The session was cancelled by this end.
+pub const QYRO_ERR_CANCELLED: i32 = -11;
+
+/// A `SessionError` variant this build does not know how to translate.
+///
+/// `SessionError` is `#[non_exhaustive]`, so the translation must have a
+/// catch-all arm or it will not compile from this crate. A catch-all that
+/// collapsed an unknown variant onto an existing code would tell Dart something
+/// false; this one says "I do not know" instead, and the guard test in
+/// `session_abi` reads both source files so a new variant is caught before
+/// anybody can construct it.
+pub const QYRO_ERR_UNKNOWN: i32 = -12;
+
 impl HandleError {
     /// The code this error crosses the boundary as.
     #[must_use]
@@ -135,6 +165,14 @@ mod tests {
             QYRO_ERR_TABLE_FULL,
             QYRO_ERR_PANIC,
             super::QYRO_ERR_NULL_OUT,
+            super::QYRO_ERR_POISONED,
+            super::QYRO_ERR_BAD_ARGUMENT,
+            super::QYRO_ERR_PEER_UNREACHABLE,
+            super::QYRO_ERR_NOT_AUTHENTICATED,
+            super::QYRO_ERR_TRANSFER_REFUSED,
+            super::QYRO_ERR_STORAGE_REFUSED,
+            super::QYRO_ERR_CANCELLED,
+            super::QYRO_ERR_UNKNOWN,
         ];
         for (index, code) in codes.iter().enumerate() {
             assert!(

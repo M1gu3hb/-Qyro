@@ -118,10 +118,13 @@ fn declares_forbid_unsafe(source: &str) -> bool {
 /// coordinated `claude/qyro-net-6a` branch with their own guards. Their entries
 /// expire as soon as those members exist here: a merge must inspect their real
 /// guard set rather than inheriting an exemption written before the files did.
-const MINIMUM_GUARD_SET_EXCEPTIONS: [(&str, &str); 1] = [(
-    "qyro_ffi",
-    "reserved to the claude/qyro-net-6a branch; its C ABI has dedicated contract tests",
-)];
+/// Empty, and that is the state to keep it in.
+///
+/// It held one entry, `qyro_ffi`, until phase 01 of the v1.0 plan. The comment
+/// above says an entry expires as soon as its member exists here, and that is
+/// what happened: `qyro_ffi` now carries the shared minimum plus two guards of
+/// its own, for the panic boundary and for `panic = "abort"` (QYR-0306).
+const MINIMUM_GUARD_SET_EXCEPTIONS: [(&str, &str); 0] = [];
 
 #[test]
 fn every_workspace_crate_has_the_minimum_structural_guards_or_an_exact_exception() {

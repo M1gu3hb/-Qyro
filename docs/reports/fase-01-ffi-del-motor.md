@@ -281,6 +281,83 @@ commit, no de paso.
 
 ---
 
+### Puerta del Paso 4 — 2026-08-13 — **PASADA**
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all -- --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0. Falló antes, por un `mut` sin uso que destapó un test mal nombrado |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — 563 / 0 / 2. Falló antes; abajo |
+| 4 | Barrido de mutación del paso | PASS — cuatro dirigidas, §10 |
+| 5 | Lectura de aserciones | PASS — y destapó que la regla pegajosa no tenía ninguna |
+| 6 | Lectura de contadores | PASS — ocho símbolos `no_mangle`: 2 en `lib.rs` y 6 en `session_abi.rs`, con `grep -c 'unsafe(no_mangle)'` |
+| 7 | **La medida se ve fallar** | PASS — las cuatro, una tras arreglar lo que destapó |
+| 8 | Lectura de nombres de test | PASS — y uno estaba mal puesto, corregido |
+| 9 | `git diff --name-only` | PASS — ninguno de Codex |
+| 10 | El ledger sigue legible | PASS — 125 fichas, 30 abiertas. Dos cerradas, una nueva |
+| 11 | `check_docs_consistency` (bash y pwsh) | PASS — exit 0 las dos |
+| 12 | Resultado escrito antes del paso siguiente | PASS — esto |
+
+**Las seis operaciones**, ni una más: abrir emisora, abrir receptora, avanzar,
+progreso, cancelar, cerrar. Con las dos de versión que ya existían son ocho
+símbolos `extern "C"`, y una guarda cuenta que son ocho.
+
+**Una corrección al alcance, hecha y no callada.** La tabla del paso 4 dice que la
+sesión emisora recibe **directorio raíz**, y `qyro_session::Session::open_sender`
+no lo tenía: derivaba el nombre de cada archivo con `file_name()`, o sea aplanando.
+Dos archivos llamados `a.txt` en carpetas distintas viajaban los dos como `a.txt` y
+le dejaban al receptor una colisión que el emisor había fabricado. Se implementó el
+raíz —`strip_prefix`, y refuse si el resto no es un descendiente llano— en vez de
+exponer una superficie más estrecha en silencio.
+
+**Comprobación 3, dicha porque falló.** `cargo test --workspace` dio exit 101 con
+«qyro_ffi declares SessionError but its structural guards do not check every
+variant». No lo declara. La guarda de workspace decide quién declara un enum
+partiendo la fuente **en bruto** por `"pub enum "`, sin descartar tests ni cadenas
+literales, y una guarda mía contiene esa frase entre comillas para vigilar mi
+propio brazo `_`. QYR-0308. Se evitó localmente con `concat!`; la guarda compartida
+**no se tocó**, porque cambiar cómo decide quién declara qué afecta a varios crates
+y tiene alcance propio.
+
+**Comprobación 7 — las cuatro medidas.**
+
+| # | Mutación | Test dirigido | Resultado |
+|---|---|---|---|
+| G1 | `qyro_session_close` sin `guard(` | `every_extern_c_function_sits_behind_the_panic_guard` | exit 101 |
+| G2 | `panic = "abort"` en un perfil | `no_cargo_profile_sets_panic_abort` | exit 101 |
+| G3 | Un brazo borrado del mapa de errores | `every_session_error_variant_has_its_own_code_...` | exit 101 |
+| G4 | La regla pegajosa borrada | *(ninguno la cubría)* | **exit 0 — SOBREVIVIÓ** |
+
+**G4 es el hallazgo del paso, y no es puntería: es un hueco.** Borrar la regla que
+ADR-0032 §5 congela —que una sesión fallada devuelve **el mismo código** para
+siempre— **no rompía ni un test de este crate**. Lanzada contra la suite entera
+tampoco. Y el motivo por el que no lo cubría nadie es el que hace peligroso el
+hueco: envenenar una sesión de verdad exige una sesión de verdad, y eso exige un
+peer, así que el test natural sería de integración disfrazado de unitario.
+
+La política se extrajo a una función pura, `sticky`, y se probó ahí: que el fallo
+se pega, que un `Ok` posterior sigue devolviendo el código viejo —«un segundo `Ok`
+deja creer a Dart que la sesión se recuperó»—, que un fallo posterior no
+sobrescribe al primero, que el éxito **no** envenena, y que un parámetro de salida
+nulo no envenena una sesión que no llegó a tocarse. Con eso, G4 dirigida a su test
+da exit 101: left 0, right -6.
+
+**Dos fichas cerradas por este paso**, las dos con la evidencia de haberlas visto
+fallar: QYR-0305 —la guarda de `panic = "abort"`, que sin ella deja todo
+`catch_unwind` de adorno— y QYR-0306 —`qyro_ffi` ya lleva el mínimo estructural
+compartido y la lista de excepciones quedó vacía—.
+
+**Y dos guardas que fallaron mientras se escribían**, dichas porque el informe se
+escribe durante y no después: la de pánico marcaba tres funciones que sí estaban
+guardadas —leía «la línea siguiente al nombre», y estas firmas ocupan siete
+líneas—, y la de sitios de construcción pedía que `HandleError` se construyera
+fuera del archivo que lo declara, que es la pregunta correcta para `SessionError` y
+no para un enum que sólo la tabla puede producir. La segunda se resolvió eximiendo
+las dos variantes **con el argumento escrito**, que es la salida que la propia
+guarda ofrece, y dejando su alcance real —el suelo de parseo— en pie.
+
+---
+
 ## 10. Tabla de mutación
 
 No aplica al paso 1: no añade código de producción. El barrido con

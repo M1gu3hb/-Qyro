@@ -20,6 +20,10 @@
 // Nothing here can name anything cryptographic; see the module note above.
 pub mod abi;
 pub mod handle;
+mod session_abi;
+
+#[cfg(test)]
+mod guards;
 
 fn protocol_version_bytes() -> &'static [u8] {
     qyro_core::protocol_version().as_bytes()

@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -113,30 +113,56 @@ const fn net_error(error: &NetError) -> SessionError {
 }
 
 impl Session {
-    /// Opens a sending session against `address`.
+    /// Opens a sending session against `address`, naming files relative to
+    /// `root`.
+    ///
+    /// `root` is what gives the receiver its names. Every path in `files` must
+    /// live under it, and the name that travels is the remainder — so sending
+    /// `docs/a.txt` and `notes/a.txt` from a common root sends two distinct
+    /// names, where naming by file name alone would send `a.txt` twice and make
+    /// the receiver arbitrate a collision that the sender created.
     ///
     /// # Errors
     ///
-    /// [`SessionError::BadArgument`] when a path cannot be planned,
+    /// [`SessionError::BadArgument`] when `files` is empty, when a path is not
+    /// under `root`, or when the remainder is empty,
     /// [`SessionError::PeerUnreachable`] when the peer does not answer,
     /// [`SessionError::NotAuthenticated`] when it fails to prove who it is.
-    pub fn open_sender(address: SocketAddr, files: &[PathBuf]) -> Result<Self, SessionError> {
+    pub fn open_sender(
+        address: SocketAddr,
+        root: &Path,
+        files: &[PathBuf],
+    ) -> Result<Self, SessionError> {
         if files.is_empty() {
             return Err(SessionError::BadArgument);
         }
-        let planned: Vec<PlannedFile> = files
-            .iter()
-            .map(|source| {
-                let relative = source
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                PlannedFile {
-                    source: source.clone(),
-                    relative,
+        let mut planned: Vec<PlannedFile> = Vec::with_capacity(files.len());
+        for source in files {
+            // A path outside the root is refused rather than quietly renamed to
+            // its last component: the caller asked for something this cannot
+            // express, and guessing produces a name they did not choose.
+            let relative = source
+                .strip_prefix(root)
+                .map_err(|_| SessionError::BadArgument)?;
+            let mut components = Vec::new();
+            for component in relative.components() {
+                match component {
+                    Component::Normal(part) => components.push(part.to_string_lossy().into_owned()),
+                    // `..`, `.`, a root or a prefix in the remainder would mean
+                    // the strip succeeded on something that is not a plain
+                    // descendant. qyro_manifest refuses these too; refusing here
+                    // keeps the error the caller's, not the manifest's.
+                    Component::ParentDir
+                    | Component::CurDir
+                    | Component::RootDir
+                    | Component::Prefix(_) => return Err(SessionError::BadArgument),
                 }
-            })
-            .collect();
+            }
+            planned.push(PlannedFile {
+                source: source.clone(),
+                relative: components.join("/"),
+            });
+        }
         if planned.iter().any(|file| file.relative.is_empty()) {
             return Err(SessionError::BadArgument);
         }
