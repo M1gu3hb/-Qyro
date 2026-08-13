@@ -9,6 +9,7 @@ members = [
   "rust/crates/qyro_manifest",
   "rust/crates/qyro_net",
   "rust/crates/qyro_protocol",
+  "rust/crates/qyro_session",
   "rust/crates/qyro_transfer",
   # Windows only. The one crate in the product that relaxes forbid(unsafe_code);
   # see ADR-0024 §1.

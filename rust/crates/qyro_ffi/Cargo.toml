@@ -9,8 +9,14 @@ rust-version.workspace = true
 crate-type = ["cdylib", "staticlib", "rlib"]
 path = "src/lib.rs"
 
+# ADR-0032 §2. EXACTLY these two, and the depth-one guard in
+# tests/c_abi_contract.rs is what keeps it exact. Rust puts only *direct*
+# dependencies in a crate's extern prelude, so this list is the complete set of
+# crates whose items this one can name -- which is what bounds the reachable
+# crypto surface to qyro_session's public API.
 [dependencies]
 qyro_core = { path = "../qyro_core" }
+qyro_session = { path = "../qyro_session" }
 
 [dev-dependencies]
 # Reads `cargo metadata` in the C ABI contract test, so the FFI dependency

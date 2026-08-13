@@ -295,6 +295,7 @@ name = "qyro_ffi"
 version = "0.0.1"
 dependencies = [
  "qyro_core",
+ "qyro_session",
  "serde_json",
 ]
 
@@ -345,6 +346,17 @@ dependencies = [
 [[package]]
 name = "qyro_protocol"
 version = "0.0.1"
+
+[[package]]
+name = "qyro_session"
+version = "0.0.1"
+dependencies = [
+ "qyro_crypto",
+ "qyro_fs",
+ "qyro_manifest",
+ "qyro_net",
+ "qyro_transfer",
+]
 
 [[package]]
 name = "qyro_store_smoke"

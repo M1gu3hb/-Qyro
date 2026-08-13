@@ -1,0 +1,25 @@
+[package]
+name = "qyro_session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The only crate qyro_ffi sees: transfer operations, and no type that carries a key."
+
+[lib]
+path = "src/lib.rs"
+
+# ADR-0032 §2. This crate exists to be the machine-verified boundary: because
+# Rust puts only *direct* dependencies in a crate's extern prelude, qyro_ffi
+# naming exactly qyro_core and qyro_session is a resolver-checkable proof that
+# everything it can reach of the cryptographic stack is bounded by this crate's
+# public API. Every dependency below is first-party.
+[dependencies]
+# This crate MAY reach the crypto stack; qyro_ffi may not. That asymmetry is the
+# whole design: the handshake needs a DeviceIdentity, so somebody has to name
+# qyro_crypto, and this crate is where that naming is confined and audited.
+qyro_crypto = { path = "../qyro_crypto" }
+qyro_fs = { path = "../qyro_fs" }
+qyro_manifest = { path = "../qyro_manifest" }
+qyro_net = { path = "../qyro_net" }
+qyro_transfer = { path = "../qyro_transfer" }
