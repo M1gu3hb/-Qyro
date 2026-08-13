@@ -2277,3 +2277,43 @@
 - Evidencia: barrido focal a 30 s: primera pasada amplia 22 caught, 1 unviable y
   1 timeout; reejecución exacta del restante, 1 caught en 12 s; la guarda de
   progreso y sus cinco mutantes focales terminaron 5 caught en 31 s
+
+## QYR-0300 — La línea base del plan declara verde una comprobación que el propio plan pone en rojo
+
+- Plataforma: cualquiera; documentación y `scripts/check_docs_consistency.{sh,ps1}`
+- Severidad: P2
+- Esperado: `R6-ESTADO-BASE.md` §1 declara `check_docs_consistency` en PASS sobre
+  el árbol planificado, y dice que si los números no coinciden hay que parar y
+  reportarlo
+- Actual: sobre ese mismo árbol la comprobación falla. Los otros cinco números de
+  `R6` §1 reproducen exactamente —527 tests, 63 paquetes, 116 fichas con 24
+  abiertas, `clippy` y `fmt` en exit 0—; sólo éste no. La causa está entera dentro
+  de `R4-COMO-REGISTRAR-BUGS.md`, que cita dos identificadores sin ficha. **Aquí se
+  describen sin escribirlos**, porque escribirlos vuelve a disparar el mismo
+  bloqueo — que es, en sí mismo, la tercera cara del problema:
+  1. `R4` §3 línea 59 usa como encabezado literal de su plantilla de formato un
+     identificador de aspecto real, el mismo número que esta ficha ocupa. El
+     comprobador escanea el patrón en todo `.md`, así que una plantilla escrita con
+     un número real se lee como una cita. **Esta ficha cierra esa primera causa por
+     el mero hecho de existir**
+  2. `R4` §4 línea 92 cita, como ejemplo de P1, el identificador del incidente del
+     ledger ilegible del 2026-08-11. Esa ficha no está en el ledger: `R4` §1 cuenta
+     que la reparación lo dejó en 116 fichas, y en esa consolidación se perdió
+- Y un tercer desajuste, independiente: `R4` §3 afirma cuál es el siguiente
+  identificador libre, pero el comando que el propio `R4` da para comprobarlo
+  devuelve uno menos. Empezar donde ordena el encargo deja ese número intermedio
+  sin usar, lo que contradice el «consecutivos» de ese mismo párrafo
+- Resolución: **las dos causas que quedan son decisiones del supervisor y no las
+  tomo yo.** Para la del ledger ilegible: restaurar su ficha —el identificador está
+  fuera de mi rango, y `R4` §5 exige evidencia ejecutada para cerrar una, que yo no
+  tengo, porque sólo conozco el incidente por la prosa de `R4` §1— **o** quitar la
+  cita de `R4` §4, que conserva los otros dos ejemplos de P1. Para el hueco:
+  confirmar el arranque que ordena el encargo aceptando el número perdido, o
+  corregir `R4` §3
+- Lo que haría falta para cerrarla: cualquiera de las dos salidas anteriores,
+  aplicada por quien tenga el rango o la autoría del documento
+- Estado: abierto
+- Fecha: 2026-08-12
+- Evidencia: `bash scripts/check_docs_consistency.sh` sobre `90bb5d0` devuelve
+  exit 1. Sobre `6de0af7`, antes de que yo tocara nada, devolvía cinco BLOCKER, así
+  que es condición heredada y no introducida

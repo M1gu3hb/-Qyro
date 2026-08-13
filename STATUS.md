@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-12T01:00:00Z
+- Updated UTC: 2026-08-12T06:00:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: 20f85733eef3a91ccf8fafc4a23ece3c44e283bd
+- Verified commit: 90bb5d02af6c4c93f2768086d7fe9ae99485c4ba
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
