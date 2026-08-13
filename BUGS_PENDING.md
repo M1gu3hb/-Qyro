@@ -2602,3 +2602,66 @@
   SessionError but its structural guards do not check every variant for a
   construction site»; `grep -rn 'pub enum' rust/crates/qyro_ffi/src/` mostraba dos
   apariciones, una real —`HandleError`— y otra dentro de un `.contains(...)`
+
+## QYR-0309 — `qyro_session` no tiene ni un test de comportamiento, y veinte mutantes lo demuestran
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P1
+- Esperado: las decisiones del crate que conduce una transferencia están
+  defendidas por pruebas que las ejerzan
+- Actual: los seis tests de `qyro_session` son **guardas estructurales** —qué
+  archivos hay, que ninguna ruta pueda entrar en pánico, que cada variante de error
+  tenga sitio de construcción—. Ninguno abre una sesión. `advance`, `finished`,
+  `verdict` y `finish` no los ejerce nada
+- Medida: el barrido de la fase 01 deja **veinte supervivientes** en este crate, y
+  el inventario íntegro está en `docs/reports/fase-01-barrido-mutacion.md` §3. Tres
+  son de presentación —`Debug`, `Display`, el sumidero que registra—; **diecisiete
+  no**. Los cuatro de `verdict` cambian si un archivo se acepta o se rechaza, y
+  ningún test protesta
+- Por qué P1: es un control sin cobertura, que es literalmente el criterio de P1
+  en `R4` §4. No es P0 porque no hay hoy ninguna afirmación de que esté probado —el
+  informe de fase §15 dice lo contrario con todas las letras— así que nadie puede
+  creerse una garantía falsa; y porque nada del producto llama todavía al motor
+- Causa de la causa: abrir una sesión exige un peer, y el paso 2 construyó el crate
+  sin montar uno. No es un descuido del barrido: es la deuda que el barrido midió
+- Lo que haría falta para cerrarla: un test que levante emisor y receptor sobre
+  `127.0.0.1` en dos hilos y mueva un archivo, con lo que la mayoría de los veinte
+  mueren solos. `qyro_session::Session::local_addr` existe y hace posible aprender
+  el puerto desde Rust, que es lo que la superficie C no permite. Y volver a barrer
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `cargo mutants --package qyro_ffi --package qyro_session --timeout 90`
+  da «124 mutants tested in 3m: 35 missed, 75 caught, 14 unviable»; veinte de los
+  35 caen en este crate. `cargo test -p qyro_session` lista seis tests, todos bajo
+  `guards::`
+
+## QYR-0310 — Las rutas de éxito de la superficie C no se ejercen, y una prueba coincide con su mutante
+
+- Plataforma: todas; `rust/crates/qyro_ffi/src/session_abi.rs`
+- Severidad: P2
+- Esperado: cada operación `extern "C"` tiene al menos una prueba que la recorra
+  hasta el final, no sólo hasta su primer rechazo
+- Actual: los tests recorren las rutas de rechazo —handle inválido, puntero nulo,
+  dirección imparseable, lista vacía—, que son las alcanzables sin red. Las de
+  éxito no. Ocho supervivientes lo miden: `table` devolviendo una tabla nueva en
+  cada llamada, `state_code` devolviendo una constante, `insert` devolviendo una
+  constante
+- **Y uno de los ocho merece leerse aparte**, porque no sobrevive por falta de
+  peer: `with_session -> -1` pasa porque **`-1` es `QYRO_ERR_INVALID_HANDLE`**, que
+  es justo lo que los tests de handle muerto esperan. Un `with_session` que
+  devolviera `-1` siempre pasaría por coincidencia entre el centinela de la prueba
+  y la constante del mutante. Es la familia de QYR-0086: una prueba que no
+  distingue una medida de una constante
+- Por qué P2 y no P1: la superficie no la llama nadie todavía —los botones siguen
+  en `onPressed: null`, y la fase 02 es quien la conecta—, así que es hueco de
+  cobertura sin consecuencia de seguridad **hoy**. Sube en cuanto Dart la llame
+- Lo que haría falta para cerrarla: lo mismo que QYR-0309 —un peer— y, para el
+  octavo, que algún test de esa función espere un código que **no** sea `-1`, de
+  modo que una constante no pueda pasar por medida
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `cargo mutants --package qyro_ffi --timeout 90` da «93 mutants tested
+  in 2m: 9 missed, 81 caught, 3 unviable». Nueve, no ocho: el noveno es
+  `compose`, `|`→`^`, **equivalente por construcción** —las dos mitades no
+  comparten bit— y comprobado por
+  `the_two_halves_of_a_handle_do_not_overlap`, no supuesto

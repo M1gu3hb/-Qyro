@@ -1,6 +1,6 @@
 # Fase 01 — El FFI del motor
 
-**Estado: Paso 1 cerrado (ADR-0032 congelada). Pasos 2–5 pendientes.**
+**Estado: los cinco pasos cerrados con puerta. Puerta de fase pasada, con su deuda declarada en §9.bis.**
 
 Se escribe durante la fase. Las secciones que dicen «pendiente» lo están de verdad.
 
@@ -23,7 +23,15 @@ Keychain, empaquetado.
   Detalle en `fase-00-linea-base.md`.
 - **Paso 1** — la decisión de §4 tomada y **ADR-0032 congelada antes de una sola
   línea de código**, en commit propio `d282319` con **cero archivos `.rs`**.
-- Pasos 2 a 5: **no empezados**.
+- **Paso 2** — crate `qyro_session`, y la guarda del FFI movida de *alcanzabilidad*
+  a *nombrabilidad*. Vista fallar con la arista real en el manifiesto y con `E0433`
+  en el compilador.
+- **Paso 3** — tabla de handles (`u64`, generación‖ranura) y frontera de pánico.
+  Cinco controles rotos a propósito; uno sobrevivió y produjo QYR-0307.
+- **Paso 4** — las seis operaciones, ocho símbolos `extern "C"` en total, más las
+  guardas de las que `qyro_ffi` estaba exento. QYR-0305 y QYR-0306 cerradas.
+- **Paso 5** — barrido con `--timeout 90`, al informe y no al ledger. Dos fichas
+  escritas a mano: QYR-0309 y QYR-0310.
 
 ---
 
@@ -81,9 +89,23 @@ ellos. Registrarlos ahora sin tocarlos sólo llenaría el ledger.
 | QYR-0300 | La línea base no reproduce del todo | Abierto — dos de sus tres causas son decisión del supervisor |
 | QYR-0301 | §4 describe mal dos salidas | Abierto — corregido *en* ADR-0032, que decide con las descripciones arregladas |
 
-**No arreglado, y por qué no:** la cita huérfana de `R4` §4 exige un identificador
-fuera de mi rango y evidencia ejecutada que no tengo. Bloquea la comprobación 11 de
-toda puerta. Detalle en `fase-00-linea-base.md`.
+**Resuelto después, en el paso 2:** la cita huérfana de `R4` §4 no exigía un
+identificador nuevo. El incidente no se había perdido en la consolidación de 5D, se
+había **renumerado**, y `QYR-0289` lo describe — mismo P1, misma fecha. La cita
+estaba a uno. QYR-0302, commit `fb4ecb9`; con eso la comprobación 11 pasa a exit 0
+por primera vez en esta rama desde que llegaron los documentos del plan.
+
+| ID | Qué | Estado al cerrar la fase |
+|---|---|---|
+| QYR-0302 | La cita de `R4` §4 apuntaba a un número renumerado | **Cerrado** |
+| QYR-0303 | Trece archivos afirmaban la propiedad derogada | Abierto — tres son ajenos y quedan anotados |
+| QYR-0304 | El motor deshace el zeroize en la línea siguiente | **Abierto · P1** — no lo introduce esta fase |
+| QYR-0305 | Nada impedía `panic = "abort"` | **Cerrado** — guarda vista fallar |
+| QYR-0306 | `qyro_ffi` era la única excepción de guardas | **Cerrado** — lista vacía |
+| QYR-0307 | La ADR §4 describe mal el doble cierre | Abierto — la mitad del código arreglada, la de la ADR no |
+| QYR-0308 | La guarda de workspace confunde una cadena con una declaración | Abierto — evitado en local, guarda compartida sin tocar |
+| QYR-0309 | `qyro_session` sin cobertura de conducta | **Abierto · P1** |
+| QYR-0310 | Las rutas de éxito de la superficie C no se ejercen | Abierto |
 
 ---
 
@@ -109,11 +131,11 @@ pasa, y la propiedad más antigua del proyecto se pierde sin que salte nada.
 | Objetivo del documento §9 | Resultado |
 |---|---|
 | 1. ADR-0032 congelada antes del primer commit de código | **Cumplido** — `d282319`, cero `.rs` |
-| 2. Decisión de §4 tomada, argumentada, implementada, guarda vista fallar | **Parcial** — tomada y argumentada; implementar y verla fallar es el paso 2 |
-| 3–7, 9, 10, 12 | **No hecho** — pasos 2 a 5 |
-| 8. Cero dependencias externas | **Cumplido hasta aquí** — §12 |
-| 11. Las doce comprobaciones en todas las puertas | **Parcial** — §9 |
-| 13. Informe según `R5` | **En curso** — esto |
+| 2. Decisión de §4 tomada, argumentada, implementada, guarda vista fallar | **Cumplido** — §9, puerta del paso 2, comprobación 7 |
+| 3–7, 9, 10, 12 | **Cumplido en estructura, NO en conducta** — existe y está guardado; `qyro_session` no tiene un solo test de comportamiento (QYR-0309) |
+| 8. Cero dependencias externas | **Cumplido** — §12. El lock sube 63→64 por un crate de primera parte |
+| 11. Las doce comprobaciones en todas las puertas | **Cumplido** — cinco puertas escritas, §9 |
+| 13. Informe según `R5` | **Cumplido** — esto, escrito durante |
 | 14. Los botones siguen `onPressed: null` | **Cumplido** — no se ha tocado Dart |
 
 ---
@@ -122,9 +144,16 @@ pasa, y la propiedad más antigua del proyecto se pierde sin que salte nada.
 
 | Afirmación | Clase | Plataforma | Evidencia |
 |---|---|---|---|
-| 527 passed, 0 failed, 2 ignored | Probado en unidad e integración | Linux | `cargo test --workspace`, exit 0 |
+| 527 passed, 0 failed, 2 ignored *(al cerrar el paso 1)* | Probado en unidad e integración | Linux | `cargo test --workspace`, exit 0 |
+| **566 passed, 0 failed, 2 ignored** *(al cerrar la fase)* | Probado en unidad e integración | **Sólo Linux** | `cargo test --workspace`, exit 0 |
 | `clippy -D warnings` y `fmt --check` limpios | Compilado | Linux | exit 0 del proceso |
-| El cierre de `qyro_ffi` es hoy `{qyro_core, qyro_ffi}` | Comprobado | — | `cargo tree -p qyro_ffi -e normal` |
+| El cierre de `qyro_ffi` es hoy `{qyro_core, qyro_ffi}` *(cierto hasta el paso 2)* | Comprobado | — | `cargo tree -p qyro_ffi -e normal` |
+| `qyro_ffi` nombra exactamente `qyro_core` y `qyro_session` | Comprobado por el resolvedor | — | `the_ffi_names_exactly_two_crates`, y visto fallar con la arista real |
+| Un tipo de `qyro_crypto` no se puede **nombrar** en `qyro_ffi` | **Comprobado por el compilador** | — | Sonda idéntica: con arista compila, sin arista `E0433`. `qyro_crypto` en el cierre en los dos casos |
+| Toda función `extern "C"` abre con `guard(` | Comprobado estructuralmente, visto fallar | — | `every_extern_c_function_sits_behind_the_panic_guard` |
+| Un pánico dentro de la frontera C sale como código | Probado en unidad | Linux | `a_panic_inside_the_c_boundary_becomes_an_error_code`, sobre una `extern "C"` real |
+| **Que una sesión transfiera un archivo** | **NINGUNA** | — | No hay ni un test de conducta en `qyro_session`. QYR-0309 |
+| **Que la superficie C funcione en su ruta de éxito** | **NINGUNA** | — | Sólo se ejercen rutas de rechazo. QYR-0310 |
 | Los cierres de (a) 50, (b) 51, (c) 49, con 12/14 prohibidos | Comprobado, re-medido por cuatro análisis independientes | — | Réplica del recorrido de `c_abi_contract.rs:39-102` sobre `cargo metadata` |
 | Una arista directa `qyro_ffi → qyro_crypto` no cambia el cierre | Comprobado | — | Misma réplica, diferencia `[]` |
 | La ADR está congelada antes del código | Comprobado en el historial | — | `git show --stat d282319`: cero `.rs` |
@@ -355,6 +384,84 @@ fuera del archivo que lo declara, que es la pregunta correcta para `SessionError
 no para un enum que sólo la tabla puede producir. La segunda se resolvió eximiendo
 las dos variantes **con el argumento escrito**, que es la salida que la propia
 guarda ofrece, y dejando su alcance real —el suelo de parseo— en pie.
+
+---
+
+### Puerta del Paso 5 — 2026-08-13 — **PASADA**
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all -- --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0 |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — 566 / 0 / 2 |
+| 4 | Barrido de mutación con `--timeout 90` | PASS — hecho y **al informe**, no al ledger. §10 |
+| 5 | Lectura de aserciones | PASS — y produjo QYR-0310, un centinela que coincide con su mutante |
+| 6 | Lectura de contadores | PASS — 124 → 35/75/14, y 93 → 9/81/3 tras cubrir |
+| 7 | La medida se ve fallar | PASS — es el barrido entero: 116 mutantes murieron al aplicarlos |
+| 8 | Lectura de nombres de test | PASS |
+| 9 | `git diff --name-only` | PASS — ninguno de Codex |
+| 10 | El ledger sigue legible | PASS — 127 fichas, 32 abiertas. El barrido añadió **dos**, escritas a mano |
+| 11 | `check_docs_consistency` (bash y pwsh) | PASS — exit 0 las dos |
+| 12 | Resultado escrito antes del paso siguiente | PASS — esto |
+| + | `guards.rs` en todo crate nuevo | PASS — `qyro_session` y `qyro_ffi` lo tienen y el módulo está activo |
+| + | `every_workspace_crate_has_the_minimum_..._exception` en verde | PASS — y con la lista de excepciones **vacía** |
+
+**Comprobación 4, y la regla que la gobierna.** El inventario íntegro está en
+`docs/reports/fase-01-barrido-mutacion.md`. **Al ledger fueron dos fichas escritas a
+mano**, QYR-0309 y QYR-0310. La regla existe porque ya costó un P1: 173
+clasificaciones mecánicas volcadas en `BUGS_PENDING.md` lo dejaron en 262 fichas y
+sin usar (QYR-0289).
+
+**Lo que el barrido midió, en una frase: `qyro_ffi` está razonablemente defendido y
+`qyro_session` no lo está en absoluto.** 81 de 93 en el primero tras cubrir lo
+barato; veinte supervivientes en el segundo, y los cuatro de `verdict` cambian si un
+archivo se acepta o se rechaza sin que nada proteste.
+
+**Se cubrió lo barato y real que el barrido destapó**, y se volvió a barrer para no
+declararlo de memoria: `get_mut` no tenía ni un llamante —es el accesor que usan
+todas las operaciones de sesión— y `is_empty` tampoco. `qyro_ffi` pasó de 15
+supervivientes a 9.
+
+**Un mutante equivalente, demostrado y no supuesto.** `compose`, `|`→`^`, no puede
+morir: la generación ocupa los 32 bits altos y la ranura los bajos, así que los
+operandos no comparten bit encendido. En vez de escribirlo como excusa se escribió
+como test —`the_two_halves_of_a_handle_do_not_overlap`—, que además se pondrá rojo
+si alguien cambia el reparto de bits, o sea justo cuando la equivalencia deje de ser
+cierta.
+
+---
+
+## 9.bis Puerta de fase — FASE-01 — 2026-08-13 — **PASADA, con su deuda declarada**
+
+Los cinco pasos tienen puerta escrita y pasada. Las doce comprobaciones dan exit 0
+sobre el árbol final. Lo que la fase prometía está: la ADR congelada antes del
+código, el crate intermedio, la guarda movida a profundidad uno y **vista fallar**,
+la tabla de handles con sus cuatro errores tipados, el pánico convertido en código,
+las seis operaciones, el barrido y las guardas.
+
+**Lo que esta puerta NO declara**, y ninguna frase de este informe debe leerse como
+si lo declarara:
+
+1. **`qyro_session` no está probado.** QYR-0309, P1, veinte mutantes. Compila, está
+   guardado estructuralmente, y ninguna de sus decisiones está defendida.
+2. **Ninguna transferencia ha ocurrido a través de la superficie C.** Ni en un test
+   ni en ningún sitio. Las rutas de éxito no se ejercen: QYR-0310.
+3. **La propiedad más antigua del proyecto murió aquí**, y lo que la sustituye es
+   más pequeño: antes lo decidía el compilador sobre alcanzabilidad, ahora lo decide
+   una superficie pública que revisan personas y que un test transcribe.
+4. **Dart no puede pedir nada todavía** y los botones siguen `onPressed: null`.
+5. **QYR-0304 sigue abierta y es P1**: el motor deshace el zeroize del texto claro
+   recibido en la línea siguiente. No la introduce esta fase; la encuentra.
+6. **QYR-0078 sigue abierta.** Windows compila `qyro_net` —clippy en verde— pero su
+   `cargo test --workspace` no se ha visto terminar. «Compiló en Windows» no es
+   «funciona en Windows».
+7. **Nada se ha probado en hardware físico.**
+
+**La fase 02 no debería empezar por conectar Dart.** Debería empezar por QYR-0309:
+un emisor y un receptor sobre `127.0.0.1` en dos hilos moviendo un archivo. Sin eso,
+conectar la UI a un motor sin cobertura de comportamiento es construir sobre una
+capa que nadie ha ejercido, y la fase 02 heredaría el problema con más superficie
+encima.
 
 ---
 

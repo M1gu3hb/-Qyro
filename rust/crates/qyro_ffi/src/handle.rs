@@ -324,6 +324,95 @@ mod tests {
     }
 
     #[test]
+    fn get_mut_resolves_by_the_same_rules_as_get() {
+        // Added after the sweep: `get_mut` had no caller in any test, so its
+        // generation check could be deleted, inverted, or forced either way and
+        // nothing noticed. It is the accessor every session operation uses.
+        let mut table = HandleTable::new();
+        let handle = table.insert(String::from("live")).expect("empty table");
+
+        table
+            .get_mut(handle)
+            .expect("a live handle resolves")
+            .push_str(" and mutated");
+        assert_eq!(table.get(handle), Ok(&String::from("live and mutated")));
+
+        let stale = handle;
+        table.remove(handle).expect("live");
+        let reused = table
+            .insert(String::from("second"))
+            .expect("slot came free");
+        assert_eq!(
+            stale & 0xFFFF_FFFF,
+            reused & 0xFFFF_FFFF,
+            "only meaningful if the slot was reused"
+        );
+        assert_eq!(
+            table.get_mut(stale),
+            Err(HandleError::NotLive),
+            "get_mut must refuse a stale generation, exactly as get does"
+        );
+        assert_eq!(table.get_mut(0), Err(HandleError::NotLive));
+        assert_eq!(table.get_mut(u64::MAX), Err(HandleError::NotLive));
+        assert!(table.get_mut(reused).is_ok());
+    }
+
+    #[test]
+    fn len_and_is_empty_track_what_the_table_holds() {
+        // Also added after the sweep: `is_empty` had no caller, so both its
+        // return value and its comparison could be replaced freely.
+        let mut table = HandleTable::new();
+        assert!(table.is_empty());
+        assert_eq!(table.len(), 0);
+
+        let first = table.insert(1).expect("empty table");
+        assert!(
+            !table.is_empty(),
+            "a table holding one session is not empty"
+        );
+        assert_eq!(table.len(), 1);
+
+        let second = table.insert(2).expect("within capacity");
+        assert_eq!(table.len(), 2);
+
+        table.remove(first).expect("live");
+        assert_eq!(table.len(), 1);
+        assert!(!table.is_empty());
+
+        table.remove(second).expect("live");
+        assert!(table.is_empty(), "and empty again once both are closed");
+        assert_eq!(table.len(), 0);
+    }
+
+    #[test]
+    fn the_two_halves_of_a_handle_do_not_overlap() {
+        // The sweep flags `|` -> `^` in `compose` as surviving, and it always
+        // will: the generation occupies the high 32 bits and the slot the low
+        // 32, so the operands share no set bit and the two operators are
+        // identical by construction. That is an equivalent mutant, not a gap --
+        // and this test is what makes the claim checkable rather than asserted.
+        let mut table = HandleTable::new();
+        let handle = table.insert("session").expect("empty table");
+        let (generation, slot) = HandleTable::<&str>::split(handle);
+
+        assert_eq!(
+            HandleTable::<&str>::compose(generation, slot),
+            handle,
+            "split and compose must round-trip"
+        );
+        assert_eq!(
+            (u64::from(generation) << 32) & u64::from(slot),
+            0,
+            "the halves share no bit, which is why | and ^ agree here"
+        );
+        assert_eq!(
+            HandleTable::<&str>::compose(u32::MAX, u32::MAX),
+            u64::MAX,
+            "and the composition covers the whole width"
+        );
+    }
+
+    #[test]
     fn the_table_refuses_a_fifth_session_instead_of_growing() {
         let mut table = HandleTable::new();
         for index in 0..MAX_ESTABLISHED_SESSIONS {
