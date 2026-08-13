@@ -89,7 +89,7 @@ sprint, y eso destruye la escala.
 | Sev | Criterio | Ejemplos reales |
 |---|---|---|
 | **P0** | Bloquea el milestone actual **o crea una garantía de seguridad falsa** que alguien podría creerse hoy | Un bucle infinito alcanzable desde el cable; una clave que llega a Dart |
-| **P1** | Deuda grave: un control de seguridad sin cobertura, una plataforma sin evidencia cuando se afirma que la hay, algo que bloquea la fase siguiente | QYR-0073 (`O_NOFOLLOW` sin ninguna prueba); QYR-0064 (el harness de Keystore); QYR-0288 (el ledger ilegible) |
+| **P1** | Deuda grave: un control de seguridad sin cobertura, una plataforma sin evidencia cuando se afirma que la hay, algo que bloquea la fase siguiente | QYR-0073 (`O_NOFOLLOW` sin ninguna prueba); QYR-0064 (el harness de Keystore); QYR-0289 (el ledger ilegible) |
 | **P2** | Mejora importante o hueco de cobertura sin consecuencia de seguridad | QYR-0089 (`TransferReject` que nadie emite) |
 | **P3** | Menor, cosmético, o deuda de documentación | QYR-0057 (tres fichas con un `Estado` que no es un estado) |
 

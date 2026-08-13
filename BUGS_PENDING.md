@@ -2298,7 +2298,11 @@
      el mero hecho de existir**
   2. `R4` §4 línea 92 cita, como ejemplo de P1, el identificador del incidente del
      ledger ilegible del 2026-08-11. Esa ficha no está en el ledger: `R4` §1 cuenta
-     que la reparación lo dejó en 116 fichas, y en esa consolidación se perdió
+     que la reparación lo dejó en 116 fichas, y en esa consolidación se perdió.
+     **Corregido en QYR-0302, y esta descripción se quedó corta**: la ficha del
+     incidente no se perdió, se renumeró. El identificador citado cayó dentro del
+     bloque mecánico 0115–0288 que la consolidación colapsó, y el propio incidente
+     quedó descrito en `QYR-0289`, P1, del 2026-08-11. La cita estaba a uno
 - Y un tercer desajuste, independiente: `R4` §3 afirma cuál es el siguiente
   identificador libre, pero el comando que el propio `R4` da para comprobarlo
   devuelve uno menos. Empezar donde ordena el encargo deja ese número intermedio
@@ -2356,3 +2360,37 @@
   nada más; `cargo tree -p qyro_transfer -e normal` pone `qyro_crypto` a
   profundidad 1; `cargo tree -p qyro_fs -e normal` lo alcanza vía `qyro_transfer`.
   La igualdad está en `rust/crates/qyro_ffi/tests/c_abi_contract.rs:149-157`
+
+## QYR-0302 — `R4` §4 citaba un identificador que la consolidación de 5D renumeró
+
+- Plataforma: cualquiera; `docs/fase-implementacion/R4-COMO-REGISTRAR-BUGS.md` §4
+- Severidad: P2
+- Esperado: todo identificador escrito en un `.md` resuelve a una ficha del ledger;
+  es la regla que `check_docs_consistency` impone, y existe para que un ejemplo se
+  pueda ir a mirar
+- Actual: `R4` §4 ofrecía como ejemplo de P1 el número `0288`, glosado «el ledger
+  ilegible», y ese número no está en el ledger. Era la única cita irresoluble del
+  árbol, y por sí sola dejaba la comprobación en exit 1
+- Causa: no fue una ficha perdida, que es lo que supuso QYR-0300. El incidente del
+  ledger ilegible es real y está registrado, pero **la consolidación del sprint 5D
+  lo renumeró**: `QYR-0289` cuenta que 173 fichas mecánicas de `cargo-mutants`
+  habían dejado el ledger en 262 entradas, y que se sustituyeron por diez familias
+  humanas. Esas diez son QYR-0289—QYR-0298, y el bloque QYR-0115—QYR-0288 que
+  reemplazaron ya no existe. La cita apuntaba al número viejo, a uno del nuevo
+- Resolución: `R4` §4 cita ahora `QYR-0289`. Es el mismo incidente —el ledger que
+  dejó de ser legible por un volcado de herramienta—, es P1, y lleva la misma fecha
+  2026-08-11 que QYR-0300 le atribuía. No se inventó ninguna ficha, no se tocó
+  ninguna ajena y no se debilitó el comprobador: la cita pasó a resolver
+- Nota, porque es la cuarta vez: el primer intento de escribir esta ficha volvió a
+  dejar la comprobación en rojo, porque **la ficha nombraba el número al explicarlo**
+  y el comprobador no distingue citar un hallazgo de escribir sobre uno. Ya pasó en
+  QYR-0076, QYR-0092 y QYR-0300. Aquí se resolvió sin tocar el comprobador, usando
+  la forma de rango que él ya exime —`scripts/check_docs_consistency.sh:267-269`—,
+  que además es la descripción exacta: lo que se colapsó fue un rango
+- Estado: cerrado
+- Fecha: 2026-08-13
+- Evidencia: `bash scripts/check_docs_consistency.sh` daba exit 1 con un único
+  BLOCKER, «is cited but has no entry», y da exit 0 tras el cambio. Buscando ese
+  número en el árbol del commit `6de0af7` aparece ya en `R4` §4, antes de mi primer
+  commit, así que la condición era heredada. `grep -oE '^## QYR-[0-9]{4}'
+  BUGS_PENDING.md` da 118 identificadores y el salto va de `0114` a `0289`
