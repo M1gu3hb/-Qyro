@@ -2317,3 +2317,42 @@
 - Evidencia: `bash scripts/check_docs_consistency.sh` sobre `90bb5d0` devuelve
   exit 1. Sobre `6de0af7`, antes de que yo tocara nada, devolvía cinco BLOCKER, así
   que es condición heredada y no introducida
+
+## QYR-0301 — La fase 01 describe mal dos de sus tres salidas para la guarda del FFI
+
+- Plataforma: cualquiera; `qyro_ffi`, `docs/fase-implementacion/FASE-01-FFI-DEL-MOTOR.md` §4
+- Severidad: P2
+- Esperado: las tres salidas que §4 ofrece para conectar el FFI al motor están
+  descritas de forma que se puedan comparar, y la que §4 recomienda conserva la
+  guarda de cierre transitivo «intacta», como dice
+- Actual: **dos de las tres descripciones son falsas**, y la falsedad va justo en
+  la dirección que empuja hacia la salida recomendada:
+  - La guarda no es una lista de prohibidos: es una **igualdad exacta**. El test
+    `the_ffi_dependency_closure_holds_no_crypto` afirma
+    `assert_eq!(closure, {"qyro_core", "qyro_ffi"})`. Por tanto **cualquier**
+    dependencia nueva de `qyro_ffi` la rompe, se llame como se llame
+  - La salida (b), la recomendada, dice «La guarda original se conserva intacta».
+    **No puede.** Un crate intermedio sigue siendo una arista: en cuanto
+    `qyro_ffi` dependa de él, el cierre deja de ser el conjunto de dos elementos
+    que la igualdad exige. Un límite de crate **no detiene** la alcanzabilidad
+    transitiva de Cargo, que es exactamente lo que el test consulta
+  - La salida (c) dice que dejando la red fuera el problema no aparece. **También
+    aparece**: `qyro_transfer` —el motor— depende de `qyro_crypto`
+    **directamente**, y `qyro_fs` —el disco— lo alcanza a través de él. Medido:
+    `cargo tree -p qyro_transfer -e normal` lo pone a profundidad 1
+- Y la premisa de §4, «conectar `qyro_ffi` a `qyro_net` rompe esa guarda», es
+  cierta pero incompleta: la rompe conectar `qyro_ffi` a **cualquier cosa por
+  encima de `qyro_core`**, porque la cripto está debajo del motor y del disco
+  también, no sólo debajo de la red
+- Consecuencia práctica: **no existe ninguna salida que conserve la guarda tal
+  cual**. La elección real no es «cuál conserva la propiedad» sino «en qué forma
+  se reescribe la guarda», y eso cambia lo que hay que argumentar en la ADR-0032
+- Resolución: la ADR-0032 elige con las descripciones corregidas y deja escrito
+  qué se pierde. Esta ficha existe para que quede constancia de que el plan se
+  corrigió antes de decidir, no después
+- Estado: abierto
+- Fecha: 2026-08-12
+- Evidencia: `cargo tree -p qyro_ffi -e normal` da hoy `qyro_ffi -> qyro_core` y
+  nada más; `cargo tree -p qyro_transfer -e normal` pone `qyro_crypto` a
+  profundidad 1; `cargo tree -p qyro_fs -e normal` lo alcanza vía `qyro_transfer`.
+  La igualdad está en `rust/crates/qyro_ffi/tests/c_abi_contract.rs:149-157`
