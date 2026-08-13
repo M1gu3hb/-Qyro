@@ -162,6 +162,61 @@ porque una cita en un `.md` no condiciona el diseño ni el código del FFI. **La
 puerta de fase no podrá declararse pasada mientras siga así**, y eso también queda
 escrito.
 
+**Cerrada el 2026-08-13, en el paso 2.** La salvedad ya no existe: la cita
+resuelve y las dos comprobaciones dan exit 0. Ficha QYR-0302, commit `fb4ecb9`.
+Lo que había supuesto la salvedad —que hacía falta un identificador fuera de mi
+rango— era falso, y lo dice la propia ficha: el incidente no se había perdido en
+la consolidación de 5D, se había **renumerado**. La cita estaba a uno.
+
+---
+
+### Puerta del Paso 2 — 2026-08-13 — **PASADA**
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all -- --check` | PASS — exit 0. **Primero dio exit 1**; ver abajo |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0 |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — 537 / 0 / 2, los mismos dos generadores |
+| 4 | Barrido de mutación del paso | **Diferido al paso 5**, que es donde `FASE-01` §6 lo pone. Y hoy mediría poco: los seis tests de `qyro_session` son guardas estructurales, no de comportamiento (§15) |
+| 5 | Lectura de aserciones | PASS — leídas las de los seis tests de `c_abi_contract.rs`. Ninguna compara una llamada consigo misma; el guard 2 lleva además dos controles positivos, sin los cuales un comprobador que lo rechazara todo pasaría sus dos negativos |
+| 6 | Lectura de contadores | PASS — dos números y su comando: cierre 51 (`CLOSURE`) y conjunto directo 2, ambos de `cargo metadata`, no del manifiesto |
+| 7 | **La medida se ve fallar** | PASS — es el centro de este paso. Detalle abajo |
+| 8 | Lectura de nombres de test | PASS — los seis dicen lo que comprueban; `a_direct_crypto_edge_is_invisible_here_and_visible_to_guard_one` nombra la ceguera en vez de esconderla |
+| 9 | `git diff --name-only 1023f86..HEAD` | PASS — catorce archivos, ninguno de Codex, ninguno de `main` (§13) |
+| 10 | El ledger sigue legible | PASS — 119 fichas, 26 abiertas. El paso añadió **una**, cerrada |
+| 11 | `check_docs_consistency` (bash y pwsh) | PASS — exit 0 **las dos**. Primera vez en esta rama desde que llegaron los documentos del plan |
+| 12 | Resultado escrito antes del paso siguiente | PASS — esto |
+
+**Comprobación 1, dicha porque falló.** `cargo fmt --all -- --check` devolvió
+exit 1 sobre dos cadenas de `qyro_session/src/session.rs`. No se descubrió leyendo
+la salida —que era un diff, no la palabra «error»— sino leyendo `$?`, que es
+exactamente la lección que QYR-0083 dejó escrita en `R2` §1. Se aplicó
+`cargo fmt --all` y se reverificó por exit code.
+
+**Comprobación 7 — la medida se ve fallar, y con qué.** La puerta del paso 2 pide
+una cosa concreta: *la prueba de cierre transitivo, sea cual sea su forma nueva,
+tiene que fallar cuando la violas a propósito*. Se violó de verdad, con la línea
+real en el manifiesto, no con metadatos falsificados:
+
+1. Con `qyro_crypto = { path = "../qyro_crypto" }` añadido a `qyro_ffi/Cargo.toml`:
+   `the_ffi_names_exactly_two_crates` **FALLA**, exit 101, y el diff que imprime es
+   exactamente `{"qyro_core", "qyro_crypto", "qyro_session"}` contra
+   `{"qyro_core", "qyro_session"}`.
+2. En esa **misma** ejecución, `the_dependency_closure_matches_its_changelog`
+   **pasa**. Es la confirmación de ADR-0032 §1 contra el resolvedor real, y dice
+   algo incómodo que conviene no suavizar: **la guarda que este paso sustituyó
+   habría seguido en verde por encima de la arista que filtra la clave.**
+3. Y la propiedad que sostiene toda la guarda, medida en vez de argumentada. Con
+   una función sonda idéntica, `fn _probe() -> Option<qyro_crypto::DeviceIdentity>`:
+   con la arista, `cargo build -p qyro_ffi` da exit 0; sin la arista, exit 101 con
+   `error[E0433]: failed to resolve: use of unresolved module or unlinked crate
+   qyro_crypto`. **`qyro_crypto` está en el cierre en los dos casos.** Alcanzable y
+   no nombrable: eso es la frontera.
+
+El manifiesto y la sonda se revirtieron. `git diff --stat` contra HEAD sobre
+`rust/crates/qyro_ffi/src/lib.rs` es vacío: el archivo quedó idéntico al commit,
+byte a byte, no «equivalente».
+
 ---
 
 ## 10. Tabla de mutación
@@ -176,6 +231,18 @@ No aplica al paso 1: no añade código de producción. El barrido con
 **527 passed, 0 failed, 2 ignored antes y después**, en Linux, con
 `cargo test --workspace`. El paso 1 no añade tests: congela una decisión.
 
+**Paso 2: 527 → 537**, en Linux, misma orden. La cuenta, que suma exacta: **+6**
+de `qyro_session`, todos guardas estructurales, y **+4** de `c_abi_contract.rs`,
+que pasa de dos tests a seis. Los 2 ignorados son los mismos dos generadores de
+vectores de siempre; **cero ignorados nuevos**.
+
+Y lo que esos 537 **no** cubren: los seis de `qyro_session` son de estructura
+—que los archivos estén listados, que cada variante de error tenga sitio de
+construcción, que ninguna ruta de producción pueda entrar en pánico—. **Ninguno
+abre una sesión.** `open_sender`, `open_receiver`, `step`, `progress`, `cancel` y
+`finish` no los ejerce todavía nada. Eso es el paso 4, y por eso el barrido de
+mutación es el paso 5 y no éste.
+
 ---
 
 ## 12. Delta de dependencias
@@ -184,6 +251,19 @@ No aplica al paso 1: no añade código de producción. El barrido con
 `Cargo.lock` no aparece en el diff del paso (§9, comprobación 9), así que el diff
 es vacío. Cero dependencias externas.
 
+**Paso 2: 63 → 64.** El paquete que entra es `qyro_session`, **de primera parte**,
+un miembro nuevo del workspace. Misma orden:
+`git show 1023f86:Cargo.lock | grep -c '^\[\[package\]\]'` da 63 y sobre el árbol
+de hoy da 64. **Cero dependencias externas de Rust añadidas**, que es lo que la
+regla prohíbe; el número sube porque el workspace tiene un crate más, no porque
+haya llegado nada de fuera.
+
+Lo que sí cambió de tamaño es lo que queda **enlazado bajo el FFI**: de 2 crates a
+51. Ninguno es nuevo en el repositorio — todos estaban ya bajo `qyro_transfer` y
+`qyro_net` — pero antes no estaban bajo `qyro_ffi`, y ahora sí. La constante
+`CLOSURE` de `c_abi_contract.rs` los fija por nombre, declarada como registro de
+cambios y no como guarda, por el motivo que ADR-0032 §3.3 mide.
+
 ---
 
 ## 13. Archivos tocados
@@ -191,12 +271,40 @@ es vacío. Cero dependencias externas.
 Base de la fase: `1023f86`.
 
 ```
-$ git diff --name-only 1023f86..HEAD
+$ git diff --name-only 1023f86..HEAD    # tras el paso 1
 BUGS_PENDING.md
 docs/adr/ADR-0032-engine-ffi.md
 ```
 
-Ninguno es de Codex.
+Tras el paso 2, catorce:
+
+```
+$ git diff --name-only 1023f86..HEAD
+BUGS_PENDING.md
+CHANGELOG.md
+Cargo.lock
+Cargo.toml
+NEXT_STEPS.md
+STATUS.md
+.github/scripts/android_crypto_smoke.sh
+docs/adr/ADR-0032-engine-ffi.md
+docs/fase-implementacion/R4-COMO-REGISTRAR-BUGS.md
+docs/reports/fase-01-ffi-del-motor.md
+rust/crates/qyro_ffi/Cargo.toml
+rust/crates/qyro_ffi/tests/c_abi_contract.rs
+rust/crates/qyro_session/**  (5 archivos)
+rust/tools/qyro_crypto_smoke/src/lib.rs
+```
+
+**Ninguno es de Codex** y ninguno es de `main`. El único ajeno es
+`R4-COMO-REGISTRAR-BUGS.md`, del supervisor, y el cambio es **un identificador**:
+la cita de §4 pasa a apuntar a la ficha que sí existe (QYR-0302). Se hace porque
+dejar la rama en rojo está prohibido y porque la evidencia identifica el referente
+sin ambigüedad; queda dicho aquí para que se vea, no escondido en un diff.
+
+`rust/crates/qyro_ffi/src/lib.rs` **no** está en la lista, y eso es deliberado:
+se le añadió una sonda para la comprobación 7 y se le quitó. `git diff` sobre él
+es vacío.
 
 ---
 
@@ -209,14 +317,34 @@ los cancelados, en la puerta de fase.
 
 ## 15. Qué NO debe leerse como progreso
 
+Tras el paso 1 se escribió esto, y tres de las cuatro primeras han caducado. Se
+dejan, con lo que hoy es cierto al lado, porque un informe que se reescribe para
+parecer coherente deja de ser un registro:
+
 - **No existe una sola función `extern "C"` nueva.** `qyro_ffi` sigue exponiendo
   exactamente dos, y sigue dependiendo sólo de `qyro_core`. **Dart no puede pedir
   nada.** Lo que hay es una decisión escrita, no una superficie.
-- **`qyro_session` no existe.** Es el paso 2.
+  → *Tras el paso 2: la segunda mitad ya no vale, `qyro_ffi` depende de
+  `qyro_session`. **La primera sigue igual de cierta**: siguen siendo exactamente
+  dos funciones, `qyro_protocol_version_ptr` y `qyro_protocol_version_len`, y
+  ninguna abre una sesión. Dart sigue sin poder pedir nada.*
+- **`qyro_session` no existe.** Es el paso 2. → *Ya existe: cinco archivos, seis
+  guardas. Ninguna de las seis lo **ejecuta**.*
 - **La guarda nueva no existe y no se ha visto fallar.** Hasta que se vea fallar
   no es una guarda, es un comentario — lo dice el propio documento de fase §7.3.
+  → *Se ha visto fallar, con la arista real en el manifiesto y con `E0433` en el
+  compilador. §9, comprobación 7.*
 - **La propiedad más antigua del proyecto sigue intacta hoy**, y la ADR decide que
   deje de estarlo en el paso 2. Que esté decidido no es que esté hecho.
+  → *Hecho está. **La propiedad murió en este paso**: la pila criptográfica está
+  enlazada en el `cdylib` que Dart carga. Lo que la sustituye es más pequeño y hay
+  que decirlo con esas palabras — antes lo decidía el compilador sobre
+  alcanzabilidad, ahora lo decide una superficie pública que revisan personas, y
+  un test transcribe. Trece archivos afirmaban lo viejo; QYR-0303.*
+- **Y una nueva, que el paso 2 crea:** `qyro_session` compila y está guardado, pero
+  **no está probado**. Sus seis tests miran la forma del código, no su conducta.
+  Que el workspace esté en 537 verdes no dice nada sobre si una sesión transfiere
+  un archivo.
 - Los botones siguen `onPressed: null`.
 - **Nada se ha probado en hardware físico.** Dos procesos en `127.0.0.1` no son dos
   aparatos en una Wi-Fi.
@@ -228,15 +356,53 @@ los cancelados, en la puerta de fase.
 | ID | Sev | Título | Al empezar | Al cerrar el paso |
 |---|---|---|---|---|
 | QYR-0301 | P2 | La fase 01 describe mal dos de sus tres salidas para la guarda del FFI | no existía | abierto |
+| QYR-0302 | P2 | `R4` §4 citaba un identificador que la consolidación de 5D renumeró | no existía | **cerrado** |
+| QYR-0303 | P2 | Trece archivos afirmaban una propiedad que la fase 01 derogó | no existía | abierto |
+| QYR-0304 | **P1** | El motor deshace el zeroize del texto claro recibido en la línea siguiente | no existía | abierto |
+| QYR-0305 | P2 | Nada impide que un perfil ponga `panic = "abort"` y anule el `catch_unwind` | no existía | abierto |
+| QYR-0306 | P2 | `qyro_ffi` es la única excepción al mínimo de guardas | no existía | abierto |
+| QYR-0078 | P1 | `qyro_net` no se ejecuta ni se compila en Windows | abierto | abierto, **media contestada** |
 
-**Balance: 25 abiertas antes del paso, 26 después.** Sube una.
+**Balance: 25 abiertas antes del paso 1, 26 tras el paso 1, 30 tras el paso 2.**
+Sube cuatro: las cinco nuevas menos QYR-0302, que nace cerrada.
+
+**El P1 es QYR-0304 y merece leerse antes que el resto de este informe.** No lo
+introduce esta fase — está en `qyro_transfer` desde 5A — pero lo encuentra, y es de
+la peor clase: `into_zeroizing_payload().to_vec()`. Se llama al accesor que
+protege y se deshace la protección en la misma expresión. El doc-comment del
+método, tres archivos más allá, describe exactamente la conducta que esa línea
+impide. Justificación del P1 en la ficha, con por qué no es P0 y por qué no es P2.
+
+**QYR-0078, contestada a medias y no cerrada.** El trabajo `rust workspace
+(windows-latest)` existe y su paso de clippy pasó, así que «`qyro_net` no se
+compila siquiera en Windows» es falso. El paso `cargo test --workspace` seguía en
+curso al consultarlo, así que «no se ejecuta» **no** está contestado. No se cierra:
+`R4` §5 pide evidencia ejecutada, y un paso sin terminar no es un verde. Es
+literalmente la regla de no convertir «compiló» en «funciona».
 
 **Documentación que queda desfasada por ADR-0032 §9:** las afirmaciones de que el
 FFI no puede alcanzar la cripto dejarán de ser ciertas en el paso 2. El análisis
 contó **trece archivos** que lo afirman. Corregirlos es parte del paso 2, no antes:
 mientras el código no cambie, siguen siendo ciertas.
 
-**Qué necesita saber el paso 2:**
+**Qué necesita saber el paso 3** (tabla de handles):
+
+- La frontera está puesta y comprobada. Lo que el paso 3 no puede hacer sin
+  romperla es nombrar `qyro_crypto` en `qyro_ffi`, y no hará falta: la tabla de
+  handles guarda `qyro_session::Session`, que no expone nada de la pila cripto.
+- ADR-0032 §4 congela el handle como `generation||slot` en un `u64`, con el 0
+  inválido por construcción. Los tests que el paso 3 debe traer están nombrados en
+  `FASE-01` §6: doble cierre, handle inválido, handle de otra sesión, handle cero,
+  y un pánico dentro de la frontera C convertido en código de error.
+- **QYR-0305 se activa en el paso 4, no antes.** Cuando exista el primer
+  `catch_unwind` habrá código que confía en que `panic = "abort"` no está puesto, y
+  la guarda tiene que llegar con él.
+- **QYR-0306 también.** `qyro_ffi` es hoy la única excepción al mínimo de guardas, y
+  el paso 4 lo lleva de dos funciones a ocho. La exención se vacía ahí.
+- `qyro_session` no tiene un solo test de conducta. Si el paso 3 añade la tabla de
+  handles sin ejercer una sesión, el barrido del paso 5 va a tener poco que matar.
+
+**Qué necesitaba saber el paso 2** (cumplido; se deja como registro):
 
 - La estructura elegida es (b). El crate se llama `qyro_session` y es lo único que
   `qyro_ffi` ve.

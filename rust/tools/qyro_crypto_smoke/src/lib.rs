@@ -2,9 +2,15 @@
 //!
 //! Four workflows were green before this crate existed and none of them proved
 //! anything about `qyro_crypto` away from x86_64 Linux. They all build and run
-//! `qyro_ffi`, which deliberately cannot reach `qyro_crypto`, so a green Android
-//! job was evidence about a two-symbol ABI and nothing else. See
-//! `docs/adr/ADR-0023-crypto-platform-test-harness.md`.
+//! `qyro_ffi`, and a green Android job was evidence about a two-symbol ABI and
+//! nothing else. See `docs/adr/ADR-0023-crypto-platform-test-harness.md`.
+//!
+//! When this was written the reason was that `qyro_ffi` deliberately could not
+//! reach `qyro_crypto`. Phase 01 ended that: the engine went behind the FFI, so
+//! the cryptographic stack is linked into the `cdylib` Dart loads and the
+//! boundary is nameability, not reachability (ADR-0032 §9). The conclusion is
+//! unchanged and the need for this crate is larger — loading a library is still
+//! not exercising the AEAD on the platform in question.
 //!
 //! # What it runs
 //!

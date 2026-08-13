@@ -293,7 +293,8 @@ auditado son miembros de este workspace.
 - `c_abi_contract.rs` pide el cierre transitivo a `cargo metadata` en vez de
   partir `Cargo.toml` por la cadena `"[dependencies]"`. Una tabla
   `[target.'cfg(target_os = "android")'.dependencies]` es otra sección y no se
-  miraba nunca (QYR-0030).
+  miraba nunca (QYR-0030). *(La igualdad sobre el cierre quedó superada en la
+  fase 01; `cargo metadata` como fuente, no. ADR-0032 §9.)*
 - `handshake/vectors.rs` recalcula ambos transcripts y los MAC desde las
   primitivas —SHA-256 y HMAC escrito desde RFC 2104— en vez de llamar a las
   funciones que produjeron el archivo, y fija `Schedule::derive` contra los

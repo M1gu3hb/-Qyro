@@ -177,6 +177,9 @@ a su propio borrado.
   eliminados y catorce indexaciones sin comprobar con ellos (QYR-0033).
 - **La frontera FFI se comprueba sobre el cierre transitivo real**, con
   `cargo metadata` en vez de partiendo el manifest por una cadena (QYR-0030).
+  **Superado en la fase 01:** el sujeto de la guarda ya no es el cierre sino el
+  conjunto de dependencias directas. `cargo metadata` sigue siendo la fuente, que
+  es lo que QYR-0030 arregló y sigue en pie. ADR-0032 §9.
 - Cuatro controles de la ruta de decode con prueba propia (QYR-0032), nombres de
   dispositivo con superíndice rechazados (QYR-0029), variantes de error muertas
   eliminadas con guarda que impide su vuelta (QYR-0035), decisión sobre

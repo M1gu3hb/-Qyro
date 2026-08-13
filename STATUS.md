@@ -236,7 +236,9 @@ cuatro quedan abiertos y registrados, no omitidos.
   extendido a `handshake/`, `identity.rs`, `signature.rs` y `fingerprint.rs`,
   y catorce indexaciones sin comprobar eliminadas
 - Frontera FFI comprobada sobre el cierre transitivo real (`cargo metadata`):
-  IMPLEMENTED. Igualdad exacta con `{qyro_ffi, qyro_core}`
+  IMPLEMENTED. Igualdad exacta con `{qyro_ffi, qyro_core}`. **Superado en la
+  fase 01:** esa igualdad ya no se cumple ni puede cumplirse, y la guarda pasó a
+  ser el conjunto de dependencias *directas*. ADR-0032 §9
 - Variantes de `HandshakeError` sin sitio de construcción: ELIMINADAS, con
   guarda que impide que vuelvan
 - Decisión sobre codificaciones X25519 no canónicas (ADR-0021 enmendado):
@@ -917,10 +919,14 @@ Lo que **no** existe, y no debe leerse como progreso:
 - **No había filesystem en 5A**: la fuente y el destino eran memoria. El sprint
   5B.1 puso disco detrás de esas dos costuras **sin cambiarlas**; ver la sección
   de 5B.1 más arriba.
-- **Nada del producto llama al motor.** `qyro_ffi` no depende de `qyro_crypto` ni
-  de `qyro_transfer`, y una prueba de cierre transitivo lo mantiene así. Los
-  botones Enviar y Recibir siguen deshabilitados y el README sigue diciendo que
-  Qyro no transfiere archivos.
+- **Nada del producto llama al motor.** Los botones Enviar y Recibir siguen
+  deshabilitados y el README sigue diciendo que Qyro no transfiere archivos.
+  **La razón cambió en la fase 01 y es más débil que antes:** `qyro_ffi` ya
+  depende de `qyro_transfer` y de `qyro_crypto`, a través de `qyro_session`, y la
+  prueba de cierre transitivo que lo impedía ya no existe con esa forma. Lo que
+  sostiene la frase hoy es que `qyro_ffi` sigue exponiendo dos funciones y
+  ninguna de ellas abre una sesión: Dart no puede pedir nada porque no hay qué
+  pedir, no porque el camino no exista. Ver ADR-0032 §9.
 - **No hay reanudación entre sesiones.** La pausa de 5A es dentro de una sesión
   viva; sobrevivir al cierre del proceso necesita disco.
 - **El tamaño de chunk y la ventana no están medidos.** Son cotas argumentadas

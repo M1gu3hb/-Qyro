@@ -6,7 +6,13 @@
 # kind of thing that breaks silently on quoting.
 #
 # Pushes an ordinary Android executable rather than a Flutter integration test:
-# the Dart test proves qyro_ffi loads, and qyro_ffi cannot reach qyro_crypto.
+# the Dart test proves qyro_ffi loads, and that is all it proves.
+#
+# Until phase 01 the reason was stronger -- qyro_ffi could not reach qyro_crypto
+# at all. That stopped being true when the engine went behind the FFI: the crypto
+# stack is now linked into the cdylib Dart loads, bounded by nameability rather
+# than reachability (ADR-0032 §9). This harness matters more now, not less: a
+# green Dart load still exercises two symbols, and nothing else here.
 set -euo pipefail
 
 binary="target/x86_64-linux-android/debug/qyro_crypto_smoke"

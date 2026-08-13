@@ -1520,9 +1520,26 @@
   `WouldBlock` frente a `TimedOut`, `shutdown` sobre un `read` bloqueado,
   `ConnectionReset` frente a `ConnectionAborted`, el `bind` de un puerto
 - QYR-0079 es la demostración de que no es teórico
-- Resolución: pendiente, Fase 7 del sprint 6A, ya autorizada
+- Actualización 2026-08-13, **media ficha contestada**: el trabajo `rust-workspace
+  (windows-latest)` existe desde `26af47a` —llegó con una de las fusiones, no con
+  esta rama— y corre `cargo clippy --workspace --all-targets -- -D warnings` y
+  `cargo test --workspace` sobre `windows-latest`. `qyro_net` es miembro del
+  workspace, así que queda cubierto por los dos.
+  - «**no se compila siquiera en Windows**» ya es **falso**: el paso de clippy
+    terminó en success sobre el commit `0deef00`, y `--all-targets` compila el
+    crate entero, tests incluidos
+  - «**no se ejecuta**» sigue **sin contestar con evidencia ejecutada**: en la
+    última tirada el paso `cargo test --workspace` de ese trabajo seguía
+    `in_progress` cuando se consultó. Un paso que no ha terminado no es un verde
+- Resolución: pendiente. No se cierra hasta ver ese paso en success, que es lo que
+  `R4` §5 exige. Nada de convertir «compiló en Windows» en «funciona en Windows»
 - Estado: abierto
 - Fecha: 2026-08-11
+- Evidencia: `.github/workflows/ci.yml:65-77`; trabajo `rust workspace
+  (windows-latest)` de la tirada 31739146084, clippy success a las 20:06:33Z y
+  `cargo test --workspace` aún en curso. `git merge-base --is-ancestor 26af47a
+  7729b0b3` devuelve falso, así que la última tirada verde de esta rama es
+  anterior al trabajo y no dice nada de Windows
 
 ## QYR-0079 — La rama de Windows de `is_read_timeout` no la defendía nadie
 
@@ -2394,3 +2411,118 @@
   número en el árbol del commit `6de0af7` aparece ya en `R4` §4, antes de mi primer
   commit, así que la condición era heredada. `grep -oE '^## QYR-[0-9]{4}'
   BUGS_PENDING.md` da 118 identificadores y el salto va de `0114` a `0289`
+
+## QYR-0303 — Trece archivos afirmaban una propiedad que la fase 01 derogó
+
+- Plataforma: cualquiera; documentación y dos comentarios de código
+- Severidad: P2
+- Esperado: ninguna frase del repositorio afirma que `qyro_ffi` no puede alcanzar
+  `qyro_crypto`, porque desde la fase 01 lo alcanza
+- Actual: ADR-0032 §9 avisó de que «lo que sobrevive es más pequeño que lo que trece
+  archivos de este repositorio afirman hoy». Barrido y corregidos los que son míos
+  y están vivos:
+  - `.github/scripts/android_crypto_smoke.sh` decía «qyro_ffi cannot reach
+    qyro_crypto» como motivo de empujar un binario nativo. El motivo cambió; la
+    conclusión no, y ahora el harness importa **más**
+  - `rust/tools/qyro_crypto_smoke/src/lib.rs` decía «deliberately cannot reach»
+  - `STATUS.md` §«nada del producto llama al motor» afirmaba que `qyro_ffi` no
+    depende de `qyro_crypto` ni de `qyro_transfer`. Ya depende de los dos, vía
+    `qyro_session`. La frase sigue siendo cierta por otra razón, **más débil**, y
+    así queda escrita: no hay operación que abrir una sesión
+  - `STATUS.md`, `NEXT_STEPS.md` y `CHANGELOG.md` en sus entradas de 4C.2: son
+    historia y no se reescriben, se marcan como superadas
+- Lo que **no** se tocó, y por qué:
+  - `docs/reports/5C-codex.md` línea 34 lleva la versión más rotunda de la frase
+    —«la seguridad no depende de que nadie escriba mal el código; depende de que el
+    camino no exista»— y **es un archivo de Codex**. Prohibido tocarlo. Queda aquí
+    anotado para que su dueño lo corrija
+  - `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md` es una auditoría cerrada y firmada.
+    Además cita por nombre un test que ya no existe, `the_ffi_dependency_closure_holds_no_crypto`
+  - La ficha QYR-0030 describe lo que se arregló entonces y no es mía para editarla
+- Resolución: corregidos los seis primeros; los tres últimos, anotados
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `grep -rniE 'no puede alcanzar.*cripto|cannot reach.*crypto|cierre transitivo'`
+  sobre `.md`, `.rs`, `.sh`, `.ps1`, `.yml` y `.dart`
+
+## QYR-0304 — El motor deshace el zeroize del texto claro recibido en la línea siguiente
+
+- Plataforma: todas; `rust/crates/qyro_transfer/src/session.rs:861`
+- Severidad: P1
+- Esperado: el texto claro verificado de un peer vive en contenedores que se borran
+  solos, que es lo que `docs/security/secret-lifecycle-audit.md` afirma y lo que
+  `AuthenticatedFrame` implementa con `Zeroizing<Vec<u8>>`
+- Actual: `let payload = authenticated.into_zeroizing_payload().to_vec();`. Llama al
+  accesor **que conserva** la protección y le hace `.to_vec()` acto seguido. El
+  `Zeroizing` temporal se borra al final de la sentencia; la copia no, y es la que
+  se empuja a `out` y sube al motor. Cada frame descifrado de una transferencia
+  —o sea, el contenido del archivo— queda en un `Vec<u8>` que nadie limpia
+- Causa: `into_zeroizing_payload` se escribió justo para cerrar este hueco. Su
+  propio doc-comment en `aead/mod.rs:701-706` dice que reemplaza a un
+  `into_payload` que devolvía un `Vec<u8>` pelado, y que «un motor de transferencia
+  tomará el buffer así, lo escribirá a un `.qyro-part`, y lo dejará caer — el
+  borrado ocurre sin que nadie». **Eso es exactamente lo que no ocurre.** El
+  comentario describe el diseño; la línea 861 lo revierte
+- Por qué P1 y no P0: lo expuesto es contenido de archivo, no material de clave, y
+  el archivo acaba en disco de todos modos porque es lo que el usuario pidió. Lo
+  que se pierde es la protección frente a un volcado de memoria o a swap. Por qué
+  no P2: hay un doc-comment vivo que afirma la garantía contraria, y alguien puede
+  creérselo hoy
+- Lo que haría falta para cerrarla: que el motor conserve el `Zeroizing` hasta el
+  `FileSink`, y una guarda que impida reintroducir el `.to_vec()` — la forma exacta
+  se decide al escribirla, porque una guarda que sólo prohíba la cadena literal
+  `.into_zeroizing_payload().to_vec()` se esquiva con una variable intermedia
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `grep -rn 'into_payload\|payload()' rust/crates/qyro_transfer/src/`
+  da un solo sitio, el 861. Los demás `\.payload()` de producción son de
+  `PlainFrame`, no de `AuthenticatedFrame`: `qyro_net/src/handshake.rs:360` y
+  `qyro_net/src/listener.rs:169` operan sobre `frame.as_plain()`, texto sin cifrar
+  y anterior a la autenticación
+
+## QYR-0305 — Nada impide que un perfil ponga `panic = "abort"` y anule el `catch_unwind` del ABI
+
+- Plataforma: todas; perfiles de Cargo y `qyro_ffi`
+- Severidad: P2
+- Esperado: existe una guarda que falla si algún perfil pone `panic = "abort"`
+- Actual: no existe. ADR-0032 §6 congela `catch_unwind` como lo más exterior de cada
+  función `extern "C"`, para que un pánico se convierta en código de error en vez de
+  cruzar la frontera C, que es comportamiento indefinido. `catch_unwind` **no puede
+  capturar nada** si el binario se compila con `panic = "abort"`: el proceso muere,
+  y con él la aplicación anfitriona. Hoy ningún perfil lo pone, así que la propiedad
+  se cumple por accidente y no por contrato
+- Por qué P2 y no P1: hoy la propiedad se cumple, y el `catch_unwind` que protege
+  todavía no existe —llega en el paso 4—. Sube a P1 en cuanto exista, porque
+  entonces habrá código que confía en él
+- Lo que haría falta para cerrarla: una guarda que lea los perfiles del manifiesto
+  del workspace y falle ante `panic = "abort"`, escrita en el paso 4 junto al primer
+  `catch_unwind`
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `grep -rn 'panic *= *"abort"' --include=*.toml .` no da ninguna línea, y
+  `grep -rn 'panic.*abort' --include=*.rs rust/` tampoco: ni el ajuste ni su guarda
+
+## QYR-0306 — `qyro_ffi` es la única excepción al mínimo de guardas, justo antes de ganar seis funciones `extern "C"`
+
+- Plataforma: todas; `rust/crates/qyro_identity_store/src/guards.rs:121`
+- Severidad: P2
+- Esperado: todo miembro del workspace lleva el mínimo estructural de guardas, o
+  tiene una excepción exacta con motivo y con fecha de caducidad
+- Actual: `MINIMUM_GUARD_SET_EXCEPTIONS` tiene exactamente una entrada, `qyro_ffi`,
+  con el motivo «reserved to the claude/qyro-net-6a branch; its C ABI has dedicated
+  contract tests». El comentario que la acompaña dice que las entradas **caducan en
+  cuanto esos miembros existan aquí**, para que una fusión mire su guarda real en
+  vez de heredar una exención escrita antes que los archivos. `qyro_ffi` existe en
+  esta rama, así que la condición de caducidad ya se cumplió
+- Consecuencia: el crate exento es precisamente el que en el paso 4 pasa de dos
+  funciones a ocho, y el único del workspace que cruza a C. Es el peor sitio del
+  árbol para no tener la guarda de pánico y la de sitios de construcción
+- Nota: `qyro_session`, que se añadió como miembro en este paso, **sí** lleva el
+  mínimo y no necesitó excepción. La comprobación pasa sin tocar la lista
+- Lo que haría falta para cerrarla: darle a `qyro_ffi` el mínimo estructural y
+  vaciar la lista, en el paso 4, cuando exista el código que la guarda debe leer
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: `cargo test -p qyro_identity_store every_workspace_crate_has_the_minimum`
+  pasa con `qyro_session` ya como miembro; la lista tiene longitud 1 y el tipo lo
+  fija, `[(&str, &str); 1]`
