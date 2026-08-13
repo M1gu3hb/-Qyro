@@ -42,8 +42,8 @@ fn every_corpus_input_is_handled_without_panicking() {
                 if decoder.push(chunk).is_err() {
                     break;
                 }
-                let mut drained = true;
-                while drained {
+                let drain_limit = data.len() / HEADER_LEN + 1;
+                for attempt in 0..drain_limit {
                     match decoder.next_frame() {
                         Ok(Some(DecodedFrame::Message(frame))) => {
                             assert!(
@@ -64,13 +64,18 @@ fn every_corpus_input_is_handled_without_panicking() {
                         // A sealed frame keeps its ciphertext; no corpus seed is
                         // sealed today, but the arm must exist.
                         Ok(Some(DecodedFrame::Unsupported(_) | DecodedFrame::Encrypted(_))) => {}
-                        Ok(None) => drained = false,
+                        Ok(None) => break,
                         Err(_) => {
-                            drained = false;
                             // A framing error poisons the decoder, so stop here.
                             chunks = data[data.len()..].chunks(chunk_size);
+                            break;
                         }
                     }
+                    assert!(
+                        attempt + 1 < drain_limit,
+                        "{} did not make forward progress",
+                        path.display()
+                    );
                 }
             }
         }

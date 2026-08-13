@@ -31,6 +31,8 @@
 )]
 
 mod error;
+mod history;
+mod history_types;
 mod io;
 mod manifest_builder;
 mod resume;
@@ -42,6 +44,10 @@ mod guards;
 mod tests;
 
 pub use error::FsError;
+pub use history::{MAX_HISTORY_FILE_LEN, TransferHistory};
+pub use history_types::{
+    HistoryDirection, HistoryError, HistoryPeer, HistoryRecord, HistoryRepair, HistoryStatus,
+};
 pub use io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of};
 pub use manifest_builder::{PlannedFile, manifest_from_disk};
 pub use resume::{ItemProgress, ResumeState};

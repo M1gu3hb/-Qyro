@@ -54,7 +54,7 @@ fn every_frame_error_has_a_construction_site() {
         &PRODUCTION_FILES,
         "error.rs",
         "FrameError",
-        15,
+        16,
         &[],
     );
 }

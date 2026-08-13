@@ -85,6 +85,13 @@ cuatro quedan abiertos y registrados, no omitidos.
 
 ## Implemented
 
+- Confianza explícita de peers (ADR-0031): almacén `QYRO-KPS` versionado y
+  envuelto, huella humana de 128 bits y veredictos tipados
+  `KnownAndMatches`/`KnownAndChanged`/`New`: IMPLEMENTED como mecanismo puro,
+  sin UI ni autorización automática para un peer nuevo.
+- Historial local append-only `QYRO-HST`: IMPLEMENTED en `qyro_fs`, con CRC por
+  registro, recuperación truncando el primer tail inválido y consultas por
+  últimos N, peer y estado. No hay sincronización, base de datos ni UI.
 - Flutter runners Android, iOS y Windows: IMPLEMENTED
 - Rust qyro_core y qyro_ffi QYRO/1 mínima: IMPLEMENTED
 - Native bridge Dart→Rust con fallos tipados: IMPLEMENTED, EJECUTADO en Linux y
@@ -265,18 +272,19 @@ cuatro quedan abiertos y registrados, no omitidos.
 - Campaña **exhaustiva** de fuzzing: NOT_IMPLEMENTED. Hay una acotada, semanal,
   de dos minutos por target, en `crypto-fuzz.yml`.
 - Transporte, sockets y TLS: NOT_IMPLEMENTED
-- File transfer: NOT_IMPLEMENTED
+- Transferencia de producto por red/UI: NOT_IMPLEMENTED. El motor y el
+  filesystem local sí mueven una transferencia entre directorios.
 - Selección de archivos e integración del manifest con el filesystem:
   NOT_IMPLEMENTED. **El manifest sí existe** y está probado
   (`qyro_manifest`, ADR-0017/0019); lo que falta es elegir archivos reales y
   construirlo desde el disco.
 - LAN/discovery/manual IP: NOT_IMPLEMENTED
-- Resume: NOT_IMPLEMENTED
-- Emparejamiento y dispositivos de confianza: NOT_IMPLEMENTED. La identidad
-  existe (`DeviceIdentity`, Ed25519, ADR-0020), el handshake la autentica y desde
-  este sprint **sobrevive al cierre del proceso en Windows**; lo que falta es el
-  paso de confianza, y que sobreviva también en Android y en iOS.
-- Database/history: NOT_IMPLEMENTED
+- Reanudación por red/UI: NOT_IMPLEMENTED. Los metadatos locales de
+  `.qyro-resume` sí sobreviven entre procesos y `qyro_fs` los aplica.
+- UI y política interactiva de emparejamiento: NOT_IMPLEMENTED. El mecanismo de
+  confianza y el rechazo tipado de cambio de clave sí existen (ADR-0031).
+- Base de datos o historial sincronizado: NOT_IMPLEMENTED. El historial local
+  append-only sí existe y deliberadamente usa `Vec<T>` con iteradores.
 - Optical QR/RaptorQ: NOT_IMPLEMENTED
 - Wi-Fi Direct/Multipeer/Bluetooth transports: NOT_IMPLEMENTED
 - Share Target Android, Share Extension iOS, drag and drop Windows: NOT_IMPLEMENTED
@@ -364,16 +372,39 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
   31549905688 sobre el commit documental `5736077` terminó en success con sus
   ocho jobs.
 
+## Sprint 5D — ledger legible, confianza e historial
+
+- El ledger conserva 99 fichas y 18 abiertas. Las 188 entradas mecánicas del
+  barrido anterior se sustituyeron por diez fichas humanas QYR-0289–QYR-0298;
+  el inventario completo de 939 mutantes vive en el informe de mutación.
+- ADR-0031 y `qyro_identity_store` implementan la decisión local de confianza
+  sin bool ni TOFU silencioso. Una clave conocida que cambia se rechaza por
+  nombre y un peer nuevo se reporta como nuevo, no como confiable.
+- `qyro_fs` implementa un historial local append-only con recuperación real de
+  un registro escrito a medias. 10 000 registros ocuparon 720 012 bytes y se
+  parsearon en 72.6051 ms en Windows debug; el test de falsabilidad rechaza
+  deliberadamente 500 ms + 1 ns.
+- El barrido final sobre todo el código nuevo produjo 209 mutantes: 180 caught,
+  0 missed, 29 unviable y 0 timeout. `Cargo.lock` sigue byte-idéntico a
+  `ebdffb9` y conserva 61 paquetes.
+- Esto no añade red, descubrimiento, FFI, UI, selector de archivos ni política
+  interactiva. Ninguna parte de 5D se ha ejecutado en hardware físico.
+- Los seis workflows manuales sobre `ccc54ae` terminaron en success: CI
+  31563755263, Platform builds 31563756867, Crypto platform 31563758336,
+  Crypto fuzz 31563759613, Android runtime ABI 31563761200 e iOS runtime ABI
+  31563762494. CI ejecutó 487/0/2 tests en Linux y 494/0/2 en Windows.
+
 ## Real tests
 
-Evidencia actual: Linux en CI y Windows local, ambos con Rust 1.88.0. **El host
+Evidencia actual: Linux y Windows en CI, además de Windows local, con Rust
+1.88.0. **El host
 local no trae Flutter ni Dart**, así que todo lo que los necesita se ejecutó en
 CI y no aquí:
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
-- `cargo test --workspace`: PASS. Rama actual: **428 passed en Linux CI y 434
-  passed en Windows CI** (run 31547866384), 0 failed y 2 ignored en ambos. La base era 388/394.
+- `cargo test --workspace`: PASS. Rama actual: **487 passed en Linux CI y 494
+  passed en Windows CI** (run 31563755263), 0 failed y 2 ignored en ambos. La base era 388/394.
   El delta Windows +6 está explicado test por test: Windows añade los ocho
   `qyro_win_dpapi::tests::{a_data_blob_that_lies_does_not_round_trip,
   a_single_flipped_byte_is_a_typed_error_against_dpapi,
@@ -392,7 +423,7 @@ CI y no aquí:
   4D.1: la guarda de caminos públicos, cuatro sobre el accesor
   de semilla, dieciocho sobre el formato del blob y dos sobre el `unsafe` del
   crate de plataforma.
-- `cargo test --workspace --all-features`: PASS, **428 passed en Linux**, 0
+- `cargo test --workspace --all-features`: PASS, **487 passed en Linux**, 0
   failed, 2 ignored. `qyro_fs` declara una feature de fixture Windows; no añade
   una prueba al conjunto Linux
 - `cargo test --doc --workspace`: PASS
@@ -428,9 +459,10 @@ CI y no aquí:
   es `doctor_contract_test`, porque `doctor` reporta `BLOCKER` por Flutter y Dart
   ausentes. **No es una regresión**: es el comportamiento correcto de `doctor` en
   un entorno sin Flutter, y el contrato pasa en CI, donde Flutter existe
-- Los cuatro scripts `check_*` en **Bash y en PowerShell**: PASS los ocho. Este
-  contenedor sí trae `pwsh` 7.4.6, a diferencia del de los sprints 4C.2 y 4C.3,
-  cuyas secciones más abajo dicen lo contrario de sus propios contenedores
+- Los cuatro scripts `check_*` en **Bash y Windows PowerShell 5.1**: PASS las
+  ocho invocaciones. Dos rondas previas encontraron y corrigieron usos de
+  `Join-Path` que sólo aceptaba PowerShell Core; el contrato criptográfico
+  también se ejecutó completo bajo 5.1
 - `flutter analyze`, `flutter test`, `dart format` y el generador de branding:
   ejecutados solo en CI, run 31041949268
 
@@ -1213,26 +1245,12 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**Sprint 5B: el filesystem.** El motor mueve búferes; 5B es donde empieza a mover
-archivos. En orden:
-
-1. Selección de archivos en Android y en Windows.
-2. El manifest **construido desde disco**, leyendo por partes. Hoy se construye a
-   mano; el digest de un archivo grande no puede exigir tenerlo entero en RAM,
-   igual que el motor no lo exige.
-3. `.qyro-part`, verificación del digest al cerrar y rename atómico. El orden
-   importa: renombrar antes de verificar publica un archivo que todavía no se
-   sabe si es el que se mandó.
-4. Colisiones de ruta contra lo que ya existe en el destino.
-5. Los metadatos que hacen posible reanudar **después de cerrar el proceso**, que
-   es lo que 5A deliberadamente no hace.
-
-`ContentSource` y `ContentSink` son la costura por la que entra todo eso, y **no
-deberían cambiar**. Si cambian para acomodar el disco, estaban mal y eso es el
-hallazgo, igual que `SecretWrapper` aguantó la segunda plataforma en 4D.2a.
-
-Después: LAN Android↔Windows, UI, y entonces se retoma 4D.2 con ADR-0025 tal como
-quedó.
+**Descubrimiento LAN y conexión del producto.** El mecanismo local ya tiene
+identidad, handshake, confianza, motor, filesystem, reanudación e historial,
+pero nada los conecta a sockets, FFI o UI. El siguiente tramo debe abordar
+descubrimiento Android/Windows con entrada manual o QR de fallback, luego el
+selector de archivos y la UI de emparejamiento/transferencia. Android Keystore
+e iOS Keychain siguen siendo trabajos separados gobernados por ADR-0025.
 
 ## Provisional values
 

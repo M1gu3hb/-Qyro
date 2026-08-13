@@ -1,12 +1,15 @@
 //! Versioned, platform-backed persistence for a Qyro device identity.
 //!
-//! Specification: `docs/adr/ADR-0024-secure-identity-storage.md`.
+//! Specifications: `docs/adr/ADR-0024-secure-identity-storage.md` and
+//! `docs/adr/ADR-0031-trust-and-pairing.md`.
 //!
 //! # What exists and what does not
 //!
-//! The blob format and its refusals are implemented and tested. **One platform
-//! backend exists**: `qyro_win_dpapi`, Windows only. There is none for Android
-//! and none for iOS, so on those two platforms nothing here persists anything.
+//! The identity and known-peer blob formats and their refusals are implemented
+//! and tested. The trust decision is pure and does not make a new peer trusted
+//! automatically. **One platform backend exists**: `qyro_win_dpapi`, Windows
+//! only. There is none for Android and none for iOS, so on those two platforms
+//! nothing here persists anything.
 //!
 //! There is deliberately no in-memory backend outside `cfg(test)` — a working
 //! fake in the public API is one import away from becoming the thing a caller
@@ -33,6 +36,8 @@
 
 mod blob;
 mod error;
+mod known_peer_types;
+mod known_peers;
 
 #[cfg(test)]
 mod guards;
@@ -40,6 +45,12 @@ mod guards;
 mod tests;
 
 pub use error::StoreError;
+pub use known_peer_types::{KnownPeerStoreError, TrustVerdict};
+pub use known_peers::{
+    HUMAN_FINGERPRINT_LEN, HumanFingerprint, KnownPeer, KnownPeers, MAX_KNOWN_PEERS,
+    MAX_PEER_NAME_LEN, MAX_WRAPPED_KNOWN_PEERS_LEN, PeerCandidate, decide_trust, open_known_peers,
+    seal_known_peers,
+};
 
 use qyro_crypto::{DeviceIdentity, IdentitySecret, SEED_LEN};
 use zeroize::Zeroizing;
@@ -57,13 +68,17 @@ use zeroize::Zeroizing;
 /// than a silent one that makes every existing blob unreadable.
 pub const QYRO_IDENTITY_ENTROPY_V1: &[u8] = b"qyro.identity.store.v1";
 
-/// Wraps and unwraps a seed using whatever the platform provides.
+/// Wraps and unwraps sensitive stored bytes using whatever the platform provides.
 ///
 /// Split out from [`IdentityStore`] so the byte layout can be tested on any
 /// platform while the wrapping is only meaningful on one. Implementors do the
 /// cryptography; this crate never does.
 pub trait SecretWrapper {
     /// Protects `secret` under `entropy`.
+    ///
+    /// The input is an identity seed or an encoded known-peer body. The wrapper
+    /// treats both as opaque bytes and the caller supplies a distinct entropy
+    /// domain so one format cannot be opened as the other.
     ///
     /// # Errors
     ///

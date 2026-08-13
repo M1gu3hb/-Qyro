@@ -292,6 +292,20 @@ if (Test-Path -LiteralPath $ledger) {
             $blockers++
         }
     }
+
+    # BUGS_PENDING is an operating queue. Raw mutation inventories live in
+    # reports; this ledger keeps prioritised, human-owned families. Sixty open
+    # records is therefore a consistency failure, not merely untidy prose.
+    $openFindingLimit = 59
+    $openFindingCount = @(
+        Get-Content -LiteralPath $ledger -Encoding UTF8 |
+            Where-Object { $_ -match '^\-\s+Estado:\s+abierto(?:[;\s]|$)' }
+    ).Count
+    if ($openFindingCount -gt $openFindingLimit) {
+        Write-Status 'BLOCKER' 'Finding ledger' `
+            "$openFindingCount open findings exceed the ledger limit of $openFindingLimit"
+        $blockers++
+    }
 }
 
 # --------------------------------------------------- workflow branch triggers

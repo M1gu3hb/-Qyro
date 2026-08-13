@@ -52,6 +52,18 @@ pub enum FrameError {
         /// Largest accepted frame length.
         limit: u64,
     },
+    /// The computed frame total is shorter than the header already consumed.
+    ///
+    /// A valid [`crate::FrameHeader`] cannot produce this condition: its total
+    /// is the fixed 48-byte header plus unsigned payload and trailer lengths.
+    /// This error protects the decoder's progress invariant if that internal
+    /// contract ever changes or regresses.
+    DecoderNoProgress {
+        /// Total length computed from the parsed header.
+        declared: usize,
+        /// Bytes the decoder had to consume before computing the total.
+        already_consumed: usize,
+    },
     /// The message type is not part of this protocol version.
     ///
     /// Recoverable: lengths are validated before the type is resolved, so the
@@ -166,6 +178,13 @@ impl fmt::Display for FrameError {
             Self::FrameTooLarge { declared, limit } => {
                 write!(formatter, "frame length {declared} exceeds limit {limit}")
             }
+            Self::DecoderNoProgress {
+                declared,
+                already_consumed,
+            } => write!(
+                formatter,
+                "frame length {declared} is shorter than {already_consumed} bytes already consumed"
+            ),
             Self::UnknownMessageType { value } => {
                 write!(formatter, "unknown message type {value}")
             }

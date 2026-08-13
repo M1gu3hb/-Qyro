@@ -385,7 +385,11 @@ fn byte_by_byte_delivery_matches_a_single_delivery() {
     let mut whole = FrameDecoder::new();
     whole.push(&stream).expect("within buffer");
     let mut expected = Vec::new();
-    while let Some(frame) = whole.next_frame().expect("ok") {
+    for _ in 0..=2 {
+        let Some(frame) = whole.next_frame().expect("ok") else {
+            break;
+        };
+        assert!(expected.len() < 2, "decoding must make forward progress");
         expected.push(frame);
     }
 
@@ -393,13 +397,35 @@ fn byte_by_byte_delivery_matches_a_single_delivery() {
     let mut actual = Vec::new();
     for byte in &stream {
         incremental.push(&[*byte]).expect("within buffer");
-        while let Some(frame) = incremental.next_frame().expect("ok") {
+        for _ in 0..=2 {
+            let Some(frame) = incremental.next_frame().expect("ok") else {
+                break;
+            };
+            assert!(actual.len() < 2, "decoding must make forward progress");
             actual.push(frame);
         }
     }
 
     assert_eq!(actual, expected);
     assert_eq!(actual.len(), 2);
+}
+
+#[test]
+fn a_well_formed_header_never_declares_less_than_its_own_forty_eight_bytes() {
+    let bytes = encoded(MessageType::Heartbeat, Vec::new());
+    let header = FrameHeader::decode(&bytes[..HEADER_LEN]).expect("the header is well formed");
+
+    assert_eq!(header.total_len(), HEADER_LEN as u64);
+
+    let mut decoder = FrameDecoder::new();
+    decoder.push(&bytes).expect("one frame fits");
+    let before = decoder.buffered_len();
+    decoder
+        .next_frame()
+        .expect("the frame is well formed")
+        .expect("the complete frame is returned");
+    assert_eq!(before, HEADER_LEN);
+    assert_eq!(decoder.buffered_len(), 0, "one call consumes the frame");
 }
 
 #[test]

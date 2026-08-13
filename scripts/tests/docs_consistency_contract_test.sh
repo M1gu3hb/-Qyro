@@ -57,7 +57,8 @@ assert_fails_with() {
 valid="$(mktemp -d)"; missing="$(mktemp -d)"; stale="$(mktemp -d)"
 scripts_pending="$(mktemp -d)"; false_claim="$(mktemp -d)"
 range_refs="$(mktemp -d)"; concrete_finding="$(mktemp -d)"
-trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding"' EXIT
+at_open_limit="$(mktemp -d)"; too_many_open="$(mktemp -d)"
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$at_open_limit" "$too_many_open"' EXIT
 
 make_fixture "$valid"
 output="$(bash "$checker" --repo-root "$valid")"
@@ -94,6 +95,23 @@ missing_id='QYR-''0101'
 printf '\n%s is a concrete missing finding.\n' "$missing_id" >> "$concrete_finding/README.md"
 assert_fails_with "$concrete_finding" "$missing_id is cited but has no entry"
 
+# The ledger is an operational list, not an unbounded tool-output sink. Sixty
+# simultaneously open findings make the instrument fail its explicit ceiling.
+make_fixture "$at_open_limit"
+for index in $(seq 1 59); do
+  printf '## QYR-%04d — human-readable fixture %d\n\n- Estado: abierto\n\n' \
+    "$index" "$index" >> "$at_open_limit/BUGS_PENDING.md"
+done
+output="$(bash "$checker" --repo-root "$at_open_limit")"
+[[ "$output" == *"[OK] Documentation consistency"* ]]
+
+make_fixture "$too_many_open"
+for index in $(seq 1 60); do
+  printf '## QYR-%04d — human-readable fixture %d\n\n- Estado: abierto\n\n' \
+    "$index" "$index" >> "$too_many_open/BUGS_PENDING.md"
+done
+assert_fails_with "$too_many_open" "60 open findings exceed the ledger limit of 59"
+
 # STATUS.md drifted 58 commits behind audit/baseline-hardening without any check
 # noticing, because only the field layout was validated. These fixtures pin the
 # freshness rule: the verified commit must be reachable from HEAD and close to it.
@@ -115,7 +133,7 @@ set_verified_commit() {
 
 fresh="$(mktemp -d)"; drifted="$(mktemp -d)"
 unreachable="$(mktemp -d)"; malformed="$(mktemp -d)"
-trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$fresh" "$drifted" "$unreachable" "$malformed"' EXIT
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$at_open_limit" "$too_many_open" "$fresh" "$drifted" "$unreachable" "$malformed"' EXIT
 
 # A commit recorded one revision back is normal: STATUS cannot contain the SHA of
 # the very commit that introduces it.

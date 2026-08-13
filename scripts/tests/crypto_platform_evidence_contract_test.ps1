@@ -7,8 +7,26 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell 5.1 accepts only one child per Join-Path invocation. The
+# contract deliberately runs in the current host, so keep its fixture builder
+# compatible with both 5.1 and PowerShell Core.
+function Join-Path {
+    param(
+        [Parameter(Position = 0, Mandatory = $true)]
+        [string] $Path,
+        [Parameter(Position = 1, Mandatory = $true, ValueFromRemainingArguments = $true)]
+        [string[]] $ChildPath
+    )
+    $joined = $Path
+    foreach ($child in $ChildPath) {
+        $joined = Microsoft.PowerShell.Management\Join-Path -Path $joined -ChildPath $child
+    }
+    return $joined
+}
+
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $checker = Join-Path $repoRoot 'scripts' 'check_crypto_platform_evidence.ps1'
+$powerShellHost = (Get-Process -Id $PID).Path
 if (-not (Test-Path -LiteralPath $checker)) {
     Write-Error "Expected $checker to exist."
     exit 1
@@ -64,8 +82,15 @@ function New-Fixture {
 
 function Invoke-Checker([string] $Root) {
     $target = Join-Path $Root 'scripts' 'check_crypto_platform_evidence.ps1'
-    & pwsh -NoProfile -File $target *>&1 | Out-String | Out-Null
-    return $LASTEXITCODE
+    $savedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $powerShellHost -NoProfile -File $target *>&1 | Out-String | Out-Null
+        return $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+    }
 }
 
 function Assert-Rejects([string] $Description, [scriptblock] $Mutate) {
@@ -140,7 +165,7 @@ Assert-Rejects 'qyro_ffi builds passed off as crypto evidence' {
 }
 
 # And the real repository must pass, which is the point of the whole sprint.
-& pwsh -NoProfile -File $checker *>&1 | Out-String | Out-Null
+& $powerShellHost -NoProfile -File $checker *>&1 | Out-String | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Write-Host 'FAIL: the repository does not prove qyro_crypto on its own platforms'
     $script:failures++

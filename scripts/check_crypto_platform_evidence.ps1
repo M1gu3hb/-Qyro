@@ -99,8 +99,8 @@ else {
 # dropped first (sprint 4C.2, QYR-0031). A `[target.'cfg(...)'.dependencies]`
 # entry is still caught: it is not a comment.
 foreach ($manifest in @(
-        (Join-Path 'rust' 'crates' 'qyro_ffi' 'Cargo.toml'),
-        (Join-Path 'rust' 'crates' 'qyro_core' 'Cargo.toml'))) {
+        ([System.IO.Path]::Combine('rust', 'crates', 'qyro_ffi', 'Cargo.toml')),
+        ([System.IO.Path]::Combine('rust', 'crates', 'qyro_core', 'Cargo.toml')))) {
     $declarations = (Get-Content -LiteralPath $manifest) |
         Where-Object { $_ -notmatch '^\s*#' }
     if (($declarations -join "`n") -match 'qyro_crypto') {
