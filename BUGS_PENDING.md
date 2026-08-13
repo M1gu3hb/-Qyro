@@ -2526,3 +2526,40 @@
 - Evidencia: `cargo test -p qyro_identity_store every_workspace_crate_has_the_minimum`
   pasa con `qyro_session` ya como miembro; la lista tiene longitud 1 y el tipo lo
   fija, `[(&str, &str); 1]`
+
+## QYR-0307 — ADR-0032 §4 dice que el doble cierre *es* la comprobación de generación, y no lo es
+
+- Plataforma: todas; `rust/crates/qyro_ffi/src/handle.rs`, `docs/adr/ADR-0032-engine-ffi.md` §4
+- Severidad: P3
+- Esperado: el modelo que la ADR describe y el que el código implementa coinciden,
+  o la diferencia está escrita
+- Actual: la ADR dice «**Doble cierre = la comprobación de generación.** `close`
+  incrementa la generación y vacía la ranura; la segunda llamada ya no coincide».
+  En la implementación la segunda llamada no llega nunca a comparar generaciones:
+  la resolución hace tres comprobaciones en el orden que la propia ADR congela
+  —fuera de rango, ranura vacía, generación distinta— y una ranura recién cerrada
+  está **vacía**, así que falla en la segunda. La generación no protege el doble
+  cierre: protege la **reutilización de ranura**
+- Cómo se encontró: mutando `close` para que no incremente la generación. La
+  mutación **sobrevivió** al test `a_double_close_is_an_error_and_not_a_crash`, que
+  es exactamente el test que alguien leyendo la ADR creería que la cubre. Sí la
+  mataba `a_handle_from_another_session_...`, y encima por su aserción de
+  precondición antes que por la sustantiva
+- Por qué importa siendo P3: ningún comportamiento es incorrecto hoy —los cuatro
+  errores tipados salen bien—. Lo que falla es el mapa. Alguien que «simplifique»
+  quitando el incremento de generación leerá la ADR, verá que el doble cierre lo
+  cubre, verá ese test en verde, y habrá abierto la puerta a que un handle rancio
+  resuelva a la sesión siguiente en la misma ranura
+- Resolución: el test se reforzó para cubrir lo que su nombre promete — ahora
+  afirma que la generación avanzó tras cerrar, y con eso la mutación muere en el
+  test correcto. Queda la mitad de la ADR: la frase de §4 describe un mecanismo que
+  no es el que opera
+- Lo que haría falta para cerrarla: corregir esa frase de la ADR-0032 §4. No se
+  hace aquí porque una ADR congelada se enmienda a propósito y en su propio commit,
+  no de paso en un paso de implementación
+- Estado: abierto
+- Fecha: 2026-08-13
+- Evidencia: con `Some(_) => Slot::Empty { next_generation: live }` en `remove`,
+  `cargo test -p qyro_ffi a_double_close_is_an_error_and_not_a_crash` daba exit 0
+  antes del refuerzo y da exit 101 después, con
+  «close must advance the generation», left 1, right 2

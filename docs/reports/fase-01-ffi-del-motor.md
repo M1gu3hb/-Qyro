@@ -219,6 +219,68 @@ byte a byte, no «equivalente».
 
 ---
 
+### Puerta del Paso 3 — 2026-08-13 — **PASADA**
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all -- --check` | PASS — exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | PASS — exit 0. Primero dio 12 errores; abajo |
+| 3 | `cargo test --workspace`, sin ignorados nuevos | PASS — 547 / 0 / 2, los mismos dos |
+| 4 | Barrido de mutación del paso | PASS — cinco mutaciones dirigidas, tabla en §10. El barrido completo con `cargo-mutants` sigue siendo el paso 5 |
+| 5 | Lectura de aserciones | PASS — y produjo un hallazgo, QYR-0307: una aserción no cubría lo que su nombre prometía |
+| 6 | Lectura de contadores | **No aplica** — el paso no añade contadores |
+| 7 | **La medida se ve fallar** | PASS — las cinco. Una sobrevivió primero, y eso es el hallazgo |
+| 8 | Lectura de nombres de test | PASS — y uno estaba mal puesto; ver QYR-0307 |
+| 9 | `git diff --name-only` | PASS — `handle.rs` y `abi.rs` nuevos, `lib.rs`, `BUGS_PENDING.md`, este informe. Ninguno de Codex |
+| 10 | El ledger sigue legible | PASS — 124 fichas, 31 abiertas. El paso añadió **una** |
+| 11 | `check_docs_consistency` (bash y pwsh) | PASS — exit 0 las dos |
+| 12 | Resultado escrito antes del paso siguiente | PASS — esto |
+
+**Comprobación 2, dicha porque falló.** `cargo clippy -p qyro_ffi --all-targets`
+dio **12 errores** a la primera, de dos causas distintas y las dos reales: el
+bloque `#![deny(...)]` de módulo alcanzaba también a los `mod tests`, que usan
+`expect` a propósito; y con los módulos privados y sin llamantes de producción, la
+tabla entera se leía como código muerto. Se arregló cada una por su lado —un
+`#![allow(...)]` con motivo dentro de cada `mod tests`, y `pub mod` para las dos
+piezas, que además es lo que el paso 4 necesita— y no silenciando el lint.
+
+**Comprobación 7 — las cinco medidas, vistas fallar.** Cada control de §5.1 roto a
+propósito, y el test que debe cazarlo, ejecutado:
+
+| # | Mutación | Test dirigido | Resultado |
+|---|---|---|---|
+| H1 | Las generaciones empiezan en `0` y no en `1` | `the_handle_zero_is_refused_because_generations_start_at_one` | exit 101 |
+| H2 | `get` no compara la generación | `a_handle_from_another_session_...` | exit 101 |
+| H3 | `close` no incrementa la generación | `a_double_close_is_an_error_and_not_a_crash` | **exit 0 — SOBREVIVIÓ** |
+| H4 | Al desbordar, la ranura se recicla en vez de retirarse | `a_slot_whose_generation_would_wrap_is_retired_rather_than_reused` | exit 101 |
+| H5 | `guard` llama al cuerpo sin `catch_unwind` | `a_panic_inside_the_c_boundary_becomes_an_error_code` | exit 101 |
+
+**H3 es el hallazgo del paso, y es mío.** La mutación que borra el incremento de
+generación **sobrevivió** al test del doble cierre. El motivo está en QYR-0307: la
+ADR-0032 §4 dice que el doble cierre *es* la comprobación de generación, y no lo
+es. Una ranura recién cerrada está **vacía**, así que la resolución falla en la
+comprobación de vacío antes de mirar ninguna generación. Lo que la generación
+protege es la **reutilización de ranura**, no el doble cierre.
+
+Consecuencias, las dos escritas:
+
+1. Lanzada contra la suite entera, H3 **sí muere** — la caza
+   `a_handle_from_another_session_...`. O sea que el control está cubierto; lo que
+   estaba mal era mi puntería, el mismo error de clase que M4/QYR-0080 en 6A.
+2. Pero muere por la aserción de **precondición** de ese test, la que comprueba
+   que el escenario sigue siendo significativo, antes que por la sustantiva. Un
+   test que caza una regresión de seguridad por su andamiaje es un test que puede
+   dejar de cazarla en cuanto alguien reescriba el andamiaje.
+
+Por eso `a_double_close_is_an_error_and_not_a_crash` se reforzó para afirmar que la
+generación avanzó, que es el mecanismo que su nombre promete. Tras el refuerzo, H3
+dirigida a ese test da exit 101 con «close must advance the generation», left 1,
+right 2. **La otra mitad de QYR-0307 sigue abierta**: la frase de la ADR describe
+un mecanismo que no es el que opera, y una ADR congelada se enmienda en su propio
+commit, no de paso.
+
+---
+
 ## 10. Tabla de mutación
 
 No aplica al paso 1: no añade código de producción. El barrido con
