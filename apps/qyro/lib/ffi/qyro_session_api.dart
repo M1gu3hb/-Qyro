@@ -135,6 +135,29 @@ typedef _OpenReceiverDart = int Function(
   Pointer<Uint64>,
 );
 
+typedef _OpenSenderFdNative = Int32 Function(
+  Pointer<Uint8> address,
+  UintPtr addressLen,
+  Pointer<Uint8> names,
+  UintPtr namesLen,
+  Pointer<Int32> fds,
+  UintPtr fdCount,
+  Pointer<NativeFunction<_ProgressNative>> onProgress,
+  UintPtr context,
+  Pointer<Uint64> outHandle,
+);
+typedef _OpenSenderFdDart = int Function(
+  Pointer<Uint8>,
+  int,
+  Pointer<Uint8>,
+  int,
+  Pointer<Int32>,
+  int,
+  Pointer<NativeFunction<_ProgressNative>>,
+  int,
+  Pointer<Uint64>,
+);
+
 typedef _StepNative = Int32 Function(Uint64 handle, Pointer<Int32> outState);
 typedef _StepDart = int Function(int, Pointer<Int32>);
 
@@ -161,7 +184,8 @@ typedef _FreeDart = void Function(Pointer<Uint8>, int);
 /// The ten symbols of the boundary, looked up once.
 final class QyroSessionBindings {
   QyroSessionBindings._(DynamicLibrary library)
-      : _openSender =
+      : _library = library,
+        _openSender =
             library.lookupFunction<_OpenSenderNative, _OpenSenderDart>(
           'qyro_session_open_sender_blocking',
         ),
@@ -207,6 +231,29 @@ final class QyroSessionBindings {
 
   factory QyroSessionBindings.open(String path) =>
       QyroSessionBindings._(DynamicLibrary.open(path));
+
+  /// The descriptor-based opener, or null where it does not exist.
+  ///
+  /// ADR-0034 makes this symbol Unix-only: a descriptor is not a Windows
+  /// concept, so the Windows library does not export it at all. Looked up
+  /// lazily and reported as absent rather than crashing at construction, which
+  /// is what an eager `lookupFunction` would do on every desktop build.
+  _OpenSenderFdDart? get _openSenderFd {
+    if (_openSenderFdCached != null) return _openSenderFdCached;
+    try {
+      _openSenderFdCached =
+          _library.lookupFunction<_OpenSenderFdNative, _OpenSenderFdDart>(
+        'qyro_session_open_sender_fd_blocking',
+      );
+    } on ArgumentError {
+      return null;
+    }
+    return _openSenderFdCached;
+  }
+
+  _OpenSenderFdDart? _openSenderFdCached;
+
+  final DynamicLibrary _library;
 
   // Private because their types are private: the eight symbols are an
   // implementation detail of this file, and QyroSession -- which lives here --
@@ -338,6 +385,80 @@ final class QyroSession {
       callable?.close();
       _observers.remove(context);
       throw QyroSessionFailure(code, 'qyro_session_open_sender_blocking');
+    }
+    final handle = out.pointer.cast<Uint64>().value;
+    out.release();
+    return QyroSession._(bindings, handle, callable, context);
+  }
+
+  /// Opens a sending session over descriptors the picker already opened.
+  ///
+  /// ADR-0034, the Android path. **Ownership of every descriptor transfers on
+  /// this call**, on success and on failure alike: Rust turns each into a
+  /// `File` before it validates anything, so a rejected call still closes what
+  /// it was handed. Nothing here may close them, and nothing may use them twice.
+  ///
+  /// Throws [UnsupportedError] where the symbol does not exist, which is every
+  /// non-Unix platform, rather than failing at some later and stranger point.
+  static QyroSession sendDescriptors({
+    required QyroSessionBindings bindings,
+    required String to,
+    required List<int> descriptors,
+    required List<String> names,
+    QyroProgressCallback? onProgress,
+  }) {
+    final open = bindings._openSenderFd;
+    if (open == null) {
+      throw UnsupportedError(
+        'qyro_session_open_sender_fd_blocking is not in this library. '
+        'Descriptors are the Android path; ADR-0034 sends a path on Windows.',
+      );
+    }
+    if (descriptors.length != names.length || descriptors.isEmpty) {
+      throw ArgumentError(
+        'every descriptor needs exactly one name: '
+        '${descriptors.length} descriptors, ${names.length} names',
+      );
+    }
+
+    final address = _Borrowed.ofUtf8(bindings, to);
+    final joined = _Borrowed.ofUtf8(bindings, names.join(_pathSeparator));
+    // Four bytes each, little-endian, which is what `const int32_t *` expects on
+    // every platform this ships to.
+    final fdBytes = <int>[];
+    for (final fd in descriptors) {
+      fdBytes.addAll(
+          [fd & 0xFF, (fd >> 8) & 0xFF, (fd >> 16) & 0xFF, (fd >> 24) & 0xFF]);
+    }
+    final fds = _Borrowed.ofBytes(bindings, fdBytes);
+    final out = _Borrowed.ofBytes(bindings, List<int>.filled(8, 0));
+
+    final context = _nextContext++;
+    NativeCallable<_ProgressNative>? callable;
+    if (onProgress != null) {
+      _observers[context] = onProgress;
+      callable = NativeCallable<_ProgressNative>.listener(_dispatch);
+    }
+
+    final code = _withBorrowed([address, joined, fds], () {
+      return open(
+        address.pointer,
+        address.length,
+        joined.pointer,
+        joined.length,
+        fds.pointer.cast<Int32>(),
+        descriptors.length,
+        callable?.nativeFunction ?? nullptr,
+        context,
+        out.pointer.cast<Uint64>(),
+      );
+    });
+
+    if (code != QyroCode.ok) {
+      out.release();
+      callable?.close();
+      _observers.remove(context);
+      throw QyroSessionFailure(code, 'qyro_session_open_sender_fd_blocking');
     }
     final handle = out.pointer.cast<Uint64>().value;
     out.release();
