@@ -421,6 +421,53 @@ mod tests {
         reason = "a test that cannot fail loudly is not a test"
     )]
 
+    /// The pointer Dart hands over reaches the engine, carrying its context.
+    ///
+    /// Written because the mutation sweep replaced `observer` with `None` and
+    /// **nothing in this crate noticed**. The Dart test that would notice --
+    /// it asserts emissions arrive -- is not a Rust test, and `cargo mutants`
+    /// runs Rust. A guarantee that only a test in another language defends is a
+    /// guarantee the sweep cannot see.
+    #[test]
+    fn a_progress_pointer_becomes_an_observer_that_carries_its_context() {
+        use std::sync::Mutex as SeenLock;
+        static SEEN: SeenLock<Vec<(usize, u64, u64, u32)>> = SeenLock::new(Vec::new());
+
+        extern "C" fn record(context: usize, done: u64, total: u64, item: u32) {
+            if let Ok(mut seen) = SEEN.lock() {
+                seen.push((context, done, total, item));
+            }
+        }
+
+        if let Ok(mut seen) = SEEN.lock() {
+            seen.clear();
+        }
+
+        // ADR-0033 §2: a null pointer is "no observer", not a second code path.
+        assert!(
+            super::observer(None, 7).is_none(),
+            "a null progress pointer produced an observer"
+        );
+
+        let mut sink =
+            super::observer(Some(record), 4242).expect("a real pointer produces an observer");
+        sink(super::Progress {
+            done: 5,
+            total: 9,
+            item: 3,
+        });
+
+        let seen = SEEN.lock().expect("the recorder survived").clone();
+        // The context is asserted too, and with a value that is not a plausible
+        // accident: an implementation that passed zero, or passed the handle, or
+        // dropped the argument, fails here rather than looking right.
+        assert_eq!(
+            seen,
+            vec![(4242_usize, 5_u64, 9_u64, 3_u32)],
+            "the emission did not arrive with the four values it was given"
+        );
+    }
+
     use super::{
         QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_NULL_OUT, QYRO_OK, QYRO_STATE_COMPLETED,
         QYRO_STATE_IN_PROGRESS, QYRO_STATE_REJECTED, qyro_session_cancel, qyro_session_close,
