@@ -160,9 +160,27 @@ persona canceló», y eso es mentir en silencio.
 ninguna petición HTTP; el paquete viaja sin que nadie lo llame. Queda registrado
 en QYR-0326, no resuelto aquí.
 
-**Consecuencia local, medida en esta máquina.** Con cualquiera de las dos
-opciones, `flutter pub get` termina en **código 1** en un Windows sin Modo
-Desarrollador: el paso que crea los symlinks de plugins falla (QYR-0324).
-`.dart_tool/package_config.json` sí queda escrito, así que **`flutter test`
-sigue funcionando**; `flutter build windows` no. Clase de evidencia de todo lo
-que dependa de ver el diálogo: **ninguna en esta máquina**.
+**Consecuencia local, medida en esta máquina, y con la trampa dicha.** Con
+cualquiera de las dos opciones, `flutter pub get` termina en **código 1** en un
+Windows sin Modo Desarrollador: el paso que regenera los symlinks de plugins
+falla (QYR-0324).
+
+**La trampa:** eso sólo pasa cuando el paso *tiene* que correr. Con
+`.dart_tool/` y `.flutter-plugins-dependencies` ya al día, `flutter pub get`
+lo salta y **sale 0**. Es decir, el segundo `pub get` seguido miente sobre el
+primero. Medido así, en este orden:
+
+```
+rm -rf .dart_tool windows/flutter/ephemeral .flutter-plugins-dependencies
+flutter pub get                       # exit 1  -- symlinks
+flutter test test/localization_contract_test.dart   # exit 0
+flutter pub get                       # exit 0  -- lo salta
+```
+
+`.dart_tool/package_config.json` queda escrito aun cuando el paso falla, así que
+**`flutter test` sigue funcionando**; `flutter build windows` no. Clase de
+evidencia de todo lo que dependa de ver el diálogo: **ninguna en esta máquina**.
+
+*(La diferencia entre los dos paquetes sigue siendo real y va en el otro
+sentido: el paraguas arrastra además `file_selector_ios`, y con él el paso de
+symlinks de iOS, que en este árbol tampoco puede correr.)*
