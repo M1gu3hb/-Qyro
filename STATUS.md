@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-12T06:00:00Z
+- Updated UTC: 2026-08-13T22:40:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: d70c3962785f8079ebf857fe064d941a1f114dca
+- Verified commit: 68fa6bc3e92aee16443e6e82a799b2eb68464c4b
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
@@ -16,6 +16,38 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   tocado hardware físico ni dos máquinas distintas — dos procesos en 127.0.0.1 no
   son dos dispositivos en una Wi-Fi. La persistencia de identidad sigue
   **IMPLEMENTED sólo en Windows y NOT_IMPLEMENTED en Android y en iOS**
+
+### Fase 02 — en curso. Pasos 0, 0b y 1 cerrados
+
+**Lo que cambió y está ejecutado en Windows 10 real:**
+
+- **`qyro_session` tiene pruebas de conducta por primera vez** (QYR-0309
+  cerrada): diez, que conducen un emisor y un receptor en dos hilos por un socket
+  de loopback real y comparan el archivo byte a byte. Antes tenía seis, todas
+  estructurales, y ninguna abría un socket
+- **Una transferencia íntegra se le reportaba al emisor como `PeerUnreachable`**
+  (QYR-0316, P1, cerrada). El receptor producía su frame `IntegrityResult` y
+  `advance` salía sin escribirlo. Dart conduce ese lado en esta fase
+- **El checker de documentación estaba rojo en Windows PowerShell 5.1** desde
+  antes de la fase 01 (QYR-0311): `-Include` no filtraba y recorría 5 962
+  archivos donde declara 284. Arreglado, con un caso de contrato en las dos
+  mitades que se vio fallar
+- **ADR-0033 congelada** antes de una línea de código: el puente de progreso, con
+  su presupuesto de emisiones acotado por una constante y no por el tamaño del
+  archivo
+- `cargo test --workspace` en Windows: **581 passed, 0 failed, 2 ignored**
+
+**Lo que sigue sin existir, y no ha cambiado:**
+
+- **Ninguna transferencia ha ocurrido a través de la superficie C.** Ni en un
+  test ni en ningún sitio. `qyro_ffi` compila las seis operaciones y nadie las ha
+  recorrido hasta el final (QYR-0310)
+- **Dart no ha hecho nada real todavía.** El puente de progreso está decidido y
+  no implementado
+- Sin selector de archivos, sin descubrimiento, sin UI. **Los botones Enviar y
+  Recibir siguen `onPressed: null`**
+- **Cero pruebas en hardware físico.** Dos hilos en `127.0.0.1` no son dos
+  procesos, y dos procesos no son dos aparatos en una Wi-Fi
 
 ### Sprint 6A — `qyro_net`, hasta la Puerta 5 y la rama de Codex fusionada
 
