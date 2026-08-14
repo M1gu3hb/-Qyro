@@ -24,19 +24,18 @@
 
 ## 3. Lo siguiente, concreto y en orden
 
-1. **Verifica CI sobre `67dd8da`** — `gh run list --branch claude/qyro-net-6a`.
-   Quedó lanzado y sin conclusión; el informe de fase 04 §14 lo dice.
-2. **Barrido de mutación del paso 2**, que quedó sin correr (comprobación 4 de su
-   puerta, abierta y declarada):
-   `cargo-mutants.exe mutants --package qyro_net --file pairing.rs --test-workspace true --timeout 120`
-3. **Cierra el paso 2**: `two_processes_connected_by_a_manual_endpoint_transfer_a_file`.
+1. **Cierra el paso 2**: `two_processes_connected_by_a_manual_endpoint_transfer_a_file`.
    `qyro_net_smoke serve` ya imprime `LISTENING <puerto>` y vacía antes de
    aceptar; falta que imprima además la cadena, que `send` la acepte, y que
    **rechace por tipo si la huella autenticada no es la prometida** — ADR-0035
    §2.1. Necesita el punto 1 de §6.
-4. **Paso 3, la confianza por el FFI.** Empieza por `qyro_net`, no por el FFI.
-5. Pasos 4–6 (mdns-sd, NsdManager, NWBrowser): la fase 05 **no los necesita**. Si
+2. **Paso 3, la confianza por el FFI.** Empieza por `qyro_net`, no por el FFI.
+3. Pasos 4–6 (mdns-sd, NsdManager, NWBrowser): la fase 05 **no los necesita**. Si
    no caben, decláralos no hechos con su motivo, como ya hace el informe.
+
+*(La puerta del paso 2 pasa sus trece comprobaciones, barrido de mutación
+incluido: 27 mutantes, 20 caught, 2 missed —uno ruido, uno equivalente
+demostrado—, 5 unviable. Y CI está en verde sobre `67dd8da` y `7c83134`.)*
 
 ## 4. Números actuales (comandos, no memoria)
 

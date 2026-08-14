@@ -167,7 +167,7 @@ la puerta de la fase 03, y **la 11 se corrió sobre este commit** —
 | 1 | `cargo fmt --all --check` | **exit 0** |
 | 2 | `cargo clippy --workspace --all-targets -- -D warnings` | **exit 0** |
 | 3 | `cargo test --workspace` | **exit 0** — 611 passed, 0 failed, 2 ignored, 51 suites |
-| 4 | Barrido de mutación | **NO CORRIDO.** Es lo primero que le toca a la sesión siguiente |
+| 4 | Barrido de mutación | **Cumplido** — 27 mutantes, 20 caught, 2 missed (uno ruido, otro equivalente demostrado), 5 unviable, 0 timeout. §10 |
 | 5 | Lectura de aserciones | **Cumplido** — los dos lados difieren en las 7 pruebas nuevas |
 | 6 | Lectura de contadores | **No aplica** — sin contadores nuevos |
 | 7 | La medida se ve fallar | **Cumplido** — `a_changed_fingerprint_would_be_visible_to_that_round_trip`, y el control positivo dentro de `every_way_a_pairing_string_can_be_wrong_is_its_own_refusal` |
@@ -178,18 +178,36 @@ la puerta de la fase 03, y **la 11 se corrió sobre este commit** —
 | 12 | Escribir el resultado | este documento |
 | 13 | `cargo clippy -p qyro_net --all-targets --target aarch64-linux-android` | **exit 0** |
 
-**La comprobación 4 quedó sin correr y se dice en vez de omitirse.** El paso no
-está cerrado hasta que corra.
+**Las trece pasan.** El paso 2 queda cerrado en su mitad de Rust; lo que falta
+para cerrar el paso entero es la prueba entre dos procesos, y está en §7.
 
 ---
 
 ## 10. Tabla de mutación
 
-**Vacía. El barrido de esta fase no se ha ejecutado.** Alcance previsto cuando se
-haga: `rust/crates/qyro_net/src/pairing.rs`, con `--test-workspace true`, por el
-hallazgo de la fase 03 — un barrido `--package` subestima la cobertura de toda
-función cuyas pruebas viven aguas abajo, y `pairing_contract.rs` es un test de
-integración del propio crate, así que aquí no debería morder; se declara igual.
+**Alcance declarado:** un solo archivo, el que esta fase escribió en Rust, con la
+suite entera del workspace — por el hallazgo de la fase 03, un barrido
+`--package` subestima la cobertura de toda función cuyas pruebas viven aguas
+abajo. Lo que queda fuera: todo lo demás del workspace.
+
+```
+cargo-mutants mutants --package qyro_net --file pairing.rs --test-workspace true --timeout 120
+```
+
+| Archivo | Mutantes | caught | missed | unviable | timeout |
+|---|---|---|---|---|---|
+| `qyro_net/src/pairing.rs` | **27** | 20 | **2** | 5 | 0 |
+
+**Los dos supervivientes, en la tabla y no escondidos:**
+
+| Mutante | Familia | Veredicto |
+|---|---|---|
+| `<impl fmt::Display for PairingError>::fmt -> Ok(Default::default())` | Formateo | **Ruido** (`R3` §3). Nadie prueba el texto de un error, ni debe |
+| `replace \| with ^` en `fingerprint_from_hex` | Aritmética | **Equivalente, y demostrable.** `high` y `low` son nibbles de 0 a 15; `high << 4` ocupa los bits 4–7 y `low` los bits 0–3. **Sobre rangos de bits disjuntos `\|`, `^` y `+` dan el mismo valor para toda entrada.** No es un hueco de cobertura: no hay entrada que los distinga |
+
+**Ningún control de esta fase sobrevive a su propio borrado.** Los veinte
+`caught` incluyen los siete rechazos, el prefijo, la comprobación de longitud, el
+matcher de nibbles y las dos guardas de dirección.
 
 ---
 
@@ -242,11 +260,13 @@ rust/crates/qyro_net/tests/pairing_contract.rs
 |---|---|---|---|
 | `f153d61` | CI | 31844609972 | **success** |
 | `39f645c` | CI | 31844758207 | **success** |
-| `67dd8da` | CI | 31845134334 | lanzado; sin conclusión al escribir esto |
-| `67dd8da` | Platform builds | 31845134142 | lanzado; sin conclusión al escribir esto |
+| `67dd8da` | CI | 31845134334 | **success** |
+| `67dd8da` | Platform builds | 31845134142 | **success** |
+| `7c83134` | CI | 31845375097 | **success** |
 
-**Los dos últimos quedan sin verificar en este informe**, y eso es una obligación
-de la sesión siguiente, no una nota al pie.
+**Ningún run falló en esta fase.** Los tres commits de código y documentación de
+la fase 04 están en verde, incluido el job `rust` de Linux, que es donde corren
+las pruebas `cfg(unix)` que esta máquina no compila.
 
 ---
 
