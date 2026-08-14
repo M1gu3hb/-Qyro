@@ -580,11 +580,9 @@ que comprobar.
 ### Barrido del paso 2 — el emisor, y lo que mis propias pruebas no fijan
 
 **Alcance declarado:** `cargo mutants --package qyro_session --timeout 120`, tras
-añadir el puente de progreso. **Parcial: 46 de 62 mutantes** cuando se escribió
-esta línea; el resto y el veredicto final van abajo cuando termine. Se declara
-parcial en vez de esperar a poder contarlo redondo.
+añadir el puente de progreso.
 
-Parcial a 46/62: **26 caught, 10 missed, 1 timeout, 8 unviable.**
+**Completo: 62 mutantes — 33 caught, 16 missed, 2 timeout, 11 unviable.**
 
 **Siete de los diez supervivientes son código que acabo de escribir**, y eso es el
 hallazgo:
@@ -607,9 +605,47 @@ medida.** Para fijar la fórmula hace falta una prueba que calcule las emisiones
 esperadas *desde* la fórmula, con un tamaño a cada lado del codo de 25 MiB — que
 es donde `>` frente a `>=` cambia de rama.
 
-**No se arregla en este commit, se registra.** El código está en verde y el hueco
-está nombrado; taparlo con una aserción más sobre la misma prueba defectuosa es
-exactamente lo que `R4` §6 dice que no vale.
+**Y sí se arregló, en el commit siguiente** — pero no con otra aserción sobre la
+misma prueba, que es lo que `R4` §6 prohíbe. La aritmética es pura, así que se
+probó como aritmética: **siete pruebas unitarias sobre `Emitter`**, dentro de
+`session.rs`, que fijan el valor exacto en vez de acotarlo.
+
+| Prueba | Qué mutante mata |
+|---|---|
+| `the_step_is_the_floor_below_the_elbow_and_exactly_the_fraction_above_it` | `/` → `%` (`step_for(1 GiB) == 10_737_418`, que `%` da como 24) y `>` → `==` (un paso más allá del codo el valor es `PROGRESS_MIN_STEP + 1`, no el suelo) |
+| `an_observer_hears_nothing_until_the_total_is_known` | Los dos `> 0` → `>= 0`. Sobre un `u64`, `>= 0` es siempre cierto, así que el paso se fijaría sin saber el total y una emisión saldría con `total = 0` — una barra 300 KiB avanzada en un viaje de longitud desconocida |
+| `an_emission_lands_on_its_boundary_and_not_one_byte_early` | Los límites exactos de `stepped`, y que la siguiente frontera se mide **desde la última emisión** y no desde cero |
+| `the_whole_budget_is_bounded_by_a_constant_and_not_by_the_file` | La propiedad de ADR-0033 §1 sobre tamaños que ningún test con socket puede pagar: 4 MiB, 100 MiB, 1 GiB y 64 GiB |
+
+**Barrido dirigido después: 26 mutantes, 25 muertos, 1 superviviente.**
+
+**Y el que queda está probado equivalente, no excusado.** `>` → `>=` en
+`step_for` no puede cambiar la respuesta: las dos ramas sólo difieren cuando
+`fraction == PROGRESS_MIN_STEP`, y entonces las dos devuelven ese mismo número.
+`swapping_the_floor_comparison_for_a_non_strict_one_cannot_change_the_answer`
+ejerce las dos comparaciones **en paralelo** sobre seis entradas y afirma que
+coinciden — de modo que si algún día dejaran de coincidir, la prueba lo dice en
+vez de que la equivalencia se herede de un comentario. Es la misma forma con la
+que la fase 01 trató el `|` → `^` de `compose`.
+
+### Puerta del paso 2 — el puente de progreso · 2026-08-13
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all --check` | ✅ exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ exit 0 |
+| 3 | `cargo test --workspace` | ✅ exit 0 · **591 passed** (581 → 591), 0 failed, 2 ignored |
+| 4 | Barrido | ✅ 62 mutantes declarados arriba, más un barrido dirigido de 26 sobre `Emitter` con 25 muertos y una equivalencia **probada** |
+| 5 | Lectura de aserciones | ✅ La aserción de equivalencia compara dos expresiones **escritas aparte**, no dos llamadas a la misma función: si fueran la misma llamada no probaría nada |
+| 6 | Lectura de contadores | ✅ El contador de emisiones es el `Vec` que llena el observador, derivado de llamadas reales. La forma que lo distingue de una constante es la comparación contra el número de `step` |
+| 7 | La medida se ve fallar | ✅ `an_emission_per_chunk_would_be_visible_to_this_measurement`, y el propio barrido demostró que **la primera versión de esa medida no veía siete fallos** — corregido y vuelto a medir |
+| 8 | Lectura de nombres | ✅ Las siete unitarias enuncian su propiedad y la ejercen |
+| 9 | `git diff --name-only` | ✅ 5 rutas |
+| 10 | Ledger | ✅ 138 fichas, **43 abiertas**. QYR-0321 abierta y cerrada dentro del mismo paso |
+| 11 | Coherencia documental | ✅ exit 0 en Bash y PowerShell |
+| 12 | Escribir el resultado | ✅ esta tabla |
+
+**Cero dependencias añadidas:** `Cargo.lock` sigue en 64 paquetes.
 
 ### El timeout, otra vez, y esta vez sobre mi arreglo
 

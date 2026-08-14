@@ -576,3 +576,238 @@ impl Session {
 fn new_identity() -> Result<qyro_crypto::DeviceIdentity, SessionError> {
     qyro_crypto::DeviceIdentity::generate().map_err(|_| SessionError::NotAuthenticated)
 }
+
+/// The emission budget, pinned rather than bounded.
+///
+/// `tests/session_behaviour.rs` proves the budget holds over a real socket, and
+/// that is the test worth having. But a ceiling and a strict inequality between
+/// two sizes are satisfied by **any** formula that stays under the ceiling and
+/// grows with the file, so seven mutants inside `Emitter` survived it — `/`
+/// swapped for `%` among them (QYR-0321).
+///
+/// The lesson, and the reason these live here: two sizes and a strict inequality
+/// tell a measured value from a **constant**, and do not tell one measurement
+/// from **another**. The arithmetic is pure, so it gets tested as arithmetic.
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::indexing_slicing,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        reason = "a test that cannot fail loudly is not a test"
+    )]
+
+    use std::sync::{Arc, Mutex};
+
+    use super::{
+        Emitter, PROGRESS_MIN_STEP, PROGRESS_TARGET_EMISSIONS, Progress, ProgressObserver,
+    };
+
+    /// The size at which the fraction first ties the floor: 256 KiB × 100.
+    const ELBOW: u64 = PROGRESS_MIN_STEP * PROGRESS_TARGET_EMISSIONS;
+
+    type Log = Arc<Mutex<Vec<Progress>>>;
+
+    fn recorder() -> (Log, ProgressObserver) {
+        let log: Log = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&log);
+        let observer: ProgressObserver = Box::new(move |progress| {
+            if let Ok(mut entries) = sink.lock() {
+                entries.push(progress);
+            }
+        });
+        (log, observer)
+    }
+
+    fn seen(log: &Log) -> Vec<Progress> {
+        log.lock()
+            .map(|entries| entries.clone())
+            .unwrap_or_default()
+    }
+
+    fn at(done: u64, total: u64) -> Progress {
+        Progress {
+            done,
+            total,
+            item: 0,
+        }
+    }
+
+    #[test]
+    fn the_step_is_the_floor_below_the_elbow_and_exactly_the_fraction_above_it() {
+        // Below: the floor decides, so a tiny transfer does not emit a hundred
+        // times for a few kilobytes.
+        assert_eq!(Emitter::step_for(0), PROGRESS_MIN_STEP);
+        assert_eq!(Emitter::step_for(1024), PROGRESS_MIN_STEP);
+        assert_eq!(Emitter::step_for(ELBOW - 100), PROGRESS_MIN_STEP);
+
+        // At the elbow the two agree, which is what makes `>` and `>=` the same
+        // function here -- see the equivalence test below.
+        assert_eq!(Emitter::step_for(ELBOW), PROGRESS_MIN_STEP);
+
+        // One step-group past it the fraction takes over, and the value is
+        // *exact*. `>` swapped for `==` returns the floor here instead.
+        assert_eq!(Emitter::step_for(ELBOW + 100), PROGRESS_MIN_STEP + 1);
+
+        // And far above, the step is precisely total/100. `/` swapped for `%`
+        // gives 24 for this input, which is under the floor and would return the
+        // floor -- a number this assertion refuses.
+        const GIB: u64 = 1024 * 1024 * 1024;
+        assert_eq!(Emitter::step_for(GIB), GIB / PROGRESS_TARGET_EMISSIONS);
+        assert_eq!(Emitter::step_for(GIB), 10_737_418);
+    }
+
+    #[test]
+    fn swapping_the_floor_comparison_for_a_non_strict_one_cannot_change_the_answer() {
+        // Proved rather than excused, the way the `|` to `^` mutant in the FFI
+        // handle was. The two branches return the same value whenever the
+        // comparison differs -- which is only when fraction == floor, and then
+        // both hand back that same number. So `>` to `>=` is an equivalent
+        // mutant, and no test can kill it.
+        for total in [0, 1024, ELBOW - 1, ELBOW, ELBOW + 1, 1024 * 1024 * 1024] {
+            let fraction = total / PROGRESS_TARGET_EMISSIONS;
+            let strict = if fraction > PROGRESS_MIN_STEP {
+                fraction
+            } else {
+                PROGRESS_MIN_STEP
+            };
+            let loose = if fraction >= PROGRESS_MIN_STEP {
+                fraction
+            } else {
+                PROGRESS_MIN_STEP
+            };
+            assert_eq!(
+                strict, loose,
+                "the two comparisons disagree at total={total}, so the mutant is \
+                 not equivalent after all and needs a test rather than this proof"
+            );
+            assert_eq!(Emitter::step_for(total), strict);
+        }
+    }
+
+    #[test]
+    fn an_observer_hears_nothing_until_the_total_is_known() {
+        // A receiver does not learn its total until the manifest arrives, and a
+        // bar with no length is not progress. Every comparison against zero in
+        // `offer` is what keeps this true: swap any `> 0` for `>= 0` on a u64
+        // and it becomes always-true, so this starts emitting.
+        let (log, sink) = recorder();
+        let mut emitter = Emitter::new(sink);
+
+        for _ in 0..5 {
+            emitter.offer(at(0, 0), false);
+        }
+
+        // And still nothing once bytes have moved but the total has not arrived.
+        // This is the case that separates the two guards in `offer`: with a
+        // total of zero the step must stay unset, because a step computed from
+        // nothing is the floor, and a floor's worth of bytes would then emit a
+        // progress reading whose total is zero -- a bar that is 300 KiB along a
+        // journey of unknown length.
+        emitter.offer(at(PROGRESS_MIN_STEP + 1, 0), false);
+        emitter.offer(at(PROGRESS_MIN_STEP * 4, 0), false);
+
+        assert!(
+            seen(&log).is_empty(),
+            "emitted {} times with no total known: {:?}",
+            seen(&log).len(),
+            seen(&log)
+        );
+    }
+
+    #[test]
+    fn the_first_offer_that_knows_the_total_is_the_opening_emission() {
+        let (log, sink) = recorder();
+        let mut emitter = Emitter::new(sink);
+
+        emitter.offer(at(0, 4 * 1024 * 1024), false);
+
+        let entries = seen(&log);
+        assert_eq!(entries.len(), 1, "the opening emission did not happen once");
+        assert_eq!(entries[0], at(0, 4 * 1024 * 1024));
+    }
+
+    #[test]
+    fn an_emission_lands_on_its_boundary_and_not_one_byte_early() {
+        const TOTAL: u64 = 4 * 1024 * 1024;
+        let (log, sink) = recorder();
+        let mut emitter = Emitter::new(sink);
+        emitter.offer(at(0, TOTAL), false);
+        assert_eq!(seen(&log).len(), 1, "the opening emission is the baseline");
+
+        // One byte short of the step: still silent.
+        emitter.offer(at(PROGRESS_MIN_STEP - 1, TOTAL), false);
+        assert_eq!(
+            seen(&log).len(),
+            1,
+            "emitted one byte before the boundary, so the step is not the step"
+        );
+
+        // Exactly on it: emits.
+        emitter.offer(at(PROGRESS_MIN_STEP, TOTAL), false);
+        assert_eq!(seen(&log).len(), 2, "the boundary itself did not emit");
+
+        // And the next boundary is measured from the last emission, not from
+        // zero: a counter that measured from zero would fire again immediately.
+        emitter.offer(at(PROGRESS_MIN_STEP + 1, TOTAL), false);
+        assert_eq!(
+            seen(&log).len(),
+            2,
+            "emitted again one byte after the last emission"
+        );
+    }
+
+    #[test]
+    fn an_ending_emits_even_when_it_is_nowhere_near_a_boundary() {
+        // Without this the bar stops at 99%, which is the visible failure the
+        // forced terminal emission exists to prevent (ADR-0033 §4).
+        const TOTAL: u64 = 4 * 1024 * 1024;
+        let (log, sink) = recorder();
+        let mut emitter = Emitter::new(sink);
+        emitter.offer(at(0, TOTAL), false);
+
+        emitter.offer(at(TOTAL, TOTAL), true);
+
+        let entries = seen(&log);
+        assert_eq!(entries.len(), 2);
+        let last = entries[1];
+        assert_eq!(last.done, last.total, "the ending did not report the total");
+    }
+
+    #[test]
+    fn the_whole_budget_is_bounded_by_a_constant_and_not_by_the_file() {
+        // The property ADR-0033 §1 exists for, checked on sizes no socket test
+        // could afford: a gigabyte must not cost more emissions than 4 MiB does.
+        for total in [
+            4 * 1024 * 1024_u64,
+            100 * 1024 * 1024,
+            1024 * 1024 * 1024,
+            64 * 1024 * 1024 * 1024,
+        ] {
+            let (log, sink) = recorder();
+            let mut emitter = Emitter::new(sink);
+            let step = Emitter::step_for(total);
+            let mut done = 0;
+            emitter.offer(at(0, total), false);
+            // Offer at every chunk boundary, which is what the engine does.
+            while done < total {
+                done = done.saturating_add(64 * 1024).min(total);
+                emitter.offer(at(done, total), false);
+            }
+            emitter.offer(at(total, total), true);
+
+            let count = seen(&log).len();
+            assert!(
+                count <= 102,
+                "{count} emissions for {total} bytes at a step of {step}; the \
+                 budget is 102 whatever the size"
+            );
+            assert!(
+                count >= 2,
+                "{count} emissions for {total} bytes: an opening and an ending \
+                 are the minimum, so this measurement is not seeing them"
+            );
+        }
+    }
+}

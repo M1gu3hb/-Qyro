@@ -3002,10 +3002,21 @@
 - Por qué P2: el presupuesto real está implementado según la ADR y medido; lo que
   falta es que la prueba impida cambiarlo sin darse cuenta. Ningún usuario ve
   nada distinto hoy
-- Lo que haría falta para cerrarla: una prueba que calcule las emisiones
-  esperadas **desde la fórmula** en vez de acotarlas, con un tamaño a cada lado
-  del codo de 25 MiB, que es donde `>` frente a `>=` cambia de rama
-- Estado: abierto
+- Resolución: siete pruebas unitarias sobre `Emitter` en `session.rs`, porque la
+  aritmética es pura y merece probarse como aritmética. Fijan el valor **exacto**
+  de `step_for` a los dos lados del codo —`step_for(1 GiB) == 10_737_418`, que
+  `%` no puede producir—, comprueban que sin `total` no se emite ni aunque hayan
+  pasado bytes, que una emisión cae **en** su frontera y no un byte antes, y que
+  la siguiente se mide desde la última emisión y no desde cero. El barrido
+  dirigido pasa de **7 supervivientes a 1**: 26 mutantes, 25 muertos
+- **El que queda está probado equivalente, no excusado.** `>` → `>=` en
+  `step_for` no puede cambiar la respuesta: las dos ramas sólo difieren cuando
+  `fraction == PROGRESS_MIN_STEP`, y entonces las dos devuelven ese mismo número.
+  `swapping_the_floor_comparison_for_a_non_strict_one_cannot_change_the_answer`
+  ejerce las dos comparaciones en paralelo sobre seis entradas y afirma que
+  coinciden, así que si algún día dejaran de coincidir la prueba lo dice en vez
+  de que la equivalencia se herede de un comentario
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-13
 - Evidencia: `cargo mutants --package qyro_session --timeout 120`, parcial a
