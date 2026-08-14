@@ -34,10 +34,11 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 6] = [
+const PRODUCTION_FILES: [&str; 7] = [
     "lib.rs",
     "error.rs",
     "handshake.rs",
+    "pairing.rs",
     "limits.rs",
     "listener.rs",
     "stream.rs",
@@ -65,6 +66,39 @@ fn every_net_error_has_a_construction_site() {
         "NetError",
         12,
         &[],
+    );
+}
+
+/// Every refusal a pairing string can produce is produced somewhere.
+///
+/// All seven are exempt from the *cross-file* requirement and the exemption is
+/// the point of writing it down: `PairingError` is declared and constructed in
+/// the same file because the only thing that can refuse a pairing string is the
+/// parser of pairing strings. Demanding a construction site elsewhere would be
+/// satisfiable only by scattering the parse.
+///
+/// What the call still buys is the parse floor: if this enum ever stops being
+/// found, it reports zero variants and fails rather than passing silently. The
+/// reachability of all seven is held by
+/// `tests/pairing_contract.rs::every_way_a_pairing_string_can_be_wrong_is_its_own_refusal`
+/// and its two neighbours, which construct each one by parsing a string that
+/// deserves it.
+#[test]
+fn every_pairing_error_has_a_construction_site() {
+    assert_every_variant_has_a_construction_site(
+        &PRODUCTION_FILES,
+        "pairing.rs",
+        "PairingError",
+        7,
+        &[
+            "NotAPairingString",
+            "WrongFieldCount",
+            "UnreadableAddress",
+            "UnspecifiedAddress",
+            "ZeroPort",
+            "FingerprintWrongLength",
+            "FingerprintNotLowercaseHex",
+        ],
     );
 }
 

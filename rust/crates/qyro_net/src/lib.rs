@@ -44,6 +44,7 @@ mod error;
 mod handshake;
 mod limits;
 mod listener;
+mod pairing;
 mod stream;
 
 #[cfg(test)]
@@ -58,4 +59,7 @@ pub use limits::{
     MAX_PENDING_HANDSHAKES, MAX_PREAUTH_BYTES, READ_BUFFER_LEN, READ_TIMEOUT,
 };
 pub use listener::{Listener, PendingSlot, REFUSAL_TOO_MANY_PENDING, dial, refusal_of};
+pub use pairing::{
+    PAIRING_FINGERPRINT_LEN, PAIRING_PREFIX, PAIRING_SEPARATOR, PairingEndpoint, PairingError,
+};
 pub use stream::FrameStream;
