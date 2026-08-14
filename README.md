@@ -1,6 +1,11 @@
 # Qyro
 
-Qyro es un proyecto de transferencia privada y directa para Android, iOS y Windows. No requiere cuentas, nube, anuncios, telemetría ni backend central.
+Qyro es un proyecto de transferencia privada y directa. **La v1.0 son Android y
+Windows** (ADR-0039): iOS está **aplazado**, no cancelado, porque Xcode exige
+macOS y este proyecto no tiene ninguno. El núcleo de Rust ya compila para iOS en
+CI y el trabajo hecho se conserva; reincorporarlo pide un Mac y una cuenta de
+desarrollador de Apple. No requiere cuentas, nube, anuncios, telemetría ni
+backend central.
 
 > Qyro todavía no transfiere archivos. Enviar y Recibir permanecen deshabilitados.
 

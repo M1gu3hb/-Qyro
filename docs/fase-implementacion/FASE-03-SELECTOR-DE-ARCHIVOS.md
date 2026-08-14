@@ -1,5 +1,12 @@
 # FASE 03 — El selector de archivos
 
+> **iOS está fuera de la v1.0 (ADR-0039, 2026-08-14).** Xcode exige macOS y este
+> proyecto no tiene ninguno, así que la mitad iOS de esta fase queda **aplazada,
+> no cancelada**: lo escrito abajo sobre iOS sigue siendo el plan del día que
+> exista un Mac y una cuenta de desarrollador. **Lo que esta fase entrega para la
+> v1.0 es Android y Windows.**
+
+
 ## 1. Objetivo
 
 **Que el usuario elija qué mandar y dónde recibir, con el selector de su propio

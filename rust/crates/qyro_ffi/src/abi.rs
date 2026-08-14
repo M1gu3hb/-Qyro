@@ -90,14 +90,6 @@ impl HandleError {
     }
 }
 
-/// Runs `body`, converting a panic into [`QYRO_ERR_PANIC`].
-///
-/// `AssertUnwindSafe` is sound here for the reason the name asks for: the bodies
-/// this wraps today touch nothing that outlives the unwind. When the session
-/// operations arrive in step 4 they will touch the handle table, and the
-/// assertion stops being free at that point -- ADR-0032 §5 answers it by
-/// poisoning the session a panic passed through, which is the invariant that has
-/// to be written alongside those operations rather than assumed here.
 /// What a guarded body of this type hands back when it panics.
 ///
 /// A trait rather than a `Default` bound, because `Default` for `i32` is `0`, and
@@ -112,7 +104,7 @@ impl PanicOutcome for i32 {
 }
 
 impl PanicOutcome for *mut u8 {
-    /// ADR-0034: a null buffer is how allocation failure already travels, so a
+    /// ADR-0038: a null buffer is how allocation failure already travels, so a
     /// panic during allocation is indistinguishable from running out of memory,
     /// which is exactly what the caller has to handle either way.
     const ON_PANIC: Self = core::ptr::null_mut();
@@ -122,6 +114,19 @@ impl PanicOutcome for () {
     const ON_PANIC: Self = ();
 }
 
+/// Runs `body`, converting a panic into that return type's [`PanicOutcome`].
+///
+/// `AssertUnwindSafe` is sound here for the reason the name asks for: the bodies
+/// this wraps today touch nothing that outlives the unwind. The session
+/// operations do touch the handle table, and the assertion stops being free at
+/// that point -- ADR-0032 §5 answers it by poisoning the session a panic passed
+/// through, which is the invariant written alongside those operations rather
+/// than assumed here.
+///
+/// Generic rather than one function per return shape, because the structural
+/// guard in `guards.rs` requires every `extern "C"` body to open with `guard(`
+/// literally, and a family of `guard_pointer` / `guard_unit` siblings would have
+/// meant weakening it with exceptions.
 pub fn guard<T: PanicOutcome, F: FnOnce() -> T>(body: F) -> T {
     match catch_unwind(AssertUnwindSafe(body)) {
         Ok(value) => value,

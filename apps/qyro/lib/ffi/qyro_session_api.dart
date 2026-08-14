@@ -2,7 +2,7 @@
 //
 // Specification: docs/adr/ADR-0032-engine-ffi.md (the six operations),
 // docs/adr/ADR-0033-progress-bridge.md (the callback), and
-// docs/adr/ADR-0034-input-buffers.md (who owns the bytes that cross).
+// docs/adr/ADR-0038-input-buffers.md (who owns the bytes that cross).
 //
 // The library is opened with the pattern that already works on three platforms
 // -- QYRO_FFI_LIBRARY_PATH, then the per-platform file name, then the process on
@@ -224,7 +224,7 @@ final class QyroSessionBindings {
 
 // --------------------------------------------------------------------- buffers
 
-/// A borrowed native buffer that carries its own length. ADR-0034.
+/// A borrowed native buffer that carries its own length. ADR-0038.
 ///
 /// The length travels beside the pointer because the free side needs the exact
 /// number it was allocated with, and that is the one obligation the boundary

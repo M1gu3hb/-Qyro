@@ -40,7 +40,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   través de la superficie C, y llega **idéntico byte a byte**. El receptor es
   `qyro_net_smoke serve`. Con progreso monótono que termina en el total y dentro
   del presupuesto de 102 emisiones de ADR-0033
-- **ADR-0034 congelada**: Dart no puede asignar memoria nativa sin
+- **ADR-0038 congelada**: Dart no puede asignar memoria nativa sin
   `package:ffi`, así que los búferes se piden prestados a Rust. Sube la
   superficie `extern "C"` de ocho símbolos a diez
 - `cargo test --workspace` en Windows: **595 passed, 0 failed, 2 ignored**;

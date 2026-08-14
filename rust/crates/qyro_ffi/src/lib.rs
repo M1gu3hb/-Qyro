@@ -46,7 +46,7 @@ pub extern "C" fn qyro_protocol_version_len() -> usize {
     protocol_version_bytes().len()
 }
 
-/// Lends the caller `len` writable, zeroed bytes. ADR-0034.
+/// Lends the caller `len` writable, zeroed bytes. ADR-0038.
 ///
 /// Rust owns this memory from here until [`qyro_buffer_free`] takes it back.
 /// Dart cannot allocate native memory without `package:ffi`, and this phase
@@ -75,7 +75,7 @@ pub extern "C" fn qyro_buffer_alloc(len: usize) -> *mut u8 {
     })
 }
 
-/// Takes back what [`qyro_buffer_alloc`] handed out. ADR-0034.
+/// Takes back what [`qyro_buffer_alloc`] handed out. ADR-0038.
 ///
 /// A null pointer is a no-op, so the zero-length case needs no branch on the
 /// caller's side.

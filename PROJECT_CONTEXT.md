@@ -10,7 +10,9 @@ Qyro pretende mover archivos, carpetas y texto de forma privada y directa entre 
 
 ## Plataformas
 
-Android, iOS y Windows son obligatorias. Linux solo se usa como host de CI.
+**Android y Windows son obligatorias para la v1.0. iOS está aplazado a una v1.1**
+por ADR-0039, porque Xcode exige macOS y no hay ninguno disponible; su trabajo se
+conserva y sus workflows siguen corriendo. Linux solo se usa como host de CI.
 
 ## Arquitectura aprobada
 

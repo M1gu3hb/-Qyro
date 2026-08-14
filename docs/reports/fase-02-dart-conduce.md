@@ -538,7 +538,7 @@ Las tres salidas, medidas antes de elegir:
 | `@Native(isLeaf: true)` + `TypedData.address` | **No, y por plataforma, no por gusto.** Está diseñado justo para esto —un puntero válido sólo durante una llamada *leaf*, que es lo que ADR-0032 §6 ya promete al copiar al entrar—, pero `@Native` sin `assetId` resuelve el símbolo **en el proceso**, y `DynamicLibrary.process()` **no está soportado en Windows**. Los native assets que darían `assetId` siguen experimentales. Algo que funciona en Android y no en Windows no sirve para un producto de tres plataformas |
 | Dos funciones en `qyro_ffi` | **Sí**, y por eso lleva ADR |
 
-**ADR-0034, congelada antes del código** (`c5f3b10`, un archivo, cero `.rs`).
+**ADR-0038, congelada antes del código** (`c5f3b10`, un archivo, cero `.rs`).
 Reescribe la regla de ADR-0032 §6, y la sustituta es **más simple** que la
 original: *Rust posee todos los búferes que cruzan, en las dos direcciones; Dart
 nunca posee memoria nativa, la pide prestada para llenarla y la devuelve.* La
@@ -606,7 +606,7 @@ golpe al final.
 
 **Dependencias, con el comando:** `grep -c '^\[\[package\]\]' Cargo.lock` → **64**,
 sin cambio. Paquetes de Dart en `pubspec.lock` → **39**, sin cambio. **Los
-símbolos `extern "C"` suben de ocho a diez**, que es lo que ADR-0034 autoriza y
+símbolos `extern "C"` suben de ocho a diez**, que es lo que ADR-0038 autoriza y
 declara.
 
 ---

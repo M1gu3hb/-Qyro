@@ -1,4 +1,4 @@
-# ADR-0034 — Quién asigna los búferes que Dart pasa
+# ADR-0038 — Quién asigna los búferes que Dart pasa
 
 - **Estado:** aceptada
 - **Fecha:** 2026-08-14
