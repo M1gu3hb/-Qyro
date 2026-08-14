@@ -1051,12 +1051,26 @@
   `qyro_crypto::identity`, y se cierra invirtiendo la lista: fallar salvo que el
   retorno esté en una lista de tipos permitidos y argumentados, en vez de pasar
   salvo que contenga uno de cinco marcadores
-- Lo que haría falta para cerrarla: esa inversión, más la mutación que la
-  demuestre —`pub fn leak_raw(&self) -> Zeroizing<[u8; 32]>` en `identity.rs`,
-  que hoy la deja en verde— nombrada en la ficha
-- Estado: abierto
+- **Y al ir a cerrarla resultó estar medio arreglada ya, sin que nadie lo dijera.**
+  La inversión existe: el guard tiene dos listas —`PUBLIC_KEY_MATERIAL_PATHS` y
+  `PUBLIC_NON_KEY_BYTE_PATHS`— y falla si una ruta no está en ninguna. Lo que
+  faltaba era un marcador: **`&[u8]` no estaba en la lista de formas que exigen
+  clasificación**, así que cualquier `pub fn` que entregara una porción prestada
+  era invisible. Es literalmente el defecto que esta ficha describe, sobrevivido
+  dentro de su propio arreglo
+- **Y al añadir `&[u8]` apareció uno de verdad:** `AuthenticatedFrame::payload`
+  entrega **los mismos bytes** que `into_zeroizing_payload`, prestados, y este
+  guard nunca lo había visto. El informe de la fase 01 lo anotó como «pendiente
+  de ficha» y nunca se registró. Ahora está clasificado como material de clave
+- Resolución: `BYTE_RETURN_MARKERS` gana `&[u8]` y `VerifiedPayload`;
+  `PUBLIC_KEY_MATERIAL_PATHS` pasa de tres rutas a cinco
+- Estado: cerrado
 - Nota de estado: «abierto al inicio de este tramo»
-- Fecha: 2026-08-07, diagnóstico ampliado 2026-08-14
+- Fecha: 2026-08-07, diagnóstico ampliado y cerrado 2026-08-14
+- **Evidencia (la mutación que la ficha nombra, aplicada):** añadido
+  `pub fn leak_raw(&self) -> Zeroizing<[u8; 32]>` a `identity.rs`, el guard falla
+  con `these public paths return byte-shaped values and are in neither list:
+  ["identity.rs::leak_raw"]`, exit 101. Restaurado, y `git diff` del archivo vacío
 
 ## QYR-0053 — La guarda de material de clave no veía la semilla en claro
 
@@ -3311,4 +3325,46 @@
 - Fecha: 2026-08-14
 - Evidencia: `flutter pub add file_selector` resolvió 39 → 54 paquetes y después
   falló con ese mensaje, exit 1. Revertido
+
+## QYR-0325 — La guarda del texto claro afirmaba más de lo que comprobaba
+
+- Plataforma: todas; `rust/crates/qyro_crypto/src/aead/guards.rs`
+- Severidad: P2
+- Esperado: el comentario de una guarda describe lo que la guarda hace
+- Actual: decía «comprueba una forma, no un nombre … `.to_vec()`, `.clone()` y lo
+  que se invente mañana fallan igual». **No.** La auditoría la sorteó en una
+  línea: `(*authenticated.into_zeroizing_payload()).clone()` compila limpio, es la
+  misma fuga —una copia desnuda del texto claro verificado— y la guarda pasa en
+  verde. Un `deref` entre paréntesis rompe la cadena textual sin romper la fuga, y
+  hay más formas: la variable intermedia en dos sentencias,
+  `Vec::from(&…[..])`, un `impl From`
+- Es la novena vez que este proyecto produce esta forma —un comentario que afirma
+  más de lo que entrega— y la segunda dentro de la misma ficha, QYR-0304
+- **La decisión, escrita porque había dos y hay que decir cuál:** se eligió
+  **(b), hacerlo propiedad del tipo**, no (a) estrechar la afirmación. Medido
+  antes de decidir: `into_zeroizing_payload` tiene **un solo consumidor de
+  producción** —`qyro_transfer/src/session.rs`— y dos sitios que lo prestan, así
+  que (b) costaba cuatro líneas. Una guarda textual siempre pierde contra la
+  sintaxis de Rust, y esa carrera no se corre
+- Resolución: `qyro_crypto::aead::VerifiedPayload`, un envoltorio **sin `Deref`,
+  sin `Clone`, sin `Index`, sin `Into<Vec<u8>>` y sin `AsRef`**. Su único
+  accesor es `as_slice`. El comentario de la guarda textual se estrechó además a
+  lo que de verdad caza —encadenamiento directo— y se dice que no cubre el
+  `deref`, la variable intermedia ni las conversiones: la defensa que carga el
+  peso es el tipo
+- **Lo que sigue siendo posible, y no es un agujero tolerado:**
+  `as_slice().to_vec()` compila. Ninguna caja puede prohibirlo — cualquier
+  `&[u8]` se copia en un lenguaje con porciones. Lo que cambia es que la copia
+  hay que **escribirla en voz alta** en vez de llegar por un `Deref` que nadie
+  miró. Un accidente deja de compilar; una decisión sigue siendo visible
+- Estado: cerrado
+- Dueño: implementación
+- Fecha: 2026-08-14
+- **Evidencia (tres mutaciones, las tres nombradas):** con `VerifiedPayload`,
+  `cargo build -p qyro_transfer` rechaza `(*x).clone()` con **E0614 «cannot be
+  dereferenced»**, `x.to_vec()` con **E0599 «no method named to_vec»**, y
+  `Vec::from(&x[..])` con **E0608 «cannot index»**. Las tres exit 101, restauradas
+  y `git diff` vacío. Y un cuarto testigo que no se buscó: `&owned[..]` en
+  `aead/tests.rs` dejó de compilar al hacer el cambio, que es una de esas mismas
+  formas apareciendo sola
 

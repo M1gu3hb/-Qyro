@@ -671,6 +671,60 @@ impl core::fmt::Debug for FrameOpener {
     }
 }
 
+/// Verified plaintext that cannot be copied out of its wipe **by accident**.
+///
+/// # Why this is a type and not a rule
+///
+/// QYR-0304 was a `.to_vec()` on the `Zeroizing<Vec<u8>>` this used to be: the
+/// temporary was still wiped, and the copy it left behind was not. The first fix
+/// was a textual guard, and a textual guard loses to Rust syntax — the audit
+/// broke it in one line with `(*payload).clone()`, which is the same leak with
+/// the chain interrupted. `let v = …; v.to_vec()` and `Vec::from(&…[..])` are
+/// two more, and there is no end to that list (QYR-0325).
+///
+/// So the guarantee moved into the type. **No `Deref`, no `Clone`, no `Index`,
+/// no `Into<Vec<u8>>`, no `AsRef`.** Every one of those forms now fails to
+/// compile, which is a stronger statement than any guard reading source text.
+///
+/// # What it deliberately still allows
+///
+/// `as_slice().to_vec()` compiles, and that is not a hole being tolerated: any
+/// `&[u8]` can be copied in a language with slices, so no type can forbid it.
+/// What changes is that the copy has to be **written out loud** instead of
+/// arriving through a `Deref` nobody noticed. An accident stops compiling; a
+/// decision stays visible to review.
+pub struct VerifiedPayload(Zeroizing<Vec<u8>>);
+
+impl VerifiedPayload {
+    /// Borrows the plaintext. The only way in.
+    #[must_use]
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+
+    /// How many bytes the peer sent.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether the peer sent an empty payload.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl core::fmt::Debug for VerifiedPayload {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // The length and nothing else. A `Debug` that prints verified plaintext
+        // is the same leak with a log file for a destination.
+        f.debug_struct("VerifiedPayload")
+            .field("len", &self.0.len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// A frame whose tag verified.
 ///
 /// Produced **only** by [`FrameOpener::open`]. Its fields are private and it has
@@ -707,8 +761,8 @@ impl AuthenticatedFrame {
     /// remembering to ask for it, which is the only kind of wipe that survives a
     /// refactor.
     #[must_use]
-    pub fn into_zeroizing_payload(self) -> Zeroizing<Vec<u8>> {
-        self.payload
+    pub fn into_zeroizing_payload(self) -> VerifiedPayload {
+        VerifiedPayload(self.payload)
     }
 
     /// The message kind the sender authenticated.

@@ -68,8 +68,18 @@ fn every_test_only_module_is_actually_gated() {
 ///
 /// Enumerated by name rather than counted. A count lets one path be swapped for
 /// another without the number moving, and the swap is the change worth catching.
-const PUBLIC_KEY_MATERIAL_PATHS: [&str; 3] = [
+const PUBLIC_KEY_MATERIAL_PATHS: [&str; 5] = [
     "aead/mod.rs::into_zeroizing_payload",
+    // `VerifiedPayload::as_slice`. The one way to read the verified plaintext,
+    // and therefore the one place a copy can still be written -- deliberately,
+    // and out loud. See the type's own documentation.
+    "aead/mod.rs::as_slice",
+    // `AuthenticatedFrame::payload`. Hands out **the same bytes** as
+    // `into_zeroizing_payload`, borrowed, and was invisible to this guard until
+    // `&[u8]` became a marker on 2026-08-14. The phase-01 report noticed it and
+    // filed it nowhere; QYR-0053 is the ficha whose whole subject is a marker
+    // list too narrow to see what it guards.
+    "aead/mod.rs::payload",
     "identity.rs::as_bytes",
     "identity.rs::export_secret",
 ];
@@ -95,7 +105,7 @@ const PUBLIC_NON_KEY_BYTE_PATHS: [&str; 0] = [];
 /// Deliberately broad. A marker that is too narrow fails open, which is the
 /// defect this replaced; a marker that is too broad costs one line in the
 /// not-key-material list.
-const BYTE_RETURN_MARKERS: [&str; 8] = [
+const BYTE_RETURN_MARKERS: [&str; 10] = [
     "[u8; 32]",
     "[u8; SEED_LEN]",
     "[u8; PUBLIC_KEY_LEN]",
@@ -104,6 +114,15 @@ const BYTE_RETURN_MARKERS: [&str; 8] = [
     "SigningKey",
     "SessionKey",
     "StaticSecret",
+    // Added 2026-08-14 with QYR-0325. `into_zeroizing_payload` stopped
+    // returning a `Zeroizing` and started returning this wrapper, and the guard
+    // went blind to it in the same commit -- it refused to keep a list entry it
+    // could no longer see, which is the assertion below doing its job.
+    "VerifiedPayload",
+    // And the marker whose absence is the same defect QYR-0053 names: a bare
+    // borrowed slice was never a marker at all, so any `pub fn` handing out
+    // `&[u8]` was invisible. `VerifiedPayload::as_slice` would have been.
+    "&[u8]",
 ];
 
 /// Collects every public path whose return type is byte-shaped.

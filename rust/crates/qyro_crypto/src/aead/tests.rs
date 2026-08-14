@@ -843,8 +843,11 @@ fn verified_plaintext_is_handed_over_still_protected() {
 
     assert_eq!(opened.payload(), b"secret cargo");
 
-    let owned: zeroize::Zeroizing<Vec<u8>> = opened.into_zeroizing_payload();
-    assert_eq!(&owned[..], b"secret cargo");
+    let owned = opened.into_zeroizing_payload();
+    // `&owned[..]` used to be written here and no longer compiles: VerifiedPayload
+    // has no `Index`. That refusal is the point of the type — it is one of the
+    // exact forms the audit used to walk around the textual guard (QYR-0325).
+    assert_eq!(owned.as_slice(), b"secret cargo");
 }
 
 #[test]

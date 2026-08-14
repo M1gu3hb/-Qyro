@@ -88,11 +88,9 @@ const ZEROIZING_ACCESSOR: &str = "into_zeroizing_payload";
 
 /// Chained calls that are permitted to follow it, each with a reason.
 ///
-/// Empty on purpose today. This is a **deny-by-shape** list, not the
-/// allow-list-disguised-as-a-deny-list that QYR-0053 describes: anything not
-/// named here fails, so a method invented next year fails too, and adding an
-/// entry costs an argument in this file rather than silence somewhere else.
-const CHAINS_ALLOWED_AFTER_THE_ACCESSOR: [&str; 0] = [];
+/// `as_slice` is the accessor `VerifiedPayload` exists to offer, and borrowing is
+/// not copying. `len` and `is_empty` return integers.
+const CHAINS_ALLOWED_AFTER_THE_ACCESSOR: [&str; 3] = ["as_slice", "len", "is_empty"];
 
 #[test]
 fn no_consumer_unwraps_the_plaintext_out_of_its_wipe() {
@@ -101,11 +99,20 @@ fn no_consumer_unwraps_the_plaintext_out_of_its_wipe() {
     // replacement -- in another crate, where nothing owned by qyro_crypto could
     // look. Undoing the fix left 592 tests green.
     //
-    // So this reads the *consumers*, and checks a shape rather than a name:
-    // whatever `into_zeroizing_payload` returns must be bound or returned, never
-    // method-chained. `.to_vec()`, `.clone()`, `.to_owned()` and anything not
-    // yet invented all fail the same way, because the rule is "no chain" and not
-    // "not these three".
+    // So this reads the *consumers* rather than this crate.
+    //
+    // **What it catches, stated narrowly, because the first version of this
+    // comment claimed more than the code delivers (QYR-0325).** It catches a
+    // method chained *directly and textually* onto the call — the form that
+    // actually happened. It does **not** catch `(*payload).clone()`, nor a
+    // binding split across two statements, nor `Vec::from(&payload[..])`, nor a
+    // conversion behind an `impl From`. A textual analysis loses to Rust syntax
+    // and there is no point pretending otherwise.
+    //
+    // The load-bearing defence is the type: `VerifiedPayload` has no `Deref`,
+    // no `Clone`, no `Index` and no `Into<Vec<u8>>`, so all four of those forms
+    // stop compiling. This guard is the cheap second line — it still notices a
+    // `to_vec` appearing directly on the call if the type ever grows one.
     let crates_root = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
     let mut call_sites = 0_usize;
     let mut offences = Vec::new();

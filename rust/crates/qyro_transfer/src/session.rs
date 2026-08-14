@@ -16,11 +16,10 @@
     clippy::indexing_slicing
 )]
 
-use qyro_crypto::aead::{FrameOpener, FrameSealer};
+use qyro_crypto::aead::{FrameOpener, FrameSealer, VerifiedPayload};
 use qyro_manifest::TransferManifest;
 use qyro_protocol::{DecodedFrame, Frame, FrameDecoder, MessageType};
 use sha2::{Digest, Sha256};
-use zeroize::Zeroizing;
 
 use crate::error::{ItemVerdict, TransferError};
 use crate::wire::{self, Accept, Ack, ChunkRef, Complete, Control, Integrity, ItemStart, Offer};
@@ -429,7 +428,7 @@ impl Sender {
         let opened = open_all(&mut self.decoder, &mut self.opener, bytes)
             .map_err(|error| self.poison(error))?;
         for (message_type, payload) in opened {
-            self.apply(message_type, &payload)?;
+            self.apply(message_type, payload.as_slice())?;
         }
         Ok(())
     }
@@ -649,7 +648,7 @@ impl Receiver {
         let opened = open_all(&mut self.decoder, &mut self.opener, bytes)
             .map_err(|error| self.poison(error))?;
         for (message_type, payload) in opened {
-            if let Some(reply) = self.apply(message_type, &payload, sink)? {
+            if let Some(reply) = self.apply(message_type, payload.as_slice(), sink)? {
                 out.push(reply);
             }
         }
@@ -846,7 +845,7 @@ impl Receiver {
 /// is [`TransferError::NotAuthenticated`] and carries no detail: a frame with no
 /// verified sender cannot testify to anything.
 /// Authenticated frames: each one's kind, and its payload still wearing its wipe.
-type OpenedFrames = Vec<(MessageType, Zeroizing<Vec<u8>>)>;
+type OpenedFrames = Vec<(MessageType, VerifiedPayload)>;
 
 /// The payloads come back **still wearing their wipe**.
 ///
@@ -860,8 +859,10 @@ type OpenedFrames = Vec<(MessageType, Zeroizing<Vec<u8>>)>;
 /// guard forbids `into_payload` by name while being blind to a `.to_vec()` on
 /// its replacement (QYR-0304).
 ///
-/// `Zeroizing<Vec<u8>>` derefs to `[u8]`, so every caller that already took
-/// `&payload` keeps compiling and starts benefiting.
+/// The return type is [`VerifiedPayload`], which has **no `Deref`**: callers ask
+/// for `as_slice()` and the compiler refuses `(*payload).clone()` outright. That
+/// is the second half of QYR-0304 and the whole of QYR-0325 — the first fix was a
+/// textual guard, and one line of parentheses walked around it.
 fn open_all(
     decoder: &mut FrameDecoder,
     opener: &mut FrameOpener,

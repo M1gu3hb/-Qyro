@@ -375,7 +375,6 @@ dependencies = [
  "qyro_manifest",
  "qyro_protocol",
  "sha2",
- "zeroize",
 ]
 
 [[package]]

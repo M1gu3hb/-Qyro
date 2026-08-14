@@ -18,4 +18,10 @@ qyro_protocol = { path = "../qyro_protocol" }
 # Already in the audited graph as a dependency of qyro_crypto. A new edge, not a
 # new package:  still sees 59.
 sha2 = { version = "0.11.0", default-features = false }
-zeroize = { version = "1.9.0", default-features = false, features = ["alloc"] }
+
+# `zeroize` was declared here and never named in the source -- which is what
+# QYR-0304 pointed at. It is gone rather than used, because the guarantee now
+# arrives as a *type*: `qyro_crypto::aead::VerifiedPayload` wraps the
+# `Zeroizing<Vec<u8>>` and hands out nothing that copies it, so this crate never
+# has to name the crate that provides the wipe. Still in `Cargo.lock` either
+# way, as a dependency of qyro_crypto; the count does not move.
