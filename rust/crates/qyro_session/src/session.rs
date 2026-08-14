@@ -332,17 +332,26 @@ impl Session {
         })
     }
 
-    /// The address the session is bound to, once open.
+    /// The address of this end of the session.
     ///
-    /// Needed because a receiver may be opened on port 0 and has to report
-    /// which port the system chose.
+    /// Needed because a receiver may be opened on port 0 and has to report which
+    /// port the system chose. An accepted socket's local address carries that
+    /// port, so the answer survives the `Listener` being dropped.
+    ///
+    /// **This returned `peer_addr` — the *far* end — until 2026-08-14**, and
+    /// nothing noticed because the C surface does not expose it and no test
+    /// called it (QYR-0314). What remains, and is not a defect this function can
+    /// fix: `open_receiver` blocks in `accept` before returning, so a caller
+    /// still cannot learn the port *before* a peer connects. Binding on port 0
+    /// to announce the port is therefore still out of reach, and that is the
+    /// half of QYR-0314 this does not close.
     ///
     /// # Errors
     ///
     /// [`SessionError::PeerUnreachable`] if the socket cannot answer.
     pub fn local_addr(&self) -> Result<SocketAddr, SessionError> {
         self.stream
-            .peer_addr()
+            .local_addr()
             .map_err(|_| SessionError::PeerUnreachable)
     }
 
@@ -371,8 +380,10 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// [`SessionError::AlreadyFailed`] once anything has failed — the failure is
-    /// sticky, per ADR-0032 §5 — and otherwise whatever refused.
+    /// Once anything has failed, **the same error every time**: ADR-0032 §5
+    /// freezes stickiness as returning the same code, which is why `error.rs`
+    /// deliberately has no `AlreadyFailed` variant — a second `Ok` would let a
+    /// caller believe a session recovered when its worker is dead (QYR-0319).
     pub fn step(&mut self) -> Result<SessionState, SessionError> {
         if let Some(failure) = self.failed {
             return Err(failure);

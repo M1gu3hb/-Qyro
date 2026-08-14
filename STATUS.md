@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-14T04:40:00Z
+- Updated UTC: 2026-08-14T05:10:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: e103a6f1eabdff27c40bb6c125683d8e4f2ffd50
+- Verified commit: ea0b023613c5fb152b298174c8056efed76dcfa9
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
@@ -17,7 +17,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   son dos dispositivos en una Wi-Fi. La persistencia de identidad sigue
   **IMPLEMENTED sólo en Windows y NOT_IMPLEMENTED en Android y en iOS**
 
-### Fase 02 — en curso. Pasos 0, 0b y 1 cerrados
+### Fase 02 — CERRADA. Dart conduce una transferencia real
 
 **Lo que cambió y está ejecutado en Windows 10 real:**
 

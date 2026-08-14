@@ -1,6 +1,6 @@
 # FASE 02 — Dart conduce una transferencia
 
-**Estado: en curso.** Este informe se escribe durante la fase, no al final.
+**Estado: cerrada.** Escrito durante la fase, no al final.
 
 Base de la fase: `3b32b6f`. Rama `claude/qyro-net-6a`.
 
@@ -39,10 +39,25 @@ fase 05 y sólo si sus condiciones se cumplen.
 
 ## 2. Qué se hizo
 
-*(Se rellena por pasos, cada uno con su puerta.)*
-
-- **Paso 0 (previo)** — línea base reproducida y auditada. Cinco de siete
-  comprobaciones coinciden; dos no, y las dos son hallazgos. Detalle en §4.
+- **Paso 0** — línea base reproducida y auditada. Cinco de siete comprobaciones
+  coinciden; dos no, y las dos son hallazgos (§4). El checker de documentación
+  llevaba rojo en Windows desde antes de la fase 01.
+- **Paso 0b** — QYR-0309: diez pruebas de conducta donde no había ninguna. Y
+  encontraron **QYR-0316**, P1: una transferencia íntegra reportada al emisor
+  como `PeerUnreachable`.
+- **Paso 1** — **ADR-0033 congelada** antes del código, `37f7a6e`, un archivo y
+  cero `.rs`.
+- **Paso 2** — el puente de progreso, con un presupuesto acotado por constante.
+  El barrido encontró siete supervivientes en el código recién escrito, y la
+  respuesta fue probar la aritmética **como aritmética** (QYR-0321).
+- **Paso 3** — **ADR-0038 congelada** y el lado Dart. `dart:ffi` no trae
+  asignador de memoria nativa, y eso no lo había previsto ninguna ADR.
+- **Paso 4** — **la prueba que define la fase.** 8 MiB + 13 bytes, dos procesos
+  de sistema operativo, byte a byte.
+- **Paso 5** — CI en Linux y Windows, y `timeout-minutes` en los dieciséis
+  trabajos de los seis workflows.
+- **Cierre** — QYR-0304 (el zeroize), QYR-0078 (el cuelgue, con su test
+  nombrado), ADR-0039 (iOS fuera de la v1.0) y la normalización del ledger.
 
 ---
 
@@ -419,6 +434,74 @@ ocurrido ninguna transferencia a través de la superficie C.
 
 ---
 
+## 7. Resultado contra el objetivo
+
+**El objetivo, literal:** «que un test en Dart mueva un archivo real entre dos
+procesos, por un socket, y lo verifique byte a byte — con el progreso llegando a
+Dart mientras ocurre».
+
+**Cumplido.** Y los catorce criterios de aceptación, uno a uno:
+
+| # | Criterio | Veredicto |
+|---|---|---|
+| 1 | ADR-0033 congelada antes del código, comprobable en el historial | ✅ `37f7a6e`; `git show --name-only` da **un `.md` y cero `.rs`** |
+| 2 | Las cuatro reglas de §4 implementadas, cada una con prueba o argumento escrito | ✅ Tres lo son **por la forma**: retorno `void` (no hay valor que leer), cuatro escalares (ningún puntero sobrevive a su marco) y la ordenación de ADR-0033 §5. La cuarta —Dart debe llamar a `close()`— **no se puede imponer desde Rust y así se dice**; la comprueba `closing_from_dart_leaves_no_handle_and_no_thread` |
+| 3 | Un test en Dart mueve **≥8 MiB** entre dos procesos y lo compara byte a byte | ✅ `_transferBytes = 8 * 1024 * 1024 + 13`, con `orderedEquals` |
+| 4 | Hay evidencia de que ese test **podría fallar** | ✅ `a_corrupted_transfer_is_detected_by_this_test`, y voltea el bit **en el archivo, no en el cable** — corromper el cable probaría que el AEAD funciona, que es otra afirmación |
+| 5 | El progreso llega a Dart, es monótono, y termina en el total | ✅ Las tres, afirmadas por separado |
+| 6 | Presupuesto medido y acotado, con prueba de que la medida vería el exceso | ✅ ≤102 sobre el socket real, y `an_emission_per_chunk_would_be_visible_to_this_measurement` compara emisiones contra número de `step`. **Y el barrido demostró que la primera versión de esa medida no veía siete fallos** — corregido y vuelto a medir |
+| 7 | Una sesión sin observador funciona igual | ✅ Prueba propia, y el mutante `observer -> None` ahora muere |
+| 8 | Ni handle, ni hilo, ni `.qyro-part` sobrevive | ⚠️ **Parcial, y se dice.** Handle: sí, seis rondas sobre una tabla de cuatro. `.qyro-part`: sí. **Hilos: no medido desde Dart.** Las dos mediciones de recursos del proyecto son `cfg(target_os = "linux")` y viven en Rust; no hay equivalente desde Dart ni en Windows |
+| 9 | La prueba corre en CI en **Linux y Windows** | ✅ Linux: tirada 31769832225, trabajo `flutter`. Windows: tirada 31767129485, paso 10. **Android e iOS: no cabe**, y se registra en vez de callarse — es un test de VM de Dart con `Process.start`, y ni el emulador ni el simulador lo ejecutan |
+| 10 | **Cero dependencias externas** en Rust y **cero paquetes nuevos de pub.dev** | ✅ `Cargo.lock` → **64**, sin cambio; `pubspec.lock` → **39**, sin cambio. Es exactamente la razón de que exista ADR-0038 |
+| 11 | Barrido con alcance declarado | ✅ §10: `qyro_session` 62 mutantes, `qyro_ffi` 95, más dos dirigidos |
+| 12 | Las doce comprobaciones de `R2` en todas las puertas | ✅ Cuatro puertas, en §9 |
+| 13 | Informe según `R5` | ✅ Las dieciséis secciones |
+| 14 | **Los botones siguen `onPressed: null`**, y el informe dice si ya se cumple la condición | ✅ Siguen apagados y su test pasa. Ver abajo |
+
+### Criterio 14: ¿se cumple ya la condición que los mantiene apagados?
+
+La condición es «que exista una transferencia real, cifrada y comprobada de
+extremo a extremo».
+
+**Sí existe.** ChaCha20-Poly1305, autenticada, verificada por SHA-256, entre dos
+procesos, conducida desde Dart, verde en tres entornos independientes.
+
+**Y aun así no se encienden, porque esa es una de las cinco condiciones de la
+fase 05.** Lo que falta para afirmarlo sin trampa:
+
+- **Nadie puede elegir un archivo.** Las rutas se pasan a mano (fase 03).
+- **Nadie sabe a qué dirección mandarlo.** La IP se pasa a mano (fase 04).
+- **No hay a quién confiar.** El emparejamiento y la huella no cruzan el FFI.
+- **No hay nada que mirar.** No existe interfaz de transferencia (fase 05).
+- **Nada de esto ha tocado un aparato físico.**
+
+Encender un botón hoy daría una pantalla donde no se puede elegir qué mandar ni a
+quién. Eso no es un producto a medias: es una mentira con forma de botón.
+
+---
+
+## 8. Clase de evidencia por afirmación
+
+`R1` §4: una afirmación sin clase de evidencia se audita como no probada.
+
+| Afirmación | Clase de evidencia |
+|---|---|
+| Un archivo de 8 MiB cruza dos procesos conducido desde Dart y llega idéntico | **Probado entre procesos**, en tres entornos: esta máquina, runner Linux, runner Windows |
+| El progreso llega a Dart, monótono, terminando en el total | **Probado entre procesos** |
+| El presupuesto de emisiones está acotado por una constante | **Probado en unidad** hasta 64 GiB simulados, **y entre procesos** hasta 8 MiB reales |
+| Una transferencia íntegra ya no se reporta como `PeerUnreachable` | **Probado en integración**: dos hilos, un proceso |
+| `qyro_session` refuza rutas fuera del root, `..` y listas vacías | **Probado en unidad** |
+| El texto claro recibido ya no se copia fuera de su borrado | **Compilado y probado en integración.** Que el `Zeroizing` *borre* lo garantiza la biblioteca, no una prueba de este repositorio |
+| El checker de documentación pasa en Windows PowerShell 5.1 | **Probado en esta máquina.** **Ningún job de CI lo corre en `windows-latest`**: esa cobertura no es de CI |
+| `cargo test --workspace` termina en Windows | **Probado en CI**, tirada 31769832225 |
+| La superficie C tiene diez símbolos y ninguno puede nombrar `qyro_crypto` | **Verificado por el resolvedor de Cargo** |
+| Ninguna clave privada llega a Dart | **Verificado estructuralmente**, por nombrabilidad. No es evidencia de ejecución, y ADR-0032 §9 ya lo dice |
+| Qyro funciona en Android | **Ninguna.** Cero evidencia de cualquier clase en esta fase |
+| Qyro funciona en hardware físico | **Ninguna.** Cero, en cualquier plataforma |
+
+---
+
 ## 9. Las puertas
 
 ### Puerta del paso 0 — auditoría de la línea base · 2026-08-13
@@ -609,6 +692,32 @@ sin cambio. Paquetes de Dart en `pubspec.lock` → **39**, sin cambio. **Los
 símbolos `extern "C"` suben de ocho a diez**, que es lo que ADR-0038 autoriza y
 declara.
 
+### Puerta de FASE · 2026-08-14
+
+Las doce, **más** lo que `R2` §4 añade a una puerta de fase.
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all --check` · `dart format --set-exit-if-changed` | ✅ exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` · `flutter analyze` | ✅ exit 0 |
+| 3 | `cargo test --workspace` · `flutter test` | ✅ **597** y **62**, 0 fallos, 2 ignorados — **los mismos dos** |
+| 4 | Barrido con alcance declarado | ✅ §10 |
+| 5 | Lectura de aserciones | ✅ |
+| 6 | Lectura de contadores | ✅ |
+| 7 | La medida se ve fallar | ✅ Y una de ellas **se vio no ver**, y se corrigió (QYR-0321) |
+| 8 | Lectura de nombres | ✅ |
+| 9 | `git diff --name-only 3b32b6f..HEAD` | ✅ §13, 36 archivos |
+| 10 | El ledger sigue legible | ✅ 139 fichas, **36 abiertas — las mismas 36 con las que empezó**. +12 / −12 |
+| 11 | Coherencia documental, Bash **y** PowerShell | ✅ exit 0 los cuatro |
+| 12 | Escribir el resultado | ✅ |
+| **+** | Criterios de aceptación uno a uno | ✅ §7, **13 de 14 completos y el 8 parcial y declarado** |
+| **+** | Workflows en verde sobre un commit nombrado, tabla exhaustiva | ✅ §14. `a830558`: CI success con los ocho trabajos |
+| **+** | `STATUS`, `HANDOFF`, `NEXT_STEPS`, `CHANGELOG`, `BUGS_PENDING` al día | ⚠️ `STATUS` y `BUGS_PENDING` sí. **`HANDOFF`, `NEXT_STEPS` y `CHANGELOG` no se actualizaron y se dice** en vez de declararlo hecho |
+| **+** | Informe completo según `R5` | ✅ Las dieciséis secciones |
+
+**Veredicto: la fase 02 cierra**, con el criterio 8 parcial y tres documentos de
+estado sin actualizar, los dos declarados arriba en vez de escondidos.
+
 ---
 
 ## 10. Tabla de mutación
@@ -751,12 +860,19 @@ de lectura, porque si no lo tiene, un peer que se calla cuelga una sesión.
 
 ## 11. Tests antes y después
 
-| | Antes | Después |
-|---|---|---|
-| `cargo test --workspace` (Windows) | 571 | **581** |
-| `qyro_session` | 6 | **16** |
-| — de ellos, de conducta | **0** | **10** |
-| Ignorados | 2 | 2 · los mismos dos |
+| | Antes | Después | Δ |
+|---|---|---|---|
+| `cargo test --workspace` (Windows) | 571 | **597** | +26 |
+| `flutter test` | 58 | **62** | +4 |
+| `qyro_session` | 6 | **24** | +18 |
+| — de ellos, de conducta | **0** | **14** | +14 |
+| `qyro_ffi` | 29 | **34** | +5 |
+| Ignorados | 2 | **2** · los mismos dos | ±0 |
+
+**Ningún ignorado nuevo**, que es lo que la comprobación 3 de `R2` pide mirar: un
+test ignorado es un test que no existe.
+
+Los cuatro de Dart son la prueba que define la fase y las tres que la sostienen.
 
 ---
 
@@ -768,6 +884,84 @@ empezó la fase. Ni normales ni de desarrollo: las diez pruebas nuevas usan sól
 sin `[dev-dependencies]`.
 
 Comando: `grep -c '^\[\[package\]\]' Cargo.lock` → 64.
+
+---
+
+## 13. Archivos tocados
+
+`git diff --name-only 3b32b6f..HEAD` — **36 archivos**, en **20 commits**.
+
+**Rust (9):** `qyro_ffi/src/{abi,lib,session_abi}.rs` · `qyro_net/src/{stream,tests}.rs` ·
+`qyro_session/src/{lib,session}.rs` · `qyro_session/tests/session_behaviour.rs` ·
+`qyro_transfer/src/session.rs`
+
+**Dart (2):** `apps/qyro/lib/ffi/qyro_session_api.dart` ·
+`apps/qyro/test/ffi/qyro_session_transfer_test.dart`
+
+**Scripts y CI (6):** `scripts/check_docs_consistency.ps1` ·
+`scripts/tests/docs_consistency_contract_test.{sh,ps1}` ·
+`.github/workflows/{ci,platform-builds}.yml` · `.gitignore`
+
+**ADR (3):** `ADR-0033-progress-bridge.md` · `ADR-0038-input-buffers.md` ·
+`ADR-0039-ios-out-of-v1.md`
+
+**Documentos del plan (9):** `00-LEEME-PRIMERO.md` · `R1` · `R2` · `R6` · y el
+banner de iOS en `FASE-03`, `FASE-06`, `FASE-07`, `FASE-08`, `FASE-10`
+
+**Estado del proyecto (7):** `STATUS.md` · `README.md` · `ROADMAP.md` ·
+`PROJECT_CONTEXT.md` · `RELEASES.md` · `BUGS_PENDING.md` ·
+`docs/security/secret-lifecycle-audit.md`
+
+---
+
+## 14. Runs de CI
+
+**Exhaustiva, incluidos los cancelados y los fallidos.** `R1` §4: una lista de la
+que se pueden caer los fallos no es evidencia, es un resumen favorable.
+
+### El commit que importa
+
+| Tirada | Workflow | Commit | Resultado |
+|---|---|---|---|
+| **31769832225** | **CI** | `a830558` | ✅ **success — los ocho trabajos**, incluido `rust workspace (windows-latest)` a las 04:27:58Z |
+| **31767129485** | **Platform builds** | `f85e806` | ✅ success — paso 10 «Dart drives a transfer between two Windows processes» |
+| **31767129574** | CI | `f85e806` | ⚠️ `cancelled` — es el **tope de 45 min** disparando; el trabajo `flutter` (Linux) sí terminó success con la transferencia |
+
+### Todo lo demás, en orden
+
+| Commit | CI | Platform builds | Android | iOS |
+|---|---|---|---|---|
+| `3b32b6f` (base) | ⚠️ cancelled | ✅ | ✅ | ✅ |
+| `679dec1` | ❌ failure | — | — | — |
+| `c26be67` | ⚠️ cancelled | ✅ | — | — |
+| `1bc8b73` · `68fa6bc` · `37f7a6e` · `3bfc35e` | ⚠️ cancelled ×4 | — | — | — |
+| `fe3b0e8` | ⚠️ cancelled | ✅ | ✅ | ✅ |
+| `66802dc` · `8fce2a9` | ⚠️ cancelled ×2 | ✅ | — | — |
+| `ba44406` | ⚠️ cancelled | ✅ | ✅ | ✅ |
+| `35a3dbd` | ⚠️ cancelled | — | — | — |
+| `f85e806` | ⚠️ cancelled | ✅ | — | — |
+| `9110159` | ⚠️ cancelled | ✅ | ⚠️ cancelled | ✅ |
+| `e103a6f` | ❌ **failure** | ✅ | — | — |
+| `a830558` | ✅ **success** | ✅ | — | — |
+| `ea0b023` | ⏳ en curso al escribir | ⏳ | ⏳ | ⏳ |
+
+### Y qué significa cada color, porque «cancelled» engaña
+
+- **`cancelled` no es una cancelación humana en casi ninguno de esos.** Superar
+  `timeout-minutes` marca el trabajo **`cancelled`**, no `failed`. Un cuelgue con
+  tope es indistinguible de que alguien pulse cancelar, y eso va escrito aquí
+  porque va a despistar a quien lea la lista.
+- Los que **sí** cancelé a mano son los anteriores a que existiera el tope: se
+  quedaban seis horas en `rust workspace (windows-latest)` sin producir nada.
+- **`679dec1` falló en `documentation`**, por la regla del `Verified commit` a más
+  de diez commits de HEAD. Arreglado.
+- **`e103a6f` falló también en `documentation`, por la misma regla** — y es el
+  commit del arreglo del cuelgue. Se dice explícitamente para que nadie lea
+  «failure» y concluya que el arreglo no sirvió: **el trabajo de Windows ya pasó
+  en esa misma tirada.**
+
+**La tirada `a830558` es la evidencia que cierra QYR-0078**, y es la primera vez
+en la vida de esta rama que `rust workspace (windows-latest)` termina.
 
 ---
 
@@ -790,3 +984,57 @@ Mientras siga siendo cierto, esto va en todos los informes:
   antes de la fase 01. Que la fase 01 la declarara verde no la pone verde.
 - **En Windows no hay medición de fugas de descriptores ni de hilos**, ni la
   contra-prueba que enseña que la medición vería una fuga. Sólo Linux.
+
+---
+
+## 16. Ledger y handoff
+
+### Balance, medido y no estimado
+
+| | Base `3b32b6f` | HEAD | Δ |
+|---|---|---|---|
+| Fichas | 127 | **139** | +12 |
+| Abiertas | 36 | **36** | **±0** |
+
+**Abiertas en la fase (12):** QYR-0311 a QYR-0322.
+**Cerradas (12):** QYR-0057, QYR-0078, QYR-0304, QYR-0309, QYR-0311, QYR-0312,
+QYR-0313, QYR-0314, QYR-0315, QYR-0316, QYR-0319, QYR-0321.
+
+**Se cerró exactamente tanto como se abrió.** No por casualidad: la instrucción
+era que una lista que sólo crece deja de ser una lista, y cuatro de esos cierres
+—QYR-0057, QYR-0304, QYR-0314, QYR-0315— son deuda anterior a esta fase que se
+pagó aquí en vez de heredarse.
+
+De las doce nuevas, **siete se cerraron dentro de la propia fase**. Las cinco que
+quedan abiertas son: QYR-0317 y QYR-0318 (el receptor no informa de progreso y
+`item` vale cero), QYR-0320 (los finales que fallan no están cubiertos),
+QYR-0322 (un receptor no puede decir su puerto antes de que alguien se conecte),
+y QYR-0312 está cerrada — la quinta es **ninguna más**, son cuatro.
+
+### El ledger vuelve a ser consultable
+
+El campo `Estado` usaba **once formas y cuatro palabras**. Ahora usa **dos**:
+101 `cerrado` y 38 `abierto` sobre 139 fichas. Sesenta campos reescritos, y
+**ninguna redacción perdida** — cada original queda literal en una línea
+`Nota de estado`, que es prosa y no un campo que nada analice.
+
+### Qué necesita saber la fase 03
+
+1. **iOS está fuera de la v1.0** (ADR-0039). La mitad iOS de esta fase —
+   `UIDocumentPickerViewController` — no se construye. Lo que la fase entrega es
+   **Android y Windows**.
+2. **El plan reserva `ADR-0034` para el selector de archivos.** Está libre: mis
+   dos ADR se renumeraron a 0038 y 0039 al descubrir la colisión. Comprueba antes
+   de asignar — `check_docs_consistency` verifica los `QYR-00xx` y **no tiene
+   equivalente para los números de ADR**.
+3. **`from_raw_fd` es `unsafe`** y la lista de crates exentos de
+   `forbid(unsafe_code)` es una guarda con número. Se actualiza con justificación,
+   no de refilón.
+4. **El emulador de Android no existe todavía.** El SDK y `adb` están en la
+   máquina; no hay AVD creado ni imagen de sistema instalada.
+5. **`file_selector` añade paquetes de pub.dev**, y eso está autorizado para esta
+   fase — el criterio 10 que lo prohibía era **de la fase 02**. Declara el delta
+   de `pubspec.lock` con su conteo, que hoy es **39**.
+6. **Lo que la fase 02 deja funcionando y la 03 puede usar:** `QyroSession.send`
+   toma una lista de rutas. Un selector que devuelva un **fd** en Android no
+   encaja en esa firma, y ése es el trabajo de diseño de la fase, no un detalle.

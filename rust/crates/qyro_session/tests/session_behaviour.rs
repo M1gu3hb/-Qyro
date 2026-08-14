@@ -15,11 +15,11 @@
 //! # Why a reserved port and not port 0
 //!
 //! The obvious shape is to bind the receiver on port 0 and ask it which port it
-//! got. That is impossible today, and the impossibility is the finding: the
-//! `Listener` that knows the answer is a local in `open_receiver`, dropped
-//! before the constructor returns, and `Session::local_addr` hands back
-//! `peer_addr` — the *far* end (QYR-0314). So the port is reserved the
-//! conventional way: bind an ephemeral socket, read the number, drop it. The
+//! got. `Session::local_addr` now answers that correctly — it used to hand back
+//! `peer_addr`, the *far* end (QYR-0314) — but it still cannot be asked in time:
+//! `open_receiver` blocks in `accept` before returning, so by the moment there
+//! is a session to ask, a peer has already connected. So the port is reserved
+//! the conventional way: bind an ephemeral socket, read the number, drop it. The
 //! sender then retries the dial, because the receiver may not have bound yet,
 //! and a bounded retry is honest where a sleep is a guess.
 
@@ -668,6 +668,58 @@ fn a_cancelled_session_reports_cancelled_and_keeps_reporting_it() {
 
     drop(sender);
     let _ = receiving.join();
+}
+
+#[test]
+fn a_receiver_reports_the_port_it_bound_and_not_the_one_the_peer_dialled_from() {
+    // Half of QYR-0314: `local_addr` returned `peer_addr` -- the *far* end --
+    // and nothing noticed, because the C surface does not expose it and no test
+    // called it.
+    //
+    // The two ports are distinguishable on purpose: a dialling socket gets an
+    // ephemeral port the system picks, so an implementation that still handed
+    // back the peer's address fails the last assertion rather than looking
+    // plausible.
+    let source = Scratch::new("addr-src");
+    let destination = Scratch::new("addr-dst");
+    let original = source.path("payload.bin");
+    write_pattern(&original, 4096);
+    let port = a_free_port();
+    let address = loopback(port);
+    let destination_dir = destination.dir.clone();
+
+    let receiving = thread::spawn(move || {
+        Session::open_receiver(address, &destination_dir, None).map(|session| {
+            let local = session.local_addr();
+            let peer = session.progress();
+            let _ = peer;
+            local
+        })
+    });
+
+    let sender = open_sender_when_ready(address, &source.dir, &[original]).unwrap();
+    let sender_local = sender.local_addr().unwrap();
+
+    let reported = receiving.join().unwrap().unwrap().unwrap();
+
+    assert_eq!(
+        reported.port(),
+        port,
+        "the receiver reported {} where it bound {port}",
+        reported.port()
+    );
+    assert_ne!(
+        reported.port(),
+        0,
+        "port 0 is the request, never the answer"
+    );
+    assert_ne!(
+        reported.port(),
+        sender_local.port(),
+        "the receiver reported the port the sender dialled from, which is what \
+         handing back `peer_addr` looks like"
+    );
+    drop(sender);
 }
 
 #[test]

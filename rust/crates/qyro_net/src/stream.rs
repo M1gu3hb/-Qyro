@@ -222,6 +222,25 @@ impl FrameStream {
             })
     }
 
+    /// The address of **this** end.
+    ///
+    /// The twin of [`Self::peer_addr`], and the one a receiver needs: an
+    /// accepted socket's local address carries the port the listener actually
+    /// bound, so a session opened on port 0 can say which port the system chose
+    /// without holding on to the `Listener` (QYR-0314).
+    ///
+    /// # Errors
+    ///
+    /// [`NetError::SocketFailed`] with [`SocketOp::Address`].
+    pub fn local_addr(&self) -> Result<SocketAddr, NetError> {
+        self.socket
+            .local_addr()
+            .map_err(|error| NetError::SocketFailed {
+                operation: SocketOp::Address,
+                kind: error.kind(),
+            })
+    }
+
     /// Writes one whole frame.
     ///
     /// Takes the already-encoded bytes rather than a `Frame`, because a sealed

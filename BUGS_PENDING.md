@@ -15,7 +15,8 @@
 
 - Plataforma: Android, iOS, Windows
 - Severidad: P0
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: commit 286d3d4 y builds run 30938946789
 - Resolución: runners oficiales generados por Flutter 3.44.8
 - Fecha: 2026-08-04
@@ -28,7 +29,8 @@
 - Esperado: cero avisos
 - Actual: GitHub fuerza Node 24 porque la action declara Node 20
 - Workaround: ninguno necesario; jobs pasan
-- Estado: abierto; evaluar checkout v5 tras auditoría
+- Estado: abierto
+- Nota de estado: «abierto; evaluar checkout v5 tras auditoría»
 - Dueño: release
 - Fecha: 2026-08-04
 
@@ -49,7 +51,8 @@
   que se afirma
 - Evidencia: run 30938946789; `.github/workflows/platform-builds.yml:223`
 - Workaround: volver a ejecutar builds para Android e iOS
-- Estado: abierto, con el alcance corregido en el sprint 4C.1
+- Estado: abierto
+- Nota de estado: «abierto, con el alcance corregido en el sprint 4C.1»
 - Dueño: release
 - Fecha: 2026-08-04, corregido 2026-08-05
 
@@ -76,7 +79,8 @@
   sin versión de herramientas contra la que compararse
 - Evidencia: runs 30960631901 (67fa795), 30961031089 (9bfb1cc) y 30961153321
   (e9ed7f3) fallan; 30953803079 (9104421) y 30956527561 (4f7ed01) pasaban
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Resolución: commit 565a78d restaura la estructura del documento que ya
   compilaba y añade validación estructural al contrato de launch surfaces
 - Confirmación: run 30963011815 sobre ff933d9, los diez pasos en success,
@@ -92,7 +96,8 @@
 - Actual: `check_docs_consistency` validaba solo la estructura de STATUS.md, así
   que `Verified commit: 7ca3973` sobrevivió 58 commits declarando funciones ya
   implementadas como NOT_IMPLEMENTED y 9 tests cuando la suite ejecuta 51
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Resolución: commit 5825b50 añade la regla de frescura (SHA mal formado,
   inalcanzable o con más de `QYRO_MAX_STATUS_COMMIT_LAG` commits de retraso) en
   Bash y PowerShell, y el job documental usa `fetch-depth: 0`
@@ -110,7 +115,8 @@
   con `cancel-in-progress: true` lo desplaza en el próximo push a esa ref
 - Impacto: ninguno ya sobre el estado actual. El runtime ABI de Android quedó
   confirmado en esta rama por el run 30963016390 sobre ff933d9
-- Estado: cerrado por obsolescencia; el run atascado sigue en la otra rama
+- Estado: cerrado
+- Nota de estado: «cerrado por obsolescencia; el run atascado sigue en la otra rama»
 - Dueño: CI/Android
 - Fecha: 2026-08-05
 
@@ -124,7 +130,8 @@
 - Impacto adicional: `header_len > 48` se aceptaba y los bytes de extensión se
   descartaban, rompiendo la reserialización byte-exacta; `ENCRYPTED` y
   `COMPRESSED` eran ajustables públicamente
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Resolución: ADR-0018 y commits 30fe57e (contratos) y cc38554 (implementación)
 - Fecha: 2026-08-05
 
@@ -135,7 +142,8 @@
 - Esperado: el nombre mostrado corresponde al archivo que se escribirá
 - Actual: `display_name` viajaba aparte de la ruta, así que `factura.pdf.exe`
   podía presentarse como `factura.pdf` con un manifest técnicamente válido
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Resolución: ADR-0019, campo eliminado del wire, `MANIFEST_VERSION` a 2
 - Fecha: 2026-08-05
 
@@ -147,7 +155,8 @@
   archivo en el receptor
 - Actual: `HashMetadata::none()` era válido para archivos, y `Foto.jpg` junto a
   `foto.jpg` se aceptaban, sobrescribiéndose en Windows o macOS
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Resolución: digest obligatorio en el constructor y `PortableCollisionKey`
 - Fecha: 2026-08-05
 
@@ -159,7 +168,8 @@
 - Actual: property tests y targets de fuzzing comprobaban `".."` como subcadena,
   lo que rechaza el nombre legítimo `notes..txt` y no dice nada útil sobre
   travesía real
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Resolución: aserciones por segmento en property tests y targets
 - Fecha: 2026-08-05
 
@@ -184,7 +194,8 @@
   CI. Es la misma regla que `qyro_manifest` aplica a una transferencia: un
   proyecto que rechaza el nombre no portable de un peer y comete uno propio no
   está aplicando su propio estándar
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: run 30976026135 (fallo, job `windows`), contrato en rojo y verde
 - Fecha: 2026-08-05
 
@@ -204,7 +215,8 @@
 - Resolución: cuatro pruebas unitarias sobre la derivación misma, más las
   etiquetas fijadas contra ADR-0022 y no contra la función que las produce
 - Prevención: cada mutación se volvió a aplicar después; las cuatro fallan
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C_AEAD_AUDIT.md`, hallazgo H-1
 - Fecha: 2026-08-05
 
@@ -220,7 +232,8 @@
 - Causa: la lista se congeló en la ADR antes de que existiera el código, que es
   deliberado y correcto; lo que faltaba era revisarla al implementarla
 - Resolución: eliminadas del enum, con enmienda registrada en ADR-0022
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C_AEAD_AUDIT.md`, hallazgo H-2
 - Fecha: 2026-08-05
 
@@ -243,7 +256,8 @@
   nombre del paquete y el `--target` aparezcan **juntos**, y su contrato incluye
   a propósito una sustitución `qyro_ffi`/`qyro_crypto` para comprobar que el
   checker la detecta
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
 - Fecha: 2026-08-05
 
@@ -265,7 +279,8 @@
 - Segundo defecto que destapó: devolver `Err` sin más deja un sealer que puede
   haber consumido ya su secuencia. Un reintento reutilizaría el nonce. Ahora
   cualquier error lo envenena de forma permanente
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
 - Fecha: 2026-08-05
 
@@ -288,7 +303,8 @@
 - Límite registrado, no cerrado: swap, hibernación, core dumps y registros
   quedan fuera del alcance de cualquier `Drop`, y nada de esto se ha observado
   ocurriendo. Ver `docs/security/secret-lifecycle-audit.md`
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
 - Fecha: 2026-08-05
 
@@ -310,7 +326,8 @@
   que no necesita tipos para pasar
 - Resolución: `[workspace]` propio, target reparado, tres targets nuevos y
   `crypto-fuzz.yml`
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`
 - Fecha: 2026-08-05
 
@@ -329,7 +346,8 @@
 - Resolución: `.gitattributes` con `* text=auto eol=lf` y una lista explícita de
   extensiones binarias, más una prueba nombrada que rechaza un `\r` en los
   vectores comprometidos
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: run 31049534832 (fallo, job `windows-crypto`)
 - Fecha: 2026-08-05
 
@@ -352,7 +370,8 @@
   citada en el fuente y comprobada contra el archivo. Variante propia
   `PathError::FormatCharacter`, que imprime `U+202E` y nunca el carácter. Sin
   dependencias nuevas. `U+200C`/`U+200D` rechazados como decisión explícita
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: rojo en `cff6a1a` (5 pruebas); enmienda a ADR-0019;
   `tests/unicode_path_contract.rs`
 - Fecha: 2026-08-07
@@ -371,7 +390,8 @@
 - Resolución: `an_unsigned_peer_cannot_present_another_identity`, que construye
   el hello con la identidad de un tercero y también reintenta con una firma
   real hecha con la clave del atacante
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: con el control borrado la prueba falla con
   `Some(FinishedVerificationFailed)` en vez de
   `Some(SignatureVerificationFailed)`
@@ -391,7 +411,8 @@
   citarse, y el fuente explica por qué: `verify` de este crate firma sobre su
   propia entrada con separación de dominio, así que ninguna terna publicada
   puede presentársele
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: con `verify` la aserción pasa de `Err(SignatureVerificationFailed)`
   a `Ok(())`
 - Fecha: 2026-08-07
@@ -412,7 +433,8 @@
   verificados. Prueba nueva
   `the_transcript_is_what_the_specification_says_it_is`, que no toca
   `transcript.rs` para construir lo esperado
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: borrar los prefijos `u32` BE hace fallar la prueba nueva;
   reencaminar el `info` al salt hace fallar la del archivo de vectores con «the
   key schedule this crate runs disagrees with the primitives»
@@ -431,7 +453,8 @@
   referencias muertas corregidas. Se eligió `push` y no una pull request: un run
   de `pull_request` se ejecuta sobre un commit de fusión que solo existe dentro
   del run, así que su ID no puede citarse como evidencia de un commit de la rama
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: los seis runs finales de STATUS.md son de evento `push`
 - Fecha: 2026-08-07
 
@@ -447,7 +470,8 @@
 - Resolución: regla de prefijo en frontera NUL sobre las claves ordenadas,
   aplicada solo cuando el ancestro es `File`. Formulación exacta en la enmienda
   a ADR-0017
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: rojo en `52391a5` (3 pruebas);
   `tests/ancestor_collision_contract.rs`
 - Fecha: 2026-08-07
@@ -468,7 +492,8 @@
   evidencia rechaza nombres legítimos, que es el mismo error en la otra
   dirección. Una prueba fija que hoy se aceptan, para que la respuesta no cambie
   por accidente
-- Estado: **abierto** (parcialmente resuelto)
+- Estado: abierto
+- Nota de estado: «**abierto** (parcialmente resuelto)»
 - Dueño: quien tenga acceso a un Windows real para medirlo
 - Evidencia: rojo en `02e1e44`; `windows_superscript_device_names_are_rejected`
   y `names_that_merely_resemble_a_device_are_still_accepted`
@@ -488,7 +513,8 @@
   build-dependencies. Dos aserciones: una lista nombrada de crates de cripto, y
   igualdad exacta con `{qyro_ffi, qyro_core}`. Los dos scripts de guarda en
   shell descartan además las líneas de comentario antes de buscar
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: con `qyro_crypto` bajo una tabla `cfg(target_os)` la prueba falla
   nombrando el crate; la ventana que leía la prueba anterior contiene con esa
   misma edición solo `qyro_core = { path = "../qyro_core" }`
@@ -507,7 +533,8 @@
 - Resolución: los seis corregidos y marcados como corregidos, no reescritos en
   silencio. El campo `normalized` pasa a llamarse `verbatim`. `fuzzing.rs` dice
   ahora que `--cfg fuzzing` es activable por `RUSTFLAGS` en todo el workspace
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`, tabla de QYR-0031
 - Fecha: 2026-08-07
 
@@ -524,7 +551,8 @@
   a byte porque la API de construcción rechaza el manifest antes de codificarlo.
   La de desbordamiento usa 1 y `u64::MAX`, que suman exactamente `u64::MAX + 1`,
   con total declarado cero
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: cada control borrado por turno hace fallar su propia prueba
 - Fecha: 2026-08-07
 
@@ -543,7 +571,8 @@
   nuevo no quede fuera. Clippy deniega además la familia de pánico y
   `indexing_slicing` en `handshake/`, `identity.rs`, `signature.rs` y
   `fingerprint.rs`. Los dos pánicos se eliminaron sin añadir un error muerto
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: rojo en `6b02db6`; catorce indexaciones sin comprobar eliminadas
 - Fecha: 2026-08-07
 
@@ -560,7 +589,8 @@
   Eso **no se ha verificado en este repositorio** y no se toma como hecho. Si
   resulta cierto, la resolución correcta es rechazar también en Rust, porque
   este proyecto rechaza en todas las plataformas lo que rechaza en una
-- Estado: **abierto** (decisión registrada, verificación pendiente)
+- Estado: abierto
+- Nota de estado: «**abierto** (decisión registrada, verificación pendiente)»
 - Dueño: quien escriba el lado Swift
 - Fecha: 2026-08-07
 
@@ -575,7 +605,8 @@
   que no existía
 - Resolución: eliminadas, con el motivo de cada una escrito donde está el enum,
   y `every_handshake_error_has_a_construction_site` para que no vuelva a pasar
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: volver a añadir una, con su brazo de `Display`, hace fallar esa
   guarda por nombre
 - Fecha: 2026-08-07
@@ -598,7 +629,8 @@
   de prueba dentro de cada crate. La guarda encontró además un
   `debug_assert_eq!` en `codec.rs` que ningún lint de Clippy cubre, duplicando
   un test que ya corre en todos los perfiles
-- Estado: resuelto en el sprint 4C.3
+- Estado: cerrado
+- Nota de estado: «resuelto en el sprint 4C.3»
 - Evidencia: reintroducir `.expect(` en cualquier archivo de producción de
   cualquiera de los dos hace fallar su guarda por nombre
 - Fecha: registrado 2026-08-07 (4C.2), resuelto 2026-08-07 (4C.3)
@@ -623,7 +655,8 @@
   bytes entrantes no caben o al menos la mitad del búfer está consumida. Esa
   segunda condición es la amortización: una compactación mueve como mucho la
   mitad del búfer y no puede repetirse hasta que se haya consumido otro tanto
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: rojo en `9c4a1a2`. Después: 0 bytes movidos en el llenado-drenado, y
   2 359 296 contra 2 596 608 empujados en el bucle con backlog, que es donde la
   compactación corre de verdad. Enmienda a ADR-0016
@@ -642,7 +675,8 @@
 - Resolución: `reserve_for` conserva el doblado —que es lo que mantiene un push
   amortizado O(1)— y lo recorta al techo. `reserve_exact` a secas habría sido
   peor que el defecto: con pushes de un byte reasigna en cada byte
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: `the_buffer_never_reserves_more_than_its_limit`, que llena el búfer
   de verdad, rojo en `9c4a1a2`
 - Fecha: 2026-08-07
@@ -666,7 +700,8 @@
   haberles puesto identificador. La regla nueva de `check_docs_consistency`
   impide que vuelva a ocurrir: un identificador citado sin entrada es un
   BLOCKER
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Fecha: 2026-08-07
 
 ## QYR-0038 — Cotas inalcanzables presentadas como cotas
@@ -688,7 +723,8 @@
   se entere. La variante no está muerta: `FrameDecoder::next_frame` la construye
   cuando un total declarado no cabe en un `usize`, inalcanzable en 64 bits y
   alcanzable en 16
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Fecha: 2026-08-07
 
 ## QYR-0039 — CI compila `cargo-audit` desde fuente en cada run, con pin exacto
@@ -706,7 +742,8 @@
   pasa, el job **falla cerrado**, que es el comportamiento correcto y no una
   emergencia; pero falla por obsolescencia de la herramienta y no por una
   vulnerabilidad, y eso hay que saber leerlo
-- Estado: **abierto y programado**. Este sprint le da contenido; no lo corrige,
+- Estado: abierto
+- Nota de estado: «**abierto y programado**. Este sprint le da contenido; no lo corrige,»
   porque cambiar cómo CI obtiene su herramienta de auditoría no es trabajo de un
   sprint de almacenamiento seguro
 - Acción concreta cuando se aborde: binario preconstruido con checksum, o una
@@ -732,7 +769,8 @@
   minutos de runner en trabajo que este proyecto no empezó. Regla nueva en
   `check_docs_consistency` (Bash y PowerShell) que rechaza un nombre literal en
   cualquier `branches:`
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: los seis runs finales se dispararon por `push` sobre
   `claude/qyro-resource-bounds-4c3`, un nombre que ningún YAML menciona
 - Fecha: 2026-08-07
@@ -747,7 +785,8 @@
 - Resolución: fecha corregida en los dos sitios. La tabla en sí era y sigue
   siendo correcta, comprobada punto por punto contra el archivo: 170 puntos de
   código, veintiún rangos
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Fecha: 2026-08-07
 
 ## QYR-0042 — La lista de exenciones de la guarda se satisfacía borrando el gate
@@ -763,7 +802,8 @@
 - Resolución: las exenciones se derivan de las declaraciones `mod` mismas. El
   gate *es* la exención, así que quitarlo mueve el archivo al conjunto de
   producción en vez de eximirlo
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: quitar `#[cfg(test)]` de `mod schema;` falla con «src/schema.rs is
   compiled into a release build and no guard covers it»
 - Fecha: 2026-08-07
@@ -780,7 +820,8 @@
 - Resolución: una entrada por identificador, y una regla en
   `check_docs_consistency` (Bash y PowerShell) que hace BLOCKER de cualquier
   `QYR-00xx` citado sin entrada
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: la regla falló con ocho hallazgos antes de escribirse estas
   entradas, en `a1b61c4`
 - Fecha: 2026-08-07
@@ -802,7 +843,8 @@
   literales. Si no lo calcula, dice «Do not regenerate». El documento AEAD no
   tiene una comprobación equivalente de una línea, así que su consejo se
   reformula como «if and only if» con la condición escrita
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: bajo la mutación, el mensaje del handshake cambia a «**and this
   build no longer computes the transcript ADR-0021 specifies**. Do not
   regenerate»
@@ -828,7 +870,8 @@
   `rust/**` y `ci.yml` no tiene filtro; los dos lo dicen ahora, porque
   `rust/guards/` es un directorio nuevo fuera de `rust/crates/` y un lector que
   compruebe la cobertura merece encontrar la respuesta
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: los seis runs finales de STATUS.md
 - Fecha: 2026-08-07
 
@@ -854,7 +897,8 @@
 - Prevención: `check_docs_consistency` en Bash y en PowerShell trata como BLOCKER
   cualquier `## QYR-00xx` repetido, nombrando el identificador y cuántas veces
   aparece
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Evidencia: la regla se escribió antes de fusionar y disparó sobre el duplicado
   real en los dos shells: «QYR-0036 has 2 entries in BUGS_PENDING.md»
 - Fecha: 2026-08-07
@@ -874,7 +918,8 @@
   el prompt del sprint 4D.1 y queda registrado en su propia entrada; las
   auditorías de 4C.1 que originaron QYR-0037 y QYR-0038 **siguen sin estar en el
   repositorio**, así que esas dos permanecen reconstruidas y se marcan como tales
-- Estado: resuelto en lo que este sprint puede resolver; el hueco de procedencia
+- Estado: cerrado
+- Nota de estado: «resuelto en lo que este sprint puede resolver; el hueco de procedencia»
   de QYR-0037 y QYR-0038 solo lo cierra quien tenga el documento original
 - Fecha: 2026-08-07
 
@@ -905,7 +950,8 @@
   la **interpretación** del envoltorio, no su longitud
 - Alternativa descartada: poner `wrapped_len` a cero al componer la entropía en
   ambas fases. Equivalente, con más ceremonia y con un campo que miente
-- Estado: resuelto en la especificación; la implementación llega después
+- Estado: cerrado
+- Nota de estado: «resuelto en la especificación; la implementación llega después»
 - Fecha: 2026-08-07
 
 ## QYR-0049 — La rama tenía runs en verde y STATUS.md no los nombraba
@@ -925,7 +971,8 @@
   tenga sus propios seis en verde sobre un mismo commit, no antes: moverlo a un
   commit con un solo workflow ejecutado sería exactamente la sustitución que el
   campo existe para impedir
-- Estado: resuelto en la parte documental; el ancla se mueve al cerrar el sprint
+- Estado: cerrado
+- Nota de estado: «resuelto en la parte documental; el ancla se mueve al cerrar el sprint»
 - Fecha: 2026-08-07
 
 ## QYR-0050 — La ruta del blob depende de un nombre de producto provisional
@@ -948,7 +995,8 @@
   constante del crate de plataforma, y un cambio de nombre exige migración
   explícita —leer con la ruta antigua, escribir con la nueva, borrar la antigua—
   y no un cambio de literal
-- Estado: **abierto**, con la decisión tomada y la implementación pendiente del
+- Estado: abierto
+- Nota de estado: «**abierto**, con la decisión tomada y la implementación pendiente del»
   crate de plataforma
 - Fecha: 2026-08-07
 
@@ -973,7 +1021,8 @@
   —se mueve **por tramo**, y no es una afirmación de que seis workflows corrieran
   sobre él, que es lo que dice la tabla fila por fila—, y el fallo registrado con
   su run ID y su causa
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Fecha: 2026-08-07
 
 ## QYR-0052 — La ligadura de la cabecera a la entropía no la comprobaba nada
@@ -991,7 +1040,8 @@
 - Patrón, no incidente: es la **tercera** vez con esta forma exacta. QYR-0025 (un
   transcript verificado llamándose a sí mismo) y la aserción tautológica del
   target `encrypted_envelope` son las otras dos
-- Estado: abierto al inicio de este tramo
+- Estado: abierto
+- Nota de estado: «abierto al inicio de este tramo»
 - Fecha: 2026-08-07
 
 ## QYR-0053 — La guarda de material de clave no veía la semilla en claro
@@ -1006,7 +1056,8 @@
   treinta y dos bytes, y el comentario que lo explica es correcto. La conclusión
   no: excluirlo sin más deja fuera justo lo que la guarda vigila. Una lista de
   marcadores es una lista de permitidos disfrazada de prohibidos
-- Estado: abierto al inicio de este tramo
+- Estado: abierto
+- Nota de estado: «abierto al inicio de este tramo»
 - Fecha: 2026-08-07
 
 ## QYR-0054 — Nada comprobaba `forbid(unsafe_code)`
@@ -1020,7 +1071,8 @@
 - Urgencia: la guarda tiene que existir **antes** del crate de plataforma. Si
   llega después, añadir la excepción es indistinguible de un `forbid` que nunca
   estuvo
-- Estado: abierto al inicio de este tramo
+- Estado: abierto
+- Nota de estado: «abierto al inicio de este tramo»
 - Fecha: 2026-08-07
 
 ## QYR-0055 — Tres afirmaciones de STATUS.md que el repositorio contradecía
@@ -1038,7 +1090,8 @@
   revisada cuando dejó de serlo—, y ninguna regla las cubre porque las tres son
   prosa
 - Resolución: corregidas diciendo lo que sí es cierto, no borradas
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Fecha: 2026-08-07
 
 ## QYR-0058 — Las dos guardas de aislamiento nombraban un solo harness
@@ -1056,7 +1109,8 @@
 - Resolución: las dos guardas iteran sobre una lista de harnesses
 - Evidencia: hacer que `qyro_crypto` dependa de `qyro_store_smoke` hace fallar
   las dos por nombre, comprobado en Bash y en PowerShell
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Fecha: 2026-08-07
 
 ## QYR-0056 — La guarda de material de clave no ve `Vec<u8>` ni `String`
@@ -1081,11 +1135,20 @@
 - Severidad: P3
 - Actual: QYR-0052, QYR-0053 y QYR-0054 dicen `Estado: abierto al inicio de este
   tramo`, que describe una historia y no un estado. Las tres están resueltas
-- Solución: `Estado` debe ser uno de un conjunto cerrado —`abierto`, `resuelto`,
-  `parcial`, `cerrado por obsolescencia`—, con la narración en otra línea, y una
-  regla de `check_docs_consistency` que rechace cualquier otra cosa
-- Estado: abierto
-- Fecha: 2026-08-07
+- Solución: `Estado` debe ser uno de un conjunto cerrado, con la narración en
+  otra línea, y una regla de `check_docs_consistency` que rechace cualquier otra
+  cosa
+- Resolución: hecho, con **el conjunto de `R4` §5 y no el de esta ficha**. Esta
+  proponía cuatro palabras —incluidas `parcial` y `cerrado por obsolescencia`—
+  que son exactamente la clase de narración que el problema era; `R4` congela
+  tres. Las tres fichas que la abrieron y las otras cincuenta y siete están
+  normalizadas, y **ninguna redacción se perdió**: la original queda literal en
+  una línea `Nota de estado`, que es prosa y no un campo que nada analice
+- **Lo que no se hizo:** la regla en `check_docs_consistency` que rechace lo
+  demás. Eso es una comprobación nueva en una puerta, y añadirla es decisión del
+  supervisor. Queda propuesta en QYR-0315
+- Estado: cerrado
+- Fecha: 2026-08-07, cerrado 2026-08-14
 
 ## QYR-0059 — DPAPI no autentica todos los bytes de su propio blob
 
@@ -1469,7 +1532,8 @@
   comprobación por nombre no detecta. La creación puede dejar un archivo vacío
   fuera; `digest`, `rename` y `remove_file` conservan ventanas propias. Sólo la
   opción (a) completa puede cerrar esas propiedades
-- Estado: resuelto por decisión de riesgo y mitigación; la TOCTOU no se declara
+- Estado: cerrado
+- Nota de estado: «resuelto por decisión de riesgo y mitigación; la TOCTOU no se declara»
   cerrada
 - Fecha: 2026-08-08
 
@@ -1552,10 +1616,16 @@
 - Anotado porque va a despistar a alguien: superar `timeout-minutes` marca el job
   **`cancelled`**, no `failed`. Un cuelgue con tope es indistinguible de una
   cancelación humana
-- **Lo que falta para cerrarla:** una tirada de `rust workspace (windows-latest)`
-  en **success** sobre un commit nombrado. Se deja abierta a propósito: `R4` §5
-  exige evidencia ejecutada, y arreglar la causa no es lo mismo que verla verde
-- Estado: abierto
+- **Cerrada con la tirada verde, no con el arreglo.** `rust workspace
+  (windows-latest)` terminó en **success** a las 2026-08-14T04:27:58Z sobre el
+  commit `a830558`, tirada **31769832225**, junto con los otros siete trabajos de
+  esa tirada. Es la primera vez en la vida de esta rama que ese trabajo termina
+- Y una lectura que el propio historial deja hacer: la tirada de `e103a6f` —el
+  commit del arreglo— salió **failure**, pero en `documentation`, por el retraso
+  del `Verified commit` de `STATUS.md`, no en Windows. El trabajo de Windows ya
+  pasó ahí. Se dice para que nadie lea «failure» y concluya que el arreglo no
+  sirvió
+- Estado: cerrado
 - Fecha: 2026-08-11
 - Evidencia: `.github/workflows/ci.yml:65-77`; trabajo `rust workspace
   (windows-latest)` de la tirada 31739146084, clippy success a las 20:06:33Z y
@@ -2183,7 +2253,8 @@
 - Resolución: las 173 fichas mecánicas se sustituyeron por diez familias
   humanas; el inventario íntegro de 939 mutantes vive en el informe de barrido
   y ambos checkers bloquean 60 abiertas con contratos que primero fallaron
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
 - Evidencia: el conteo de líneas `## QYR-` y `- Estado:` da 99 fichas y 23
@@ -2217,7 +2288,8 @@
 - Resolución: contratos focales de ciphertext/trailer, associated data, offsets,
   extensión, flags y consumo mataron 17; las ocho restantes son equivalentes
   por invariantes de tipos o ramas demostrablemente inalcanzables
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
 - Evidencia: barrido exacto a 30 s terminó primero 16 caught/9 missed; el único
@@ -2248,7 +2320,8 @@
 - Resolución: ocho contratos de fronteras mataron 24; las dos restantes son
   equivalentes: un directorio inválido no puede construirse y dos índices de
   `enumerate` distintos nunca son iguales
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
 - Evidencia: barrido exacto a 30 s: 24 caught, 2 missed equivalentes, 0 timeout
@@ -2310,7 +2383,8 @@
 - Resolución: equivalencia demostrada. `record` llama primero a `check`; para
   `sequence == highest`, el bit cero ya está marcado y devuelve
   `ReplayDetected`, por lo que ninguna de las dos comparaciones se alcanza
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
 - Evidencia: lectura estructural de `check`/`record`; ningún test puede distinguir
@@ -2330,7 +2404,8 @@
   acotaron todos los drenajes por frames/bytes, los doce mutantes pasan de
   `TIMEOUT` a `CAUGHT` y el decodificador rechaza con `DecoderNoProgress` todo
   total que alguna regresión calcule por debajo de la cabecera ya consumida
-- Estado: resuelto
+- Estado: cerrado
+- Nota de estado: «resuelto»
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
 - Evidencia: barrido focal a 30 s: primera pasada amplia 22 caught, 1 unviable y
@@ -2860,11 +2935,20 @@
   operaciones `extern "C"` no la incluyen, así que hoy nadie la llama y el
   defecto no ha llegado a Dart. Es una función pública equivocada sin consumidor,
   la forma que toma aquí el antipatrón de `R1` §5.5
-- Lo que haría falta para cerrarla: retener el `Listener` o su dirección en la
-  sesión, devolver la dirección local, y una prueba que abra un receptor en el
-  puerto 0 y compruebe que el puerto informado **no** es cero y **no** es el del
-  peer. Cerrarla es prerrequisito de la mitad receptora de la fase 02
-- Estado: abierto
+- Resolución: `FrameStream` gana `local_addr`, gemelo de `peer_addr`, y
+  `Session::local_addr` lo usa. **La dirección local de un socket aceptado lleva
+  el puerto que el listener ató**, así que la respuesta sobrevive a que el
+  `Listener` se descarte y no hace falta retenerlo
+- Prueba: `a_receiver_reports_the_port_it_bound_and_not_the_one_the_peer_dialled_from`.
+  Los dos puertos son distinguibles a propósito —el que marca recibe un puerto
+  efímero que elige el sistema—, así que una implementación que siguiera
+  devolviendo la dirección del peer falla en vez de parecer plausible
+- **La otra mitad no se cierra y se dice:** `open_receiver` sigue bloqueando en
+  `accept` antes de devolver, así que cuando ya hay sesión a la que preguntar, un
+  peer se conectó. Atar al puerto 0 **para anunciar el puerto** sigue fuera de
+  alcance, y eso pide separar el bind del accept — cambio de forma de la API que
+  no toca a esta fase. Va a QYR-0322
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-13
 - Evidencia: lectura del código; ninguna prueba de conducta lo cubre, que es
@@ -2889,9 +2973,21 @@
 - Recogido de paso: el comentario de `.github/workflows/ci.yml:73` dice «its
   ninth guard test», contando un guard en `qyro_win_dpapi`; hoy hay cinco, y el
   crate corre 13 tests en Windows, no 9
-- Resolución: pendiente; normalizar a los tres estados en un commit de sólo
-  documentación, y decidir si el checker debe exigirlo
-- Estado: abierto
+- Resolución: normalizado. **Sesenta campos reescritos**, y el vocabulario pasa
+  de once formas a dos: 101 `cerrado` y 38 `abierto` sobre 139 fichas.
+  `descartado` sigue sin aparecer, que es correcto — nada se ha descartado
+- **Ninguna redacción se borró.** Cada campo que no era canónico deja su texto
+  original literal en una línea `- Nota de estado: «…»`. «Resuelto en la parte
+  documental» decía algo que `cerrado` no dice, y sigue dicho; lo que ya no hace
+  es vivir en el campo que se consulta
+- Y esto es editar fichas ajenas, que `R4` §8 desaconseja. Se hace porque **esta
+  ficha existe para autorizarlo** y porque el campo es infraestructura del ledger,
+  no el contenido de nadie: no se ha tocado una sola línea de diagnóstico
+- **Lo que queda propuesto y no hecho:** una regla en `check_docs_consistency`
+  que rechace un `Estado` fuera de los tres. Es una comprobación nueva en la
+  puerta y esa decisión es del supervisor, no un arreglo que me corresponda
+  aplicar solo
+- Estado: cerrado
 - Dueño: documentación
 - Fecha: 2026-08-13
 - Evidencia: `grep -oE '^- Estado: [^,;.(]*' BUGS_PENDING.md | sort | uniq -c`;
@@ -2990,10 +3086,14 @@
 - Por qué P3: es un enlace roto en documentación, sin consecuencia de ejecución.
   Se registra porque `rustdoc` no está en la puerta y por tanto nada lo caza:
   `clippy -D warnings` no evalúa `rustdoc::broken_intra_doc_links`
-- Resolución: pendiente; reescribir el doc para decir que `step` devuelve el
-  mismo error que falló, y evaluar si `cargo doc -D warnings` debe entrar en la
-  puerta
-- Estado: abierto
+- Resolución: el doc de `step` dice ahora que devuelve **el mismo error** que
+  falló, y por qué `error.rs` no tiene la variante: ADR-0032 §5 congela la
+  pegajosidad como devolver el mismo código
+- **Lo que no se hace, y por qué:** `cargo doc -D warnings` **no** entra en la
+  puerta en esta fase. Añadir una comprobación número trece al cierre de cada
+  paso es una decisión de proceso que le toca al supervisor, no un arreglo. Queda
+  propuesta y sin aplicar
+- Estado: cerrado
 - Dueño: documentación
 - Fecha: 2026-08-13
 - Evidencia: `grep -rn 'AlreadyFailed' rust/crates/` devuelve exactamente dos
@@ -3080,3 +3180,29 @@
 - Evidencia: `cargo mutants --package qyro_session --timeout 120`, parcial a
   46/62: 26 caught, 10 missed, 1 timeout, 8 unviable. Inventario en
   `docs/reports/fase-02-dart-conduce.md` §10
+
+## QYR-0322 — Un receptor no puede decir su puerto antes de que alguien se conecte
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P2
+- Esperado: abrir un receptor en el puerto 0, preguntarle qué puerto le dio el
+  sistema, y **anunciarlo** — que es para lo que sirve atar al puerto 0
+- Actual: `open_receiver` hace `bind` y `accept` dentro de la misma llamada y no
+  devuelve hasta que un peer se conecta. Cuando existe una sesión a la que
+  preguntar, ya es tarde: el puerto sólo servía para que alguien lo marcase
+- La mitad del defecto que sí se arregló es QYR-0314: `local_addr` devolvía la
+  dirección del peer. Ahora devuelve la propia, y es correcta — lo que no se
+  puede es preguntarla a tiempo
+- Por qué P2: la fase 02 conduce el lado emisor y su prueba usa
+  `qyro_net_smoke serve`, que sí anuncia su puerto antes de aceptar. Sube en
+  cuanto Dart tenga que **recibir**, que es la fase 05
+- Lo que haría falta para cerrarla: separar el bind del accept en la superficie de
+  `qyro_session` —algo como un `Bound` que sepa su dirección y del que salga una
+  `Session` al aceptar—. Cambia la forma de la API pública del crate frontera, así
+  que lleva su cláusula de ADR
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: `qyro_net_smoke` resuelve el mismo problema imprimiendo
+  `LISTENING <port>` y haciendo flush **antes** de aceptar; es la forma que
+  funciona y la que esta caja no ofrece
