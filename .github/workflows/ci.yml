@@ -30,6 +30,10 @@ permissions:
 
 jobs:
   rust:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +67,10 @@ jobs:
         run: rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
 
   rust-windows:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 45
     name: rust workspace (windows-latest)
     runs-on: windows-latest
     steps:
@@ -77,6 +85,10 @@ jobs:
       - run: cargo test --workspace
 
   fs-final-component:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
     name: fs final-component guard (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -104,6 +116,10 @@ jobs:
           -- --exact
 
   flutter:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -111,9 +127,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
-      - name: Build qyro_ffi for the Dart integration test
+      # Release, not debug. The transfer test moves 8 MiB through ChaCha20 and
+      # SHA-256, and a debug build of that stack turns a one-second test into a
+      # multi-minute one. The receiver is built here too: qyro_net_smoke already
+      # speaks the same engine and the same handshake, and it announces its port
+      # before it accepts, so the test never has to guess.
+      - name: Build qyro_ffi and the smoke receiver for the Dart transfer test
         working-directory: .
-        run: cargo build --package qyro_ffi
+        run: cargo build --release --package qyro_ffi --package qyro_net_smoke
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
@@ -132,12 +153,17 @@ jobs:
             exit 1
           fi
       - run: flutter analyze
-      - name: Run Flutter and native ABI tests
+      - name: Run Flutter, native ABI and Dart-driven transfer tests
         run: flutter test
         env:
-          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}/target/debug/libqyro_ffi.so
+          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}/target/release/libqyro_ffi.so
+          QYRO_NET_SMOKE_PATH: ${{ github.workspace }}/target/release/qyro_net_smoke
 
   scripts:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -170,6 +196,10 @@ jobs:
           exit "$status"
 
   documentation:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       # Full history: the checker proves STATUS.md's verified commit is reachable

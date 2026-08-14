@@ -41,6 +41,9 @@ permissions:
 
 jobs:
   android:
+    # QYR-0078: no job in this repository declared a cap, so a stuck step
+    # ran to GitHub's six-hour default instead of failing with a log.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -100,6 +103,9 @@ jobs:
           echo '[PASS] the APK carries qyro_ffi and not the crypto smoke harness'
 
   windows:
+    # QYR-0078: no job in this repository declared a cap, so a stuck step
+    # ran to GitHub's six-hour default instead of failing with a log.
+    timeout-minutes: 60
     runs-on: windows-latest
     defaults:
       run:
@@ -110,6 +116,13 @@ jobs:
       - name: Build qyro_ffi for Windows
         working-directory: .
         run: cargo build --locked --package qyro_ffi
+      # Release for the transfer test only. It moves 8 MiB through ChaCha20 and
+      # SHA-256, and a debug build of that stack is minutes where release is
+      # seconds. The debug DLL above is what the packaging steps ship, and is
+      # left exactly as it was.
+      - name: Build the release pair for the Dart-driven transfer test
+        working-directory: .
+        run: cargo build --locked --release --package qyro_ffi --package qyro_net_smoke
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
@@ -120,6 +133,14 @@ jobs:
         run: flutter test test/ffi/qyro_native_api_test.dart
         env:
           QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}\target\debug\qyro_ffi.dll
+      # Phase 02 §5 step 5: the same transfer the Linux job runs, on the other
+      # platform the product ships on. Two real Windows processes, a real
+      # socket, 8 MiB compared byte for byte.
+      - name: Dart drives a transfer between two Windows processes
+        run: flutter test test/ffi/qyro_session_transfer_test.dart
+        env:
+          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}\target\release\qyro_ffi.dll
+          QYRO_NET_SMOKE_PATH: ${{ github.workspace }}\target\release\qyro_net_smoke.exe
       - run: flutter build windows --debug
       - name: Package and verify the Windows x64 bundle
         shell: pwsh
@@ -244,6 +265,9 @@ jobs:
           retention-days: 14
 
   ios:
+    # QYR-0078: no job in this repository declared a cap, so a stuck step
+    # ran to GitHub's six-hour default instead of failing with a log.
+    timeout-minutes: 60
     runs-on: macos-latest
     defaults:
       run:
