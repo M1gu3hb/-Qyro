@@ -100,7 +100,7 @@
 4. **Las 12 comprobaciones se leen por CÓDIGO DE SALIDA**, no por el texto.
 5. **Toda clase de evidencia se nombra.** «Compiló» nunca es «funciona».
 6. **Nada de salida de herramienta en `BUGS_PENDING.md`.** Va al informe.
-7. **Identificadores nuevos desde `QYR-0331`**, consecutivos.
+7. **Identificadores nuevos desde `QYR-0331+`**, consecutivos.
 8. Toda ADR se congela **antes** del código, en un commit propio.
 9. **Nunca commits en `main`.** Sólo `claude/qyro-net-6a`.
 10. Este archivo se reescribe y se commitea al cerrar cada paso.

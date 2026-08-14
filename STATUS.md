@@ -3,19 +3,62 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-14T05:10:00Z
+- Updated UTC: 2026-08-14T21:47:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: ea0b023613c5fb152b298174c8056efed76dcfa9
+- Verified commit: 274b504b4b24baa8dcd42fa6bca4ff01653ed550
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
   veces seguidas sin intermitencia. Antes de este sprint el «transporte» era un
   `Vec<u8>` que pasaba de una variable a otra dentro del mismo proceso.
-  **Sigue sin haber descubrimiento, sin FFI del motor, sin selector de archivos y
-  sin UI: los botones Enviar y Recibir siguen deshabilitados**, y nada de esto ha
-  tocado hardware físico ni dos máquinas distintas — dos procesos en 127.0.0.1 no
-  son dos dispositivos en una Wi-Fi. La persistencia de identidad sigue
-  **IMPLEMENTED sólo en Windows y NOT_IMPLEMENTED en Android y en iOS**
+  **El FFI del motor existe** desde la fase 01 y **Dart conduce una transferencia
+  real** desde la fase 02. **El selector de archivos existe en código** desde la
+  fase 03 y **nadie lo ha visto abrirse**: no hay emulador de Android en la
+  máquina de desarrollo y el Modo Desarrollador de Windows está apagado
+  (QYR-0324). **Sigue sin haber descubrimiento y sin UI: los botones Enviar y
+  Recibir siguen deshabilitados**, y nada de esto ha tocado hardware físico ni
+  dos máquinas distintas — dos procesos en 127.0.0.1 no son dos dispositivos en
+  una Wi-Fi. La persistencia de identidad sigue **IMPLEMENTED sólo en Windows y
+  NOT_IMPLEMENTED en Android y en iOS**
+
+### Fase 03 — CERRADA COMO PARCIAL. El selector de archivos
+
+Informe completo: `docs/reports/fase-03-selector-de-archivos.md`.
+
+**Lo que existe y está ejecutado en Windows 10 real:**
+
+- **Android elige por descriptor y Windows por ruta**, que es ADR-0034. En
+  Android un `MethodChannel` propio de ~140 líneas de Kotlin abre con `"rw"` y
+  entrega el entero de `detachFd()`; `file_selector_android` **copia el archivo
+  entero a la caché** antes de que Dart lo vea (QYR-0323) y por eso no se usa.
+- **En Windows la dependencia es `file_selector_windows` 0.9.3+5**, la
+  implementación endosada, y **no** el paraguas `file_selector`: el paraguas
+  arrastra siete paquetes más y uno de ellos es la implementación que copia
+  (ADR-0034, enmienda 1). Medido: 37 → 45 paquetes contra 37 → 52.
+- **Una transferencia conducida por descriptor llega byte a byte idéntica**, y
+  los nombres que sólo el selector conoce viajan correctos — un descriptor no
+  tiene nombre propio.
+- **Cero crates de Rust nuevos.** `Cargo.lock` sigue en **64 paquetes**, 50 de
+  crates.io.
+- `cargo test --workspace` en Windows: **603 passed, 0 failed, 2 ignored**;
+  `flutter test`: **76 passed, 1 skipped**.
+
+**Lo que NO debe leerse como progreso:**
+
+- **Nadie ha visto ningún selector.** El diálogo de Windows no se abre en
+  `flutter test` —no hay ventana— y `flutter build windows` no corre en esta
+  máquina. El SAF de Android no se ha ejecutado en ningún emulador ni teléfono.
+  El criterio 7 de la fase **no está cumplido** y por eso la fase es PARCIAL.
+- **`the_descriptor_is_closed_exactly_once` es `cfg(unix)`** y no corre en
+  Windows. Su evidencia viene del job de Linux.
+- Sigue sin haber descubrimiento, sin UI y sin ninguna pantalla. **Los botones
+  Enviar y Recibir siguen `onPressed: null`.**
+
+**Tres defectos de verificación que esta fase encontró y cerró:** un byte NUL
+crudo que hacía que `grep` saltara un archivo entero (QYR-0327), un `}` escrito
+como literal de carácter que truncaba el análisis de las guardas en siete crates
+(QYR-0328, P1, misma forma que QYR-0071), y la prueba del manifiesto fusionado,
+que **no se había ejecutado nunca en ninguna parte** (QYR-0329, P1).
 
 ### Fase 02 — CERRADA. Dart conduce una transferencia real
 
@@ -315,10 +358,13 @@ cuatro quedan abiertos y registrados, no omitidos.
 - Transporte, sockets y TLS: NOT_IMPLEMENTED
 - Transferencia de producto por red/UI: NOT_IMPLEMENTED. El motor y el
   filesystem local sí mueven una transferencia entre directorios.
-- Selección de archivos e integración del manifest con el filesystem:
-  NOT_IMPLEMENTED. **El manifest sí existe** y está probado
-  (`qyro_manifest`, ADR-0017/0019); lo que falta es elegir archivos reales y
-  construirlo desde el disco.
+- Selección de archivos: **IMPLEMENTED en código, NO EJECUTADA por nadie**
+  (fase 03, ADR-0034). El `MethodChannel` de Android y el diálogo de Windows
+  existen y están probados aguas abajo del diálogo; **ningún diálogo se ha
+  abierto** en esta máquina ni en CI. La integración del manifest con el
+  filesystem sí está ejecutada: `manifest_from_disk` y `manifest_from_open_files`
+  construyen desde el disco y desde descriptores ya abiertos, con transferencias
+  verificadas byte a byte en los dos caminos.
 - LAN/discovery/manual IP: NOT_IMPLEMENTED
 - Reanudación por red/UI: NOT_IMPLEMENTED. Los metadatos locales de
   `.qyro-resume` sí sobreviven entre procesos y `qyro_fs` los aplica.
@@ -438,9 +484,15 @@ workflows en verde ejercitaban `qyro_ffi`, que deliberadamente no depende de
 ## Real tests
 
 Evidencia actual: Linux y Windows en CI, además de Windows local, con Rust
-1.88.0. **El host
-local no trae Flutter ni Dart**, así que todo lo que los necesita se ejecutó en
-CI y no aquí:
+1.88.0.
+
+**Corregido el 2026-08-14 (fase 03):** este párrafo decía «el host local no trae
+Flutter ni Dart». Ya los trae — Flutter 3.44.8 y Dart 3.12.2 en `D:\flutter`, la
+misma versión que CI fija—, así que `flutter test`, `flutter analyze` y
+`dart format` **sí** se ejecutan localmente y sus números están en el informe de
+la fase 03. Lo que sigue sin correr aquí es `flutter build` y `flutter run` con
+plugins, por el Modo Desarrollador (QYR-0324). Los números de esta lista son de
+sprints anteriores y no se reescriben; los actuales están en el informe de fase.
 
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets -- -D warnings`: PASS, sin avisos
