@@ -98,10 +98,34 @@ impl HandleError {
 /// assertion stops being free at that point -- ADR-0032 §5 answers it by
 /// poisoning the session a panic passed through, which is the invariant that has
 /// to be written alongside those operations rather than assumed here.
-pub fn guard<F: FnOnce() -> i32>(body: F) -> i32 {
+/// What a guarded body of this type hands back when it panics.
+///
+/// A trait rather than a `Default` bound, because `Default` for `i32` is `0`, and
+/// `0` is [`QYRO_OK`]: a panic would report success. Every return shape that
+/// crosses the boundary has to name its own failure value, out loud, once.
+pub trait PanicOutcome {
+    const ON_PANIC: Self;
+}
+
+impl PanicOutcome for i32 {
+    const ON_PANIC: Self = QYRO_ERR_PANIC;
+}
+
+impl PanicOutcome for *mut u8 {
+    /// ADR-0034: a null buffer is how allocation failure already travels, so a
+    /// panic during allocation is indistinguishable from running out of memory,
+    /// which is exactly what the caller has to handle either way.
+    const ON_PANIC: Self = core::ptr::null_mut();
+}
+
+impl PanicOutcome for () {
+    const ON_PANIC: Self = ();
+}
+
+pub fn guard<T: PanicOutcome, F: FnOnce() -> T>(body: F) -> T {
     match catch_unwind(AssertUnwindSafe(body)) {
-        Ok(code) => code,
-        Err(_) => QYRO_ERR_PANIC,
+        Ok(value) => value,
+        Err(_) => T::ON_PANIC,
     }
 }
 
