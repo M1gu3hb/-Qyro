@@ -100,16 +100,31 @@ python3 - <<'PY'
 import re
 t=open('BUGS_PENDING.md', encoding='utf-8').read()
 b=[x for x in re.split(r'\n(?=## QYR-)',t) if re.match(r'## QYR-',x)]
-print('total',len(b),'abiertas',len([x for x in b if re.search(r'- Estado: *\*{0,2}abierto',x)]))
+def estado(x):
+    m=re.search(r'^- Estado: *\*{0,2}(\w+)', x, re.M)
+    return m.group(1).lower() if m else '?'
+print('total',len(b),'abiertas',len([x for x in b if estado(x)=='abierto']))
 PY
 ```
 
-*(Corregido el 2026-08-13, QYR-0313. El patrón era `- Estado: *abierto`, que no
-casa con `- Estado: **abierto**`; cuatro fichas lo escriben en negrita y el
-script devolvía 32 donde la verdad eran 36. Y `open()` sin `encoding` usa la
-página de códigos del sistema, así que en Windows fallaba sobre un ledger lleno
-de acentos: la comprobación 10 no se podía correr en la plataforma donde se
-descubrió la 11.)*
+*(Corregido el 2026-08-13, QYR-0313. Tenía **tres** defectos en ocho líneas.)*
+
+1. *El patrón era `- Estado: *abierto`, que no casa con `- Estado: **abierto**`.
+   Cuatro fichas lo escriben en negrita, así que devolvía 32 donde la verdad
+   eran 36.*
+2. *`open()` sin `encoding` usa la página de códigos del sistema, así que en
+   Windows moría sobre un ledger lleno de acentos: la comprobación 10 no se podía
+   correr en la misma plataforma donde la 11 resultó estar rota.*
+3. *Y buscaba por **subcadena en todo el bloque** en vez de leer el campo. Una
+   ficha que cita el texto `- Estado: abierto` dentro de su prosa —por ejemplo,
+   la ficha que documenta este mismo defecto— se contaba a sí misma como abierta
+   estando cerrada. Ahora lee el campo, anclado a principio de línea con `re.M`,
+   y se queda con la primera coincidencia.*
+
+*El tercero apareció al cerrar QYR-0312 y QYR-0313: el conteo bajó de 45 a 44
+cuando tenían que ser 43, y la ficha que sobraba era la que hablaba del script.
+**Un contador que se equivoca al contar su propia corrección es la forma más
+barata que hay de descubrir que buscaba la cosa equivocada.***
 
 **Si la fase añadió más de diez fichas, mira por qué antes de aceptarlo.** Ese
 techo existe **para que nadie vuelque salida de herramienta en el ledger**, que

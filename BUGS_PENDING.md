@@ -2771,7 +2771,12 @@
   `open('BUGS_PENDING.md')` sin `encoding` usa la página de códigos del sistema y
   revienta sobre un ledger lleno de acentos, así que la comprobación 10 no se
   podía correr en la misma plataforma donde apareció QYR-0311. Ahora lleva
-  `encoding='utf-8'`
+  `encoding='utf-8'`. **Y un tercero, que se delató solo:** buscaba por subcadena
+  en todo el bloque en vez de leer el campo, así que una ficha que cita el texto
+  del patrón en su prosa se contaba a sí misma como abierta estando cerrada.
+  Apareció al cerrar esta misma ficha —el conteo bajó de 45 a 44 cuando tenían
+  que ser 43, y la que sobraba era ésta—. Ahora lee el campo anclado a principio
+  de línea con `re.M` y se queda con la primera coincidencia
 - Estado: cerrado
 - Dueño: documentación
 - Fecha: 2026-08-13
