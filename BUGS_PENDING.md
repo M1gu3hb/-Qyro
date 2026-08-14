@@ -3249,3 +3249,66 @@
 - Evidencia: `qyro_net_smoke` resuelve el mismo problema imprimiendo
   `LISTENING <port>` y haciendo flush **antes** de aceptar; es la forma que
   funciona y la que esta caja no ofrece
+
+## QYR-0323 — `file_selector_android` copia el archivo elegido a la caché antes de que Dart lo vea
+
+- Plataforma: Android; `file_selector_android 0.5.2+9`
+- Severidad: P1
+- Esperado: elegir un archivo con el selector del sistema entrega una referencia
+  a ese archivo, no una copia
+- Actual: **copia el archivo entero.** `FileSelectorApiImpl.java:365` llama en el
+  camino principal a `FileUtils.getPathFromCopyOfFileFromUri`, que abre un
+  `InputStream` sobre el `content://`, crea `{cacheDir}/{uuid}/{fileName}` y
+  ejecuta `copy(inputStream, outputStream)` antes de devolver la ruta. Su propio
+  doc-comment lo dice: «Copies the file from the given content URI to a temporary
+  directory»
+- Por qué P1: **un archivo de 4 GB se duplica en disco antes de que la
+  transferencia empiece.** En un teléfono con la memoria justa eso no es lento,
+  es imposible — y el fallo llega antes de que nada se haya enviado. Bloquea el
+  objetivo de la fase 03 en Android
+- Resuelto **leyendo el fuente del paquete fijado**, no su documentación de
+  pub.dev, que es lo que la instrucción pedía. El otro camino,
+  `FileUtils.getPathFromUri`, no sirve de alternativa: lanza
+  `UnsupportedOperationException` para volúmenes que no sean `primary`, es decir
+  para tarjetas SD y USB
+- Lo que haría falta para cerrarla: un `MethodChannel` propio que devuelva el
+  **fd** de `openFileDescriptor(uri, "rw")` vía `detachFd()`, que es lo que
+  `FASE-03` §4.1 ya decide. Sigue siendo **cero crates de Rust**. La decisión va
+  en la ADR de la fase antes del código
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: `file_selector_android-0.5.2+9`, en la caché de pub tras un
+  `flutter pub add` que se revirtió después:
+  `android/src/main/java/dev/flutter/packages/file_selector_android/FileUtils.java:112`
+  documenta el esquema `{cacheDir}/{randomUuid}/{fileName}`, y la línea 148
+  ejecuta la copia
+
+## QYR-0324 — Esta máquina no puede construir una app de Flutter con plugins
+
+- Plataforma: Windows, entorno de desarrollo
+- Severidad: P2
+- Esperado: `flutter pub add <plugin>` deja el proyecto construible
+- Actual: `flutter.bat` responde **«Building with plugins requires symlink
+  support. Please enable Developer Mode in your system settings»** y sale con 1.
+  Windows exige el Modo Desarrollador para crear enlaces simbólicos sin
+  privilegios, y Flutter los usa para el registrante de plugins
+- **No se habilita, y el motivo no es técnico:** es una configuración del sistema
+  del propietario de la máquina, no del proyecto. Cambiarla no es una decisión que
+  esta sesión pueda tomar sola
+- Alcance real, medido y no supuesto: `flutter test` **sigue pasando** —62 tests
+  con el plugin en el lock—, porque las pruebas de VM no construyen la app. Lo
+  que se bloquea es `flutter build` y `flutter run` con plugins **en esta
+  máquina**. Los runners de CI sí tienen soporte de enlaces simbólicos
+- Consecuencia para la fase 03: el código del selector se puede escribir y CI lo
+  puede verificar; **lo que no se puede es verlo funcionar aquí**. Y el criterio
+  de la fase es que una persona elija un archivo de verdad, así que esto importa
+- Lo que haría falta para cerrarla: que el propietario active el Modo
+  Desarrollador —`start ms-settings:developers`—, o un dispositivo Android físico
+  por USB, donde el `flutter build apk` lo hace el runner y no esta máquina
+- Estado: abierto
+- Dueño: propietario
+- Fecha: 2026-08-14
+- Evidencia: `flutter pub add file_selector` resolvió 39 → 54 paquetes y después
+  falló con ese mensaje, exit 1. Revertido
+
