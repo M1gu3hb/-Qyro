@@ -577,6 +577,49 @@ que probablemente sí, y entonces el cuelgue es de mi harness y no de producció
 **No lo verifiqué, así que no lo afirmo.** Queda en QYR-0320 como la primera cosa
 que comprobar.
 
+### Barrido del paso 2 — el emisor, y lo que mis propias pruebas no fijan
+
+**Alcance declarado:** `cargo mutants --package qyro_session --timeout 120`, tras
+añadir el puente de progreso. **Parcial: 46 de 62 mutantes** cuando se escribió
+esta línea; el resto y el veredicto final van abajo cuando termine. Se declara
+parcial en vez de esperar a poder contarlo redondo.
+
+Parcial a 46/62: **26 caught, 10 missed, 1 timeout, 8 unviable.**
+
+**Siete de los diez supervivientes son código que acabo de escribir**, y eso es el
+hallazgo:
+
+| Mutante | Qué no fija mi prueba |
+|---|---|
+| `:101` `Emitter::step_for`, `/` → `%` | La **aritmética** del paso. `total % 100` da otro número y mis aserciones lo aceptan |
+| `:102` `>` → `==` y `>` → `>=` | Cuál de las dos ramas —el suelo o la fracción— decide en el codo |
+| `:114` `&&` → `\|\|`, y `:114`, `:117`, `:119` `>` → `>=` | Los límites exactos de cuándo se emite |
+
+**Por qué pasan.** `the_callback_budget_is_respected_for_a_known_file_size`
+comprueba un **techo** (≤102) y una **desigualdad estricta** entre dos tamaños. Las
+dos son propiedades reales y las dos siguen valiendo con la aritmética cambiada:
+`%` en vez de `/` produce un paso distinto, pero sigue dando menos de 102
+emisiones y sigue creciendo con el archivo por debajo del codo.
+
+Es la trampa de `R1` §5.6 en una forma que no había visto: **la desigualdad
+estricta distingue una medida de una constante, y no distingue una medida de otra
+medida.** Para fijar la fórmula hace falta una prueba que calcule las emisiones
+esperadas *desde* la fórmula, con un tamaño a cada lado del codo de 25 MiB — que
+es donde `>` frente a `>=` cambia de rama.
+
+**No se arregla en este commit, se registra.** El código está en verde y el hueco
+está nombrado; taparlo con una aserción más sobre la misma prueba defectuosa es
+exactamente lo que `R4` §6 dice que no vale.
+
+### El timeout, otra vez, y esta vez sobre mi arreglo
+
+`:419` · `Session::write_outbound` → `Ok(())`. Es el arreglo de QYR-0316
+convertido en un no-op: nada sale nunca al socket y las dos puntas se quedan
+esperando. `R2` §3 — **no es un superviviente**: el comportamiento cambia de forma
+observable, y lo que falla es la *forma* de fallar. Y refuerza lo que ya dijo el
+barrido anterior: la pregunta pendiente sigue siendo si `FrameStream` tiene plazo
+de lectura, porque si no lo tiene, un peer que se calla cuelga una sesión.
+
 ---
 
 ## 11. Tests antes y después

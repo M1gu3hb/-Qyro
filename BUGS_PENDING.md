@@ -2981,3 +2981,33 @@
   11 caught, 9 missed, 1 timeout, 11 unviable. Dos de los nueve son de `Display`
   y `Debug` y quedan fuera por `R4` §2. Inventario completo en
   `docs/reports/fase-02-dart-conduce.md` §10
+
+## QYR-0321 — Las pruebas del presupuesto de progreso no fijan su aritmética
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P2
+- Esperado: las pruebas que defienden el presupuesto de ADR-0033 §4 distinguen la
+  fórmula congelada de cualquier otra que dé números parecidos
+- Actual: **siete mutantes sobreviven, los siete dentro de `Emitter`**, que es
+  código escrito en este mismo paso: `/` → `%` en `step_for`, `>` → `==` y
+  `>` → `>=` en su comparación, `&&` → `||` en `offer`, y sus tres `>` → `>=`.
+  `the_callback_budget_is_respected_for_a_known_file_size` comprueba un techo de
+  102 y una desigualdad estricta entre dos tamaños; las dos propiedades siguen
+  siendo ciertas con la aritmética cambiada, porque `total % 100` también da
+  menos de 102 emisiones y también crece con el archivo por debajo del codo
+- La lección, que es lo que hace la ficha útil: la forma de `R1` §5.6 —dos tamaños
+  y una desigualdad estricta— **distingue una medida de una constante y no
+  distingue una medida de otra medida.** Es la primera vez que este repositorio
+  encuentra ese límite de la regla
+- Por qué P2: el presupuesto real está implementado según la ADR y medido; lo que
+  falta es que la prueba impida cambiarlo sin darse cuenta. Ningún usuario ve
+  nada distinto hoy
+- Lo que haría falta para cerrarla: una prueba que calcule las emisiones
+  esperadas **desde la fórmula** en vez de acotarlas, con un tamaño a cada lado
+  del codo de 25 MiB, que es donde `>` frente a `>=` cambia de rama
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: `cargo mutants --package qyro_session --timeout 120`, parcial a
+  46/62: 26 caught, 10 missed, 1 timeout, 8 unviable. Inventario en
+  `docs/reports/fase-02-dart-conduce.md` §10
