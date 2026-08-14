@@ -287,6 +287,22 @@ fn a_peer_cannot_make_us_buffer_more_than_the_declared_limit() {
     let huge = frame_of(MessageType::DataChunk, declared, 9);
     let head = huge[..HEADER_LEN + 64].to_vec();
 
+    // A blocked write is not a failed write, and that difference hung this test
+    // for forty-three minutes on `windows-latest`, seven runs in a row, until a
+    // job timeout finally named it (QYR-0078).
+    //
+    // The reader stops taking bytes at the 4 KiB allowance and **leaves the
+    // socket open**, so the 512 KiB of filler below has nowhere to go. On Linux
+    // the auto-tuned loopback buffers absorb all of it and `write_all` returns;
+    // on Windows they do not, and `write_all` blocks for ever on a peer that
+    // will never read again -- taking `writer.join()` down with it.
+    //
+    // The comment this replaces said these writes "are expected to fail once it
+    // does". They were not made to. A deadline is what makes that sentence true
+    // on every platform instead of on the one whose buffers happen to oblige.
+    raw.set_write_timeout(Some(Duration::from_secs(5)))
+        .expect("a loopback socket accepts a write deadline");
+
     let writer = thread::spawn(move || {
         if raw.write_all(&head).is_err() {
             return;
