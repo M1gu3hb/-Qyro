@@ -491,6 +491,33 @@ rust/crates/qyro_session/tests/session_behaviour.rs
 `.gitignore` gana `mutants.out/`: la salida del barrido son 65 KB de log y no
 entra en el árbol. Va al informe con su alcance declarado, que es la regla.
 
+### Puerta del paso 1 — ADR-0033 congelada · 2026-08-13
+
+Un paso de sólo documentación, y la puerta se declara como tal en vez de fingir
+que las doce aplican por igual.
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1–3 | fmt · clippy · test | ✅ exit 0 los tres, **581 passed**. Ningún `.rs` tocado, y eso es el criterio del paso, no un efecto secundario |
+| 4 | Barrido | **N/A declarado** · cero código nuevo |
+| 5–8 | Aserciones · contadores · la medida se ve fallar · nombres | **N/A declarado** · cero pruebas nuevas. Lo que la ADR **decide** sobre la medición —dos tamaños y una desigualdad estricta— es obligación del paso 2, y está escrita en §4 de la ADR para que el paso 2 no pueda saltársela |
+| 9 | `git diff --name-only` | ✅ **exactamente un archivo**: `docs/adr/ADR-0033-progress-bridge.md` |
+| 10 | Ledger | ✅ 137 fichas, **43 abiertas**. Dos cerradas en este tramo: QYR-0312 y QYR-0313 |
+| 11 | Coherencia documental | ✅ exit 0 en Bash y PowerShell, **después** de mover el `Verified commit` |
+| 12 | Escribir el resultado | ✅ esta tabla |
+
+**La prueba de que la ADR se congeló antes del código** es
+`git show --name-only --format='' 37f7a6e` → una línea, un `.md`, cero `.rs`.
+
+**Dos cosas que la puerta encontró y no se arreglan en silencio:**
+
+- `STATUS.md` llevaba **11 commits** de retraso sobre HEAD, con el límite en 10,
+  y la comprobación 11 bloqueó. Es la regla funcionando.
+- El primer intento de moverlo **inventó el SHA de 40 caracteres** en vez de
+  leerlo, y el checker lo cazó con «*is not a commit in this repository*». Va
+  escrito porque es el mismo modo de fallo que citar un número de memoria, y
+  porque es la razón por la que `R1` §6 exige el SHA completo y no el corto.
+
 ---
 
 ## 10. Tabla de mutación
