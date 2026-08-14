@@ -893,10 +893,13 @@ mod tests {
 
         let path = a_scratch_file("handed-over");
         let file = std::fs::File::open(&path).expect("the scratch file opens");
-        let identity = file.metadata().map(|meta| {
-            use std::os::unix::fs::MetadataExt as _;
-            (meta.dev(), meta.ino())
-        });
+        let identity = file
+            .metadata()
+            .map(|meta| {
+                use std::os::unix::fs::MetadataExt as _;
+                (meta.dev(), meta.ino())
+            })
+            .ok();
         let descriptor = file.into_raw_fd();
 
         assert_eq!(
@@ -958,10 +961,13 @@ mod tests {
 
         let path = a_scratch_file("kept-open");
         let file = std::fs::File::open(&path).expect("the scratch file opens");
-        let identity = file.metadata().map(|meta| {
-            use std::os::unix::fs::MetadataExt as _;
-            (meta.dev(), meta.ino())
-        });
+        let identity = file
+            .metadata()
+            .map(|meta| {
+                use std::os::unix::fs::MetadataExt as _;
+                (meta.dev(), meta.ino())
+            })
+            .ok();
         let descriptor = file.into_raw_fd();
 
         assert_eq!(
@@ -994,10 +1000,13 @@ mod tests {
 
         let path = a_scratch_file("mismatched");
         let file = std::fs::File::open(&path).expect("the scratch file opens");
-        let identity = file.metadata().map(|meta| {
-            use std::os::unix::fs::MetadataExt as _;
-            (meta.dev(), meta.ino())
-        });
+        let identity = file
+            .metadata()
+            .map(|meta| {
+                use std::os::unix::fs::MetadataExt as _;
+                (meta.dev(), meta.ino())
+            })
+            .ok();
         let descriptor = file.into_raw_fd();
 
         let mut handle = 0_u64;
