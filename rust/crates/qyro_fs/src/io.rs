@@ -170,6 +170,21 @@ impl FileSource {
         }
     }
 
+    /// Builds a source over handles that are already open.
+    ///
+    /// ADR-0034's Android half: the Storage Access Framework hands out a
+    /// descriptor, so there is no path to reopen and `paths` stays empty. The
+    /// handles are the only way in, and dropping this source closes them.
+    #[must_use]
+    pub fn from_open_files(handles: BTreeMap<u32, File>) -> Self {
+        Self {
+            paths: BTreeMap::new(),
+            handles: RefCell::new(handles),
+            #[cfg(test)]
+            peak_read: std::cell::Cell::new(0),
+        }
+    }
+
     /// Reads into `out`, returning bytes read, or nothing on any failure.
     ///
     /// `ContentSource::read_at` has no error channel — it returns a count — so a
@@ -178,11 +193,17 @@ impl FileSource {
     /// widening ADR-0026's trait, and a seam that has to change for its second
     /// implementation was the wrong seam.
     fn try_read(&self, item_id: u32, offset: u64, out: &mut [u8]) -> Option<usize> {
-        let path = self.paths.get(&item_id)?;
         let mut handles = self.handles.borrow_mut();
         let file = match handles.entry(item_id) {
             std::collections::btree_map::Entry::Occupied(slot) => slot.into_mut(),
-            std::collections::btree_map::Entry::Vacant(slot) => slot.insert(File::open(path).ok()?),
+            // Only a path-backed source opens lazily. A descriptor-backed one
+            // has no path to reopen, and an item it has no handle for is an
+            // item it cannot serve -- which reads as a short read, exactly as
+            // any other read failure does.
+            std::collections::btree_map::Entry::Vacant(slot) => {
+                let path = self.paths.get(&item_id)?;
+                slot.insert(File::open(path).ok()?)
+            }
         };
         file.seek(SeekFrom::Start(offset)).ok()?;
 
@@ -451,6 +472,21 @@ impl ContentSink for FileSink {
 /// [`FsError::Io`].
 pub fn digest_of(path: &Path) -> Result<Vec<u8>, FsError> {
     let mut file = File::open(path)?;
+    digest_of_reader(&mut file)
+}
+
+/// The same streaming digest over anything readable.
+///
+/// Factored out for ADR-0034: on Android the bytes arrive as an already-open
+/// descriptor and there is no path to reopen. One implementation rather than
+/// two, so a path-backed transfer and a descriptor-backed one cannot disagree
+/// about what SHA-256 they computed.
+///
+/// # Errors
+///
+/// [`FsError::Io`] when a read fails.
+pub fn digest_of_reader<R: Read>(source: &mut R) -> Result<Vec<u8>, FsError> {
+    let file = source;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; HASH_BUFFER_LEN];
     loop {

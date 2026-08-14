@@ -48,6 +48,8 @@ pub use history::{MAX_HISTORY_FILE_LEN, TransferHistory};
 pub use history_types::{
     HistoryDirection, HistoryError, HistoryPeer, HistoryRecord, HistoryRepair, HistoryStatus,
 };
-pub use io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of};
-pub use manifest_builder::{PlannedFile, manifest_from_disk};
+pub use io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of, digest_of_reader};
+pub use manifest_builder::{
+    PlannedFile, PlannedOpenFile, descriptors_by_item, manifest_from_disk, manifest_from_open_files,
+};
 pub use resume::{ItemProgress, ResumeState};

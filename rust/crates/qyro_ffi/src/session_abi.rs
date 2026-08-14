@@ -277,6 +277,95 @@ pub unsafe extern "C" fn qyro_session_open_sender_blocking(
     })
 }
 
+/// Opens a sending session over **descriptors the caller already opened**.
+///
+/// ADR-0034. Android's Storage Access Framework hands out a `content://` and a
+/// `ParcelFileDescriptor`, never a path, and no NDK API can open one. Dart calls
+/// `detachFd()` — which gives up ownership on that side — and passes the raw
+/// integers here.
+///
+/// `names` is one buffer of NUL-separated relative names, one per descriptor and
+/// in the same order. A descriptor has no name of its own: the picker knew it and
+/// the kernel does not.
+///
+/// **Ownership transfers on entry, on every path out.** Each descriptor becomes a
+/// `File` before anything can fail, so a rejected argument still closes what it
+/// was given rather than leaking it. Dart must not close them, and must not use
+/// them again.
+///
+/// # Safety
+///
+/// `address` and `names` must address their stated lengths in readable memory.
+/// `fds` must address `fd_count` readable `int32`s. Each must be a descriptor
+/// this process owns and nothing else will close. `out_handle` must point to one
+/// writable `u64`.
+///
+/// # Platforms
+///
+/// Unix only, which for this product means Android. A descriptor is not a
+/// Windows concept and ADR-0034 sends a path there instead, so this symbol
+/// simply does not exist in the Windows library rather than existing and
+/// failing — an absent symbol is a link error at load time, and a present one
+/// that always refuses is a runtime surprise.
+#[cfg(unix)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qyro_session_open_sender_fd_blocking(
+    address: *const u8,
+    address_len: usize,
+    names: *const u8,
+    names_len: usize,
+    fds: *const i32,
+    fd_count: usize,
+    on_progress: Option<QyroProgressFn>,
+    context: usize,
+    out_handle: *mut u64,
+) -> i32 {
+    guard(|| {
+        if out_handle.is_null() || fds.is_null() || fd_count == 0 {
+            return QYRO_ERR_BAD_ARGUMENT;
+        }
+        // SAFETY: the caller's contract, stated above.
+        let (Some(address), Some(names)) =
+            (unsafe { (borrow(address, address_len), borrow(names, names_len)) })
+        else {
+            return QYRO_ERR_BAD_ARGUMENT;
+        };
+        // SAFETY: the caller promises `fd_count` readable `int32`s at `fds`.
+        let raw = unsafe { std::slice::from_raw_parts(fds, fd_count) };
+
+        // Taken first, and unconditionally. Every later `return` then drops
+        // real `File`s, so a bad argument closes the descriptors it was handed
+        // instead of leaking one per rejected call.
+        let mut handles: Vec<std::fs::File> = Vec::with_capacity(fd_count);
+        for descriptor in raw {
+            // SAFETY: the caller promises each is a descriptor this process
+            // owns and that nothing else will close. `detachFd` on the Dart side
+            // is what makes that true: it releases the ParcelFileDescriptor's
+            // claim, so this `File` is the only owner and its `Drop` is the only
+            // close. `getFd` would leave two owners and a double close.
+            handles.push(unsafe {
+                <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(*descriptor)
+            });
+        }
+
+        let Ok(address) = address.parse::<SocketAddr>() else {
+            return QYRO_ERR_BAD_ARGUMENT;
+        };
+        let labels: Vec<&str> = names.split(' ').filter(|part| !part.is_empty()).collect();
+        if labels.len() != handles.len() {
+            return QYRO_ERR_BAD_ARGUMENT;
+        }
+
+        let paired: Vec<(String, std::fs::File)> =
+            labels.into_iter().map(str::to_owned).zip(handles).collect();
+
+        match Session::open_sender_files(address, paired, observer(on_progress, context)) {
+            Ok(session) => insert(session, out_handle),
+            Err(error) => session_code(error),
+        }
+    })
+}
+
 /// Opens a receiving session. Blocks: it accepts and completes a handshake.
 ///
 /// # Safety

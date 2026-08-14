@@ -11,12 +11,16 @@
 )]
 
 use std::collections::BTreeMap;
+use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use qyro_fs::{FileSink, FileSource, PlannedFile, manifest_from_disk};
+use qyro_fs::{
+    FileSink, FileSource, PlannedFile, PlannedOpenFile, descriptors_by_item, manifest_from_disk,
+    manifest_from_open_files,
+};
 use qyro_net::{FrameStream, Listener, NetError, dial, initiate, respond};
 use qyro_transfer::{ContentSink, ItemVerdict, Phase, Receiver, Sender};
 
@@ -290,6 +294,80 @@ impl Session {
             role: Role::Sending {
                 engine,
                 source: FileSource::new(paths),
+            },
+            cancel: Arc::new(AtomicBool::new(false)),
+            failed: None,
+            progress,
+            outbound: opening,
+            observer,
+        })
+    }
+
+    /// Opens a sending session over files that are **already open**.
+    ///
+    /// ADR-0034: on Android the Storage Access Framework hands out a descriptor
+    /// and never a path, so there is nothing to open and nothing to reopen. The
+    /// `File`s arrive owned — `qyro_ffi` did the one `unsafe` this needs, at the
+    /// C boundary where `unsafe` already lives — and this session owns them from
+    /// here until it drops, which is what closes them.
+    ///
+    /// `files` carries the relative name each one travels under, because a
+    /// descriptor has no name: the picker knew it and the kernel does not.
+    ///
+    /// # Errors
+    ///
+    /// [`SessionError::BadArgument`] when `files` is empty or a name is empty,
+    /// [`SessionError::StorageRefused`] when a handle cannot be read or rewound,
+    /// and the same reachability and authentication errors as
+    /// [`Self::open_sender`].
+    pub fn open_sender_files(
+        address: SocketAddr,
+        files: Vec<(String, File)>,
+        observer: Option<ProgressObserver>,
+    ) -> Result<Self, SessionError> {
+        if files.is_empty() {
+            return Err(SessionError::BadArgument);
+        }
+        if files.iter().any(|(name, _)| name.is_empty()) {
+            return Err(SessionError::BadArgument);
+        }
+        let mut planned: Vec<PlannedOpenFile> = files
+            .into_iter()
+            .map(|(relative, handle)| PlannedOpenFile { handle, relative })
+            .collect();
+
+        let manifest = manifest_from_open_files(1, 0, &mut planned)
+            .map_err(|_| SessionError::StorageRefused)?;
+        let total = manifest
+            .items()
+            .iter()
+            .map(qyro_manifest::ManifestItem::size)
+            .sum();
+        let handles = descriptors_by_item(planned);
+
+        let identity = new_identity()?;
+        let stream = dial(address).map_err(|error| net_error(&error))?;
+        let established = initiate(stream, &identity).map_err(|error| net_error(&error))?;
+        let (stream, sealer, opener) = established.into_parts();
+
+        let mut engine = Box::new(Sender::new(sealer, opener, manifest));
+        let opening = engine.open().map_err(|_| SessionError::TransferRefused)?;
+
+        let progress = Progress {
+            done: 0,
+            total,
+            item: 0,
+        };
+        let mut observer = observer.map(Emitter::new);
+        if let Some(emitter) = observer.as_mut() {
+            emitter.offer(progress, false);
+        }
+
+        Ok(Self {
+            stream,
+            role: Role::Sending {
+                engine,
+                source: FileSource::from_open_files(handles),
             },
             cancel: Arc::new(AtomicBool::new(false)),
             failed: None,
