@@ -120,6 +120,29 @@ try {
     Add-Content (Join-Path $concreteFinding 'README.md') "$missingId is a concrete missing finding." -Encoding UTF8
     Assert-FailsWith $concreteFinding "$missingId is cited but has no entry"
 
+    # ...and only inside the five declared extensions. This case exists because
+    # the scope was not enforced at all: `-Include` beside `-LiteralPath` is
+    # inert on Windows PowerShell 5.1, so the checker read `.txt`, `.o` and
+    # `.exe` as documentation and blocked on a citation the Bash half could not
+    # see (QYR-0311). The case is written the way it is on purpose -- the same
+    # citation in an out-of-scope file and in an in-scope one, so a checker that
+    # ignores extensions cannot satisfy both halves, and neither can a checker
+    # that scans nothing.
+    $outOfScope = New-Fixture; $fixtures += $outOfScope
+    @('## QYR-0001 - fixture', '', '- Estado: cerrado') |
+        Set-Content -LiteralPath (Join-Path $outOfScope 'BUGS_PENDING.md') -Encoding UTF8
+    $outOfScopeId = 'QYR-' + '0102'
+    Add-Content (Join-Path $outOfScope 'notes.txt') "$outOfScopeId is cited where the checker must not look." -Encoding UTF8
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $outOfScope 2>&1
+    if ($LASTEXITCODE -ne 0 -or -not (($output -join [Environment]::NewLine).Contains('[OK] Documentation consistency'))) {
+        throw "A citation in an out-of-scope file must not block: $($output -join [Environment]::NewLine)"
+    }
+    # The other half of the same measurement: move that citation into a file the
+    # checker does declare, and it must block. Without this, a checker that
+    # scanned no files at all would pass the case above.
+    Add-Content (Join-Path $outOfScope 'README.md') "$outOfScopeId is cited where the checker must look." -Encoding UTF8
+    Assert-FailsWith $outOfScope "$outOfScopeId is cited but has no entry"
+
     # The ledger is an operational list, not an unbounded tool-output sink.
     # The boundary itself remains usable; the next open record must fail.
     $atOpenLimit = New-Fixture; $fixtures += $atOpenLimit

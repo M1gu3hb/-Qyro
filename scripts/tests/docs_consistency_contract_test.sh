@@ -58,7 +58,8 @@ valid="$(mktemp -d)"; missing="$(mktemp -d)"; stale="$(mktemp -d)"
 scripts_pending="$(mktemp -d)"; false_claim="$(mktemp -d)"
 range_refs="$(mktemp -d)"; concrete_finding="$(mktemp -d)"
 at_open_limit="$(mktemp -d)"; too_many_open="$(mktemp -d)"
-trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$at_open_limit" "$too_many_open"' EXIT
+out_of_scope="$(mktemp -d)"
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$at_open_limit" "$too_many_open" "$out_of_scope"' EXIT
 
 make_fixture "$valid"
 output="$(bash "$checker" --repo-root "$valid")"
@@ -94,6 +95,25 @@ printf '## QYR-0001 — fixture\n\n- Estado: cerrado\n' > "$concrete_finding/BUG
 missing_id='QYR-''0101'
 printf '\n%s is a concrete missing finding.\n' "$missing_id" >> "$concrete_finding/README.md"
 assert_fails_with "$concrete_finding" "$missing_id is cited but has no entry"
+
+# ...and only inside the five declared extensions. The twin of this case exists
+# in the PowerShell half, where the scope was not enforced at all: `-Include`
+# beside `-LiteralPath` is inert on Windows PowerShell 5.1, so that checker read
+# `.txt`, `.o` and `.exe` as documentation and blocked on a citation this half
+# could not see (QYR-0311). Asserted here too because the two halves are only
+# equivalent for as long as something checks that they are.
+#
+# Both directions on purpose: the same citation out of scope must pass and in
+# scope must fail. A checker that ignores extensions fails the first; a checker
+# that scans nothing passes the first and fails the second.
+make_fixture "$out_of_scope"
+printf '## QYR-0001 — fixture\n\n- Estado: cerrado\n' > "$out_of_scope/BUGS_PENDING.md"
+out_of_scope_id='QYR-''0102'
+printf '\n%s is cited where the checker must not look.\n' "$out_of_scope_id" > "$out_of_scope/notes.txt"
+output="$(bash "$checker" --repo-root "$out_of_scope")"
+[[ "$output" == *"[OK] Documentation consistency"* ]]
+printf '\n%s is cited where the checker must look.\n' "$out_of_scope_id" >> "$out_of_scope/README.md"
+assert_fails_with "$out_of_scope" "$out_of_scope_id is cited but has no entry"
 
 # The ledger is an operational list, not an unbounded tool-output sink. Sixty
 # simultaneously open findings make the instrument fail its explicit ceiling.

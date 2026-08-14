@@ -251,8 +251,19 @@ if (Test-Path -LiteralPath $ledger) {
         if ($line -match '^##\s+(QYR-[0-9]{4})') { [void]$recorded.Add($Matches[1]) }
     }
     $cited = [System.Collections.Generic.HashSet[string]]::new()
-    $extensions = @('*.md', '*.rs', '*.sh', '*.ps1', '*.yml')
-    foreach ($file in (Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Include $extensions -ErrorAction SilentlyContinue)) {
+    # `-Include` is inert beside `-LiteralPath` on a directory: Windows
+    # PowerShell 5.1 applies it to the path being enumerated rather than to the
+    # recursive results, so the five extensions filtered *nothing* and this loop
+    # read `.o`, `.rlib`, `.exe` and every `.txt` under `target/` as if it were
+    # documentation -- 5 679 of 5 962 files outside the declared scope. The Bash
+    # half's `grep --include` does filter, so the two halves disagreed about
+    # which files exist, and the disagreement surfaced as a blocker that only
+    # Windows ever saw (QYR-0311). Filtered explicitly here, because an
+    # extension test that runs is worth more than a parameter that reads well.
+    $extensions = @('.md', '.rs', '.sh', '.ps1', '.yml')
+    $scanned = Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $extensions -contains $_.Extension }
+    foreach ($file in $scanned) {
         # `Get-Content -Raw` returns $null for an empty file. The fixtures keep
         # intentionally empty scripts, and range normalisation must treat those
         # as empty text rather than passing null to Regex.Replace.

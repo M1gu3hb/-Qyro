@@ -1540,6 +1540,26 @@
   `cargo test --workspace` aún en curso. `git merge-base --is-ancestor 26af47a
   7729b0b3` devuelve falso, así que la última tirada verde de esta rama es
   anterior al trabajo y no dice nada de Windows
+- Actualización 2026-08-13 (fase 02, paso 0), **la otra media contestada, y el
+  diagnóstico cambia**: no es que nadie mirase. `gh run list --workflow CI`
+  devuelve **siete tiradas consecutivas** en esta rama —31734622896, 31735781534,
+  31739146084, 31741320500, 31741914871, 31742884829, 31743822172— y **las siete
+  estaban `in_progress`**, la más antigua con 3 h 46 min acumuladas. En la tirada
+  31743822172 los otros siete trabajos (`rust`, `flutter`, `scripts`,
+  `documentation` y los tres `fs final-component guard`) terminaron en success; el
+  único que no termina es **`rust workspace (windows-latest)`**. `ci.yml` no
+  declara `timeout-minutes` en ningún trabajo, así que un cuelgue corre hasta el
+  corte de seis horas de GitHub en vez de fallar en minutos
+  - **Y el contraste importa:** ese mismo `cargo test --workspace` **terminó en
+    verde en un Windows 10 real**, exit 0, 571 tests, 0 fallos, 2 ignorados. Así
+    que «Windows» no es la causa; la causa está en el runner o en la interacción
+    con él, y ésa es una hipótesis distinta de la que la ficha describía
+  - Las siete tiradas se cancelaron con `gh run cancel`, autorizado por el
+    propietario. Cancelar no es contestar: la ficha sigue abierta hasta ver el
+    paso en success, o hasta identificar qué cuelga
+  - Lo que haría falta para cerrarla: `timeout-minutes` en `ci.yml` para que el
+    cuelgue falle con log en vez de agotar el runner, y una tirada de ese trabajo
+    en success sobre un commit nombrado
 
 ## QYR-0079 — La rama de Windows de `is_read_timeout` no la defendía nadie
 
@@ -2665,3 +2685,138 @@
   `compose`, `|`→`^`, **equivalente por construcción** —las dos mitades no
   comparten bit— y comprobado por
   `the_two_halves_of_a_handle_do_not_overlap`, no supuesto
+
+## QYR-0311 — El checker de documentación es rojo en Windows, y su filtro de archivos no filtra
+
+- Plataforma: Windows PowerShell 5.1; `scripts/check_docs_consistency.ps1:255`
+- Severidad: P1
+- Esperado: las dos mitades del checker examinan el mismo conjunto de archivos
+  —`*.md`, `*.rs`, `*.sh`, `*.ps1`, `*.yml`— y dan el mismo veredicto
+- Actual: `Get-ChildItem -LiteralPath … -Recurse -File -Include` **no filtra
+  nada** en PowerShell 5.1. El checker declara cinco extensiones y recorre 5 962
+  archivos, de los cuales 5 679 están fuera de su alcance declarado: `.o`,
+  `.bin`, `.rlib`, `.exe`, `.txt` y todo `target/`. Cuela
+  `docs/reports/6A-prompt-2.txt:15`, que separa los dos extremos del rango
+  reservado con la palabra «a» en vez de con un en dash. Los dos checkers exoneran
+  el rango escrito con guion, en dash o em dash, y `QYR-nnnn+`; **ninguno exonera
+  la forma con palabra**, así que su extremo superior se lee como cita suelta. La
+  mitad Bash nunca ve el archivo porque `grep --include` sí filtra
+- Por qué P1: el `.ps1` existe para dar evidencia en Windows y **no hay ninguna**.
+  `ci.yml:181` lo invoca con `pwsh` sobre un runner Linux, así que ningún job
+  cubre la plataforma para la que el script fue escrito. La comprobación 11 de la
+  puerta se ha declarado verde sin haberse ejecutado nunca allí
+- Reproducción: `powershell -NoProfile -File scripts/check_docs_consistency.ps1`
+  → exit 1. Fixture aislado de cuatro archivos: `-Include @('*.md','*.rs')`
+  devuelve también `b.txt` y `d.o`; `| Where-Object { $_.Extension -in … }`
+  devuelve lo correcto
+- Resolución: pendiente; sustituir `-Include` por un filtro `Where-Object` sobre
+  la extensión, y decidir aparte si la forma «QYR-nnnn a QYR-nnnn» se exonera o
+  se prohíbe en la prosa
+- Lo que haría falta para cerrarla: el script verde en PowerShell 5.1 real, y un
+  job de CI que lo corra en `windows-latest` en vez de `pwsh` sobre Linux
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: la familia es la de QYR-0100, que ya arregló la forma con en dash;
+  volvió por otra puerta. El archivo culpable ya existía en `90bb5d0`
+
+## QYR-0312 — Las reglas afirman que las 64 dependencias son de primera parte; cincuenta vienen de crates.io
+
+- Plataforma: documentación; `Cargo.lock`
+- Severidad: P2
+- Esperado: `R1` §2 y `00-LEEME-PRIMERO` §4 describen el grafo de dependencias tal
+  y como es, porque es la regla que gobierna si se puede añadir una
+- Actual: las dos dicen «todos son de primera parte». De los 64 paquetes de
+  `Cargo.lock`, **14 son de primera parte y 50 traen
+  `source = "registry+https://github.com/rust-lang/crates.io-index"`** —
+  `ed25519-dalek`, `chacha20poly1305`, `sha2`, `unicode-normalization` y su
+  cierre. El propio `THIRD_PARTY_NOTICES.md` lo dice sin ambigüedad: «Desde el
+  sprint 4A el workspace Rust sí tiene crates externos». `00-LEEME-PRIMERO` §4
+  además dice 63 donde hoy hay 64
+- Lo que sí es cierto y conviene no perder al corregir: **ningún sprint reciente
+  ha añadido un paquete externo.** Entre `90bb5d0` y `3b32b6f` el lock pasa de 63
+  a 64 y el único añadido es `qyro_session`, de primera parte; la
+  dev-dependency `serde_json` que la fase 01 declaró sin coste ya estaba en el
+  lock de `90bb5d0`
+- Por qué P2 y no P3: es la premisa de una regla no negociable. Un lector que la
+  crea concluye que el proyecto no tiene superficie de terceros que auditar
+- Resolución: pendiente; reescribir las dos afirmaciones como «cero dependencias
+  externas **nuevas**» con el conteo real y la fecha del último cambio
+- Estado: abierto
+- Dueño: documentación
+- Fecha: 2026-08-13
+- Evidencia: `grep -c '^\[\[package\]\]' Cargo.lock` → 64;
+  `grep -c '^source = ' Cargo.lock` → 50;
+  `git show 90bb5d0:Cargo.lock | grep -c '^\[\[package\]\]'` → 63
+
+## QYR-0313 — El conteo de fichas abiertas de la puerta no ve las que están en negrita
+
+- Plataforma: documentación; `R2` §1.10
+- Severidad: P3
+- Esperado: la comprobación 10 de la puerta cuenta todas las fichas abiertas
+- Actual: su script usa `re.search(r'- Estado: *abierto', x)`, que no casa con
+  `- Estado: **abierto**`. Cuatro fichas lo escriben en negrita, así que el script
+  devuelve **32** donde el número real es **36**. La línea base heredó el 32
+- Por qué P3: no oculta ningún defecto, sólo lo cuenta mal. Pero es el número que
+  la puerta usa para decidir si una fase «añadió más de diez fichas»
+- Resolución: pendiente; relajar el patrón a `- Estado: (\*\*)?abierto`, o
+  normalizar las cuatro fichas y prohibir el énfasis en el campo `Estado`
+- Estado: abierto
+- Dueño: documentación
+- Fecha: 2026-08-13
+- Evidencia: `grep -cE '^- Estado: abierto'` → 32;
+  `grep -cE '^- Estado: (\*\*)?abierto'` → 36
+
+## QYR-0314 — `Session::local_addr` devuelve la dirección del peer, y el listener que sabe el puerto se descarta
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs:244`
+- Severidad: P2
+- Esperado: `local_addr` devuelve la dirección a la que la sesión está atada, que
+  es lo que su nombre y su doc-comment prometen, para que un receptor abierto en
+  el puerto 0 pueda informar del puerto que el sistema eligió
+- Actual: devuelve `self.stream.peer_addr()`, que `qyro_net/src/stream.rs:211`
+  documenta como «la dirección del far end». Y aunque se corrigiera, el propósito
+  seguiría siendo inalcanzable: `open_receiver` bloquea en `listener.accept()`
+  antes de devolver, y el `Listener` —único que sabe el puerto, vía
+  `Listener::local_addr` en `qyro_net/src/listener.rs:95`— es una variable local
+  que se descarta. Cuando se puede preguntar, ya hay un peer conectado
+- Por qué P2 y no P1: la función **no cruza la superficie C**. Las seis
+  operaciones `extern "C"` no la incluyen, así que hoy nadie la llama y el
+  defecto no ha llegado a Dart. Es una función pública equivocada sin consumidor,
+  la forma que toma aquí el antipatrón de `R1` §5.5
+- Lo que haría falta para cerrarla: retener el `Listener` o su dirección en la
+  sesión, devolver la dirección local, y una prueba que abra un receptor en el
+  puerto 0 y compruebe que el puerto informado **no** es cero y **no** es el del
+  peer. Cerrarla es prerrequisito de la mitad receptora de la fase 02
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: lectura del código; ninguna prueba de conducta lo cubre, que es
+  precisamente QYR-0309
+
+## QYR-0315 — El campo `Estado` del ledger usa un vocabulario que `R4` no reconoce
+
+- Plataforma: documentación; `BUGS_PENDING.md`
+- Severidad: P3
+- Esperado: `R4` §5 congela tres estados y dice que son estados, no narraciones:
+  `abierto`, `cerrado`, `descartado`
+- Actual: el campo usa **cuatro palabras y once formas**. `resuelto` aparece 45
+  veces y no es ninguno de los tres; `cerrado` 40; `abierto` 29, más 3
+  `**abierto**`, 3 «abierto al inicio de este tramo» y 1 «**abierto y
+  programado**»; y cinco variantes narrativas de `resuelto`. `descartado` no
+  aparece nunca. QYR-0057 registra tres de estas fichas; el alcance real es
+  cincuenta veces mayor
+- Por qué P3: `resuelto` y `cerrado` significan lo mismo para cualquier lector, y
+  ninguna herramienta se rompe. Pero `R4` §5 existe porque un campo con once
+  formas deja de ser consultable, y el conteo de la puerta ya tropieza con dos de
+  ellas (QYR-0313)
+- Recogido de paso: el comentario de `.github/workflows/ci.yml:73` dice «its
+  ninth guard test», contando un guard en `qyro_win_dpapi`; hoy hay cinco, y el
+  crate corre 13 tests en Windows, no 9
+- Resolución: pendiente; normalizar a los tres estados en un commit de sólo
+  documentación, y decidir si el checker debe exigirlo
+- Estado: abierto
+- Dueño: documentación
+- Fecha: 2026-08-13
+- Evidencia: `grep -oE '^- Estado: [^,;.(]*' BUGS_PENDING.md | sort | uniq -c`;
+  `cargo test -p qyro_win_dpapi --lib -- --list` → 5 `guards::` + 8 `tests::`
