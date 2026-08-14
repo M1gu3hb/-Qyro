@@ -29,31 +29,77 @@ const _forbidden = <String>[
   'android.permission.READ_MEDIA_AUDIO',
 ];
 
-/// Where Gradle writes the merged manifest, newest build variant first.
+/// Where the intermediates live, most likely first.
+///
+/// **`build/app/`, not `android/app/build/`.** Flutter's Gradle plugin moves the
+/// build directory out of the Android project — `rootProject.buildDir` becomes
+/// `../build` and each module gets `build/<module>` — so nothing is ever written
+/// under `android/app/build/`. This list used to name only that path, which is
+/// why the assertion below had never once read a file. The Android path stays
+/// second because a plain Gradle invocation, without Flutter, does use it.
+const _intermediateRoots = <String>[
+  'build/app/intermediates',
+  'android/app/build/intermediates',
+];
+
+/// The exact paths, newest Android Gradle Plugin layout first.
 const _mergedCandidates = <String>[
-  'android/app/build/intermediates/merged_manifests/debug/processDebugManifest/AndroidManifest.xml',
-  'android/app/build/intermediates/merged_manifests/debug/AndroidManifest.xml',
-  'android/app/build/intermediates/merged_manifest/debug/AndroidManifest.xml',
+  'merged_manifests/debug/processDebugMainManifest/AndroidManifest.xml',
+  'merged_manifests/debug/processDebugManifest/AndroidManifest.xml',
+  'merged_manifests/debug/AndroidManifest.xml',
+  'merged_manifest/debug/AndroidManifest.xml',
 ];
 
 File? _mergedManifest() {
-  for (final candidate in _mergedCandidates) {
-    final file = File(candidate);
-    if (file.existsSync()) return file;
+  for (final root in _intermediateRoots) {
+    for (final candidate in _mergedCandidates) {
+      final file = File('$root/$candidate');
+      if (file.existsSync()) return file;
+    }
   }
   // A wider sweep, because the intermediates path has moved between Android
   // Gradle Plugin versions and pinning one is how this test would quietly stop
   // reading anything.
-  final root = Directory('android/app/build/intermediates');
-  if (!root.existsSync()) return null;
-  for (final entry in root.listSync(recursive: true)) {
-    if (entry is File &&
-        entry.path.endsWith('AndroidManifest.xml') &&
-        entry.path.contains('merged_manifest')) {
-      return entry;
+  for (final root in _intermediateRoots) {
+    final directory = Directory(root);
+    if (!directory.existsSync()) continue;
+    for (final entry in directory.listSync(recursive: true)) {
+      if (entry is File &&
+          entry.path.endsWith('AndroidManifest.xml') &&
+          entry.path.contains('merged_manifest')) {
+        return entry;
+      }
     }
   }
   return null;
+}
+
+/// Everything the sweep looked at, for a failure message that can be acted on.
+///
+/// Without this, «none was found» is a dead end: it does not say whether the
+/// build directory is missing, empty, or full of manifests under a name this
+/// test does not recognise.
+String _whatTheSweepSaw() {
+  final report = StringBuffer();
+  for (final root in _intermediateRoots) {
+    final directory = Directory(root);
+    if (!directory.existsSync()) {
+      report.writeln('  $root: does not exist');
+      continue;
+    }
+    final manifests = directory
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('AndroidManifest.xml'))
+        .map((file) => file.path)
+        .take(20)
+        .toList();
+    report.writeln('  $root: ${manifests.length} manifest(s)');
+    for (final path in manifests) {
+      report.writeln('    $path');
+    }
+  }
+  return report.toString();
 }
 
 void main() {
@@ -90,13 +136,13 @@ void main() {
       if (Platform.environment['QYRO_REQUIRE_MERGED_MANIFEST'] == '1') {
         fail(
           'QYRO_REQUIRE_MERGED_MANIFEST is set, so an APK was built and a '
-          'merged manifest must exist. None was found under '
-          'android/app/build/intermediates. The Android Gradle Plugin moved it '
-          'again; update _mergedCandidates rather than letting this skip.',
+          'merged manifest must exist. None was found. Update '
+          '_intermediateRoots or _mergedCandidates rather than letting this '
+          'skip. What the sweep saw:\n${_whatTheSweepSaw()}',
         );
       }
       markTestSkipped(
-        'no merged manifest found under android/app/build/intermediates. '
+        'no merged manifest found under ${_intermediateRoots.join(" or ")}. '
         'Run `flutter build apk --debug` first; on this machine that needs '
         'Developer Mode for plugin symlinks (QYR-0324), so CI is where this '
         'assertion actually runs.',
