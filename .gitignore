@@ -11,6 +11,10 @@ config/features.json
 
 # Rust
 target/
+# cargo-mutants working directory. Tool output belongs in a report with its
+# scope declared, never in the tree and never in the ledger (R1 §7).
+mutants.out/
+mutants.out.old/
 
 # Flutter/Dart
 .dart_tool/

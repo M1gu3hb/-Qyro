@@ -2820,3 +2820,146 @@
 - Fecha: 2026-08-13
 - Evidencia: `grep -oE '^- Estado: [^,;.(]*' BUGS_PENDING.md | sort | uniq -c`;
   `cargo test -p qyro_win_dpapi --lib -- --list` → 5 `guards::` + 8 `tests::`
+
+## QYR-0316 — Una transferencia que llega íntegra se le reporta al emisor como peer inalcanzable
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P1
+- Esperado: cuando el receptor verifica los digests y da su veredicto, el emisor
+  termina en `SessionState::Completed`
+- Actual: el emisor termina en **`Err(SessionError::PeerUnreachable)`** mientras
+  el receptor termina en `Ok(Completed)` y materializa el archivo correcto byte a
+  byte. El receptor, al recibir `Complete`, produce el frame `IntegrityResult` y
+  lo deja en `outbound`; pero `advance` escribe `outbound` **al principio** de
+  cada paso y sale por `return Ok(self.verdict())` **antes** de escribirlo. Como
+  ese paso devuelve un estado terminal, nadie vuelve a llamar a `step`, y el
+  frame no se envía jamás. El emisor sólo alcanza `Phase::Done` al **recibir**
+  `IntegrityResult`, así que se queda esperando un frame que existe y que nadie
+  mandó, hasta que el socket se cierra
+- Por qué P1: es el antipatrón de `R1` §5.5 —bytes que se producen y nadie
+  mira— con consecuencia visible para el usuario. Dart conduce el lado **emisor**
+  en la fase 02, así que un envío correcto se le presentaría a la persona como
+  fallo de red. Y bloquea los criterios de aceptación 3 y 5 de la fase
+- Reproducción: `cargo test -p qyro_session --test session_behaviour`. Antes del
+  arreglo, cinco de los diez tests fallan con
+  `left: Err(PeerUnreachable) / right: Ok(Completed)`, y el mensaje dice que el
+  receptor terminó `Ok(Completed)` y materializó 1
+- Resolución: `write_outbound` extraído y llamado también cuando el paso resulta
+  ser el último. Visto fallar y visto pasar: los mismos diez tests están en rojo
+  sin el arreglo y en verde con él
+- Estado: cerrado
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: el defecto nunca se había ejercido porque `qyro_session` no tenía
+  una sola prueba de conducta, que es QYR-0309
+
+## QYR-0317 — El receptor no informa de progreso: `done` se queda en cero toda la transferencia
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P2
+- Esperado: `Session::progress` describe el avance de la sesión, sea cual sea su
+  papel; `qyro_session_progress` es una de las seis operaciones `extern "C"`
+- Actual: `self.progress.done` se asigna **sólo** en el brazo emisor, desde
+  `engine.bytes_sent()`. El brazo receptor asigna `total` cuando aprende el
+  manifiesto y nunca toca `done`, así que una sesión receptora informa `0` de
+  principio a fin. `qyro_transfer::Receiver` **no tiene accesor** de bytes
+  recibidos —sólo `Sender::bytes_sent`—, así que cerrarlo pide una adición en
+  `qyro_transfer`, no un cambio de una línea aquí
+- Por qué P2 y no P1: la fase 02 conduce el lado emisor, que sí informa bien.
+  Sube a P1 en la fase 05, donde una barra de progreso congelada en cero es lo
+  que ve la persona que recibe
+- Lo que haría falta para cerrarla: un accesor de bytes recibidos en
+  `qyro_transfer::Receiver` y su asignación aquí, más una prueba con dos tamaños
+  y una desigualdad estricta entre ellos, que es la forma que distingue un
+  contador medido de una constante
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: `grep -n 'progress.done' rust/crates/qyro_session/src/session.rs`
+  devuelve una sola línea, dentro de `Role::Sending`
+
+## QYR-0318 — `Progress::item` se documenta como uno-based y no se asigna nunca
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P2
+- Esperado: «Which manifest item is moving, one-based. Zero before the first»,
+  que es lo que dice su propio doc-comment
+- Actual: **ningún brazo lo asigna.** Vale `0` desde el `Progress::default` de la
+  apertura hasta el final, en las dos direcciones, con lo que «cero antes del
+  primero» es indistinguible de «cero siempre». Cruza a Dart como el tercer
+  entero de `qyro_session_progress`, así que una interfaz que muestre «archivo 3
+  de 7» mostraría siempre cero
+- Por qué P2: es un campo informativo, no afecta a la integridad de lo
+  transferido. Pero es una superficie congelada que promete un valor que nunca
+  llega
+- Lo que haría falta para cerrarla: asignarlo en los dos brazos y una prueba que
+  compruebe que **cambia** durante una transferencia de varios archivos —una
+  aserción de que es distinto de cero al final la satisfaría una constante
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: `grep -n 'progress.item' rust/crates/qyro_session/src/session.rs` no
+  devuelve ninguna asignación
+
+## QYR-0319 — Un doc-comment enlaza una variante de error que la propia caja dice que no existe
+
+- Plataforma: documentación; `rust/crates/qyro_session/src/session.rs:275`
+- Severidad: P3
+- Esperado: los enlaces intra-doc apuntan a elementos que existen
+- Actual: el doc de `Session::step` dice «[`SessionError::AlreadyFailed`] once
+  anything has failed», y `error.rs:48` dice literalmente «There is deliberately
+  no `AlreadyFailed`», con el motivo: ADR-0032 §5 congela la pegajosidad como
+  *devolver el mismo código*. El borrador de la enumeración sí la tenía y la
+  guarda de sitios de construcción la cazó; el doc-comment se quedó atrás
+- Por qué P3: es un enlace roto en documentación, sin consecuencia de ejecución.
+  Se registra porque `rustdoc` no está en la puerta y por tanto nada lo caza:
+  `clippy -D warnings` no evalúa `rustdoc::broken_intra_doc_links`
+- Resolución: pendiente; reescribir el doc para decir que `step` devuelve el
+  mismo error que falló, y evaluar si `cargo doc -D warnings` debe entrar en la
+  puerta
+- Estado: abierto
+- Dueño: documentación
+- Fecha: 2026-08-13
+- Evidencia: `grep -rn 'AlreadyFailed' rust/crates/` devuelve exactamente dos
+  líneas, una negando la existencia y otra enlazándola
+
+## QYR-0320 — Las pruebas de `qyro_session` cubren el final feliz y ninguno de los que fallan
+
+- Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
+- Severidad: P2
+- Esperado: cada rama de decisión de la sesión tiene una prueba que la recorre
+- Actual: las diez pruebas de conducta que cierran QYR-0309 matan 11 de 32
+  mutantes y dejan **siete supervivientes reales**, todos de la misma causa: no
+  hay ninguna prueba de un final que falle. En concreto quedan sin defender
+  - **`RefusingSink::write_at` → `()`** (`:66`): que contenido llegado antes del
+    manifiesto se rechace. El sink existe para *registrar* en vez de tragar, y
+    volverlo silencioso no rompe ninguna prueba
+  - **`verdict`, `&&` → `||`** (`:406`): que un receptor con **cero veredictos**
+    termine en `Rejected`. Con `||`, `all()` sobre una lista vacía vale `true` y
+    una transferencia sin ningún ítem verificado se reportaría como `Completed`
+  - **`finish`, `==` → `!=`** (`:446`): un ítem cuyo veredicto no es `Ok`
+  - **`finished` → `true` / `false` y sus dos `==`** (`:393`–`:395`): un peer que
+    cierra justo después del último frame. **Estos cuatro sobreviven por culpa
+    del arreglo de QYR-0316**: antes, esa ruta se recorría en cada transferencia
+    porque el receptor cerraba sin mandar su veredicto
+- Aparte, un **timeout** en `:347` (`==` → `!=` en el brazo emisor): el emisor
+  sale en el primer paso y el receptor se queda en `read_frame`. `R2` §3 dice que
+  un cuelgue no es un superviviente; un peer que saluda y se calla sí produce la
+  condición. **Lo que este barrido no establece es si `FrameStream` tiene plazo
+  de lectura** —`qyro_net` clasifica `is_read_timeout`, así que probablemente sí—
+  y eso es lo primero que hay que comprobar
+- Por qué P2 y no P1: ninguno de los siete es alcanzable por un peer honesto, y
+  el camino que un usuario recorre está cubierto y verificado byte a byte. Sube a
+  P1 si se confirma que un peer silencioso puede colgar una sesión sin plazo
+- Lo que haría falta para cerrarla: un peer construido a mano que mande contenido
+  antes del manifiesto y que se calle a media transferencia. Eso pide
+  `qyro_crypto`, `qyro_net` y `qyro_transfer` como `[dev-dependencies]` de
+  `qyro_session` —todas ya en el workspace, **cero paquetes nuevos**— y es
+  trabajo propio, no una prueba más
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-13
+- Evidencia: `cargo mutants --package qyro_session --timeout 90` → 32 mutantes,
+  11 caught, 9 missed, 1 timeout, 11 unviable. Dos de los nueve son de `Display`
+  y `Debug` y quedan fuera por `R4` §2. Inventario completo en
+  `docs/reports/fase-02-dart-conduce.md` §10

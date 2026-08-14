@@ -320,6 +320,105 @@ Es el mismo error de lectura que `R2` §1.1 describe, en otra forma.)*
 
 ---
 
+## 6. Paso 0b — QYR-0309, y el defecto que estaba esperando debajo
+
+La fase 01 recomendó no empezar por Dart sino por «un emisor y un receptor sobre
+`127.0.0.1` en dos hilos moviendo un archivo». Tenía razón, y la razón resultó ser
+más concreta de lo que ella misma sabía.
+
+### 6.1 Qué había
+
+`qyro_session` tenía **seis tests, los seis en `guards.rs`, y los seis leen los
+archivos de producción como texto**: ningún constructo que pueda entrar en
+pánico, cada archivo listado, cada variante de error construida en algún sitio.
+Son guardas útiles —cazaron la variante `AlreadyFailed` que nada podía producir—
+pero **ninguna abre un socket**. `session.rs` son 444 líneas y `error.rs` 69, y no
+había una sola prueba que hiciera correr el código.
+
+### 6.2 Qué se escribió
+
+`rust/crates/qyro_session/tests/session_behaviour.rs`, diez pruebas contra la API
+**pública** del crate y nada más — que es también la superficie que ADR-0032 §2
+acota, así que ejercerla aquí es ejercer la frontera.
+
+| Prueba | Qué defiende |
+|---|---|
+| `an_empty_file_list_is_refused_before_anything_is_dialled` | El rechazo ocurre **antes** del dial. Nada escucha en esa dirección, así que `BadArgument` y `PeerUnreachable` son distinguibles y la prueba puede notar si la comprobación se mueve |
+| `a_file_outside_the_root_is_refused_rather_than_renamed_to_its_last_component` | El fallo silencioso que evita: mandarlo igual con un nombre que el emisor no eligió |
+| `a_parent_directory_in_the_remainder_is_refused` | `inner/../secret.bin` recorta contra el root y aun así no es descendiente llano |
+| **`a_file_crosses_two_sessions_on_the_loopback_and_arrives_byte_for_byte`** | La que define el paso |
+| `a_corrupted_arrival_would_be_visible_to_this_comparison` | `R2` §1.7: voltea un bit y comprueba que la comparación lo ve |
+| `two_files_under_a_common_root_arrive_under_their_own_relative_names` | La afirmación del doc-comment que nadie ejercía. **Dos tamaños distintos a propósito**, porque si ambos arribos fueran idénticos la prueba no podría ver una colisión |
+| `progress_reaches_the_total_and_never_goes_backwards` | Monotonía, y `total > 0` — trampa 4 del documento de fase |
+| `a_cancelled_session_reports_cancelled_and_keeps_reporting_it` | La pegajosidad de ADR-0032 §5, comprobada **tres veces seguidas** |
+| `a_receiver_that_never_gets_a_peer_reports_the_peer_and_not_success` | Un socket que abre y cuelga no es un peer autenticado |
+| `finishing_a_sender_materialises_nothing_and_says_so` | `finish` es del receptor; un emisor que contara algo estaría contando otra cosa |
+
+El archivo de prueba usa **2 MiB + 7 bytes**, no 4 KiB: los chunks son de 64 KiB
+tras una ventana de 16, así que por debajo de 1 MiB la ventana, el go-back-N y el
+control de flujo no se ejercitan y una transferencia que nunca rellena la ventana
+pasaría igual.
+
+### 6.3 El defecto que encontraron
+
+**Cinco de las diez fallaron a la primera, y no por un fallo del test.**
+
+El mensaje de la aserción se escribió para decir qué vio el *otro* extremo, y eso
+fue lo que lo resolvió:
+
+```
+the sender did not complete; the receiver ended Ok(Completed) and materialised Ok(1)
+  left: Err(PeerUnreachable)
+ right: Ok(Completed)
+```
+
+El receptor completó y materializó el archivo **correcto byte a byte**. El emisor
+lo reportó como fallo de transporte.
+
+El mecanismo, leído en el código y no adivinado:
+
+1. El receptor, al recibir `Complete`, calcula los veredictos y **produce el frame
+   `IntegrityResult`**, que `qyro_session` deja en `self.outbound`.
+2. `advance` escribe `outbound` **al principio** de cada paso.
+3. Pero ese mismo paso ve `engine.phase() == Phase::Done` y sale por
+   `return Ok(self.verdict())`.
+4. Como devuelve un estado terminal, **nadie vuelve a llamar a `step`**. El frame
+   nunca sale.
+5. El emisor sólo alcanza `Phase::Done` al **recibir** `IntegrityResult`
+   (`qyro_transfer/src/session.rs:496`). Espera un frame que existe y que nadie
+   mandó, hasta que el socket se cierra → `PeerUnreachable`.
+
+Es exactamente el antipatrón nº 5 de `R1` §5 —un artefacto que se escribe y nada
+lee— pero al revés: **bytes que se producen y nadie escribe**. Y con consecuencia
+de producto: Dart conduce el lado **emisor** en esta fase, así que un envío
+correcto se le habría presentado a la persona como fallo de red.
+
+**QYR-0316, P1, cerrada.** El arreglo extrae `write_outbound` y lo llama también
+cuando el paso resulta ser el último. Visto fallar y visto pasar: los mismos diez
+tests, en rojo sin el arreglo y en verde con él.
+
+### 6.4 Dos huecos más que las pruebas dejaron a la vista
+
+- **QYR-0317**, P2 — el receptor **nunca informa de progreso**. `progress.done` se
+  asigna sólo en el brazo emisor; una sesión receptora informa `0` de principio a
+  fin, y `qyro_transfer::Receiver` no tiene accesor de bytes recibidos.
+- **QYR-0318**, P2 — `Progress::item` se documenta «one-based» y **no se asigna
+  nunca**, en ninguno de los dos brazos.
+
+La prueba de progreso **no afirma nada sobre ninguno de los dos**, a propósito:
+afirmar el cero de hoy congelaría un defecto como contrato, y afirmar el
+comportamiento pretendido fallaría. Lo que sí afirma es lo que es cierto y merece
+defensa —que el receptor **aprende** su total del manifiesto, empezando en cero y
+no recibiéndolo del llamante—, y el resto lo llevan las fichas.
+
+### 6.5 Lo que este paso NO demuestra
+
+Dos `Session` en dos **hilos del mismo proceso** sobre `127.0.0.1`. No son dos
+procesos, no son dos aparatos, y no hay Dart en ninguna parte. Sigue sin haber
+ocurrido ninguna transferencia a través de la superficie C.
+
+---
+
 ## 9. Las puertas
 
 ### Puerta del paso 0 — auditoría de la línea base · 2026-08-13
@@ -361,6 +460,117 @@ todavía. El conteo va con las dos cifras a propósito: el script de `R2` §1.10
 
 **Cero dependencias añadidas.** `Cargo.lock` sigue en 64 paquetes; ningún archivo
 Rust tocado.
+
+### Puerta del paso 0b — QYR-0309 · 2026-08-13
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all --check` | ✅ exit 0 |
+| 2 | `cargo clippy --workspace --all-targets -- -D warnings` | ✅ exit 0 |
+| 3 | `cargo test --workspace` | ✅ exit 0 · **581 passed** (571 → 581), 0 failed, **2 ignored — los mismos dos**, ninguno nuevo |
+| 4 | Barrido de mutación | ✅ **corrido y declarado** · 32 mutantes, 11/9/1/11. Inventario y agrupación en §10; la familia de supervivientes va a **una** ficha escrita a mano, no al ledger entrada por entrada |
+| 5 | Lectura de aserciones | ✅ Revisadas una a una. La que más importa es la de `two_files_…`: usa **dos tamaños distintos** para que dos arribos idénticos no puedan pasar por un par legítimo |
+| 6 | Lectura de contadores | ✅ N/A · ningún contador nuevo bajo `cfg(test)` |
+| 7 | La medida se ve fallar | ✅ `a_corrupted_arrival_would_be_visible_to_this_comparison` voltea un bit y comprueba que la comparación lo ve, **y** que voltearlo no cambia la longitud, para que no pase por un fallo de tamaño |
+| 8 | Lectura de nombres | ✅ Las diez enuncian una propiedad y el cuerpo la ejerce. `an_empty_file_list_is_refused_before_anything_is_dialled` dice «antes del dial» y **lo comprueba**: nada escucha en esa dirección, así que `BadArgument` y `PeerUnreachable` son distinguibles |
+| 9 | `git diff --name-only` | ✅ 5 rutas |
+| 10 | El ledger sigue legible | ⚠️ **En el límite exacto.** 137 fichas · **10 nuevas en la fase** (QYR-0311 a QYR-0320). `R2` §1.10 dice «más de diez»; son diez, así que pasa, pero es el techo y conviene decirlo en vez de que se note en la fase siguiente |
+| 11 | Coherencia documental, Bash **y** PowerShell | ✅ exit 0 los cuatro: checker y contrato, en las dos mitades |
+| 12 | Escribir el resultado | ✅ esta tabla |
+
+**Archivos tocados en el paso 0b:**
+
+```
+.gitignore
+BUGS_PENDING.md
+docs/reports/fase-02-dart-conduce.md
+rust/crates/qyro_session/src/session.rs
+rust/crates/qyro_session/tests/session_behaviour.rs
+```
+
+`.gitignore` gana `mutants.out/`: la salida del barrido son 65 KB de log y no
+entra en el árbol. Va al informe con su alcance declarado, que es la regla.
+
+---
+
+## 10. Tabla de mutación
+
+**Alcance declarado:** `cargo mutants --package qyro_session --timeout 90`, sobre
+el único crate que este paso toca. cargo-mutants 25.x. **No es un barrido del
+workspace** y no dice nada de los otros diez crates.
+
+| Resultado | Nº |
+|---|---|
+| Mutantes generados | **32** |
+| Caught | **11** |
+| Missed | **9** |
+| Timeout | **1** |
+| Unviable | **11** |
+
+`cargo mutants` sale con **exit 3** cuando quedan supervivientes; es el resultado
+esperado aquí y no un fallo de la herramienta.
+
+### Los nueve supervivientes, agrupados por causa
+
+**Dos están excluidos por `R4` §2** — un mutante de `Display` o `Debug` no merece
+ficha:
+
+- `error.rs:58` · `Display for SessionError`
+- `session.rs:100` · `Debug for Session`
+
+**Siete son huecos reales, y los siete son la misma familia: las pruebas cubren
+el final feliz y no los finales que fallan.**
+
+| Mutante | Qué queda sin defender |
+|---|---|
+| `session.rs:66` · `RefusingSink::write_at` → `()` | Que contenido llegado **antes** del manifiesto se rechace. El sink existe para *registrar* en vez de tragar, y volverlo silencioso no rompe nada |
+| `session.rs:393` · `finished` → `true` / → `false` | Un peer que cierra justo después del último frame |
+| `session.rs:394`, `:395` · `==` → `!=` en `finished` | Igual |
+| `session.rs:406` · `&&` → `\|\|` en `verdict` | Que un receptor con **cero veredictos** termine en `Rejected` y no en `Completed`. Con `\|\|`, `all()` sobre una lista vacía es `true` |
+| `session.rs:446` · `==` → `!=` en `finish` | Un ítem cuyo veredicto **no** es `Ok` |
+
+**La observación incómoda, y va aquí porque es la útil:** los cuatro mutantes de
+`finished` sobreviven **por culpa del arreglo de QYR-0316**. Antes, la ruta «la
+lectura falló y ya habíamos terminado» se recorría en cada transferencia, porque
+el receptor cerraba sin mandar su veredicto. Arreglado eso, esa ruta ya no la
+alcanza ningún test. Arreglar un defecto puede descubrir cobertura, y aquí la
+descubrió.
+
+### El timeout no es un superviviente
+
+`session.rs:347` · `==` → `!=` en el brazo emisor de `advance`. Con la mutación,
+el emisor se considera terminado en el primer paso y sale; el **receptor** se
+queda bloqueado en `read_frame` esperando frames que ya no llegan, y el `join`
+incondicional del harness cuelga con él.
+
+`R2` §3 pregunta si un peer puede producir la condición. **Un peer que saluda y
+después se calla sí la produce.** Lo que este barrido **no** establece es si
+`FrameStream` tiene plazo de lectura: `qyro_net` clasifica `is_read_timeout`, así
+que probablemente sí, y entonces el cuelgue es de mi harness y no de producción.
+**No lo verifiqué, así que no lo afirmo.** Queda en QYR-0320 como la primera cosa
+que comprobar.
+
+---
+
+## 11. Tests antes y después
+
+| | Antes | Después |
+|---|---|---|
+| `cargo test --workspace` (Windows) | 571 | **581** |
+| `qyro_session` | 6 | **16** |
+| — de ellos, de conducta | **0** | **10** |
+| Ignorados | 2 | 2 · los mismos dos |
+
+---
+
+## 12. Delta de dependencias
+
+**Cero.** `Cargo.lock` sigue en **64** paquetes, el mismo número con el que
+empezó la fase. Ni normales ni de desarrollo: las diez pruebas nuevas usan sólo
+`std` y la API pública de `qyro_session`, que es por lo que `qyro_session` sigue
+sin `[dev-dependencies]`.
+
+Comando: `grep -c '^\[\[package\]\]' Cargo.lock` → 64.
 
 ---
 

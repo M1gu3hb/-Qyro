@@ -292,13 +292,26 @@ impl Session {
         error
     }
 
-    fn advance(&mut self) -> Result<SessionState, SessionError> {
+    /// Puts everything the engine has produced on the wire.
+    ///
+    /// Called at the start of a step *and* again when a step turns out to be the
+    /// last one. Only at the start is not enough: the receiver produces its
+    /// `IntegrityResult` in the same step that takes it to `Phase::Done`, and a
+    /// step that returns a terminal state is the last one anybody calls. Those
+    /// bytes are the sender's only way to learn the transfer verified, so
+    /// leaving them in `outbound` makes a successful transfer end as
+    /// `PeerUnreachable` on the sending side (QYR-0316).
+    fn write_outbound(&mut self) -> Result<(), SessionError> {
         for frame in core::mem::take(&mut self.outbound) {
             self.stream
                 .write_frame(&frame)
                 .map_err(|error| net_error(&error))?;
         }
-        self.stream.flush().map_err(|error| net_error(&error))?;
+        self.stream.flush().map_err(|error| net_error(&error))
+    }
+
+    fn advance(&mut self) -> Result<SessionState, SessionError> {
+        self.write_outbound()?;
 
         let inbound = match self.stream.read_frame() {
             Ok(Some(frame)) => Some(
@@ -315,6 +328,10 @@ impl Session {
             }
         };
 
+        // Declared without a value on purpose: both arms are required to set it,
+        // and a `false` default would let a future arm fall through to "not
+        // finished" silently.
+        let finished;
         match &mut self.role {
             Role::Sending { engine, source } => {
                 if let Some(bytes) = inbound {
@@ -327,9 +344,7 @@ impl Session {
                     .map_err(|_| SessionError::TransferRefused)?;
                 self.outbound = produced;
                 self.progress.done = engine.bytes_sent();
-                if engine.phase() == Phase::Done {
-                    return Ok(self.verdict());
-                }
+                finished = engine.phase() == Phase::Done;
             }
             Role::Receiving {
                 engine,
@@ -361,10 +376,15 @@ impl Session {
                     }
                     self.outbound = answers;
                 }
-                if engine.phase() == Phase::Done {
-                    return Ok(self.verdict());
-                }
+                finished = engine.phase() == Phase::Done;
             }
+        }
+        if finished {
+            // The step that ends the transfer is the last one a caller makes, so
+            // anything the ending produced has to leave here rather than wait
+            // for a step that never comes.
+            self.write_outbound()?;
+            return Ok(self.verdict());
         }
         Ok(SessionState::InProgress)
     }
