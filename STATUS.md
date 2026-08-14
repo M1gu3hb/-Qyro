@@ -35,19 +35,26 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 - **ADR-0033 congelada** antes de una línea de código: el puente de progreso, con
   su presupuesto de emisiones acotado por una constante y no por el tamaño del
   archivo
-- `cargo test --workspace` en Windows: **581 passed, 0 failed, 2 ignored**
+- **Dart conduce una transferencia real.** Un archivo de 8 MiB + 13 bytes cruza
+  **dos procesos de sistema operativo**, por un socket, conducido desde Dart a
+  través de la superficie C, y llega **idéntico byte a byte**. El receptor es
+  `qyro_net_smoke serve`. Con progreso monótono que termina en el total y dentro
+  del presupuesto de 102 emisiones de ADR-0033
+- **ADR-0034 congelada**: Dart no puede asignar memoria nativa sin
+  `package:ffi`, así que los búferes se piden prestados a Rust. Sube la
+  superficie `extern "C"` de ocho símbolos a diez
+- `cargo test --workspace` en Windows: **595 passed, 0 failed, 2 ignored**;
+  `flutter test`: **62 passed**
 
 **Lo que sigue sin existir, y no ha cambiado:**
 
-- **Ninguna transferencia ha ocurrido a través de la superficie C.** Ni en un
-  test ni en ningún sitio. `qyro_ffi` compila las seis operaciones y nadie las ha
-  recorrido hasta el final (QYR-0310)
-- **Dart no ha hecho nada real todavía.** El puente de progreso está decidido y
-  no implementado
 - Sin selector de archivos, sin descubrimiento, sin UI. **Los botones Enviar y
-  Recibir siguen `onPressed: null`**
-- **Cero pruebas en hardware físico.** Dos hilos en `127.0.0.1` no son dos
-  procesos, y dos procesos no son dos aparatos en una Wi-Fi
+  Recibir siguen `onPressed: null`**, y el test que lo comprueba sigue pasando
+- **Cero pruebas en hardware físico.** Dos procesos en `127.0.0.1` **no** son dos
+  aparatos en una Wi-Fi: no hay descubrimiento, ni MTU real, ni pérdida de
+  paquetes, ni dos sistemas operativos distintos
+- El receptor **no informa de progreso** (QYR-0317) y `Progress::item` vale cero
+  siempre (QYR-0318). Dart conduce el lado emisor, que sí informa bien
 
 ### Sprint 6A — `qyro_net`, hasta la Puerta 5 y la rama de Codex fusionada
 

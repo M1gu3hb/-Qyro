@@ -518,6 +518,97 @@ que las doce aplican por igual.
   escrito porque es el mismo modo de fallo que citar un número de memoria, y
   porque es la razón por la que `R1` §6 exige el SHA completo y no el corto.
 
+### Pasos 3 y 4 — el lado Dart, y la prueba que define la fase
+
+**Ocurrió.** Un archivo de **8 MiB + 13 bytes** cruzó **dos procesos de sistema
+operativo distintos**, por un socket, conducido desde Dart, y llegó **idéntico
+byte a byte**.
+
+#### 3.1 El problema que apareció al escribir Dart, y que ninguna ADR anticipó
+
+`dart:ffi` **no trae asignador de memoria nativa**. El `malloc` que todo el mundo
+usa vive en `package:ffi`, y el criterio de aceptación 10 de esta fase dice «cero
+paquetes nuevos de pub.dev». `pubspec.lock` tiene 39 y `ffi` no está.
+
+Las tres salidas, medidas antes de elegir:
+
+| Salida | Veredicto |
+|---|---|
+| `package:ffi` | **No.** Es exactamente el paquete que el criterio 10 prohíbe |
+| `@Native(isLeaf: true)` + `TypedData.address` | **No, y por plataforma, no por gusto.** Está diseñado justo para esto —un puntero válido sólo durante una llamada *leaf*, que es lo que ADR-0032 §6 ya promete al copiar al entrar—, pero `@Native` sin `assetId` resuelve el símbolo **en el proceso**, y `DynamicLibrary.process()` **no está soportado en Windows**. Los native assets que darían `assetId` siguen experimentales. Algo que funciona en Android y no en Windows no sirve para un producto de tres plataformas |
+| Dos funciones en `qyro_ffi` | **Sí**, y por eso lleva ADR |
+
+**ADR-0034, congelada antes del código** (`c5f3b10`, un archivo, cero `.rs`).
+Reescribe la regla de ADR-0032 §6, y la sustituta es **más simple** que la
+original: *Rust posee todos los búferes que cruzan, en las dos direcciones; Dart
+nunca posee memoria nativa, la pide prestada para llenarla y la devuelve.* La
+frase original repartía la propiedad en dos y le daba a Dart la mitad que Dart
+**no puede** sostener sin una dependencia.
+
+Y la propia ADR-0032 §6 lo vio venir: *«La fase 02 necesitará un liberador de
+verdad y eso lleva su propia cláusula de ADR, no llega de refilón.»* Resultó
+hacer falta para la **entrada**, no para la salida.
+
+#### 3.2 `guard` se hace genérico en vez de tener hermanos
+
+Las dos funciones nuevas devuelven `*mut u8` y `()`, no `i32`, así que no cabían
+en `guard`. La guarda `every_extern_c_function_sits_behind_the_panic_guard` exige
+que el cuerpo abra **literalmente** con `guard(`, y añadir excepciones habría sido
+debilitarla.
+
+En su lugar, `guard` pasa a ser genérico sobre un trait `PanicOutcome` con el
+valor de fallo **nombrado por tipo**. Un trait y no una cota `Default`, y la razón
+importa: `Default` para `i32` es `0`, y `0` es `QYRO_OK` — un pánico habría
+reportado éxito.
+
+#### 3.3 Las cuatro pruebas, y por qué dos existen para que las otras dos signifiquen algo
+
+| Prueba | Qué defiende |
+|---|---|
+| **`a_file_crosses_two_processes_driven_from_dart`** | La que define la fase. 8 MiB + 13 B, dos procesos, byte a byte, `.qyro-part` no sobrevive |
+| `a_corrupted_transfer_is_detected_by_this_test` | `R2` §1.7. Voltea un bit **en el archivo llegado, no en el cable**: corromper el cable demostraría que el AEAD funciona, que es otra afirmación |
+| `a_session_without_an_observer_still_completes` | ADR-0033 §2: «sin observador» no puede ser un segundo camino |
+| `closing_from_dart_leaves_no_handle_and_no_thread` | Abre y cierra **seis** sesiones seguidas. La tabla sostiene cuatro (ADR-0032 §4), así que una sexta ronda sólo puede pasar si `dispose` libera la ranura de verdad. Es la comprobación de fuga que la superficie C **puede** expresar |
+
+**El presupuesto de ADR-0033 aguantó al cruzar de verdad:** ≤102 emisiones para
+8 MiB, monótonas, la última igual al total.
+
+**Y `run()` cede el control entre pasos, y eso no es decoración.**
+`NativeCallable.listener` entrega en el event loop del isolate que lo creó, así
+que un isolate que nunca vuelve a su bucle recibe **todas** las emisiones de
+golpe al final.
+
+#### 3.4 Dos errores míos, escritos porque el proyecto los escribe
+
+1. El primer borrador metió un **byte NUL literal** en el fuente Dart al separar
+   rutas. Funcionaba, y convertía el archivo en «binario» para todas las
+   herramientas de texto. Sustituido por el escape `\x00` en una constante.
+2. El primer `_startReceiver` leía el anuncio del puerto con `await for` y
+   después drenaba el resto del mismo stream: `Bad state: Stream has already
+   been listened to`, las cuatro pruebas en rojo. Una suscripción, no dos.
+
+### Puerta de los pasos 3 y 4 · 2026-08-14
+
+| # | Comprobación | Veredicto |
+|---|---|---|
+| 1 | `cargo fmt --all --check` · `dart format --set-exit-if-changed` | ✅ exit 0 los dos |
+| 2 | `cargo clippy … -D warnings` · `flutter analyze` | ✅ exit 0 los dos, «No issues found!» |
+| 3 | `cargo test --workspace` · `flutter test` | ✅ **595** Rust (591 → 595) y **62** Dart, 0 fallos, 2 ignorados — los mismos dos |
+| 4 | Barrido | ⏳ **pendiente para la puerta de fase**, sobre `qyro_ffi`, que es donde está el código nuevo de Rust |
+| 5 | Lectura de aserciones | ✅ La comparación byte a byte lee `original` y `arrived`, dos archivos distintos. `two_buffers_do_not_share_memory` compara dos asignaciones, no una consigo misma |
+| 6 | Lectura de contadores | ✅ `emissions` lo llena el callback real; su cota se comprueba contra el tamaño conocido |
+| 7 | La medida se ve fallar | ✅ El bit volteado, y la ronda seis de la tabla de handles |
+| 8 | Lectura de nombres | ✅ Las cuatro llevan el nombre que `FASE-02` §7 exige y ejercen lo que dicen |
+| 9 | `git diff --name-only` | ✅ 4 rutas: `abi.rs`, `lib.rs`, `qyro_session_api.dart`, `qyro_session_transfer_test.dart` |
+| 10 | Ledger | ✅ 138 fichas, 43 abiertas · **cero fichas nuevas en este tramo** |
+| 11 | Coherencia documental | ✅ exit 0 en Bash y PowerShell |
+| 12 | Escribir el resultado | ✅ esta tabla |
+
+**Dependencias, con el comando:** `grep -c '^\[\[package\]\]' Cargo.lock` → **64**,
+sin cambio. Paquetes de Dart en `pubspec.lock` → **39**, sin cambio. **Los
+símbolos `extern "C"` suben de ocho a diez**, que es lo que ADR-0034 autoriza y
+declara.
+
 ---
 
 ## 10. Tabla de mutación
