@@ -34,10 +34,31 @@ proyecto, y en cada caso digo qué.
   handshake prueba posesión de una clave, **no** que sea la clave que querías. La
   confianza la decide `decide_trust` contra el almacén de peers.
 
-## 2. Dependencias — cero externas
+## 2. Dependencias — cero externas **nuevas**
 
-**`Cargo.lock` tiene 63 paquetes y todos son de primera parte.** Siete sprints sin
-añadir uno.
+**`Cargo.lock` tiene 64 paquetes: 14 de primera parte y 50 de crates.io.** Ningún
+sprint ha añadido uno externo desde el 4A.
+
+*(Corregido el 2026-08-13, QYR-0312. Esta regla decía «63 paquetes y todos son de
+primera parte», y la segunda mitad era falsa cuando se escribió: la pila
+Ed25519/X25519 de dalek y la de RustCrypto —`ed25519-dalek`, `chacha20poly1305`,
+`curve25519-dalek`, `sha2`, `hkdf`, `hmac`, `zeroize`, `subtle`, `getrandom`,
+`unicode-normalization`— entraron en el sprint 4A y `THIRD_PARTY_NOTICES.md` lo
+dice desde entonces. Lo que todos los sprints verificaron de verdad es «no
+añade», y se había comprimido en «no tiene». La regla operativa no cambia; la
+premisa sí. El 63 era además correcto en su día: entre `90bb5d0` y `3b32b6f` el
+lock sube a 64 y el único añadido es `qyro_session`, de primera parte.)*
+
+**Los conteos, con el comando que los produce:**
+
+```
+grep -c '^\[\[package\]\]' Cargo.lock        # 64  -- total
+grep -c '^source = ' Cargo.lock              # 50  -- de crates.io
+```
+
+**Un paquete de primera parte es el que no lleva línea `source`.** La diferencia
+entre los dos números es el conteo que importa, y se vuelve a obtener en cada
+puerta en vez de citarse de memoria.
 
 **Si crees que necesitas una dependencia: para, escríbelo en el informe, y no la
 añadas.** Di qué problema resuelve, cuántos crates transitivos arrastra **medido

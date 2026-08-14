@@ -88,7 +88,7 @@ primarias citadas en las fases correspondientes. **No las vuelvas a abrir.**
 | Selector de archivos | En Dart con `file_selector`; a Rust cruza un **fd** en Android/iOS y una **ruta** en Windows. **Sin COM a mano** | Fase 03 §6 |
 | Descubrimiento | Nativo por plataforma tras un trait. **Nada de sockets mDNS crudos en móvil** | Fase 04 §6 |
 | Historial | Log append-only con el formato enmarcado propio. **Sin SQLite** | Ya implementado en `qyro_fs::history` |
-| Dependencias | **Cero externas.** `Cargo.lock` tiene 63 paquetes y todos son de primera parte | `R1` §2 |
+| Dependencias | **Cero externas nuevas.** `Cargo.lock` tiene 64 paquetes: 14 de primera parte y 50 de crates.io. Ninguna añadida desde 4A | `R1` §2 |
 
 ---
 

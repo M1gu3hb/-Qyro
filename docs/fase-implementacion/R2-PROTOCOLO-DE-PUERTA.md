@@ -98,13 +98,27 @@ Cuenta las entradas abiertas:
 ```
 python3 - <<'PY'
 import re
-t=open('BUGS_PENDING.md').read()
+t=open('BUGS_PENDING.md', encoding='utf-8').read()
 b=[x for x in re.split(r'\n(?=## QYR-)',t) if re.match(r'## QYR-',x)]
-print('total',len(b),'abiertas',len([x for x in b if re.search(r'- Estado: *abierto',x)]))
+print('total',len(b),'abiertas',len([x for x in b if re.search(r'- Estado: *\*{0,2}abierto',x)]))
 PY
 ```
 
-**Si la fase añadió más de diez fichas, la fase está mal hecha, no el ledger.**
+*(Corregido el 2026-08-13, QYR-0313. El patrón era `- Estado: *abierto`, que no
+casa con `- Estado: **abierto**`; cuatro fichas lo escriben en negrita y el
+script devolvía 32 donde la verdad eran 36. Y `open()` sin `encoding` usa la
+página de códigos del sistema, así que en Windows fallaba sobre un ledger lleno
+de acentos: la comprobación 10 no se podía correr en la plataforma donde se
+descubrió la 11.)*
+
+**Si la fase añadió más de diez fichas, mira por qué antes de aceptarlo.** Ese
+techo existe **para que nadie vuelque salida de herramienta en el ledger**, que
+es lo que costó un P1 el 2026-08-11. **No es un techo para hallazgos de auditoría
+escritos a mano.** Si auditando encuentras doce defectos reales, son doce fichas:
+regístralas todas y escribe en la puerta que pasa el criterio de `R4` §2, que
+supera el de aquí, y por qué. **Lo que no vale es dejar de buscar para no pasar
+de diez.**
+
 Y toda ficha tiene que tener un título que una persona entienda sin abrir una
 herramienta.
 

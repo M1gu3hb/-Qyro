@@ -16,12 +16,17 @@ que el árbol que tienes no es el que se planificó, y todo lo demás se apoya e
 | Tests | **527 passed, 0 failed, 2 ignored** | `cargo test --workspace` |
 | Clippy | PASS | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Formato | PASS | `cargo fmt --all --check` |
-| Paquetes | **63**, todos de primera parte | `grep -c '^\[\[package\]\]' Cargo.lock` |
+| Paquetes | **63**: 13 de primera parte, 50 de crates.io | `grep -c '^\[\[package\]\]' Cargo.lock` y `grep -c '^source = '` |
 | Coherencia docs | PASS | `bash scripts/check_docs_consistency.sh` |
 | Ledger | **116 entradas, 24 abiertas** (5 P1, 13 P2, 6 P3) | ver §4 |
 
-**Cero dependencias externas.** Siete sprints seguidos. `serde_json` está en el
-grafo sólo como `dev-dependency` y no se enlaza en nada que Dart cargue.
+**Cero dependencias externas *añadidas*.** Siete sprints seguidos sin añadir una.
+`serde_json` está en el grafo sólo como `dev-dependency` y no se enlaza en nada
+que Dart cargue.
+
+*(Corregido el 2026-08-13, QYR-0312: la línea decía «Cero dependencias externas»
+a secas, y el workspace tiene cincuenta desde el sprint 4A. Lo que la línea base
+midió y sigue siendo cierto es que ninguna se añadió.)*
 
 ---
 

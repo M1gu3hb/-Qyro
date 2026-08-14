@@ -2740,14 +2740,21 @@
   lock de `90bb5d0`
 - Por qué P2 y no P3: es la premisa de una regla no negociable. Un lector que la
   crea concluye que el proyecto no tiene superficie de terceros que auditar
-- Resolución: pendiente; reescribir las dos afirmaciones como «cero dependencias
-  externas **nuevas**» con el conteo real y la fecha del último cambio
-- Estado: abierto
+- Resolución: corregidas las tres afirmaciones a «cero dependencias externas
+  **nuevas**», con los dos conteos y el comando que los produce, y con una nota
+  fechada que dice qué decía antes y por qué era falso. `R1` §2 y
+  `00-LEEME-PRIMERO` §4 pasan a 64 = 14 + 50; `R6-ESTADO-BASE` §1 pasa a 63 =
+  13 + 50, que es lo que era cierto en su commit. Los ADR, el `CHANGELOG`,
+  `DECISIONS.md` y `LICENSE_AUDIT.md` **no se tocan**: dicen que la racha *se
+  rompió* en 4A, que es exacto, y reescribirlos borraría el registro de cuándo
+  ocurrió
+- Estado: cerrado
 - Dueño: documentación
 - Fecha: 2026-08-13
 - Evidencia: `grep -c '^\[\[package\]\]' Cargo.lock` → 64;
   `grep -c '^source = ' Cargo.lock` → 50;
-  `git show 90bb5d0:Cargo.lock | grep -c '^\[\[package\]\]'` → 63
+  `git show 90bb5d0:Cargo.lock | grep -c '^\[\[package\]\]'` → 63 y
+  `| grep -c '^source = '` → 50, que es de dónde sale el 13 de `R6`
 
 ## QYR-0313 — El conteo de fichas abiertas de la puerta no ve las que están en negrita
 
@@ -2759,13 +2766,19 @@
   devuelve **32** donde el número real es **36**. La línea base heredó el 32
 - Por qué P3: no oculta ningún defecto, sólo lo cuenta mal. Pero es el número que
   la puerta usa para decidir si una fase «añadió más de diez fichas»
-- Resolución: pendiente; relajar el patrón a `- Estado: (\*\*)?abierto`, o
-  normalizar las cuatro fichas y prohibir el énfasis en el campo `Estado`
-- Estado: abierto
+- Resolución: patrón relajado a `- Estado: *\*{0,2}abierto` en `R2` §1.10. **Y un
+  segundo defecto en el mismo script, que sólo se ve en Windows:** su
+  `open('BUGS_PENDING.md')` sin `encoding` usa la página de códigos del sistema y
+  revienta sobre un ledger lleno de acentos, así que la comprobación 10 no se
+  podía correr en la misma plataforma donde apareció QYR-0311. Ahora lleva
+  `encoding='utf-8'`
+- Estado: cerrado
 - Dueño: documentación
 - Fecha: 2026-08-13
-- Evidencia: `grep -cE '^- Estado: abierto'` → 32;
-  `grep -cE '^- Estado: (\*\*)?abierto'` → 36
+- Evidencia: antes `grep -cE '^- Estado: abierto'` → 32 frente a
+  `grep -cE '^- Estado: (\*\*)?abierto'` → 36. Después, el script de `R2` corrido
+  literalmente devuelve `total 137 abiertas 45`, el mismo 45 que el grep
+  independiente
 
 ## QYR-0314 — `Session::local_addr` devuelve la dirección del peer, y el listener que sabe el puerto se descarta
 
