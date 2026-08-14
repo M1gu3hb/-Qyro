@@ -1040,9 +1040,23 @@
 - Patrón, no incidente: es la **tercera** vez con esta forma exacta. QYR-0025 (un
   transcript verificado llamándose a sí mismo) y la aserción tautológica del
   target `encrypted_envelope` son las otras dos
+- **Es la misma familia que QYR-0304, y conviene decirlo:** las dos son guardas
+  que miran **un nombre o un marcador** en vez de **una forma**, así que lo que no
+  esté en la lista pasa. Esta ficha ya lo dice mejor que ninguna otra frase del
+  repositorio: «una lista de marcadores es una lista de permitidos disfrazada de
+  prohibidos»
+- **Pero una sola guarda no cierra las dos, y no se finge que sí.** QYR-0304 es
+  sobre lo que los *consumidores* hacen con lo que reciben, y se cerró leyendo
+  crates ajenos. Ésta es sobre el *tipo de retorno* de un `pub fn` en
+  `qyro_crypto::identity`, y se cierra invirtiendo la lista: fallar salvo que el
+  retorno esté en una lista de tipos permitidos y argumentados, en vez de pasar
+  salvo que contenga uno de cinco marcadores
+- Lo que haría falta para cerrarla: esa inversión, más la mutación que la
+  demuestre —`pub fn leak_raw(&self) -> Zeroizing<[u8; 32]>` en `identity.rs`,
+  que hoy la deja en verde— nombrada en la ficha
 - Estado: abierto
 - Nota de estado: «abierto al inicio de este tramo»
-- Fecha: 2026-08-07
+- Fecha: 2026-08-07, diagnóstico ampliado 2026-08-14
 
 ## QYR-0053 — La guarda de material de clave no veía la semilla en claro
 
@@ -2605,9 +2619,38 @@
 - Corregido de paso `docs/security/secret-lifecycle-audit.md:65`, que afirmaba
   «una copia; el tipo no es `Clone`». Que `AuthenticatedFrame` no sea `Clone`
   impide clonar el frame, no impide que quien recibe el `Zeroizing` lo copie
+- **Reabierta y vuelta a cerrar el 2026-08-14, porque el primer cierre no valía.**
+  La evidencia era un `grep`, y `R4` §5 exige que una ficha cerrada nombre la
+  mutación aplicada y el test que falló. El supervisor lo comprobó deshaciendo el
+  arreglo entero —el tipo desnudo y el `.to_vec()` de vuelta— y obtuvo **592
+  tests, 0 failed**. El defecto exacto que esta ficha describe podía volver al
+  día siguiente con el árbol en verde
+- Es la octava vez que este proyecto produce esa forma: una propiedad que
+  sobrevive al borrado de su propio control. QYR-0073 fue ésta con `O_NOFOLLOW`
+- **La guarda que faltaba:** `no_consumer_unwraps_the_plaintext_out_of_its_wipe`,
+  en `qyro_crypto/src/aead/guards.rs`. Lee el fuente de **los crates
+  consumidores** —lo que la guarda de egreso no podía hacer, porque vive donde se
+  define el accesor y el defecto vivía en otro crate— y comprueba **una forma, no
+  un nombre**: lo que devuelve `into_zeroizing_payload` se ata o se devuelve,
+  nunca se encadena. `.to_vec()`, `.clone()`, `.to_owned()` y lo que se invente
+  mañana fallan igual, porque la regla es «sin cadena» y no «estos tres»
+- La lista de excepciones está **vacía** a propósito, y eso importa: es una lista
+  de prohibidos por forma, no la lista de permitidos disfrazada de prohibidos que
+  QYR-0053 describe. Añadir una entrada cuesta un argumento escrito ahí
+- Y lleva su contra-aserción: si no encuentra **ningún** consumidor, falla. Una
+  guarda que pasa porque no está mirando nada no es una guarda — y esa aserción
+  cazó un fallo real en su primera ejecución, un filtro de rutas que descartaba
+  todos los archivos
 - Estado: cerrado
-- Fecha: 2026-08-13, cerrado 2026-08-14
-- Evidencia: `grep -rn 'into_payload\|payload()' rust/crates/qyro_transfer/src/`
+- Fecha: 2026-08-13, cerrado mal 2026-08-14, cerrado bien 2026-08-14
+- **Evidencia (la mutación, nombrada):** revertidos a la vez
+  `type OpenedFrames = Vec<(MessageType, Vec<u8>)>` y
+  `into_zeroizing_payload().to_vec()` en `qyro_transfer/src/session.rs`, la guarda
+  falla con
+  `these call sites chain onto into_zeroizing_payload … [".../qyro_transfer/src/session.rs: .to_vec()"]`,
+  exit 101. Restaurado el arreglo, verde, y `git diff` del archivo vacío
+- Evidencia anterior, que se conserva porque explica el alcance:
+  `grep -rn 'into_payload\|payload()' rust/crates/qyro_transfer/src/`
   da un solo sitio, el 861. Los demás `\.payload()` de producción son de
   `PlainFrame`, no de `AuthenticatedFrame`: `qyro_net/src/handshake.rs:360` y
   `qyro_net/src/listener.rs:169` operan sobre `frame.as_plain()`, texto sin cifrar

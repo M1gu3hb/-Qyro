@@ -73,6 +73,47 @@ pub(crate) fn production_source(relative_path: &str) -> String {
     strip_test_only_items(&source)
 }
 
+/// Reads a production file **anywhere**, with the same stripping.
+///
+/// [`production_source`] resolves against the including crate's own `src`, which
+/// is right for a guard over a crate's own code and useless for one that has to
+/// look at its *consumers*. QYR-0304 was exactly that gap: the egress guard for
+/// `into_zeroizing_payload` lives in `qyro_crypto` and the code that undid the
+/// guarantee lives in `qyro_transfer`, so no guard could see it from where the
+/// guarantee is owned.
+///
+/// Same three passes, in the same order, so a cross-crate analysis and a
+/// crate-local one cannot disagree about what counts as production code.
+#[allow(dead_code, reason = "used only by crates whose guards read their consumers")]
+pub(crate) fn production_source_at(path: &str) -> String {
+    let source = fs::read_to_string(path).unwrap_or_else(|error| panic!("{path}: {error}"));
+    let source = strip_comments(&source);
+    let source = strip_compile_time_assertions(&source);
+    strip_test_only_items(&source)
+}
+
+/// Every `.rs` file under `root`, recursively, sorted so failures are stable.
+#[allow(dead_code, reason = "used only by crates whose guards read their consumers")]
+pub(crate) fn rust_files_under(root: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_owned()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path.to_string_lossy().into_owned());
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                found.push(path.to_string_lossy().into_owned());
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
 /// Reads one production file with only comments removed.
 ///
 /// The reference the overrun check compares against: comments go because the
