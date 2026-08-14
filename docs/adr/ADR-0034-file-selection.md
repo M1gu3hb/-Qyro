@@ -111,3 +111,58 @@ alguna vez hace falta declarar un permiso de almacenamiento, el diseño está ma
   permiso. La reanudación dentro de una sesión sí, que es la que existe.
 - **No promete nada visto en un aparato.** Al congelar esto no hay emulador
   arrancado ni teléfono conectado.
+
+---
+
+## Enmienda 1 (2026-08-14) — el paquete de Windows es `file_selector_windows`, no `file_selector`
+
+**Qué cambia:** el §1 de esta ADR nombraba `file_selector`. La dependencia que
+entra es **`file_selector_windows` 0.9.3+5**, la implementación endosada de
+Windows del **mismo** plugin federado: mismo publisher verificado
+(`flutter.dev`), misma licencia (BSD-3), mismo código de diálogo. Lo que cruza
+el FFI **no cambia**: una ruta UTF-8.
+
+**Por qué, medido.** Se resolvieron las dos opciones y se contaron los paquetes
+del `pubspec.lock`:
+
+```
+# antes:  37 paquetes
+# file_selector 1.0.3           -> 52 paquetes  (+15)
+# file_selector_windows 0.9.3+5 -> 45 paquetes  (+8)
+flutter pub get
+grep -cE '^  [a-z_0-9]+:$' apps/qyro/pubspec.lock
+```
+
+Los **siete** que añade el paquete paraguas y no la implementación de Windows:
+`file_selector`, `file_selector_android`, `file_selector_ios`,
+`file_selector_linux`, `file_selector_macos`, `file_selector_web` y
+`flutter_web_plugins`.
+
+**El que decide es el segundo.** `file_selector_android` **es** la
+implementación que copia (QYR-0323, §1 de esta ADR). Depender del paraguas mete
+ese Java en el APK de una aplicación cuyo diseño dice que nunca debe llamarlo.
+*Una dependencia que hay que acordarse de no llamar es una trampa para quien
+venga después*, y este proyecto ya tiene un `MethodChannel` propio precisamente
+para no llamarla.
+
+No es una decisión de permisos: el manifiesto de `file_selector_android`
+0.5.2+9 está vacío —`<manifest package="dev.flutter.packages.file_selector_android"></manifest>`,
+leído del paquete, no de su documentación—. Es una decisión de **no embarcar el
+código que copia**.
+
+**Lo que cuesta.** No hay selector en Linux ni en macOS. Ninguna de las dos es
+plataforma de la v1.0. `pickerForPlatform()` las **rechaza por nombre**, igual
+que a iOS, en vez de devolver una lista vacía: una lista vacía se lee como «la
+persona canceló», y eso es mentir en silencio.
+
+**Lo que esta enmienda NO arregla.** `http` entra igual, transitivamente por
+`file_selector_platform_interface` 2.7.0, en las **dos** opciones. Qyro no hace
+ninguna petición HTTP; el paquete viaja sin que nadie lo llame. Queda registrado
+en QYR-0326, no resuelto aquí.
+
+**Consecuencia local, medida en esta máquina.** Con cualquiera de las dos
+opciones, `flutter pub get` termina en **código 1** en un Windows sin Modo
+Desarrollador: el paso que crea los symlinks de plugins falla (QYR-0324).
+`.dart_tool/package_config.json` sí queda escrito, así que **`flutter test`
+sigue funcionando**; `flutter build windows` no. Clase de evidencia de todo lo
+que dependa de ver el diálogo: **ninguna en esta máquina**.

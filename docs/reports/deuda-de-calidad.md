@@ -29,6 +29,7 @@ arregla.
 | QYR-0322 | P2 | Un receptor no puede decir su puerto antes de que alguien se conecte | 05 |
 | QYR-0323 | P1 | `file_selector_android` copia el archivo a la caché | **03 — es un bloqueo, se arregla** |
 | QYR-0324 | P2 | Esta máquina no puede construir Flutter con plugins (Modo Desarrollador) | Depende del propietario |
+| QYR-0326 | P3 | Un cliente HTTP viaja en el árbol de dependencias de Dart sin que nadie lo llame | 09 |
 | QYR-0004 | P1 | Builds no retenidos con checksum y etiqueta | 08 |
 | QYR-0005 | P1 | Auditorías y suites avanzadas no disponibles | 09 |
 | QYR-0064 | P1 | El harness de binario empujado no alcanza Android Keystore | 06 |

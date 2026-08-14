@@ -3368,3 +3368,33 @@
   `aead/tests.rs` dejó de compilar al hacer el cambio, que es una de esas mismas
   formas apareciendo sola
 
+## QYR-0326 — Una aplicación que promete no hablar con la nube embarca un cliente HTTP
+
+- Plataforma: Windows y Android; `apps/qyro`
+- Severidad: P3
+- Esperado: una aplicación sin nube, sin cuentas y sin telemetría no arrastra un
+  cliente HTTP en su árbol de dependencias
+- Actual: `http 1.6.0` y `http_parser 4.1.2` entran transitivamente por
+  `file_selector_platform_interface 2.7.0`, que los declara en su `pubspec.yaml`
+  aunque el selector de Windows no los use
+- **Lo que NO es:** no es una fuga. Qyro no hace ninguna petición HTTP y no hay
+  llamada a `package:http` en `apps/qyro/lib`. Es una dependencia que viaja sin
+  que nadie la llame, en un producto cuyo argumento entero es que no habla con
+  nadie salvo con el otro aparato
+- **Lo que se midió antes de aceptarlo:** entra en las **dos** opciones de
+  selector —`file_selector` 1.0.3 y `file_selector_windows` 0.9.3+5— porque las
+  dos pasan por `file_selector_platform_interface`. Elegir la implementación de
+  Windows evita siete paquetes; éste no es uno de ellos
+- Lo que haría falta para cerrarla: o una guarda que compruebe que ningún
+  `.dart` de `apps/qyro/lib` importa `package:http`, o escribir el diálogo de
+  Windows sin el plugin —lo que ADR-0034 §4.2 rechaza por la vtable de
+  `IFileOpenDialog`—. La primera es barata y es lo que se propone para la 09
+- Resolución: pendiente
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: `grep -cE '^  [a-z_0-9]+:$' apps/qyro/pubspec.lock` pasa de 37 a 45
+  con `file_selector_windows`; el `pubspec.yaml` de
+  `file_selector_platform_interface 2.7.0` en la caché declara
+  `http: ">=0.13.0 <2.0.0"`
+
