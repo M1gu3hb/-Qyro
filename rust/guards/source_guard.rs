@@ -503,9 +503,20 @@ const GATE_MARKERS: [&str; 4] = [
 /// other direction. Both spellings are in these crates.
 ///
 /// String literals are skipped so a brace inside one cannot unbalance the
-/// count. Character literals are not: `&'a str` is indistinguishable from an
-/// opening quote without parsing Rust, and these crates have lifetimes and no
-/// braces in char literals.
+/// count. **Character literals are skipped too**, through the same
+/// [`non_code_end`] the assertion scan already uses: it only calls a `'` a
+/// literal when the closing quote falls on the exact scalar boundary, so
+/// `&'a str` is left alone and `'}'` is not.
+///
+/// That was not always true, and the cost of the earlier premise — «these
+/// crates have lifetimes and no braces in char literals», written once and
+/// never checked — is QYR-0328. `qyro_ffi/src/session_abi.rs` wrote
+/// `!line.starts_with('}')` inside its test module. The `}` counted as a real
+/// brace, the module closed one function early, and every guard built on
+/// `production_source` had been reading a truncated file ever since. Nothing
+/// failed, because what followed the cut happened to be harmless — until
+/// something was added after it. Same shape as QYR-0071, same answer: a
+/// property that matters is enforced, not assumed.
 fn item_end(source: &str) -> Option<usize> {
     let bytes = source.as_bytes();
     let mut round = 0usize;
@@ -515,6 +526,15 @@ fn item_end(source: &str) -> Option<usize> {
     let mut opened_body = false;
 
     while index < bytes.len() {
+        // Only for `'`. The string and comment cases keep the inline handling
+        // below, because changing what this function skips wholesale would
+        // change the analysis of every crate at once for no defect.
+        if bytes[index] == b'\'' {
+            if let Some(end) = non_code_end(source, index) {
+                index = end;
+                continue;
+            }
+        }
         match bytes[index] {
             b'"' => {
                 index += 1;
@@ -960,6 +980,33 @@ fn the_analysis_actually_strips() {
     );
     assert!(quoted.contains("fn kept"), "a brace in a string is not a brace");
     assert!(quoted.contains("fn tail"));
+
+    // QYR-0328: nor does a brace inside a *character* literal. The gated module
+    // below closes at its own brace and not at the one inside `'}'`; before the
+    // fix the strip ended at the first inner `}` and `fn kept` survived into the
+    // production analysis, carrying an `.expect(` nobody was reading.
+    let charred = strip_test_only_items(
+        "#[cfg(test)]\nmod t {\n    fn f(l: &str) -> bool { l.starts_with('}') }\n    fn g() { \"x\".to_owned().expect(0); }\n}\nfn kept() {}\n",
+    );
+    assert!(
+        !charred.contains(".expect("),
+        "a `}}` written as a character literal closed the gated module early, so \
+         the rest of its body reached the production analysis (QYR-0328)"
+    );
+    assert!(
+        charred.contains("fn kept"),
+        "and the strip must still stop at the module's real end"
+    );
+    // The other half of the same rule: a lifetime is not a character literal,
+    // and mistaking one for the other would swallow whatever follows it.
+    let lifetimes = strip_test_only_items(
+        "#[cfg(test)]\nmod t {\n    fn f<'a>(x: &'a str) -> &'a str { x }\n    fn g() { let _ = 1.expect(2); }\n}\nfn kept() {}\n",
+    );
+    assert!(
+        !lifetimes.contains(".expect("),
+        "two lifetimes on one line moved the end of the gated module"
+    );
+    assert!(lifetimes.contains("fn kept"));
 
     // Both spellings of a compile-time assertion are exempt, and only those.
     let item = strip_compile_time_assertions("const _: () = assert!(1 == 1);\nfn kept() {}\n");

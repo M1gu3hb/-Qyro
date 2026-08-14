@@ -30,6 +30,7 @@ arregla.
 | QYR-0323 | P1 | `file_selector_android` copia el archivo a la caché | **03 — es un bloqueo, se arregla** |
 | QYR-0324 | P2 | Esta máquina no puede construir Flutter con plugins (Modo Desarrollador) | Depende del propietario |
 | QYR-0326 | P3 | Un cliente HTTP viaja en el árbol de dependencias de Dart sin que nadie lo llame | 09 |
+| QYR-0330 | P3 | El rebobinado tras el digest es código muerto y su justificación afirma lo contrario | 09 |
 | QYR-0004 | P1 | Builds no retenidos con checksum y etiqueta | 08 |
 | QYR-0005 | P1 | Auditorías y suites avanzadas no disponibles | 09 |
 | QYR-0064 | P1 | El harness de binario empujado no alcanza Android Keystore | 06 |
@@ -44,3 +45,5 @@ arregla.
 | La guarda textual de `into_zeroizing_payload` no cubre `deref`, variable intermedia ni conversiones | `qyro_crypto/src/aead/guards.rs` | 09 — la defensa que carga el peso es `VerifiedPayload`, así que es cosmético |
 | `cargo doc -D warnings` no está en la puerta, así que un enlace intra-doc roto no falla | `R2` §1 | 09 — decisión del supervisor, no arreglo |
 | No hay job de CI que corra `check_docs_consistency.ps1` en `windows-latest` | `.github/workflows/ci.yml` | 09 |
+| `assert_analysis_reached_the_end` compara la última línea no vacía, y en un `.rs` esa línea es `}`: sobrevive a cualquier truncamiento, así que la comprobación es cierta y vacua (así se escondió QYR-0328) | `rust/guards/source_guard.rs` | 09 |
+| El chequeo de formato de Dart corre con `working-directory: apps/qyro`, así que `tools/branding_generator` no está cubierto y hoy `dart format` lo cambiaría | `.github/workflows/ci.yml` | 09 |

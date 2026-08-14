@@ -161,6 +161,146 @@ fn every_extern_c_function_sits_behind_the_panic_guard() {
     );
 }
 
+/// This crate closes no descriptor by hand, so `Drop` is the only closer.
+///
+/// The half of "exactly once" that cannot be observed from inside the process,
+/// stated structurally instead. `session_abi::the_descriptor_is_closed_exactly_once`
+/// proves the descriptor was **released**; it cannot prove the release happened
+/// once rather than twice, because a second close of a number that has already
+/// been reused is indistinguishable from a first close of whatever now holds it.
+///
+/// So the other half rests on ownership: `File::from_raw_fd` makes the `File`
+/// the sole owner and its `Drop` runs once. A second close could only come from
+/// code that calls one, there is none, and this fails if one appears.
+///
+/// The needles are assembled at run time rather than written whole, because a
+/// guard that searches for a string it also contains reports itself.
+#[test]
+fn the_crate_closes_no_descriptor_by_hand() {
+    let spellings = [
+        format!("libc::{}", "close"),
+        format!("{}(fd", "close"),
+        format!("{}Handle", "Close"),
+    ];
+
+    let mut found = Vec::new();
+    for file in PRODUCTION_FILES {
+        let source = production_source(file);
+        for spelling in &spellings {
+            if source.contains(spelling.as_str()) {
+                found.push(format!("src/{file}: {spelling}"));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "this crate closes a descriptor by hand: {found:?}. `File`'s Drop is the \
+         single close ADR-0034 §2 depends on; a second one can close a descriptor \
+         that was reassigned in between, and the victim is whatever took the \
+         number — the transfer socket, for instance"
+    );
+
+    // Two positive controls, because the assertion above is an absence and an
+    // absence passes for free when the analysis reads nothing.
+    let boundary = production_source("session_abi.rs");
+    assert!(
+        boundary.contains("from_raw_fd"),
+        "nothing takes ownership of a descriptor any more, so this guard asserts \
+         the absence of a closer for something that never opens"
+    );
+    assert!(
+        boundary.len() > 8_000,
+        "the analysed source is {} bytes, which is not the C boundary; a search \
+         over a truncated file finds nothing and says so cheerfully",
+        boundary.len()
+    );
+}
+
+/// Whether `bytes` carries a raw NUL, which is what makes a file "binary".
+///
+/// Split out of the assertion so the measurement can be shown to work on a
+/// string that has one. A scan that cannot see a NUL is not evidence that there
+/// is none, and this whole check exists because a NUL hid for a commit.
+fn carries_a_raw_nul(bytes: &[u8]) -> bool {
+    bytes.contains(&0)
+}
+
+/// No Rust source in this repository carries a raw NUL byte.
+///
+/// QYR-0327. `session_abi.rs` shipped with a literal NUL inside `split('\0')`
+/// — the separator written as the byte instead of as the escape. It compiled,
+/// it behaved identically, and it made **ripgrep and `grep` skip the entire
+/// file as binary**: a repository-wide search for
+/// `qyro_session_open_sender_fd_blocking` returned nothing while the function
+/// was right there. That is not a cosmetic defect. Half the verification in
+/// this project is textual — the guards, the reviews, the searches — and a file
+/// no text tool will read is a file none of it covers.
+///
+/// Repository-wide rather than crate-local, for the same reason the panic guard
+/// is: a check that lives in one crate protects one crate, and the file this
+/// happened in is not special.
+#[test]
+fn no_rust_source_carries_a_raw_nul_byte() {
+    let rust_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("rust/ is two levels above this crate")
+        .to_path_buf();
+
+    let mut offenders = Vec::new();
+    let mut scanned = 0_usize;
+    let mut pending = vec![rust_root.clone()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // `target` is build output and is genuinely full of binaries.
+                if path.file_name().is_some_and(|name| name == "target") {
+                    continue;
+                }
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                let Ok(bytes) = std::fs::read(&path) else {
+                    continue;
+                };
+                scanned += 1;
+                if carries_a_raw_nul(&bytes) {
+                    offenders.push(path.display().to_string());
+                }
+            }
+        }
+    }
+
+    // The positive control. Without it a walk that found nothing — a moved
+    // directory, a changed layout — would report success.
+    assert!(
+        scanned >= 100,
+        "only {scanned} Rust files were read under {}; the walk is not seeing \
+         the workspace, so this guard proves nothing",
+        rust_root.display()
+    );
+    // And the measurement can see what it is for (R2 §1.7).
+    assert!(
+        carries_a_raw_nul(b"split('\0')"),
+        "the scan cannot detect a raw NUL, so a clean result means nothing"
+    );
+    assert!(
+        !carries_a_raw_nul(br"split('\0')"),
+        "the scan flags the escape as well as the byte, so it cannot tell the \
+         fix from the defect"
+    );
+
+    assert!(
+        offenders.is_empty(),
+        "these Rust sources carry a raw NUL byte, which makes grep and ripgrep \
+         treat them as binary and skip them entirely: {offenders:?}. Write the \
+         byte as the escape `\\0`."
+    );
+}
+
 /// No Cargo profile sets `panic = "abort"`.
 ///
 /// QYR-0305. `catch_unwind` catches nothing under `panic = "abort"`: the process

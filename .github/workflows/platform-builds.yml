@@ -73,6 +73,20 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build apk --debug
+      # ADR-0034 §4 asks for the assertion on the **merged** manifest, because a
+      # Flutter plugin can add a permission that never appears in the file this
+      # repository writes. `test/android_manifest_test.dart` has made that
+      # assertion since phase 03 step 3 and had never once run it: the merged
+      # manifest only exists after `flutter build apk`, this is the only job that
+      # builds one, and it did not run any test afterwards. The test skipped in
+      # CI, skipped locally, and reported skipped as not-a-failure — a
+      # measurement that could not see the thing it was for.
+      - name: The merged manifest declares no storage permission
+        run: flutter test test/android_manifest_test.dart
+        env:
+          # Here a skip is a failure: the APK was just built, so the manifest
+          # exists or the path moved, and both deserve a red run.
+          QYRO_REQUIRE_MERGED_MANIFEST: "1"
       - name: Verify qyro_ffi is packaged in the APK
         shell: bash
         run: |

@@ -22,6 +22,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qyro/ffi/qyro_file_picker.dart';
 import 'package:qyro/ffi/qyro_session_api.dart';
 
 /// Two chunk windows and a bit more than the phase asks for.
@@ -200,6 +201,77 @@ void main() {
       // No partial survives its own success.
       expect(
         File('${destination.path}/payload.bin.qyro-part').existsSync(),
+        isFalse,
+      );
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
+    test('a_file_chosen_through_the_picker_transfers_and_verifies', () async {
+      // Phase 03's closing test, and its name says exactly what it does.
+      //
+      // The phase document asks for
+      // `a_file_chosen_through_the_system_dialog_transfers_and_verifies`. That
+      // name cannot be written honestly here: `flutter test` runs on the Dart
+      // VM with no window, a modal Win32 dialog needs one, and Developer Mode
+      // is off on this machine so `flutter run` cannot build the app either
+      // (QYR-0324). A test whose name claims a dialog opened, when no dialog
+      // opened, is anti-pattern 3 of this repository — the name enunciates a
+      // property the body does not exercise.
+      //
+      // So this exercises everything downstream of the dialog: the picker's own
+      // mapping from a chosen path to the `QyroPicked` the sender consumes, and
+      // then a real transfer of that file between two processes, verified byte
+      // for byte. What is *not* covered is the dialog handing back a path, which
+      // is `file_selector_windows`'s own tested code, and the person clicking.
+      final source = Directory('${scratch.path}/send')..createSync();
+      final destination = Directory('${scratch.path}/recv')..createSync();
+      final original = File('${source.path}/holiday.jpg');
+      _writePattern(original, 512 * 1024);
+
+      // The seam the dialog would fill. Everything after this line is the code
+      // that ships.
+      final picker = QyroWindowsFilePicker(
+        openPaths: () async => <String>[original.path],
+      );
+      final picked = (await picker.pickFiles()).single;
+      expect(picked, isA<QyroPickedPath>());
+      final chosen = picked as QyroPickedPath;
+      expect(chosen.name, 'holiday.jpg');
+      expect(
+        chosen.size,
+        original.lengthSync(),
+        reason: 'the picker reported a size that is not the file it was given',
+      );
+
+      final receiver = await _startReceiver(smoke!, destination);
+      final session = QyroSession.send(
+        bindings: bindings,
+        to: '127.0.0.1:${receiver.port}',
+        root: source.path,
+        files: <String>[chosen.path],
+      );
+      try {
+        expect(await session.run(), QyroSessionState.completed);
+      } finally {
+        session.dispose();
+      }
+      await receiver.finished.timeout(const Duration(seconds: 60));
+
+      // It arrived under the name the picker reported, which is the name the
+      // person saw, and not under anything the sender invented.
+      final arrived = File('${destination.path}/${chosen.name}');
+      expect(
+        arrived.existsSync(),
+        isTrue,
+        reason: 'nothing arrived at ${arrived.path}; the name the picker '
+            'reported is not the name that travelled',
+      );
+      final expected = original.readAsBytesSync();
+      final actual = arrived.readAsBytesSync();
+      expect(actual.length, expected.length);
+      expect(actual.length, 512 * 1024);
+      expect(actual, orderedEquals(expected));
+      expect(
+        File('${destination.path}/${chosen.name}.qyro-part').existsSync(),
         isFalse,
       );
     }, timeout: const Timeout(Duration(minutes: 5)));

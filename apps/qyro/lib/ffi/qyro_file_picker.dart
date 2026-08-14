@@ -12,9 +12,16 @@
 // The Android half is a MethodChannel written in this repository rather than a
 // package, because `file_selector_android` copies the whole file into the app
 // cache before Dart sees it (QYR-0323).
+//
+// The Windows half is `file_selector_windows`, the endorsed Windows
+// implementation of that same federated plugin, depended on directly rather
+// than through the `file_selector` umbrella -- the umbrella would drag
+// `file_selector_android` into the APK, which is the one package this design
+// exists to avoid. ADR-0034, amendment 1.
 
 import 'dart:io';
 
+import 'package:file_selector_windows/file_selector_windows.dart';
 import 'package:flutter/services.dart';
 
 /// One thing the person picked.
@@ -89,55 +96,74 @@ final class QyroAndroidFilePicker implements QyroFilePicker {
 
 /// The picker this platform uses.
 ///
-/// Windows returns a path-shaped picker; the desktop dialog has no content://
-/// problem. iOS is out of v1.0 (ADR-0039) and is refused by name rather than
-/// silently returning nothing, because an empty list reads as "the person
-/// cancelled".
-QyroFilePicker pickerForPlatform() {
-  if (Platform.isAndroid) {
-    return const QyroAndroidFilePicker();
-  }
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    return const QyroDesktopFilePicker();
-  }
-  throw UnsupportedError(
-    'Qyro has no file picker for ${Platform.operatingSystem}. iOS is deferred '
-    'to v1.1 by ADR-0039.',
-  );
+/// Two platforms ship in v1.0 and both are named here. Everything else is
+/// refused **by name**, including Linux and macOS: an unsupported platform must
+/// not return an empty list, because an empty list is what a cancelled picker
+/// returns and the caller cannot tell the two apart. iOS is deferred by
+/// ADR-0039; Linux and macOS never had a picker and are not v1.0 targets
+/// (ADR-0034, amendment 1).
+///
+/// [operatingSystem] defaults to the host's, and exists so the routing itself
+/// can be tested from any machine. A test that can only run on the platform it
+/// is asserting about is a test that never runs.
+QyroFilePicker pickerForPlatform({String? operatingSystem}) {
+  final os = operatingSystem ?? Platform.operatingSystem;
+  return switch (os) {
+    'android' => const QyroAndroidFilePicker(),
+    'windows' => const QyroWindowsFilePicker(),
+    _ => throw UnsupportedError(
+        'Qyro has no file picker for $os. v1.0 ships Android and Windows; iOS '
+        'is deferred by ADR-0039 and the other desktops were never targets.',
+      ),
+  };
 }
 
-/// Desktop: a real path, from a real dialog.
+/// Windows: a real path, from the system dialog.
 ///
-/// The dialog itself is `file_selector` (flutter.dev, BSD-3). Hand-written
+/// The dialog is `file_selector_windows` (flutter.dev, BSD-3). Hand-written
 /// `IFileOpenDialog` is a ~29-slot vtable whose order Microsoft does not publish
 /// on the web, and a shifted slot is silent undefined behaviour rather than a
-/// link error.
+/// link error (ADR-0034 §4.2).
 ///
-/// Injected rather than called directly so the transfer path can be tested
-/// without a dialog: [openPaths] is what a test replaces.
-final class QyroDesktopFilePicker implements QyroFilePicker {
-  const QyroDesktopFilePicker({this.openPaths});
+/// [openPaths] is the seam. It defaults to the real dialog, so production needs
+/// no wiring; a test replaces it, because a modal dialog cannot be driven from
+/// `flutter test` and a picker that can only be exercised by hand is a picker
+/// with no tests at all.
+final class QyroWindowsFilePicker implements QyroFilePicker {
+  const QyroWindowsFilePicker({this.openPaths = _systemDialog});
 
   /// Returns absolute paths, or an empty list if the person cancelled.
-  final Future<List<String>> Function()? openPaths;
+  final Future<List<String>> Function() openPaths;
+
+  static Future<List<String>> _systemDialog() async {
+    final chosen = await FileSelectorWindows().openFiles();
+    return chosen.map((file) => file.path).toList(growable: false);
+  }
 
   @override
   Future<List<QyroPicked>> pickFiles() async {
-    final open = openPaths;
-    if (open == null) {
-      throw UnsupportedError(
-        'QyroDesktopFilePicker needs an openPaths callback until the '
-        'file_selector dependency is wired in ADR-0034 step 3.',
-      );
-    }
-    final paths = await open();
+    final paths = await openPaths();
     return paths.map((path) {
       final file = File(path);
       return QyroPickedPath(
         path: path,
-        name: path.split(Platform.pathSeparator).last,
+        name: leafName(path),
         size: file.existsSync() ? file.lengthSync() : -1,
       );
     }).toList(growable: false);
   }
+}
+
+/// The last segment of [path], cutting on either separator.
+///
+/// Both, and not `Platform.pathSeparator`, for two reasons that are really one:
+/// a Windows path handled on a Linux CI host would come back whole, and the
+/// name is what travels to the receiver — a name that is still a path is how a
+/// receiver ends up writing outside its destination. The manifest layer refuses
+/// that too; this is the layer that should never have produced it.
+String leafName(String path) {
+  final cut = <int>[path.lastIndexOf('/'), path.lastIndexOf(r'\')]
+      .reduce((a, b) => a > b ? a : b);
+  final leaf = cut < 0 ? path : path.substring(cut + 1);
+  return leaf.isEmpty ? 'file' : leaf;
 }

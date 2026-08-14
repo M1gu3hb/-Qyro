@@ -456,6 +456,266 @@ fn progress_reaches_the_total_and_never_goes_backwards() {
     // carry it instead.
 }
 
+// --------------------------------------------------- the descriptor-backed sender
+
+/// Opens a sender over handles, retrying the dial exactly like the path version.
+///
+/// `Vec<(String, File)>` and not `&[..]`, because the session takes ownership of
+/// every handle: a retry therefore needs *fresh* handles, which is why this
+/// reopens from `sources` on each attempt rather than cloning a list it cannot
+/// clone.
+fn open_sender_files_when_ready(
+    address: SocketAddr,
+    sources: &[(String, PathBuf)],
+) -> Result<Session, SessionError> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let mut handles = Vec::with_capacity(sources.len());
+        for (name, path) in sources {
+            handles.push((name.clone(), fs::File::open(path).unwrap()));
+        }
+        match Session::open_sender_files(address, handles, None) {
+            Err(SessionError::PeerUnreachable) if Instant::now() < deadline => {
+                thread::sleep(Duration::from_millis(5));
+            }
+            other => return other,
+        }
+    }
+}
+
+/// The descriptor-backed twin of [`move_files`].
+fn move_open_files(sources: &[(String, PathBuf)], destination: &Path) -> Moved {
+    let address = loopback(a_free_port());
+    let destination = destination.to_path_buf();
+
+    let receiving = thread::spawn(move || {
+        let mut session = match Session::open_receiver(address, &destination, None) {
+            Ok(session) => session,
+            Err(error) => return (Err(error), Err(error), Vec::new()),
+        };
+        let (state, progress) = drive(&mut session);
+        let materialised = session.finish();
+        (state, materialised, progress)
+    });
+
+    let mut sender = open_sender_files_when_ready(address, sources);
+    let (sent, sender_progress) = match sender.as_mut() {
+        Ok(session) => drive(session),
+        Err(error) => (Err(*error), Vec::new()),
+    };
+
+    let (received, materialised, receiver_progress) = receiving.join().unwrap();
+    Moved {
+        sent,
+        received,
+        materialised,
+        sender_progress,
+        receiver_progress,
+    }
+}
+
+#[test]
+fn a_file_opened_by_descriptor_reads_identically_to_one_opened_by_path() {
+    // ADR-0034's central claim: Android hands out a descriptor and Windows a
+    // path, and the *same bytes* come out either way. Two independent transfers
+    // of one source into two destinations, compared against the original and
+    // against each other — a comparison of one arrival with itself would be the
+    // five-times-repeated anti-pattern of R1 §5.
+    let source = Scratch::new("fd-vs-path-src");
+    let by_path = Scratch::new("fd-vs-path-a");
+    let by_handle = Scratch::new("fd-vs-path-b");
+    let original = source.path("payload.bin");
+    write_pattern(&original, CROSSES_THE_WINDOW);
+
+    let path_moved = move_files(&source.dir, &[original.clone()], &by_path.dir);
+    assert_eq!(
+        path_moved.sent,
+        Ok(SessionState::Completed),
+        "the path-driven transfer did not complete; the receiver ended {:?}",
+        path_moved.received
+    );
+
+    let handle_moved = move_open_files(
+        &[("payload.bin".to_owned(), original.clone())],
+        &by_handle.dir,
+    );
+    assert_eq!(
+        handle_moved.sent,
+        Ok(SessionState::Completed),
+        "the descriptor-driven transfer did not complete; the receiver ended \
+         {:?} and materialised {:?}",
+        handle_moved.received,
+        handle_moved.materialised
+    );
+    assert_eq!(handle_moved.materialised, Ok(1));
+
+    let arrived_by_path = read_all(&by_path.path("payload.bin"));
+    let arrived_by_handle = read_all(&by_handle.path("payload.bin"));
+    let expected = read_all(&original);
+
+    // The length first, so a failure says whether the bytes differ or the size
+    // does — and so a zero-length pair cannot satisfy the equality below.
+    assert_eq!(
+        arrived_by_handle.len(),
+        expected.len(),
+        "the descriptor-driven arrival is a different length from the original"
+    );
+    assert_eq!(
+        arrived_by_handle.len() as u64,
+        CROSSES_THE_WINDOW,
+        "the arrival is not the size this test wrote, so it is comparing \
+         something else"
+    );
+    assert_eq!(arrived_by_handle, expected);
+    assert_eq!(
+        arrived_by_path, arrived_by_handle,
+        "the two paths through the engine disagree about the bytes"
+    );
+}
+
+#[test]
+fn a_transfer_driven_by_descriptor_arrives_byte_identical() {
+    // Two files, two different sizes, two names that only the picker knows: a
+    // descriptor carries no name of its own, so the names travelling correctly
+    // is a property of this API and of nothing else.
+    let source = Scratch::new("fd-two-src");
+    let destination = Scratch::new("fd-two-dst");
+    let first = source.path("first.bin");
+    let second = source.path("second.bin");
+    write_pattern(&first, 4096);
+    write_pattern(&second, 12_288);
+
+    let moved = move_open_files(
+        &[
+            ("holiday.jpg".to_owned(), first.clone()),
+            ("notes/deep.txt".to_owned(), second.clone()),
+        ],
+        &destination.dir,
+    );
+
+    assert_eq!(
+        moved.sent,
+        Ok(SessionState::Completed),
+        "the sender did not complete; the receiver ended {:?} and materialised \
+         {:?}",
+        moved.received,
+        moved.materialised
+    );
+    assert_eq!(moved.materialised, Ok(2));
+
+    // The names the picker chose, not the names on the sender's disk. An
+    // implementation that fell back to the file's own name would put
+    // `first.bin` here and fail.
+    let arrived_first = destination.path("holiday.jpg");
+    let arrived_second = destination.path("notes/deep.txt");
+    assert!(
+        arrived_first.exists(),
+        "holiday.jpg did not arrive; the descriptor was named after its source"
+    );
+    assert!(arrived_second.exists(), "notes/deep.txt did not arrive");
+    assert!(
+        !destination.path("first.bin").exists(),
+        "the source's own file name reached the receiver, so the name the picker \
+         chose is not what travelled"
+    );
+
+    assert_eq!(read_all(&arrived_first), read_all(&first));
+    assert_eq!(read_all(&arrived_second), read_all(&second));
+    // Two different sizes on purpose: if the two items had collapsed into one,
+    // an existence-and-equality check on identical bodies would not notice.
+    assert_ne!(
+        read_all(&arrived_first).len(),
+        read_all(&arrived_second).len(),
+        "the two arrivals are indistinguishable, so this test cannot see a \
+         collision between them"
+    );
+}
+
+#[test]
+fn a_revoked_descriptor_mid_transfer_is_a_typed_error_not_a_hang() {
+    // ADR-0034 §3 argues that revoking a `content://` permission cannot close a
+    // descriptor that is already open, and that *if* a read failed anyway the
+    // existing path carries it: `FileSource::read_at` has no error channel, so
+    // a failure reads as a short read, the digest does not match, and the
+    // session ends `Rejected`.
+    //
+    // The argument was written and never run. This runs it, modelling the
+    // revocation as the observable thing it would look like — the handle stops
+    // producing the bytes the manifest already recorded — by truncating the file
+    // underneath after the manifest is built. What matters is that the session
+    // *ends*: a sender that waits forever for bytes that will never come is a
+    // hang, and a hang in the engine is what phase 05's UI would inherit.
+    let source = Scratch::new("revoked-src");
+    let destination = Scratch::new("revoked-dst");
+    let original = source.path("payload.bin");
+    write_pattern(&original, CROSSES_THE_WINDOW);
+
+    let address = loopback(a_free_port());
+    let destination_dir = destination.dir.clone();
+    let receiving = thread::spawn(move || {
+        Session::open_receiver(address, &destination_dir, None).map(|mut session| {
+            let (state, _) = drive(&mut session);
+            let materialised = session.finish();
+            (state, materialised)
+        })
+    });
+
+    let mut sender =
+        open_sender_files_when_ready(address, &[("payload.bin".to_owned(), original.clone())])
+            .unwrap();
+
+    // The manifest already carries the true size and digest. Now the bytes go.
+    fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&original)
+        .unwrap();
+    assert_eq!(
+        fs::metadata(&original).unwrap().len(),
+        0,
+        "the file was not truncated, so this test never revokes anything"
+    );
+
+    let (report, outcome) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let (state, _) = drive(&mut sender);
+        let _ = report.send(state);
+        drop(sender);
+    });
+
+    let ending = outcome
+        .recv_timeout(Duration::from_secs(60))
+        .unwrap_or_else(|_| {
+            panic!(
+                "the sender never finished. A descriptor that stops producing \
+                 bytes must end the session with a typed error, not wait for \
+                 them for ever"
+            )
+        });
+
+    // Either ending is correct and they are genuinely different outcomes: the
+    // engine may notice the short item itself, or the receiver may refuse the
+    // digest. What must not happen is `Completed`, which would mean a file the
+    // sender could no longer read was delivered as good.
+    assert_ne!(
+        ending,
+        Ok(SessionState::Completed),
+        "a file that became unreadable mid-transfer was delivered as complete"
+    );
+
+    let received = receiving.join().unwrap();
+    if let Ok((_, Ok(materialised))) = received {
+        assert_eq!(
+            materialised, 0,
+            "the receiver materialised an item whose bytes never arrived"
+        );
+    }
+    assert!(
+        !destination.path("payload.bin").exists(),
+        "a truncated transfer left a file the receiver would show as delivered"
+    );
+}
+
 // ------------------------------------------------------------- the progress bridge
 
 /// Sends `size` bytes with an observer attached, and counts both.

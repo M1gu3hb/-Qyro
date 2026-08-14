@@ -12,6 +12,15 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: any
+  # The Windows dialog of ADR-0034, amendment 1. flutter.dev, BSD-3.
+  #
+  # The endorsed Windows implementation, not the `file_selector` umbrella. The
+  # umbrella resolves seven more packages and one of them is
+  # `file_selector_android`, which is the implementation that copies the whole
+  # file into the app cache before Dart sees it (QYR-0323). Android goes through
+  # android/app/src/main/kotlin/com/owner/qyro/FilePickerChannel.kt instead, and
+  # not depending on the copier is stronger than remembering not to call it.
+  file_selector_windows: 0.9.3+5
 
 dev_dependencies:
   branding_generator:

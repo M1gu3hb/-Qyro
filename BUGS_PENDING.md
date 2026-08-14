@@ -3398,3 +3398,129 @@
   `file_selector_platform_interface 2.7.0` en la caché declara
   `http: ">=0.13.0 <2.0.0"`
 
+## QYR-0327 — Un byte NUL crudo hacía que grep y ripgrep saltaran un archivo entero
+
+- Plataforma: todas; `qyro_ffi`
+- Severidad: P2
+- Esperado: buscar un símbolo en el repositorio lo encuentra donde está
+- Actual: `rust/crates/qyro_ffi/src/session_abi.rs` llevaba el separador escrito
+  como **el byte NUL literal** dentro de `split('…')` en vez de como el escape
+  `'\0'`. Compila igual y se comporta igual. Lo que cambia es que `grep` y
+  `ripgrep` clasifican el archivo como **binario y lo saltan entero**: una
+  búsqueda de `qyro_session_open_sender_fd_blocking` en todo el repositorio
+  devolvía **cero resultados** con la función delante
+- **A quién rompe, en concreto:** a quien audita. La mitad de la verificación de
+  este proyecto es textual —las guardas, las revisiones, las búsquedas— y un
+  archivo que ninguna herramienta de texto lee es un archivo que nada de eso
+  cubre. Me pasó a mí en esta sesión: concluí que el paso 2 de la fase 03 no
+  tenía implementación porque la búsqueda no devolvía nada
+- **Lo que NO es:** las guardas de Rust sí lo leían. `fs::read_to_string` acepta
+  un NUL —es UTF-8 válido—, así que `no_production_path_can_panic` y compañía
+  nunca dejaron de analizarlo. El daño es a las herramientas externas
+- Resolución: escrito como `'\0'`, y una guarda repo-wide que recorre todo
+  `rust/` y falla si algún `.rs` lleva un NUL crudo
+- Estado: cerrado
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: mutación — reintroducido el byte, `cargo test -p qyro_ffi --lib
+  guards::no_rust_source_carries_a_raw_nul_byte` falla nombrando el archivo,
+  exit 101; restaurado, exit 0. La guarda trae además su propio control
+  positivo: comprueba que detecta un NUL en `b"…\0…"` y que **no** marca el
+  escape, así que no puede confundir el arreglo con el defecto
+
+## QYR-0328 — Un `}` escrito como carácter cerraba el módulo de pruebas y media guarda dejaba de leerse
+
+- Plataforma: todas; `rust/guards/source_guard.rs` y los siete crates que lo incluyen
+- Severidad: **P1**
+- Esperado: `production_source` devuelve el archivo de producción entero, que es
+  la premisa de `no_production_path_can_panic` y de todo lo construido encima
+- Actual: `item_end` saltaba los literales de cadena y **no** los de carácter. El
+  comentario que lo justificaba terminaba diciendo «y estos crates no tienen
+  llaves en literales de carácter» — una **premisa, escrita una vez y nunca
+  comprobada**. Dejó de ser cierta: `qyro_ffi/src/session_abi.rs` escribió
+  `!line.starts_with('}')` dentro de su módulo de pruebas, ese `}` contó como
+  llave real, el módulo se cerró una función antes de tiempo y **el análisis
+  venía leyendo un archivo truncado**
+- **Por qué P1 y no P2:** es la misma forma que QYR-0071, que hizo que cuatro
+  sprints de evidencia estructural midieran menos de lo que decían. Nada falló
+  mientras lo que quedaba tras el corte fue inocuo; el defecto se hizo visible
+  sólo al añadir código detrás. Una guarda que cubre menos de lo que afirma es
+  una garantía falsa, y eso es lo que decide la severidad
+- **Y por qué `assert_analysis_reached_the_end` no lo vio:** compara la última
+  línea no vacía del archivo crudo con lo analizado, y la última línea de un
+  archivo Rust es `}`, que sobrevive a cualquier truncamiento. La comprobación
+  es cierta y aquí es vacua. Queda anotado para la 09
+- Resolución: `item_end` salta ahora los literales de carácter usando el
+  `non_code_end` que ya existía y ya estaba probado — sólo llama a un `'` un
+  literal cuando la comilla de cierre cae en el límite exacto del escalar, así
+  que `&'a str` sigue intacto y `'}'` no. La premisa deja de ser premisa
+- Estado: cerrado
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: mutación — quitado el salto, `cargo test -p qyro_crypto --lib
+  guards::the_analysis_actually_strips` falla nombrando la propiedad, exit 101;
+  restaurado, exit 0. Los dos casos nuevos de esa prueba son el defecto y su
+  contrario: un `'}'` dentro de un módulo cerrado, y dos tiempos de vida en una
+  línea que **no** deben tomarse por literales
+
+## QYR-0329 — La prueba del manifiesto fusionado no se ejecutó nunca en ninguna parte
+
+- Plataforma: Android; `apps/qyro/test/android_manifest_test.dart`
+- Severidad: **P1**
+- Esperado: el criterio 6 de la fase 03 —«el manifiesto de Android no declara
+  ningún permiso de almacenamiento»— se comprueba sobre el manifiesto
+  **fusionado**, que es donde aparecería un permiso añadido por un plugin
+- Actual: la prueba existe desde el paso 3 de la fase 03 y **nunca corrió**. El
+  manifiesto fusionado sólo existe después de `flutter build apk`; el único job
+  que lo construye es `platform-builds.yml / android`, y ese job no ejecutaba
+  ninguna prueba después. En el job `flutter` de `ci.yml` no hay APK, así que
+  allí se salta. Resultado: se saltaba en CI, se saltaba en local, y un salto se
+  cuenta como no-fallo
+- **A quién rompe:** al criterio de aceptación entero. ADR-0034 §4 dice
+  explícitamente «se comprueba sobre el manifiesto *fusionado*, no sobre el que
+  escribimos», y esa comprobación no se hacía en ningún sitio. Es exactamente la
+  forma «una medición que no puede ver el fallo que busca»
+- Resolución: `platform-builds.yml` corre `flutter test
+  test/android_manifest_test.dart` inmediatamente después de `flutter build apk
+  --debug`, con `QYRO_REQUIRE_MERGED_MANIFEST=1`; con esa variable **un salto es
+  un fallo**, así que si el Android Gradle Plugin vuelve a mover la ruta de
+  `intermediates` la corrida sale roja en vez de saltar en silencio
+- Estado: cerrado
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: pendiente de la corrida de CI sobre el commit de esta fase; el paso
+  y la variable están en `.github/workflows/platform-builds.yml`. **No se puede
+  ejecutar en esta máquina**: `flutter build apk` exige el Modo Desarrollador
+  (QYR-0324)
+
+## QYR-0330 — El rebobinado tras el digest es código muerto, y su justificación afirma lo contrario
+
+- Plataforma: todas; `qyro_fs::manifest_from_open_files`
+- Severidad: P3
+- Esperado: si un control existe, borrarlo hace fallar alguna prueba
+- Actual: `manifest_from_open_files` hace `seek(SeekFrom::Start(0))` después de
+  calcular el digest. Borrarlo **no rompe ninguna prueba de las 600**, porque
+  `FileSource::try_read` hace `seek(SeekFrom::Start(offset))` antes de cada
+  lectura: la posición en la que quedó el handle no la lee nadie
+- **La afirmación que hay que corregir:** el mensaje del commit `b4ebac7` dice
+  que olvidarlo «envía un archivo vacío con un digest correcto, que verifica y
+  no entrega nada». Medido, eso es falso para cualquier handle que admita
+  búsqueda — y ADR-0034 exige `"rw"` precisamente para que la admita
+- **Lo que sí sería cierto:** con un handle NO buscable —un pipe, que es lo que
+  `openFileDescriptor(uri, "r")` puede devolver— fallarían los dos `seek`, el de
+  este código y el de `try_read`, así que tampoco es este rebobinado el que
+  salva nada
+- Resolución: no se borra. Es defensivo y quitarlo es ruido; lo que se corrige
+  es la afirmación. Lo que haría falta para cerrarla: o una prueba que lo mate
+  —haría falta un handle no buscable, y en Windows eso no se monta trivialmente—
+  o borrarlo en la 09 con el argumento escrito
+- Estado: abierto
+- Dueño: implementación
+- Fecha: 2026-08-14
+- Evidencia: mutación manual — borrado el `seek` posterior al digest,
+  `cargo test -p qyro_session --test session_behaviour` sale **0** con 17
+  passed. Restaurado. El contraste está en la otra mutación del mismo barrido:
+  vaciar `descriptors_by_item` mata
+  `a_file_opened_by_descriptor_reads_identically_to_one_opened_by_path` y
+  `a_transfer_driven_by_descriptor_arrives_byte_identical` por nombre
+

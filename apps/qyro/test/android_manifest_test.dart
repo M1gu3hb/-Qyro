@@ -81,6 +81,20 @@ void main() {
       // Skipped rather than passed, and said out loud. A green tick for a file
       // that was never read is the failure mode this whole test exists to
       // avoid, so it must not be able to look like success.
+      //
+      // And where the manifest is *supposed* to exist, a skip is a failure.
+      // Until phase 03 nothing in CI ran this test after `flutter build apk`,
+      // so it skipped everywhere and the criterion it defends had never once
+      // been checked. The job that builds the APK now sets this variable, and a
+      // moved intermediates path fails the run instead of quietly skipping it.
+      if (Platform.environment['QYRO_REQUIRE_MERGED_MANIFEST'] == '1') {
+        fail(
+          'QYRO_REQUIRE_MERGED_MANIFEST is set, so an APK was built and a '
+          'merged manifest must exist. None was found under '
+          'android/app/build/intermediates. The Android Gradle Plugin moved it '
+          'again; update _mergedCandidates rather than letting this skip.',
+        );
+      }
       markTestSkipped(
         'no merged manifest found under android/app/build/intermediates. '
         'Run `flutter build apk --debug` first; on this machine that needs '

@@ -351,7 +351,7 @@ pub unsafe extern "C" fn qyro_session_open_sender_fd_blocking(
         let Ok(address) = address.parse::<SocketAddr>() else {
             return QYRO_ERR_BAD_ARGUMENT;
         };
-        let labels: Vec<&str> = names.split(' ').filter(|part| !part.is_empty()).collect();
+        let labels: Vec<&str> = names.split('\0').filter(|part| !part.is_empty()).collect();
         if labels.len() != handles.len() {
             return QYRO_ERR_BAD_ARGUMENT;
         }
@@ -557,12 +557,16 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    use super::qyro_session_open_sender_fd_blocking;
     use super::{
         QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_NULL_OUT, QYRO_OK, QYRO_STATE_COMPLETED,
         QYRO_STATE_IN_PROGRESS, QYRO_STATE_REJECTED, qyro_session_cancel, qyro_session_close,
         qyro_session_open_receiver_blocking, qyro_session_open_sender_blocking,
         qyro_session_progress, qyro_session_step_blocking,
     };
+    #[cfg(unix)]
+    use crate::abi::QYRO_ERR_PEER_UNREACHABLE;
     use crate::abi::{QYRO_ERR_INVALID_HANDLE, QYRO_ERR_UNKNOWN};
 
     fn buffer(text: &str) -> (*const u8, usize) {
@@ -819,5 +823,210 @@ mod tests {
              this test should be too"
         );
         let _ = QYRO_ERR_UNKNOWN;
+    }
+
+    // ------------------------------------------------ the descriptor boundary
+
+    /// What a descriptor points at, or nothing when it points at nothing.
+    ///
+    /// `(device, inode)` and not "is it open", because a descriptor **number**
+    /// is reused the moment it is freed: the very call under test opens a
+    /// socket, and on a busy process that socket can land on the number we just
+    /// gave away. Asking "does this number still name the file we handed over"
+    /// is the question that survives reuse; asking "is this number open" is not.
+    ///
+    /// Reads through a borrowed `File` and gives the number straight back, so
+    /// the measurement never closes anything itself.
+    #[cfg(unix)]
+    fn what_the_descriptor_points_at(descriptor: i32) -> Option<(u64, u64)> {
+        use std::os::fd::{FromRawFd as _, IntoRawFd as _};
+        use std::os::unix::fs::MetadataExt as _;
+
+        // SAFETY: the caller passes a descriptor number this process either owns
+        // or has released. The handle is given straight back with `into_raw_fd`
+        // and never dropped, so this observation closes nothing either way.
+        let borrowed = unsafe { std::fs::File::from_raw_fd(descriptor) };
+        let identity = borrowed
+            .metadata()
+            .map(|meta| (meta.dev(), meta.ino()))
+            .ok();
+        let _ = borrowed.into_raw_fd();
+        identity
+    }
+
+    /// A scratch file with bytes in it, and where it lives.
+    #[cfg(unix)]
+    fn a_scratch_file(tag: &str) -> std::path::PathBuf {
+        use std::io::Write as _;
+        let directory = std::env::temp_dir().join(format!("qyro-ffi-fd-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("a temp directory");
+        let path = directory.join(format!("{tag}.bin"));
+        let mut file = std::fs::File::create(&path).expect("a scratch file");
+        file.write_all(&[7_u8; 4096]).expect("bytes on disk");
+        path
+    }
+
+    /// The descriptor Dart hands over is closed by Rust, on the failing path too.
+    ///
+    /// ADR-0034 §2: `detachFd()` already gave up the Kotlin side's claim, so if
+    /// this boundary does not close, nothing does — one leaked descriptor per
+    /// rejected pick, on a process with a hard limit. The failing path is the
+    /// one worth testing: the happy path closes at the end of a transfer, and
+    /// the rejection is where a `return` before the `File` exists would leak.
+    ///
+    /// Nothing is listening on the address, so the call reaches the dial and
+    /// fails there — which is also what proves ownership was taken *before*
+    /// validation, since a `BAD_ARGUMENT` would mean it never got that far.
+    ///
+    /// **What this proves and what it does not.** It proves the descriptor was
+    /// released: the number no longer names the file. It does not prove the
+    /// close happened exactly once rather than twice — a second close of a
+    /// reused number is not observable from inside the process. That half rests
+    /// on the type: the `File` is the only owner and `Drop` runs once, and
+    /// `no_rust_source_carries_a_raw_nul_byte`'s neighbour
+    /// `the_crate_closes_no_descriptor_by_hand` is what keeps a second closer
+    /// from appearing.
+    #[cfg(unix)]
+    #[test]
+    fn the_descriptor_is_closed_exactly_once() {
+        use std::os::fd::IntoRawFd as _;
+
+        let path = a_scratch_file("handed-over");
+        let file = std::fs::File::open(&path).expect("the scratch file opens");
+        let identity = file.metadata().map(|meta| {
+            use std::os::unix::fs::MetadataExt as _;
+            (meta.dev(), meta.ino())
+        });
+        let descriptor = file.into_raw_fd();
+
+        assert_eq!(
+            what_the_descriptor_points_at(descriptor),
+            identity,
+            "the measurement cannot see the file before it is handed over, so it \
+             could not see it survive either"
+        );
+
+        let mut handle = 0_u64;
+        // Port 1 on loopback: privileged, and nothing binds it in a test runner.
+        let (address, address_len) = buffer("127.0.0.1:1");
+        let (names, names_len) = buffer("handed-over.bin");
+        let descriptors = [descriptor];
+
+        let code = unsafe {
+            qyro_session_open_sender_fd_blocking(
+                address,
+                address_len,
+                names,
+                names_len,
+                descriptors.as_ptr(),
+                descriptors.len(),
+                None,
+                0,
+                &raw mut handle,
+            )
+        };
+
+        assert_eq!(
+            code, QYRO_ERR_PEER_UNREACHABLE,
+            "the call ended {code} rather than at the dial, so it never took \
+             ownership and this test is measuring the wrong path"
+        );
+        assert_eq!(handle, 0, "nothing may be written on the failing path");
+
+        assert_ne!(
+            what_the_descriptor_points_at(descriptor),
+            identity,
+            "the descriptor still names the file it was handed. Rust is its only \
+             owner after detachFd, so a descriptor that survives a rejected call \
+             is a descriptor nothing will ever close (ADR-0034 §2)"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// R2 §1.7 for the test above: a descriptor that leaked would be visible.
+    ///
+    /// The assertion that matters there is a **negative** one — "it no longer
+    /// names the file" — and a negative assertion passes for free if the
+    /// measurement is broken, blind, or looking at the wrong number. So this
+    /// keeps a descriptor deliberately alive and requires the same measurement
+    /// to say so.
+    #[cfg(unix)]
+    #[test]
+    fn a_descriptor_that_was_not_handed_over_stays_visible_to_this_measurement() {
+        use std::os::fd::{FromRawFd as _, IntoRawFd as _};
+
+        let path = a_scratch_file("kept-open");
+        let file = std::fs::File::open(&path).expect("the scratch file opens");
+        let identity = file.metadata().map(|meta| {
+            use std::os::unix::fs::MetadataExt as _;
+            (meta.dev(), meta.ino())
+        });
+        let descriptor = file.into_raw_fd();
+
+        assert_eq!(
+            what_the_descriptor_points_at(descriptor),
+            identity,
+            "a descriptor nobody took is reported as gone, so the measurement in \
+             the_descriptor_is_closed_exactly_once would report success for a leak"
+        );
+        assert!(
+            identity.is_some(),
+            "the file has no identity, so both sides of the comparison are None \
+             and the assertion above compares nothing with nothing"
+        );
+
+        // SAFETY: this number is still ours; taking it back is what closes it.
+        drop(unsafe { std::fs::File::from_raw_fd(descriptor) });
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A descriptor list whose names do not line up is refused, and still closed.
+    ///
+    /// The argument check sits *after* the loop that takes ownership, and that
+    /// ordering is the whole design of §2. A refactor that moved the check
+    /// earlier would be an improvement everywhere except here, where it turns
+    /// every rejected pick into a leaked descriptor.
+    #[cfg(unix)]
+    #[test]
+    fn a_rejected_argument_still_closes_what_it_was_handed() {
+        use std::os::fd::IntoRawFd as _;
+
+        let path = a_scratch_file("mismatched");
+        let file = std::fs::File::open(&path).expect("the scratch file opens");
+        let identity = file.metadata().map(|meta| {
+            use std::os::unix::fs::MetadataExt as _;
+            (meta.dev(), meta.ino())
+        });
+        let descriptor = file.into_raw_fd();
+
+        let mut handle = 0_u64;
+        let (address, address_len) = buffer("127.0.0.1:1");
+        // Two names, one descriptor.
+        let (names, names_len) = buffer("a.bin\0b.bin");
+        let descriptors = [descriptor];
+
+        let code = unsafe {
+            qyro_session_open_sender_fd_blocking(
+                address,
+                address_len,
+                names,
+                names_len,
+                descriptors.as_ptr(),
+                descriptors.len(),
+                None,
+                0,
+                &raw mut handle,
+            )
+        };
+
+        assert_eq!(code, QYRO_ERR_BAD_ARGUMENT);
+        assert_ne!(
+            what_the_descriptor_points_at(descriptor),
+            identity,
+            "a rejected argument leaked the descriptor it was handed"
+        );
+
+        let _ = std::fs::remove_file(&path);
     }
 }
