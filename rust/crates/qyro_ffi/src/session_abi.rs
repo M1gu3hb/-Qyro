@@ -37,7 +37,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use qyro_session::{Session, SessionError, SessionState};
+use qyro_session::{Progress, ProgressObserver, Session, SessionError, SessionState};
 
 use crate::abi::{
     QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_CANCELLED, QYRO_ERR_NOT_AUTHENTICATED, QYRO_ERR_NULL_OUT,
@@ -165,6 +165,37 @@ where
     code
 }
 
+/// What Dart hands over to be told how far a session has got.
+///
+/// ADR-0033 §2 freezes the shape: `void` return, four scalars, no pointer. The
+/// return type is what makes rule 1 structural — there is no value for Rust to
+/// read, so cancellation cannot accidentally start travelling this way instead
+/// of through `qyro_session_cancel`. The four parameters being integers is what
+/// makes rule 3 structural: the call is deferred, and a pointer handed over here
+/// would address a Rust stack frame that no longer exists when Dart looks.
+pub type QyroProgressFn = extern "C" fn(context: usize, done: u64, total: u64, item: u32);
+
+/// Turns a nullable C pointer into the observer `qyro_session` expects.
+///
+/// Null becomes `None`, and ADR-0033 §2 requires that a session without an
+/// observer take the same path as one with it rather than a second one.
+///
+/// `context` is opaque and never interpreted — it exists because the handle does
+/// not yet exist when the opening call runs, so an emission during the handshake
+/// could not carry it.
+fn observer(on_progress: Option<QyroProgressFn>, context: usize) -> Option<ProgressObserver> {
+    let callback = on_progress?;
+    Some(Box::new(move |progress: Progress| {
+        // Unwinding out of an `extern "C"` function is undefined behaviour, so a
+        // callback that panics is the caller's contract to keep, not something
+        // this side can rescue. What this side does guarantee is the panic
+        // boundary around every operation (ADR-0032 §8): a panic raised on the
+        // Rust side of the call still becomes QYRO_ERR_PANIC rather than
+        // crossing back into Dart.
+        callback(context, progress.done, progress.total, progress.item);
+    }))
+}
+
 fn insert(session: Session, out_handle: *mut u64) -> i32 {
     if out_handle.is_null() {
         return QYRO_ERR_NULL_OUT;
@@ -203,6 +234,8 @@ pub unsafe extern "C" fn qyro_session_open_sender_blocking(
     root_len: usize,
     paths: *const u8,
     paths_len: usize,
+    on_progress: Option<QyroProgressFn>,
+    context: usize,
     out_handle: *mut u64,
 ) -> i32 {
     guard(|| {
@@ -232,7 +265,12 @@ pub unsafe extern "C" fn qyro_session_open_sender_blocking(
             return QYRO_ERR_BAD_ARGUMENT;
         }
 
-        match Session::open_sender(address, Path::new(root), &files) {
+        match Session::open_sender(
+            address,
+            Path::new(root),
+            &files,
+            observer(on_progress, context),
+        ) {
             Ok(session) => insert(session, out_handle),
             Err(error) => session_code(error),
         }
@@ -251,6 +289,8 @@ pub unsafe extern "C" fn qyro_session_open_receiver_blocking(
     bind_len: usize,
     destination: *const u8,
     destination_len: usize,
+    on_progress: Option<QyroProgressFn>,
+    context: usize,
     out_handle: *mut u64,
 ) -> i32 {
     guard(|| {
@@ -270,7 +310,7 @@ pub unsafe extern "C" fn qyro_session_open_receiver_blocking(
             return QYRO_ERR_BAD_ARGUMENT;
         }
 
-        match Session::open_receiver(bind, Path::new(destination)) {
+        match Session::open_receiver(bind, Path::new(destination), observer(on_progress, context)) {
             Ok(session) => insert(session, out_handle),
             Err(error) => session_code(error),
         }
@@ -429,6 +469,8 @@ mod tests {
                     root_len,
                     paths,
                     paths_len,
+                    None,
+                    0,
                     std::ptr::null_mut(),
                 )
             },
@@ -458,6 +500,8 @@ mod tests {
                     root_len,
                     paths,
                     paths_len,
+                    None,
+                    0,
                     &raw mut handle,
                 )
             },
@@ -480,6 +524,8 @@ mod tests {
                     root,
                     root_len,
                     std::ptr::null(),
+                    0,
+                    None,
                     0,
                     &raw mut handle,
                 )
@@ -509,6 +555,8 @@ mod tests {
                 bind_len,
                 destination_ptr,
                 destination_len,
+                None,
+                0,
                 std::ptr::null_mut(),
             )
         };

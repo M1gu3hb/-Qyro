@@ -36,6 +36,7 @@ use std::io::{Read as _, Write as _};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -134,7 +135,7 @@ fn open_sender_when_ready(
 ) -> Result<Session, SessionError> {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        match Session::open_sender(address, root, files) {
+        match Session::open_sender(address, root, files, None) {
             Err(SessionError::PeerUnreachable) if Instant::now() < deadline => {
                 thread::sleep(Duration::from_millis(5));
             }
@@ -182,7 +183,7 @@ fn move_files(root: &Path, files: &[PathBuf], destination: &Path) -> Moved {
     let destination = destination.to_path_buf();
 
     let receiving = thread::spawn(move || {
-        let mut session = match Session::open_receiver(address, &destination) {
+        let mut session = match Session::open_receiver(address, &destination, None) {
             Ok(session) => session,
             Err(error) => return (Err(error), Err(error), Vec::new()),
         };
@@ -225,7 +226,7 @@ fn an_empty_file_list_is_refused_before_anything_is_dialled() {
     // refusal happened before the dial: had the check been missing or moved
     // after it, this would be `PeerUnreachable` instead, and the two are
     // distinguishable exactly because nothing is listening.
-    let refused = Session::open_sender(loopback(a_free_port()), &root.dir, &[]);
+    let refused = Session::open_sender(loopback(a_free_port()), &root.dir, &[], None);
 
     assert_eq!(refused.unwrap_err(), SessionError::BadArgument);
 }
@@ -237,7 +238,7 @@ fn a_file_outside_the_root_is_refused_rather_than_renamed_to_its_last_component(
     let stray = elsewhere.path("photo.jpg");
     write_pattern(&stray, 32);
 
-    let refused = Session::open_sender(loopback(a_free_port()), &root.dir, &[stray]);
+    let refused = Session::open_sender(loopback(a_free_port()), &root.dir, &[stray], None);
 
     // The quiet failure this guards against is naming the file `photo.jpg` and
     // sending it anyway: the receiver would get a name the sender never chose.
@@ -255,7 +256,7 @@ fn a_parent_directory_in_the_remainder_is_refused() {
     // not a plain descendant. qyro_manifest refuses it too; refusing here keeps
     // the error the caller's.
     let escaping = nested.join("..").join("secret.bin");
-    let refused = Session::open_sender(loopback(a_free_port()), &root.dir, &[escaping]);
+    let refused = Session::open_sender(loopback(a_free_port()), &root.dir, &[escaping], None);
 
     assert_eq!(refused.unwrap_err(), SessionError::BadArgument);
 }
@@ -455,6 +456,184 @@ fn progress_reaches_the_total_and_never_goes_backwards() {
     // carry it instead.
 }
 
+// ------------------------------------------------------------- the progress bridge
+
+/// Sends `size` bytes with an observer attached, and counts both.
+///
+/// Returns every emission and **how many times `step` was called**. The two
+/// numbers together are what makes the budget measurable: a counter that only
+/// knew emissions could not tell a budget from an implementation that emits
+/// once and stops.
+fn move_observed(size: u64) -> (Vec<Progress>, usize, Result<SessionState, SessionError>) {
+    let source = Scratch::new("budget-src");
+    let destination = Scratch::new("budget-dst");
+    let original = source.path("payload.bin");
+    write_pattern(&original, size);
+
+    let address = loopback(a_free_port());
+    let destination_dir = destination.dir.clone();
+    let receiving = thread::spawn(move || {
+        Session::open_receiver(address, &destination_dir, None).map(|mut session| {
+            let (state, _) = drive(&mut session);
+            let _ = session.finish();
+            state
+        })
+    });
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    // Rebuilt on every retry rather than probed with a throwaway connection: the
+    // receiver accepts exactly once, so a probe that succeeded would consume the
+    // session under test.
+    let recorder_for = |shared: &Arc<Mutex<Vec<Progress>>>| -> Box<dyn FnMut(Progress) + Send> {
+        let recorder = Arc::clone(shared);
+        Box::new(move |progress| {
+            if let Ok(mut log) = recorder.lock() {
+                log.push(progress);
+            }
+        })
+    };
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut sender = loop {
+        let attempt = Session::open_sender(
+            address,
+            &source.dir,
+            &[original.clone()],
+            Some(recorder_for(&seen)),
+        );
+        match attempt {
+            Err(SessionError::PeerUnreachable) if Instant::now() < deadline => {
+                // A refused dial emitted nothing, so the log is still empty and
+                // the retry starts clean.
+                thread::sleep(Duration::from_millis(5));
+            }
+            other => break other,
+        }
+    };
+    let outcome = match sender.as_mut() {
+        Ok(session) => {
+            let mut steps = 0_usize;
+            let state = loop {
+                steps += 1;
+                match session.step() {
+                    Ok(SessionState::InProgress) => {}
+                    other => break other,
+                }
+            };
+            (state, steps)
+        }
+        Err(error) => (Err(*error), 0),
+    };
+    let _ = receiving.join();
+    let emissions = seen.lock().map(|log| log.clone()).unwrap_or_default();
+    (emissions, outcome.1, outcome.0)
+}
+
+#[test]
+fn a_session_without_an_observer_still_completes() {
+    // ADR-0033 §2: «no observer» must never be a second code path. Every other
+    // test in this file passes None, so this one states the property by name
+    // rather than leaving it implied.
+    let source = Scratch::new("noobs-src");
+    let destination = Scratch::new("noobs-dst");
+    let original = source.path("payload.bin");
+    write_pattern(&original, CROSSES_THE_WINDOW);
+
+    let moved = move_files(&source.dir, &[original.clone()], &destination.dir);
+
+    assert_eq!(
+        moved.sent,
+        Ok(SessionState::Completed),
+        "a session with no observer did not complete; the receiver ended {:?}",
+        moved.received
+    );
+    assert_eq!(
+        read_all(&destination.path("payload.bin")),
+        read_all(&original)
+    );
+}
+
+#[test]
+fn the_callback_budget_is_respected_for_a_known_file_size() {
+    let (small, _, small_state) = move_observed(512 * 1024);
+    let (large, _, large_state) = move_observed(4 * 1024 * 1024);
+    assert_eq!(small_state, Ok(SessionState::Completed));
+    assert_eq!(large_state, Ok(SessionState::Completed));
+
+    // The upper bound of ADR-0033 §4: 100 stepped emissions, plus the opening
+    // one, plus the terminal one.
+    const CEILING: usize = 102;
+    assert!(
+        large.len() <= CEILING,
+        "{} emissions for 4 MiB, over the budget of {CEILING}",
+        large.len()
+    );
+
+    // Two sizes and a strict inequality, which is the shape that tells a
+    // measured counter from a constant (R1 §5.6). Below the 25 MiB elbow the
+    // 256 KiB floor decides, so eight times the bytes must emit strictly more.
+    // An implementation that always emitted 102 -- or always 2 -- satisfies the
+    // ceiling above and fails here.
+    assert!(
+        large.len() > small.len(),
+        "512 KiB emitted {} and 4 MiB emitted {}; a budget that does not grow \
+         with the file below the floor is not measuring the file",
+        small.len(),
+        large.len()
+    );
+
+    // And it is a real progression, not a repeated number.
+    let last = large
+        .last()
+        .expect("a completed transfer emitted something");
+    assert_eq!(last.done, last.total, "the last emission is not the total");
+    assert_eq!(
+        large.first().map(|first| first.done),
+        Some(0),
+        "the opening emission did not start at zero"
+    );
+    for pair in large.windows(2) {
+        assert!(
+            pair[1].done >= pair[0].done,
+            "an emission went backwards: {} then {}",
+            pair[0].done,
+            pair[1].done
+        );
+    }
+}
+
+#[test]
+fn an_emission_per_chunk_would_be_visible_to_this_measurement() {
+    // R2 §1.7, and the reason the helper counts `step` calls as well as
+    // emissions. The budget exists to stop the emission count tracking the
+    // chunk count; the way to know this measurement could see that failure is
+    // to compare it against a number that *does* track the chunks.
+    //
+    // `step` is the loop that moves chunks, so an implementation that emitted
+    // once per step would make the two counts equal. They must not be.
+    let (emissions, steps, state) = move_observed(4 * 1024 * 1024);
+    assert_eq!(state, Ok(SessionState::Completed));
+
+    assert!(
+        steps > 0,
+        "no step ran, so this measurement is comparing two zeros"
+    );
+    assert!(
+        emissions.len() < steps,
+        "{} emissions for {steps} steps. Equal counts is exactly what emitting \
+         once per chunk looks like, so this measurement would report it",
+        emissions.len()
+    );
+    // Not merely fewer -- decisively fewer. One emission short of per-step would
+    // satisfy a bare `<` while being the failure this guards against.
+    assert!(
+        emissions.len() * 2 < steps,
+        "{} emissions for {steps} steps is within a factor of two of one per \
+         step, which is not a budget",
+        emissions.len()
+    );
+}
+
 // --------------------------------------------------------------- endings and state
 
 #[test]
@@ -467,7 +646,7 @@ fn a_cancelled_session_reports_cancelled_and_keeps_reporting_it() {
     let destination_dir = destination.dir.clone();
 
     let receiving = thread::spawn(move || {
-        Session::open_receiver(address, &destination_dir).map(|mut session| {
+        Session::open_receiver(address, &destination_dir, None).map(|mut session| {
             let _ = drive(&mut session);
         })
     });
@@ -496,7 +675,7 @@ fn a_receiver_that_never_gets_a_peer_reports_the_peer_and_not_success() {
     let destination = Scratch::new("no-peer");
     let address = loopback(a_free_port());
 
-    let receiving = thread::spawn(move || Session::open_receiver(address, &destination.dir));
+    let receiving = thread::spawn(move || Session::open_receiver(address, &destination.dir, None));
 
     // Connect and hang up without speaking. The receiver must not treat a
     // socket that opened and closed as an authenticated peer.
@@ -534,7 +713,7 @@ fn finishing_a_sender_materialises_nothing_and_says_so() {
     let destination_dir = destination.dir.clone();
 
     let receiving = thread::spawn(move || {
-        Session::open_receiver(address, &destination_dir).map(|mut session| {
+        Session::open_receiver(address, &destination_dir, None).map(|mut session| {
             let (state, _) = drive(&mut session);
             let _ = session.finish();
             state

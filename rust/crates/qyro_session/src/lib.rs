@@ -47,4 +47,4 @@ mod session;
 mod guards;
 
 pub use error::SessionError;
-pub use session::{Progress, Session, SessionState};
+pub use session::{Progress, ProgressObserver, Session, SessionState};

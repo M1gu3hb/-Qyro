@@ -51,6 +51,81 @@ pub struct Progress {
     pub item: u32,
 }
 
+/// How many emissions a whole transfer is allowed, whatever its size.
+///
+/// ADR-0033 §4. The engine moves 64 KiB chunks, so one emission per chunk is
+/// 16 384 calls for a gigabyte, and every one of them enqueues a message on the
+/// event loop of the isolate that has to draw the bar. The unacceptable part is
+/// not the number, it is that it **grows with the file**.
+const PROGRESS_TARGET_EMISSIONS: u64 = 100;
+
+/// The floor under the emission step.
+///
+/// Without it, a small transfer would emit a hundred times for a few kilobytes.
+const PROGRESS_MIN_STEP: u64 = 256 * 1024;
+
+/// Something that wants to be told how far a session has got.
+///
+/// A boxed closure and not a C function pointer: `qyro_ffi` wraps its pointer in
+/// one of these, and everything on this side of the boundary — including the
+/// tests that count emissions — stays ordinary Rust. ADR-0032 §2 still holds,
+/// because `Progress` is three integers and names no `qyro_crypto` type.
+pub type ProgressObserver = Box<dyn FnMut(Progress) + Send>;
+
+/// The emission budget of ADR-0033 §4, and the state it needs.
+struct Emitter {
+    sink: ProgressObserver,
+    /// Bytes that must pass before the next emission. Zero until `total` is
+    /// known, which for a receiver is not until the manifest arrives.
+    step_bytes: u64,
+    last: u64,
+    opened: bool,
+}
+
+impl Emitter {
+    fn new(sink: ProgressObserver) -> Self {
+        Self {
+            sink,
+            step_bytes: 0,
+            last: 0,
+            opened: false,
+        }
+    }
+
+    /// `max(256 KiB, total/100)`.
+    ///
+    /// Below about 25 MiB the floor decides and there are fewer than a hundred
+    /// emissions; above it the fraction decides and there are exactly a hundred.
+    /// Both branches are bounded and neither grows with the file.
+    const fn step_for(total: u64) -> u64 {
+        let fraction = total / PROGRESS_TARGET_EMISSIONS;
+        if fraction > PROGRESS_MIN_STEP {
+            fraction
+        } else {
+            PROGRESS_MIN_STEP
+        }
+    }
+
+    /// Emits if the budget allows, or if `force` says this is an ending.
+    ///
+    /// The terminal emission is unconditional on purpose: without it the bar
+    /// stops at 99%, which is the most common visible failure of this pattern.
+    fn offer(&mut self, progress: Progress, force: bool) {
+        if self.step_bytes == 0 && progress.total > 0 {
+            self.step_bytes = Self::step_for(progress.total);
+        }
+        let opening = !self.opened && progress.total > 0;
+        let stepped =
+            self.step_bytes > 0 && progress.done.saturating_sub(self.last) >= self.step_bytes;
+        if !(force || opening || stepped) {
+            return;
+        }
+        self.opened = true;
+        self.last = progress.done;
+        (self.sink)(progress);
+    }
+}
+
 /// A sink that refuses to be written to.
 ///
 /// Used only for the frames that precede the manifest. It **records** rather
@@ -91,15 +166,19 @@ pub struct Session {
     failed: Option<SessionError>,
     progress: Progress,
     outbound: Vec<Vec<u8>>,
+    observer: Option<Emitter>,
 }
 
 impl core::fmt::Debug for Session {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Never the engine and never the stream: a Debug that prints a sealer
-        // is a key in a log.
+        // is a key in a log. The observer is a closure the caller owns and this
+        // side cannot describe, so it is reported as present or absent and not
+        // as itself.
         f.debug_struct("Session")
             .field("progress", &self.progress)
             .field("failed", &self.failed)
+            .field("observed", &self.observer.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -128,10 +207,14 @@ impl Session {
     /// under `root`, or when the remainder is empty,
     /// [`SessionError::PeerUnreachable`] when the peer does not answer,
     /// [`SessionError::NotAuthenticated`] when it fails to prove who it is.
+    /// `observer` may be `None`, and a session without one behaves identically.
+    /// ADR-0033 §2: the nullable pointer on the C side arrives here as `None`,
+    /// and «no observer» must never be a second code path.
     pub fn open_sender(
         address: SocketAddr,
         root: &Path,
         files: &[PathBuf],
+        observer: Option<ProgressObserver>,
     ) -> Result<Self, SessionError> {
         if files.is_empty() {
             return Err(SessionError::BadArgument);
@@ -189,6 +272,19 @@ impl Session {
         let mut engine = Box::new(Sender::new(sealer, opener, manifest));
         let opening = engine.open().map_err(|_| SessionError::TransferRefused)?;
 
+        let progress = Progress {
+            done: 0,
+            total,
+            item: 0,
+        };
+        let mut observer = observer.map(Emitter::new);
+        // The opening emission, so the bar knows its scale before the first
+        // byte. A sender knows `total` here; a receiver does not learn it until
+        // the manifest arrives, and emits its opening then.
+        if let Some(emitter) = observer.as_mut() {
+            emitter.offer(progress, false);
+        }
+
         Ok(Self {
             stream,
             role: Role::Sending {
@@ -197,12 +293,9 @@ impl Session {
             },
             cancel: Arc::new(AtomicBool::new(false)),
             failed: None,
-            progress: Progress {
-                done: 0,
-                total,
-                item: 0,
-            },
+            progress,
             outbound: opening,
+            observer,
         })
     }
 
@@ -212,7 +305,12 @@ impl Session {
     ///
     /// [`SessionError::BadArgument`] when the port cannot be bound, and the
     /// same authentication and reachability errors as [`Self::open_sender`].
-    pub fn open_receiver(bind: SocketAddr, destination: &Path) -> Result<Self, SessionError> {
+    /// `observer` may be `None`, exactly as in [`Self::open_sender`].
+    pub fn open_receiver(
+        bind: SocketAddr,
+        destination: &Path,
+        observer: Option<ProgressObserver>,
+    ) -> Result<Self, SessionError> {
         let listener = Listener::bind(bind).map_err(|_| SessionError::BadArgument)?;
         let identity = new_identity()?;
         let accepted = listener.accept().map_err(|error| net_error(&error))?;
@@ -230,6 +328,7 @@ impl Session {
             failed: None,
             progress: Progress::default(),
             outbound: Vec::new(),
+            observer: observer.map(Emitter::new),
         })
     }
 
@@ -282,8 +381,23 @@ impl Session {
             return Err(self.fail(SessionError::Cancelled));
         }
         match self.advance() {
-            Ok(state) => Ok(state),
+            Ok(state) => {
+                // The terminal emission is forced, because a bar that stops at
+                // 99% is the most common visible failure of this pattern
+                // (ADR-0033 §4). An *error* deliberately emits nothing: the
+                // caller already got a stronger signal than a progress update.
+                self.emit(state != SessionState::InProgress);
+                Ok(state)
+            }
             Err(error) => Err(self.fail(error)),
+        }
+    }
+
+    /// Offers the current progress to the observer, if there is one.
+    fn emit(&mut self, terminal: bool) {
+        let progress = self.progress;
+        if let Some(emitter) = self.observer.as_mut() {
+            emitter.offer(progress, terminal);
         }
     }
 
