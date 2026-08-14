@@ -62,7 +62,28 @@ valor en cuanto `hmac/zeroize` está activo.
 | clave one-time de Poly1305 | interna de chacha20poly1305 | una operación | sí | `mac_key.zeroize()` dentro de la biblioteca | una | ninguna |
 | búfer de `seal` | temporal | una llamada | **sí mientras es texto claro** | `Zeroizing<Vec<u8>>` | una; el ciphertext se copia fuera de forma explícita | no |
 | búfer de `open` | temporal | una llamada | **sí en cuanto el tag verifica** | `Zeroizing<Vec<u8>>` | una, que se mueve al frame | no |
-| `AuthenticatedFrame::payload` | quien abrió el frame | hasta que lo suelta | sí | `Zeroizing<Vec<u8>>` | una; el tipo no es `Clone` | sí, como `Zeroizing<Vec<u8>>` |
+| `AuthenticatedFrame::payload` | quien abrió el frame | hasta que lo suelta | sí | `Zeroizing<Vec<u8>>` | una **si el consumidor no la copia** — ver la nota | sí, como `Zeroizing<Vec<u8>>` |
+
+> **Nota, 2026-08-14 (QYR-0304).** Esta fila decía «una; el tipo no es `Clone`», y
+> esa segunda mitad **era falsa como garantía**. Que `AuthenticatedFrame` no sea
+> `Clone` impide clonar *el frame*; no impide que quien recibe el
+> `Zeroizing<Vec<u8>>` haga `.to_vec()` sobre él. Y eso es exactamente lo que
+> `qyro_transfer::session::open_all` hacía.
+>
+> El matiz importa porque la lectura obvia también es incorrecta: `.to_vec()`
+> **no deshacía el `Zeroizing`** — el temporal sí se borraba al terminar la
+> sentencia. Lo que hacía era **copiar el texto claro a una asignación nueva que
+> nadie limpia**, dejando los bytes verificados en dos sitios y borrando uno. La
+> exposición neta era idéntica a la del `into_payload` que
+> `into_zeroizing_payload` existe para sustituir.
+>
+> Y la guarda de egreso de `qyro_crypto` no podía verlo: prohíbe
+> `fn into_payload(self) -> Vec<u8>` **por nombre**, y es ciega a un `.to_vec()`
+> sobre su reemplazo, que vive en otro crate. Una guarda sobre la forma de una
+> API no cubre lo que sus consumidores hacen con lo que reciben.
+>
+> Corregido: `open_all` devuelve `Zeroizing<Vec<u8>>` hasta sus llamadores, que
+> ya tomaban `&payload` y siguen compilando por coerción de `Deref`.
 | contador de secuencia | `FrameSealer` | vida del sealer | **no** | n/a | una | no |
 | ventana de replay | `FrameOpener` | vida del opener | **no** | n/a | una | solo bajo `--cfg fuzzing` |
 

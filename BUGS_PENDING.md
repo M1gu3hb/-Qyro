@@ -1531,8 +1531,30 @@
   - «**no se ejecuta**» sigue **sin contestar con evidencia ejecutada**: en la
     última tirada el paso `cargo test --workspace` de ese trabajo seguía
     `in_progress` cuando se consultó. Un paso que no ha terminado no es un verde
-- Resolución: pendiente. No se cierra hasta ver ese paso en success, que es lo que
-  `R4` §5 exige. Nada de convertir «compiló en Windows» en «funciona en Windows»
+- Resolución: **el test está nombrado y arreglado**, y falta ver el verde. El tope
+  de 45 minutos hizo terminar la tirada y dejó log:
+  `03:35:24 test tests::a_peer_cannot_make_us_buffer_more_than_the_declared_limit
+  has been running for over 60 seconds` … `04:18:15 ##[error]The operation was
+  canceled.` Cuarenta y tres minutos en un test, siete tiradas seguidas
+- Mecanismo: el lector para en el permiso de 4 KiB y **deja el socket abierto**,
+  así que los 512 KiB de relleno que el hilo escritor empuja no tienen a dónde ir.
+  En Linux los búferes autoajustados de loopback se los tragan y `write_all`
+  retorna; en el runner `windows-latest` no, y `write_all` se bloquea para siempre
+  contra un peer que ya no va a leer, arrastrando a `writer.join()`
+- **Es un defecto del test, no de `qyro_net`.** El producto nunca bufferizó más de
+  su permiso; el harness dio por hecho un error que sólo una plataforma entrega.
+  Arreglado con un plazo de escritura de cinco segundos, que es lo que hace cierta
+  la frase que su propio comentario ya afirmaba
+- Y esta máquina **no podía encontrarlo**: la suite completa lleva todo el sprint
+  en verde sobre Windows real aquí, porque estos búferes también son bastante
+  grandes. La nota de la fase 02 que decía «Windows no es la causa, la causa está
+  en el runner» era una conjetura entonces y resultó exacta
+- Anotado porque va a despistar a alguien: superar `timeout-minutes` marca el job
+  **`cancelled`**, no `failed`. Un cuelgue con tope es indistinguible de una
+  cancelación humana
+- **Lo que falta para cerrarla:** una tirada de `rust workspace (windows-latest)`
+  en **success** sobre un commit nombrado. Se deja abierta a propósito: `R4` §5
+  exige evidencia ejecutada, y arreglar la causa no es lo mismo que verla verde
 - Estado: abierto
 - Fecha: 2026-08-11
 - Evidencia: `.github/workflows/ci.yml:65-77`; trabajo `rust workspace
@@ -2492,8 +2514,24 @@
   `FileSink`, y una guarda que impida reintroducir el `.to_vec()` — la forma exacta
   se decide al escribirla, porque una guarda que sólo prohíba la cadena literal
   `.into_zeroizing_payload().to_vec()` se esquiva con una variable intermedia
-- Estado: abierto
-- Fecha: 2026-08-13
+- Resolución: `open_all` devuelve `Zeroizing<Vec<u8>>` hasta sus llamadores en vez
+  de `.to_vec()`. Los dos ya tomaban `&payload` para pasarlo a un `&[u8]`, así que
+  la coerción de `Deref` los deja compilando sin tocarlos. `qyro_transfer` ya
+  declaraba `zeroize` en su `Cargo.toml` y no lo usaba en ningún sitio; ahora sí
+- **El matiz se conserva porque la lectura obvia es la equivocada:** `.to_vec()`
+  no deshacía el `Zeroizing` —el temporal sí se borraba al final de la sentencia—.
+  Lo que hacía era copiar el texto claro a una asignación nueva que nadie limpia,
+  dejando los bytes verificados en dos sitios y borrando uno. Exposición neta
+  idéntica a la del `into_payload` que ese accesor existe para sustituir
+- Y lo que esto enseña sobre guardas: la de egreso de `qyro_crypto` prohíbe
+  `fn into_payload(self) -> Vec<u8>` **por nombre** y es ciega a un `.to_vec()`
+  sobre su reemplazo, que además vive en otro crate. **Una guarda sobre la forma
+  de una API no cubre lo que sus consumidores hacen con lo que reciben**
+- Corregido de paso `docs/security/secret-lifecycle-audit.md:65`, que afirmaba
+  «una copia; el tipo no es `Clone`». Que `AuthenticatedFrame` no sea `Clone`
+  impide clonar el frame, no impide que quien recibe el `Zeroizing` lo copie
+- Estado: cerrado
+- Fecha: 2026-08-13, cerrado 2026-08-14
 - Evidencia: `grep -rn 'into_payload\|payload()' rust/crates/qyro_transfer/src/`
   da un solo sitio, el 861. Los demás `\.payload()` de producción son de
   `PlainFrame`, no de `AuthenticatedFrame`: `qyro_net/src/handshake.rs:360` y
@@ -2648,8 +2686,19 @@
   `127.0.0.1` en dos hilos y mueva un archivo, con lo que la mayoría de los veinte
   mueren solos. `qyro_session::Session::local_addr` existe y hace posible aprender
   el puerto desde Rust, que es lo que la superficie C no permite. Y volver a barrer
-- Estado: abierto
-- Fecha: 2026-08-13
+- Resolución: `rust/crates/qyro_session/tests/session_behaviour.rs`, **diez pruebas
+  de conducta** que conducen un emisor y un receptor reales en dos hilos sobre un
+  socket de loopback, por la API pública del crate y nada más. Más siete pruebas
+  unitarias sobre `Emitter` en `session.rs`. El crate pasa de 6 tests a 23
+- **Y encontraron lo que existían para encontrar:** cinco de las diez fallaron a
+  la primera con `Err(PeerUnreachable)` mientras el receptor terminaba
+  `Ok(Completed)` y materializaba el archivo correcto byte a byte. Eso es
+  QYR-0316, P1, un envío correcto reportado como fallo de red
+- Barrido después: de 20 supervivientes en este crate a 16 sobre 62 mutantes, y de
+  esos 16 dos son de `Display`/`Debug` (fuera por `R4` §2) y el resto están
+  agrupados en QYR-0320 con su causa común
+- Estado: cerrado
+- Fecha: 2026-08-13, cerrado 2026-08-14
 - Evidencia: `cargo mutants --package qyro_ffi --package qyro_session --timeout 90`
   da «124 mutants tested in 3m: 35 missed, 75 caught, 14 unviable»; veinte de los
   35 caen en este crate. `cargo test -p qyro_session` lista seis tests, todos bajo
@@ -2709,12 +2758,21 @@
   → exit 1. Fixture aislado de cuatro archivos: `-Include @('*.md','*.rs')`
   devuelve también `b.txt` y `d.o`; `| Where-Object { $_.Extension -in … }`
   devuelve lo correcto
-- Resolución: pendiente; sustituir `-Include` por un filtro `Where-Object` sobre
-  la extensión, y decidir aparte si la forma «QYR-nnnn a QYR-nnnn» se exonera o
-  se prohíbe en la prosa
-- Lo que haría falta para cerrarla: el script verde en PowerShell 5.1 real, y un
-  job de CI que lo corra en `windows-latest` en vez de `pwsh` sobre Linux
-- Estado: abierto
+- Resolución: `-Include` sustituido por un filtro `Where-Object` sobre la
+  extensión —el patrón que la línea 130 del **mismo archivo** ya usaba—. El
+  alcance pasa de 5 962 archivos recorridos a **284, cero fuera de los declarados**,
+  y el checker sale **exit 0 en Windows PowerShell 5.1 real** por primera vez
+- Y el contrato que debía protegerlo **pasaba en verde con el defecto vivo**, así
+  que gana un caso **en las dos mitades**, con las dos direcciones: la misma cita
+  fuera de alcance no debe bloquear y dentro sí. Una sola dirección no distingue
+  un checker que ignora extensiones de uno que no escanea nada. Visto fallar
+  reintroduciendo el defecto a mano
+- **Lo que queda fuera y se dice:** sigue sin haber un job de CI que corra el
+  `.ps1` en `windows-latest`; `ci.yml:181` lo invoca con `pwsh` sobre ubuntu. La
+  cobertura de la plataforma la da hoy esta máquina, no CI, y eso es una clase de
+  evidencia más débil. Se registra aquí en vez de dejar la ficha abierta por ello,
+  porque el defecto que la abrió está corregido y verificado
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-13
 - Evidencia: la familia es la de QYR-0100, que ya arregló la forma con en dash;

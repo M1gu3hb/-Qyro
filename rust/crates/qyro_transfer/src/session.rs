@@ -20,6 +20,7 @@ use qyro_crypto::aead::{FrameOpener, FrameSealer};
 use qyro_manifest::TransferManifest;
 use qyro_protocol::{DecodedFrame, Frame, FrameDecoder, MessageType};
 use sha2::{Digest, Sha256};
+use zeroize::Zeroizing;
 
 use crate::error::{ItemVerdict, TransferError};
 use crate::wire::{self, Accept, Ack, ChunkRef, Complete, Control, Integrity, ItemStart, Offer};
@@ -844,11 +845,28 @@ impl Receiver {
 /// Returns `(message_type, payload)` pairs. A frame that does not authenticate
 /// is [`TransferError::NotAuthenticated`] and carries no detail: a frame with no
 /// verified sender cannot testify to anything.
+/// Authenticated frames: each one's kind, and its payload still wearing its wipe.
+type OpenedFrames = Vec<(MessageType, Zeroizing<Vec<u8>>)>;
+
+/// The payloads come back **still wearing their wipe**.
+///
+/// The previous shape ended in `.to_vec()`, and the subtlety is worth stating
+/// because the obvious reading is wrong: `.to_vec()` did not undo the
+/// `Zeroizing`. The temporary was still wiped when the statement ended. What it
+/// did was **copy the plaintext into a fresh allocation that nothing wipes**, so
+/// the verified bytes ended up in two places and only one of them was cleared.
+/// The net exposure was identical to the `into_payload` that
+/// `into_zeroizing_payload` exists to replace -- and `qyro_crypto`'s egress
+/// guard forbids `into_payload` by name while being blind to a `.to_vec()` on
+/// its replacement (QYR-0304).
+///
+/// `Zeroizing<Vec<u8>>` derefs to `[u8]`, so every caller that already took
+/// `&payload` keeps compiling and starts benefiting.
 fn open_all(
     decoder: &mut FrameDecoder,
     opener: &mut FrameOpener,
     bytes: &[u8],
-) -> Result<Vec<(MessageType, Vec<u8>)>, TransferError> {
+) -> Result<OpenedFrames, TransferError> {
     decoder.push(bytes).map_err(|_| TransferError::Framing)?;
     let mut out = Vec::new();
     while let Some(decoded) = decoder.next_frame().map_err(|_| TransferError::Framing)? {
@@ -858,7 +876,7 @@ fn open_all(
                     .open(&envelope)
                     .map_err(|_| TransferError::NotAuthenticated)?;
                 let message_type = authenticated.message_type();
-                let payload = authenticated.into_zeroizing_payload().to_vec();
+                let payload = authenticated.into_zeroizing_payload();
                 out.push((message_type, payload));
             }
             DecodedFrame::Message(_) | DecodedFrame::Unsupported(_) => {
