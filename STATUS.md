@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-14T21:47:00Z
+- Updated UTC: 2026-08-14T23:30:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: 274b504b4b24baa8dcd42fa6bca4ff01653ed550
+- Verified commit: 0aef8eafd171a4378fa0f8716cbede1b0b5d05aa
 - Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
   operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
   byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
@@ -20,6 +20,37 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   dos máquinas distintas — dos procesos en 127.0.0.1 no son dos dispositivos en
   una Wi-Fi. La persistencia de identidad sigue **IMPLEMENTED sólo en Windows y
   NOT_IMPLEMENTED en Android y en iOS**
+
+### Fase 05 — CERRADA. La interfaz, y los botones ENCENDIDOS
+
+Informe: `docs/reports/fase-05-la-interfaz-y-los-botones.md`.
+Decisión de producto: ADR-0036. Superficie C: ADR-0032 enmienda 1.
+
+**Los botones Enviar y Recibir están encendidos**, y el texto que explicaba por
+qué estaban apagados está borrado del catálogo, de la pantalla y de las dos
+pruebas que lo esperaban. Las cinco condiciones se cumplen y cada una tiene su
+prueba con nombre; la que las gobierna a todas —«nadie ha visto esto en una
+pantalla»— sigue siendo cierta y está en §15 de ese informe.
+
+**Lo que existe y está ejecutado en Windows 10 real:**
+
+- **La superficie C pasa de once símbolos a diecinueve** y ninguno cruza un tipo:
+  enteros, o texto en un búfer que el llamante presta. Cuando no cabe **no se
+  escribe nada**, porque media huella que coincide no prueba nada.
+- **Una clave cambiada se refuta por nombre desde Dart**, con dos procesos
+  receptores y por tanto dos identidades bajo un mismo nombre.
+- **El receptor puede decir que no**, el emisor aprende el motivo exacto, y el
+  destino queda sin un solo archivo — comprobado listando el directorio.
+- **Cuatro pantallas** con todos sus estados feos probados contra un doble, y la
+  entrada manual y el QR en la primera, nunca detrás de «avanzado».
+- **Un peer con clave cambiada no ofrece botón de aceptar** — ausente, no
+  atenuado: no hay «continuar de todos modos» que encontrar.
+- 623 tests de Rust y 94 de Dart. `Cargo.lock` sigue en **64**.
+
+**Lo que NO debe leerse como progreso:** nadie ha visto esta interfaz —
+`flutter build` no corre en esta máquina (QYR-0324)—, no hay descubrimiento
+automático, el QR no se lee con una cámara, y la confianza no sobrevive al cierre
+de la aplicación hasta la fase 06.
 
 ### Fase 03 — CERRADA COMO PARCIAL. El selector de archivos
 
@@ -358,6 +389,15 @@ cuatro quedan abiertos y registrados, no omitidos.
 - Transporte, sockets y TLS: NOT_IMPLEMENTED
 - Transferencia de producto por red/UI: NOT_IMPLEMENTED. El motor y el
   filesystem local sí mueven una transferencia entre directorios.
+- **Interfaz de transferencia**: IMPLEMENTED (fase 05, ADR-0036). Cuatro
+  pantallas, los dos idiomas, y **los botones encendidos**. NO vista en ninguna
+  pantalla: `flutter build` no corre en la máquina de desarrollo (QYR-0324).
+- **Confianza consultada desde la aplicación**: IMPLEMENTED (ADR-0032 enmienda
+  1). Una clave cambiada se refuta por nombre desde Dart. **No persiste**: el
+  libro vive en memoria hasta la fase 06.
+- **Rechazo del receptor**: IMPLEMENTED (QYR-0089, QYR-0088). `TransferReject` se
+  emite y se entiende, `Phase::Rejected` no es `Cancelled`, y `FileSink::abandon`
+  deja el destino como lo encontró.
 - Selección de archivos: **IMPLEMENTED en código, NO EJECUTADA por nadie**
   (fase 03, ADR-0034). El `MethodChannel` de Android y el diálogo de Windows
   existen y están probados aguas abajo del diálogo; **ningún diálogo se ha
