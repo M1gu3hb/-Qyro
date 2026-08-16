@@ -4,53 +4,59 @@
 
 ## 1. Dónde estoy
 
-- **Fase 03 CERRADA COMO PARCIAL** — `docs/reports/fase-03-selector-de-archivos.md`.
-- **Fase 04 ABIERTA**, paso 2 a medias — `docs/reports/fase-04-descubrimiento-y-emparejamiento.md`.
-- Rama `claude/qyro-net-6a`. Base de la fase 04: `62658d7`.
+- **Fase 03 cerrada como PARCIAL.** **Fase 04 partida en 04a y 04b** por
+  ADR-0035 enmienda 1: la 04b (`NsdManager`, `mdns-sd`) va **después** de la 05.
+- **Fase 04a**: pasos 1–3 hechos en Rust. Falta el FFI y la prueba entre procesos.
+- Rama `claude/qyro-net-6a`, último commit **`0f87a4e`**.
 
-## 2. Hecho en esta sesión (2026-08-14)
+## 2. LOS CINCO REQUISITOS DE LOS BOTONES — el estado exacto
 
-| Qué | Commit |
-|---|---|
-| Línea base reproducida + archivo de estado | `00aea33` |
-| ADR-0034 enmienda 1: `file_selector_windows`, no el paraguas | `54c66e2` |
-| El 2.º `pub get` seguido miente sobre el 1.º | `205204f` |
-| Diálogo de Windows + las 4 pruebas del paso 2 + QYR-0327/0328/0329 | `867d3fa` |
-| Las 3 pruebas `cfg(unix)` no compilaban (lo dijo CI, no yo) | `b8dbca5` |
-| La prueba del manifiesto fusionado miraba donde Flutter no escribe | `274b504` |
-| Informe de fase 03, PARCIAL | `62658d7` |
-| **ADR-0035 congelada** antes del código | `39f645c` |
-| **La cadena de emparejamiento** `QYRO1\|addr\|32hex`, con 7 pruebas | `67dd8da` |
+| # | Condición | Estado | Qué falta, en concreto |
+|---|---|---|---|
+| 1 | Dart conduce una transferencia verificada | **CUMPLIDA** — fase 02 | — |
+| 2 | El usuario elige el archivo con el selector de su sistema | **CUMPLIDA en código; compilada y probada en CI aguas abajo del diálogo, NO vista abrirse por nadie** | Nada bloquea. La clase de evidencia se escribe tal cual |
+| 3 | Dos aparatos se encuentran, o hay camino manual | **PARCIAL** | La cadena `QYRO1\|addr\|32hex` existe y está probada como **texto**. Falta usarla para conectar: `qyro_net_smoke serve` imprime la cadena, `send` la acepta, y **rechaza por tipo si la huella autenticada no es la prometida** (ADR-0035 §2.1) |
+| 4 | La huella se ve y una clave cambiada se rechaza | **PARCIAL** | El núcleo está hecho y probado en Rust: `Session::peer_fingerprint()`, `TrustBook`, `a_known_peer_whose_key_changed_is_refused_by_name`. **Falta cruzarlo por el FFI y por Dart** |
+| 5 | El receptor puede rechazar | **NO CUMPLIDA** | QYR-0089 y QYR-0088. `TransferReject` está en el protocolo y **nadie lo emite ni lo entiende**; `FileSink` no puede abandonar una transferencia |
 
-## 3. Lo siguiente, concreto y en orden
+**Los botones NO se encienden hoy.** Faltan la 3 en su mitad de conexión, la 4 en
+su mitad de FFI, y la 5 entera.
 
-1. **Cierra el paso 2**: `two_processes_connected_by_a_manual_endpoint_transfer_a_file`.
-   `qyro_net_smoke serve` ya imprime `LISTENING <puerto>` y vacía antes de
-   aceptar; falta que imprima además la cadena, que `send` la acepte, y que
-   **rechace por tipo si la huella autenticada no es la prometida** — ADR-0035
-   §2.1. Necesita el punto 1 de §6.
-2. **Paso 3, la confianza por el FFI.** Empieza por `qyro_net`, no por el FFI.
-3. Pasos 4–6 (mdns-sd, NsdManager, NWBrowser): la fase 05 **no los necesita**. Si
-   no caben, decláralos no hechos con su motivo, como ya hace el informe.
+## 3. Lo siguiente, en orden
 
-*(La puerta del paso 2 pasa sus trece comprobaciones, barrido de mutación
-incluido: 27 mutantes, 20 caught, 2 missed —uno ruido, uno equivalente
-demostrado—, 5 unviable. Y CI está en verde sobre `67dd8da` y `7c83134`.)*
+1. **Condición 5 — QYR-0089 y QYR-0088.** Es la única *no cumplida* y la que hace
+   que la pantalla de recibir no sea una mentira. Prueba de las dos juntas: un
+   receptor rechaza a mitad, el emisor recibe el motivo exacto y para, y el
+   destino queda **sin un solo archivo nuevo**, comprobado listando el directorio.
+2. **Condición 4 — el FFI de confianza.** Cinco símbolos:
+   `qyro_session_peer_fingerprint`, `qyro_session_peer_trust`,
+   `qyro_session_remember_peer`, `qyro_trust_forget_peer`,
+   `qyro_trust_list_peers`. El libro es `qyro_session::TrustBook`, **en memoria**.
+   Después, `a_known_peer_whose_key_changed_is_refused_by_name` **desde Dart**.
+3. **Condición 3 — la cadena entre dos procesos.**
+   `two_processes_connected_by_a_manual_endpoint_transfer_a_file`.
+4. **ADR de la UI** (`ADR-0036-transfer-ui.md`), congelada antes de dibujar.
+   Lo que tiene que decidir: los estados feos, **qué pasa cuando llega una
+   transferencia de un desconocido** —si se acepta por defecto, Qyro es un buzón
+   abierto para cualquiera en la Wi-Fi—, qué ve el receptor antes de decidir, y
+   los dos idiomas.
+5. **Las cuatro pantallas**: peers, enviar, recibir, historial. `qyro_fs::history`
+   ya tiene `latest`, `for_peer` y `with_status`: exponer, no reescribir.
+6. **Encender los botones** y **quitar el texto que explica por qué están
+   apagados**, que deja de ser cierto.
 
 ## 4. Números actuales (comandos, no memoria)
 
 | Comprobación | Comando | Valor |
 |---|---|---|
-| Tests Rust | `cargo test --workspace` | **611 passed, 0 failed, 2 ignored** (51 suites, Windows) |
+| Tests Rust | `cargo test --workspace` | **615 passed, 0 failed, 2 ignored** (51 suites, Windows) |
 | Tests Dart | `flutter test` con las 2 variables | **76 passed, 1 skipped** |
-| Clippy | `cargo clippy --workspace --all-targets -- -D warnings` | exit **0** |
-| Clippy target unix | `cargo clippy -p <crate> --all-targets --target aarch64-linux-android -- -D warnings` | exit **0** |
-| fmt Rust / Dart | `cargo fmt --all --check` · `dart format --set-exit-if-changed .` **desde `apps/qyro`** | exit **0** |
-| `flutter analyze` | en `apps/qyro` | exit **0** |
+| Clippy · fmt | `--workspace --all-targets -D warnings` · `fmt --all --check` | exit **0** |
+| Clippy target unix | `-p <crate> --all-targets --target aarch64-linux-android` | exit **0** |
 | Docs | `check_docs_consistency` en Bash y PowerShell | exit **0** |
 | Paquetes Rust / Dart | `[[package]]`/`source =` · sección `packages:` | **64 / 50** · **45** |
 | Ledger | script de `R2` §1.10 | **147 fichas, 39 abiertas** |
-| CI verde sobre | `62658d7`, `f153d61`, `39f645c` | **success** |
+| CI verde sobre | `62658d7`, `f153d61`, `39f645c`, `67dd8da`, `7c83134` | success |
 
 ## 5. El entorno (medido)
 
@@ -62,60 +68,53 @@ demostrado—, 5 unviable. Y CI está en verde sobre `67dd8da` y `7c83134`.)*
 | `cargo-mutants` | `D:\tools\cargo\bin\cargo-mutants.exe` 27.1.0 (subcomando `mutants`) |
 | Git Bash | `C:\Program Files\Git\bin\bash.exe` — `bash` a secas es WSL sin distro |
 | PowerShell | 5.1 únicamente, **no hay `pwsh`** |
-| Android SDK | `%LOCALAPPDATA%\Android\Sdk` y `D:\android-sdk`. **Ninguno tiene emulador** |
 | Targets Rust | `x86_64-pc-windows-msvc` y `aarch64-linux-android` |
 | Pruebas FFI de Dart | `cargo build --release -p qyro_ffi -p qyro_net_smoke`, luego `QYRO_FFI_LIBRARY_PATH=…\target\release\qyro_ffi.dll` y `QYRO_NET_SMOKE_PATH=…\qyro_net_smoke.exe` |
 
 **Modo Desarrollador APAGADO**: `flutter test` sí, `flutter build`/`run` no (QYR-0324).
 
-## 6. Restricciones estructurales medidas, que ADR-0035 ya decidió
+## 6. Lo que ya está resuelto y no hay que volver a investigar
 
-1. **`qyro_net::Session` no publica la identidad del peer.** `qyro_crypto` sí
-   —`peer_identity()`—, `qyro_net` la envuelve y no la republica. **Sin ensanchar
-   ahí no hay huella que enseñar.** ADR-0035 §5(a) lo autoriza: accesor de sólo
-   lectura a la identidad **pública**, que no es material de clave.
-2. **`qyro_session` no puede reexportar `TrustVerdict` ni `HumanFingerprint`.**
-   `qyro_session_re_exports_nothing_it_does_not_own` sólo admite `pub use` de
-   `crate`, `self`, `super`, `error` y `session`. La fachada **posee su propio
-   vocabulario** y convierte por dentro. ADR-0035 §5(b).
-3. **`qyro_session` gana `qyro_identity_store`**, de primera parte, y hay que
-   actualizar `CLOSURE` en `qyro_ffi/tests/c_abi_contract.rs`.
-4. **Toda enum de error nueva necesita su comprobación de sitio de construcción**
-   o una meta-guarda de `qyro_identity_store` pone el workspace en rojo. Se
-   exime con el argumento escrito, como se hizo con `PairingError`.
+1. **`qyro_net::Session::peer_identity()` existe.** Y `peer_fingerprint()` ya
+   existía desde 6A: lo que faltaba era la identidad, que es lo que
+   `decide_trust` necesita — el almacén guarda la identidad completa, no su hash.
+2. **`qyro_session` posee su vocabulario**: `PeerTrust` (Known/Changed/New, con
+   `code()` escrito a mano) y `TrustBook`. No reexporta nada ajeno.
+3. **La guarda de re-exportación ahora deriva** los módulos del `lib.rs` de la
+   fachada en vez de listarlos, así que añadir un módulo ya no la pone roja.
+   `CLOSURE` en `c_abi_contract.rs` incluye `qyro_identity_store`.
+4. **La confianza NO persiste**, y es correcto: `seal_known_peers` necesita un
+   `SecretWrapper` y en Android no hay hasta la fase 06. El libro muere con el
+   proceso. Funciona la decisión, no su memoria.
 
 ## 7. Qué NO hay que rehacer
 
-- **`cargo` no reconstruye si restauras un archivo con una mtime vieja.** Tras
-  `Copy-Item` de un backup: `(Get-Item ruta).LastWriteTime = Get-Date`.
-- **Lo `cfg(unix)` no se compila aquí.** Verifícalo con `--target
-  aarch64-linux-android`; `check` no enlaza, no hace falta enlazador.
-- **`check_docs_consistency` se corre sobre el commit FINAL**: la regla de
-  frescura de `STATUS.md` se invalida sola con cada commit.
+- **`cargo` no reconstruye con una mtime vieja.** Tras restaurar un backup:
+  `(Get-Item ruta).LastWriteTime = Get-Date`.
+- **Lo `cfg(unix)` no se compila aquí.** `--target aarch64-linux-android`; `check`
+  no enlaza, no hace falta enlazador.
+- **`check_docs_consistency` se corre sobre el commit FINAL.**
 - Citar un `QYR-00xx` sin ficha bloquea. Para «el siguiente libre» escribe
-  `QYR-nnnn+`, con el `+` pegado al número **dentro** de las comillas.
+  `QYR-nnnn+` con el `+` pegado al número, dentro de las comillas.
 - `flutter pub get` sale 1 la primera vez tras cambiar un plugin y 0 la segunda.
   Reescribe `apps/qyro/windows/flutter/generated_plugin_*`: `git checkout --`.
-- **`dart format --set-exit-if-changed .` desde la raíz falla** por
-  `tools/branding_generator`, que CI no cubre. Está en el carril.
-- `Select-String` de PS 5.1 no tiene `-Recurse`, y `-match` ignora mayúsculas
-  (`FAILED` casa con `failed`). Usa `-cmatch`.
-- **Un barrido `cargo-mutants --package` subestima la cobertura** de toda función
-  cuyas pruebas viven aguas abajo. Usa `--test-workspace true`.
+- `dart format --set-exit-if-changed .` **desde la raíz** falla por
+  `tools/branding_generator`. Córrelo desde `apps/qyro`, como CI.
+- `Select-String` de PS 5.1 no tiene `-Recurse` y `-match` ignora mayúsculas.
+- **`cargo-mutants --package` subestima** la cobertura de funciones cuyas pruebas
+  viven aguas abajo. Usa `--test-workspace true`.
 
-## 8. Reglas mínimas (esto basta con poco contexto)
+## 8. Reglas mínimas
 
-1. **Sólo un P0 detiene una fase.** El resto → `docs/reports/deuda-de-calidad.md`,
-   fase 09. Excepción: si un defecto *impide construir lo siguiente*.
-2. **Autonomía total** salvo: `main`/force-push/borrar rama, dependencia nueva de
-   Rust (**excepción concedida: `mdns-sd` 0.20.3 bajo `cfg(windows)`**), gastar
-   dinero, y lo que exija hardware o una segunda persona.
-3. **Los botones Enviar/Recibir siguen `onPressed: null`** hasta la fase 05.
-4. **Las comprobaciones de la puerta se leen por CÓDIGO DE SALIDA.** Son doce más
-   la decimotercera que añadió la fase 03: el clippy del target unix.
+1. **Sólo un P0 detiene una fase.** El resto → `deuda-de-calidad.md`, fase 09.
+   Excepción: lo que *impide construir lo siguiente*.
+2. **Autonomía total** salvo `main`, dinero, aparato físico o segunda persona.
+3. **Los botones sólo se encienden con las cinco condiciones de §2 escritas y con
+   su evidencia.** Y entonces se quita el texto que explica por qué están apagados.
+4. **Las comprobaciones de la puerta son trece y se leen por CÓDIGO DE SALIDA.**
 5. **Toda clase de evidencia se nombra.** «Compiló» nunca es «funciona».
-6. **Nada de salida de herramienta en `BUGS_PENDING.md`.** Va al informe.
-7. **Identificadores nuevos desde `QYR-0331+`**, consecutivos.
-8. Toda ADR se congela **antes** del código, en un commit propio.
+6. **Nada de salida de herramienta en `BUGS_PENDING.md`.**
+7. **Identificadores nuevos desde `QYR-0331+`.**
+8. Toda ADR se congela **antes** del código, en commit propio.
 9. **Nunca commits en `main`.** Sólo `claude/qyro-net-6a`.
 10. Este archivo se reescribe y se commitea al cerrar cada paso.
