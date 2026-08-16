@@ -56,8 +56,8 @@ pub const QYRO_STATE_COMPLETED: i32 = 1;
 pub const QYRO_STATE_REJECTED: i32 = 2;
 
 /// An entry in the table: the session, plus its sticky error if it has failed.
-struct Entry {
-    session: Session,
+pub(crate) struct Entry {
+    pub(crate) session: Session,
     /// Set once and never cleared. ADR-0032 §5 freezes stickiness as returning
     /// *the same code*: a second `Ok` would let Dart believe a session recovered
     /// when its worker is dead.
@@ -103,7 +103,7 @@ const fn state_code(state: SessionState) -> i32 {
 /// # Safety
 ///
 /// `ptr` must address `len` readable bytes, or be null when `len` is 0.
-unsafe fn borrow(ptr: *const u8, len: usize) -> Option<&'static str> {
+pub(crate) unsafe fn borrow_text(ptr: *const u8, len: usize) -> Option<&'static str> {
     if len == 0 {
         return Some("");
     }
@@ -142,6 +142,27 @@ const fn sticky(previous: Option<i32>, outcome: i32) -> (Option<i32>, i32) {
 }
 
 /// Runs `body` against a live session, applying the sticky-error rule.
+/// Runs `body` against a live session **without** the sticky-error rule.
+///
+/// For the read-only questions of ADR-0032 amendment 1: asking a failed session
+/// for the peer's fingerprint must answer the fingerprint, not the code the
+/// session died with. Stickiness exists so a caller cannot believe a *transfer*
+/// recovered; a fingerprint is not a transfer, and refusing to show it after a
+/// failure would hide exactly the fact a person needs in order to understand
+/// what went wrong.
+pub(crate) fn with_session_entry<F>(handle: u64, body: F) -> i32
+where
+    F: FnOnce(&mut Entry) -> i32,
+{
+    let Ok(mut table) = table().lock() else {
+        return QYRO_ERR_POISONED;
+    };
+    match table.get_mut(handle) {
+        Ok(entry) => body(entry),
+        Err(error) => error.code(),
+    }
+}
+
 fn with_session<F>(handle: u64, body: F) -> i32
 where
     F: FnOnce(&mut Entry) -> i32,
@@ -245,9 +266,9 @@ pub unsafe extern "C" fn qyro_session_open_sender_blocking(
         // SAFETY: the caller's contract, stated above.
         let (Some(address), Some(root), Some(paths)) = (unsafe {
             (
-                borrow(address, address_len),
-                borrow(root, root_len),
-                borrow(paths, paths_len),
+                borrow_text(address, address_len),
+                borrow_text(root, root_len),
+                borrow_text(paths, paths_len),
             )
         }) else {
             return QYRO_ERR_BAD_ARGUMENT;
@@ -325,9 +346,12 @@ pub unsafe extern "C" fn qyro_session_open_sender_fd_blocking(
             return QYRO_ERR_BAD_ARGUMENT;
         }
         // SAFETY: the caller's contract, stated above.
-        let (Some(address), Some(names)) =
-            (unsafe { (borrow(address, address_len), borrow(names, names_len)) })
-        else {
+        let (Some(address), Some(names)) = (unsafe {
+            (
+                borrow_text(address, address_len),
+                borrow_text(names, names_len),
+            )
+        }) else {
             return QYRO_ERR_BAD_ARGUMENT;
         };
         // SAFETY: the caller promises `fd_count` readable `int32`s at `fds`.
@@ -387,9 +411,12 @@ pub unsafe extern "C" fn qyro_session_open_receiver_blocking(
             return QYRO_ERR_NULL_OUT;
         }
         // SAFETY: the caller's contract, stated above.
-        let (Some(bind), Some(destination)) =
-            (unsafe { (borrow(bind, bind_len), borrow(destination, destination_len)) })
-        else {
+        let (Some(bind), Some(destination)) = (unsafe {
+            (
+                borrow_text(bind, bind_len),
+                borrow_text(destination, destination_len),
+            )
+        }) else {
             return QYRO_ERR_BAD_ARGUMENT;
         };
         let Ok(bind) = bind.parse::<SocketAddr>() else {

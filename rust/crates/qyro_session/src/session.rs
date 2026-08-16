@@ -254,6 +254,28 @@ impl RejectReason {
     }
 }
 
+/// Validates a pairing string and returns its address half as text.
+///
+/// ADR-0035 §2. Lives here rather than being re-exported from `qyro_net`,
+/// because `qyro_ffi` may name only this crate and `qyro_core` — the same reason
+/// [`crate::PeerTrust`] and [`crate::RejectReason`] are owned rather than
+/// republished.
+///
+/// The fingerprint half is deliberately **not** returned: it is an expectation
+/// to check against the authenticated fingerprint, not a value to display as if
+/// it were established (ADR-0035 §2.1).
+///
+/// # Errors
+///
+/// [`SessionError::BadArgument`] for anything that is not a valid pairing
+/// string — a wrong prefix, a field count that is not three, an address nothing
+/// can dial, or a fingerprint that is not thirty-two lowercase hex characters.
+pub fn parse_pairing(text: &str) -> Result<String, SessionError> {
+    qyro_net::PairingEndpoint::parse(text)
+        .map(|endpoint| endpoint.address().to_string())
+        .map_err(|_| SessionError::BadArgument)
+}
+
 impl Session {
     /// Opens a sending session against `address`, naming files relative to
     /// `root`.

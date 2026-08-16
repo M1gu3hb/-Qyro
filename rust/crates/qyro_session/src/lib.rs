@@ -1,4 +1,4 @@
-﻿//! The only crate `qyro_ffi` sees.
+//! The only crate `qyro_ffi` sees.
 //!
 //! Specification: `docs/adr/ADR-0032-engine-ffi.md`.
 //!
@@ -48,5 +48,5 @@ mod trust;
 mod guards;
 
 pub use error::SessionError;
-pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState};
+pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState, parse_pairing};
 pub use trust::{PeerTrust, TrustBook, fingerprint_text};

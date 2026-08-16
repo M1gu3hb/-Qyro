@@ -6,7 +6,7 @@
 //! dedicated contract tests", which was true and never sufficient: contract
 //! tests check what the ABI *says*, and the shared minimum checks what the
 //! source *can do*. This is the one crate in the workspace that crosses to C,
-//! and it just went from two functions to eight.
+//! and its surface is nineteen functions (ADR-0032 amendment 1).
 //!
 //! A panic here does not fail a test: it unwinds across a C frontier, which is
 //! undefined behaviour.
@@ -29,7 +29,13 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 4] = ["lib.rs", "abi.rs", "handle.rs", "session_abi.rs"];
+const PRODUCTION_FILES: [&str; 5] = [
+    "lib.rs",
+    "abi.rs",
+    "handle.rs",
+    "session_abi.rs",
+    "trust_abi.rs",
+];
 
 #[test]
 fn no_production_path_can_panic() {
@@ -154,10 +160,14 @@ fn every_extern_c_function_sits_behind_the_panic_guard() {
     );
     // Without this the guard would pass on a crate with no C functions at all,
     // which is precisely the state it must not silently accept.
+    // The floor tracks the real surface. ADR-0032 amendment 1 took it from
+    // eleven to nineteen, and a floor left at the old number would have kept
+    // passing while the analysis read a fraction of the file -- which is the
+    // failure mode this assertion exists for, not a formality.
     assert!(
-        checked >= 8,
-        "only {checked} extern \"C\" functions found; the surface is eight, so \
-         this analysis is not reading what it thinks it is"
+        checked >= 19,
+        "only {checked} extern \"C\" functions found; the surface is nineteen, \
+         so this analysis is not reading what it thinks it is"
     );
 }
 

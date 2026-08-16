@@ -21,6 +21,17 @@
 pub mod abi;
 pub mod handle;
 mod session_abi;
+mod trust_abi;
+
+// The eight of ADR-0032 amendment 1. Re-exported so the contract test can call
+// them as Rust rather than through a loaded library: what is being checked is
+// the boundary's behaviour, and dlopen would only add a way for the test to
+// be looking at a stale build.
+pub use trust_abi::{
+    qyro_pairing_parse, qyro_session_local_address, qyro_session_peer_fingerprint,
+    qyro_session_peer_trust, qyro_session_reject, qyro_session_rejection,
+    qyro_session_remember_peer, qyro_trust_forget_peer, qyro_trust_list_peers,
+};
 
 use crate::abi::guard;
 
