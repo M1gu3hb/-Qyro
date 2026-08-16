@@ -7,7 +7,7 @@
 - **Fase 03 cerrada como PARCIAL.** **Fase 04 partida en 04a y 04b** por
   ADR-0035 enmienda 1: la 04b (`NsdManager`, `mdns-sd`) va **después** de la 05.
 - **Fase 04a**: pasos 1–3 hechos en Rust. Falta el FFI y la prueba entre procesos.
-- Rama `claude/qyro-net-6a`, último commit **`0f87a4e`**.
+- Rama `claude/qyro-net-6a`, último commit **`9b9de79`**.
 
 ## 2. LOS CINCO REQUISITOS DE LOS BOTONES — el estado exacto
 
@@ -15,24 +15,25 @@
 |---|---|---|---|
 | 1 | Dart conduce una transferencia verificada | **CUMPLIDA** — fase 02 | — |
 | 2 | El usuario elige el archivo con el selector de su sistema | **CUMPLIDA en código; compilada y probada en CI aguas abajo del diálogo, NO vista abrirse por nadie** | Nada bloquea. La clase de evidencia se escribe tal cual |
-| 3 | Dos aparatos se encuentran, o hay camino manual | **PARCIAL** | La cadena `QYRO1\|addr\|32hex` existe y está probada como **texto**. Falta usarla para conectar: `qyro_net_smoke serve` imprime la cadena, `send` la acepta, y **rechaza por tipo si la huella autenticada no es la prometida** (ADR-0035 §2.1) |
-| 4 | La huella se ve y una clave cambiada se rechaza | **PARCIAL** | El núcleo está hecho y probado en Rust: `Session::peer_fingerprint()`, `TrustBook`, `a_known_peer_whose_key_changed_is_refused_by_name`. **Falta cruzarlo por el FFI y por Dart** |
-| 5 | El receptor puede rechazar | **NO CUMPLIDA** | QYR-0089 y QYR-0088. `TransferReject` está en el protocolo y **nadie lo emite ni lo entiende**; `FileSink` no puede abandonar una transferencia |
+| 3 | Dos aparatos se encuentran, o hay camino manual | **PARCIAL** | La cadena `QYRO1\|addr\|32hex` existe y está probada como **texto**, y `Session::peer_identity()` ya da la huella autenticada con la que compararla. Falta el pegamento: `qyro_net_smoke serve` imprimiendo la cadena, `send` aceptándola, y el rechazo tipado si la huella no es la prometida (ADR-0035 §2.1) |
+| 4 | La huella se ve y una clave cambiada se rechaza | **CUMPLIDA en Rust; falta cruzar el FFI** | `Session::peer_fingerprint()` (formateada por el core), `TrustBook`, `PeerTrust` con tres palabras, y `a_known_peer_whose_key_changed_is_refused_by_name` en verde con dos identidades reales. **La confianza NO persiste**: necesita un `SecretWrapper` que en Android no existe hasta la fase 06 |
+| 5 | El receptor puede rechazar | **CUMPLIDA en Rust; falta cruzar el FFI** | QYR-0089 y QYR-0088 **cerradas**: `Receiver::reject_transfer`, `Phase::Rejected` distinto de `Cancelled`, `Session::reject`, `Session::rejection()` y `FileSink::abandon`. Falta `qyro_session_reject` en la superficie C |
 
-**Los botones NO se encienden hoy.** Faltan la 3 en su mitad de conexión, la 4 en
-su mitad de FFI, y la 5 entera.
+**Los botones NO se encienden hoy.** Lo que falta es **el mismo trabajo tres
+veces: cruzar el FFI**. Las condiciones 3, 4 y 5 están hechas y probadas en Rust;
+ninguna es alcanzable desde Dart.
 
 ## 3. Lo siguiente, en orden
 
-1. **Condición 5 — QYR-0089 y QYR-0088.** Es la única *no cumplida* y la que hace
-   que la pantalla de recibir no sea una mentira. Prueba de las dos juntas: un
-   receptor rechaza a mitad, el emisor recibe el motivo exacto y para, y el
-   destino queda **sin un solo archivo nuevo**, comprobado listando el directorio.
-2. **Condición 4 — el FFI de confianza.** Cinco símbolos:
+1. **El FFI, de una vez, para las tres condiciones.** Es una sola tanda de
+   símbolos y una sola tanda de bindings de Dart:
    `qyro_session_peer_fingerprint`, `qyro_session_peer_trust`,
    `qyro_session_remember_peer`, `qyro_trust_forget_peer`,
-   `qyro_trust_list_peers`. El libro es `qyro_session::TrustBook`, **en memoria**.
-   Después, `a_known_peer_whose_key_changed_is_refused_by_name` **desde Dart**.
+   `qyro_trust_list_peers`, `qyro_session_reject`, `qyro_session_rejection`.
+   Todos devuelven enteros o texto por búfer prestado (ADR-0038); ninguno cruza
+   un tipo. `TrustBook` vive en memoria y lo posee el llamante.
+2. **`a_known_peer_whose_key_changed_is_refused_by_name` desde Dart**, que es lo
+   que convierte la condición 4 en cumplida de verdad.
 3. **Condición 3 — la cadena entre dos procesos.**
    `two_processes_connected_by_a_manual_endpoint_transfer_a_file`.
 4. **ADR de la UI** (`ADR-0036-transfer-ui.md`), congelada antes de dibujar.
@@ -49,13 +50,13 @@ su mitad de FFI, y la 5 entera.
 
 | Comprobación | Comando | Valor |
 |---|---|---|
-| Tests Rust | `cargo test --workspace` | **615 passed, 0 failed, 2 ignored** (51 suites, Windows) |
+| Tests Rust | `cargo test --workspace` | **617 passed, 0 failed, 2 ignored** (51 suites, Windows) |
 | Tests Dart | `flutter test` con las 2 variables | **76 passed, 1 skipped** |
 | Clippy · fmt | `--workspace --all-targets -D warnings` · `fmt --all --check` | exit **0** |
 | Clippy target unix | `-p <crate> --all-targets --target aarch64-linux-android` | exit **0** |
 | Docs | `check_docs_consistency` en Bash y PowerShell | exit **0** |
 | Paquetes Rust / Dart | `[[package]]`/`source =` · sección `packages:` | **64 / 50** · **45** |
-| Ledger | script de `R2` §1.10 | **147 fichas, 39 abiertas** |
+| Ledger | script de `R2` §1.10 | **147 fichas, 37 abiertas** (QYR-0088 y QYR-0089 cerradas) |
 | CI verde sobre | `62658d7`, `f153d61`, `39f645c`, `67dd8da`, `7c83134` | success |
 
 ## 5. El entorno (medido)
