@@ -325,6 +325,52 @@ impl Integrity {
     }
 }
 
+/// Why a receiver refused a transfer.
+///
+/// QYR-0089. Travels as the one reason byte of [`Control`], so `TransferReject`
+/// has the body every control message already has and the format does not grow.
+///
+/// **Every byte decodes.** An unknown value becomes [`Self::Unspecified`] rather
+/// than an error: a peer sending a reason this build has not heard of is a peer
+/// running a later version, and refusing to understand *why* it refused would
+/// turn a clear "no" into a framing failure.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RejectReason {
+    /// The person said no.
+    Declined,
+    /// There is no room for what was offered.
+    NoRoom,
+    /// The manifest itself was refused — a name, a size, a count.
+    UnacceptableManifest,
+    /// A reason this build does not know, including a peer that sent none.
+    Unspecified,
+}
+
+impl RejectReason {
+    /// The byte that travels. Written out, so reordering the enum is not a
+    /// format change.
+    #[must_use]
+    pub const fn as_byte(self) -> u8 {
+        match self {
+            Self::Declined => 0,
+            Self::NoRoom => 1,
+            Self::UnacceptableManifest => 2,
+            Self::Unspecified => 255,
+        }
+    }
+
+    /// Reads one. Total on purpose — see the type comment.
+    #[must_use]
+    pub const fn from_byte(byte: u8) -> Self {
+        match byte {
+            0 => Self::Declined,
+            1 => Self::NoRoom,
+            2 => Self::UnacceptableManifest,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
 /// Body of `Pause`, `Resume` and `Cancel`: one reason byte.
 ///
 /// A control message with no body cannot be extended without changing its

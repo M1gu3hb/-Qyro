@@ -23,14 +23,16 @@ use qyro_fs::{
     manifest_from_open_files,
 };
 use qyro_net::{FrameStream, Listener, NetError, dial, initiate, respond};
-use qyro_transfer::{ContentSink, ItemVerdict, Phase, Receiver, Sender};
+use qyro_transfer::{
+    ContentSink, ItemVerdict, Phase, Receiver, RejectReason as WireReject, Sender,
+};
 
 use crate::error::SessionError;
 
 /// Where a session is.
 ///
 /// Three states, not four: an error is the return value, not a state. ADR-0032
-/// Â§5 â€” a transport failure and "still running" must not arrive through one
+/// Ã‚Â§5 Ã¢â‚¬â€ a transport failure and "still running" must not arrive through one
 /// channel.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SessionState {
@@ -45,7 +47,7 @@ pub enum SessionState {
 /// How far a session has got.
 ///
 /// Plain integers on purpose: this is what crosses to Dart in phase 02, and
-/// ADR-0032 Â§6 forbids anything there that needs freeing.
+/// ADR-0032 Ã‚Â§6 forbids anything there that needs freeing.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Progress {
     /// Bytes handed to the wire or to the disk so far.
@@ -58,7 +60,7 @@ pub struct Progress {
 
 /// How many emissions a whole transfer is allowed, whatever its size.
 ///
-/// ADR-0033 Â§4. The engine moves 64 KiB chunks, so one emission per chunk is
+/// ADR-0033 Ã‚Â§4. The engine moves 64 KiB chunks, so one emission per chunk is
 /// 16 384 calls for a gigabyte, and every one of them enqueues a message on the
 /// event loop of the isolate that has to draw the bar. The unacceptable part is
 /// not the number, it is that it **grows with the file**.
@@ -72,12 +74,12 @@ const PROGRESS_MIN_STEP: u64 = 256 * 1024;
 /// Something that wants to be told how far a session has got.
 ///
 /// A boxed closure and not a C function pointer: `qyro_ffi` wraps its pointer in
-/// one of these, and everything on this side of the boundary â€” including the
-/// tests that count emissions â€” stays ordinary Rust. ADR-0032 Â§2 still holds,
+/// one of these, and everything on this side of the boundary Ã¢â‚¬â€ including the
+/// tests that count emissions Ã¢â‚¬â€ stays ordinary Rust. ADR-0032 Ã‚Â§2 still holds,
 /// because `Progress` is three integers and names no `qyro_crypto` type.
 pub type ProgressObserver = Box<dyn FnMut(Progress) + Send>;
 
-/// The emission budget of ADR-0033 Â§4, and the state it needs.
+/// The emission budget of ADR-0033 Ã‚Â§4, and the state it needs.
 struct Emitter {
     sink: ProgressObserver,
     /// Bytes that must pass before the next emission. Zero until `total` is
@@ -168,7 +170,7 @@ pub struct Session {
     stream: FrameStream,
     /// The public identity the peer proved it holds, kept so a trust decision
     /// can be made after the handshake and before a manifest crosses
-    /// (ADR-0035 Â§3). `into_parts` drops the `qyro_net::Session`, so if this is
+    /// (ADR-0035 Ã‚Â§3). `into_parts` drops the `qyro_net::Session`, so if this is
     /// not taken here it is gone.
     peer_identity: PublicIdentity,
     role: Role,
@@ -201,12 +203,63 @@ const fn net_error(error: &NetError) -> SessionError {
     }
 }
 
+/// Why a receiver refused, in this crate's words.
+///
+/// Owned rather than re-exported, for the same reason as [`crate::PeerTrust`]:
+/// ADR-0032 §2 bounds what `qyro_ffi` can name to this crate's public API, and
+/// republishing `qyro_transfer::RejectReason` would put that crate's vocabulary
+/// on the C boundary along with every variant it ever adds. The guard
+/// `qyro_session_re_exports_nothing_it_does_not_own` is what keeps that bound
+/// real, and it refused this exact re-export while it was being written.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RejectReason {
+    /// The person said no.
+    Declined,
+    /// There is no room for what was offered.
+    NoRoom,
+    /// The manifest itself was refused — a name, a size, a count.
+    UnacceptableManifest,
+    /// A reason this build does not know, including a peer that sent none.
+    Unspecified,
+}
+
+impl RejectReason {
+    /// The stable integer the C boundary carries. Written out, not derived.
+    #[must_use]
+    pub const fn code(self) -> i32 {
+        match self {
+            Self::Declined => 0,
+            Self::NoRoom => 1,
+            Self::UnacceptableManifest => 2,
+            Self::Unspecified => 3,
+        }
+    }
+
+    const fn to_wire(self) -> WireReject {
+        match self {
+            Self::Declined => WireReject::Declined,
+            Self::NoRoom => WireReject::NoRoom,
+            Self::UnacceptableManifest => WireReject::UnacceptableManifest,
+            Self::Unspecified => WireReject::Unspecified,
+        }
+    }
+
+    const fn from_wire(wire: WireReject) -> Self {
+        match wire {
+            WireReject::Declined => Self::Declined,
+            WireReject::NoRoom => Self::NoRoom,
+            WireReject::UnacceptableManifest => Self::UnacceptableManifest,
+            WireReject::Unspecified => Self::Unspecified,
+        }
+    }
+}
+
 impl Session {
     /// Opens a sending session against `address`, naming files relative to
     /// `root`.
     ///
     /// `root` is what gives the receiver its names. Every path in `files` must
-    /// live under it, and the name that travels is the remainder â€” so sending
+    /// live under it, and the name that travels is the remainder Ã¢â‚¬â€ so sending
     /// `docs/a.txt` and `notes/a.txt` from a common root sends two distinct
     /// names, where naming by file name alone would send `a.txt` twice and make
     /// the receiver arbitrate a collision that the sender created.
@@ -218,8 +271,8 @@ impl Session {
     /// [`SessionError::PeerUnreachable`] when the peer does not answer,
     /// [`SessionError::NotAuthenticated`] when it fails to prove who it is.
     /// `observer` may be `None`, and a session without one behaves identically.
-    /// ADR-0033 Â§2: the nullable pointer on the C side arrives here as `None`,
-    /// and Â«no observerÂ» must never be a second code path.
+    /// ADR-0033 Ã‚Â§2: the nullable pointer on the C side arrives here as `None`,
+    /// and Ã‚Â«no observerÃ‚Â» must never be a second code path.
     pub fn open_sender(
         address: SocketAddr,
         root: &Path,
@@ -315,8 +368,8 @@ impl Session {
     ///
     /// ADR-0034: on Android the Storage Access Framework hands out a descriptor
     /// and never a path, so there is nothing to open and nothing to reopen. The
-    /// `File`s arrive owned â€” `qyro_ffi` did the one `unsafe` this needs, at the
-    /// C boundary where `unsafe` already lives â€” and this session owns them from
+    /// `File`s arrive owned Ã¢â‚¬â€ `qyro_ffi` did the one `unsafe` this needs, at the
+    /// C boundary where `unsafe` already lives Ã¢â‚¬â€ and this session owns them from
     /// here until it drops, which is what closes them.
     ///
     /// `files` carries the relative name each one travels under, because a
@@ -428,7 +481,7 @@ impl Session {
     /// port the system chose. An accepted socket's local address carries that
     /// port, so the answer survives the `Listener` being dropped.
     ///
-    /// **This returned `peer_addr` â€” the *far* end â€” until 2026-08-14**, and
+    /// **This returned `peer_addr` Ã¢â‚¬â€ the *far* end Ã¢â‚¬â€ until 2026-08-14**, and
     /// nothing noticed because the C surface does not expose it and no test
     /// called it (QYR-0314). What remains, and is not a defect this function can
     /// fix: `open_receiver` blocks in `accept` before returning, so a caller
@@ -455,12 +508,12 @@ impl Session {
     ///
     /// Safe from any thread and never blocks: it raises a flag rather than
     /// taking the session's lock, because taking the lock would make cancel
-    /// wait for the very step it is trying to interrupt (ADR-0032 Â§7).
+    /// wait for the very step it is trying to interrupt (ADR-0032 Ã‚Â§7).
     /// The peer's fingerprint, **formatted by the core**, ready to show.
     ///
-    /// ADR-0035 Â§4. Not the raw bytes: if the interface formatted this itself,
+    /// ADR-0035 Ã‚Â§4. Not the raw bytes: if the interface formatted this itself,
     /// two devices could render the same fingerprint differently and comparing
-    /// it out loud â€” the only thing a fingerprint is for â€” would prove nothing.
+    /// it out loud Ã¢â‚¬â€ the only thing a fingerprint is for Ã¢â‚¬â€ would prove nothing.
     #[must_use]
     pub fn peer_fingerprint(&self) -> String {
         crate::trust::fingerprint_text(&self.peer_identity)
@@ -468,7 +521,7 @@ impl Session {
 
     /// What `book` says about the peer **this handshake authenticated**.
     ///
-    /// ADR-0035 Â§3: the identity handed to the decision is the authenticated
+    /// ADR-0035 Ã‚Â§3: the identity handed to the decision is the authenticated
     /// one, never a name or a fingerprint that arrived in a pairing string. A
     /// pairing string sets an expectation; only this proves anything.
     ///
@@ -510,9 +563,9 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// Once anything has failed, **the same error every time**: ADR-0032 Â§5
+    /// Once anything has failed, **the same error every time**: ADR-0032 Ã‚Â§5
     /// freezes stickiness as returning the same code, which is why `error.rs`
-    /// deliberately has no `AlreadyFailed` variant â€” a second `Ok` would let a
+    /// deliberately has no `AlreadyFailed` variant Ã¢â‚¬â€ a second `Ok` would let a
     /// caller believe a session recovered when its worker is dead (QYR-0319).
     pub fn step(&mut self) -> Result<SessionState, SessionError> {
         if let Some(failure) = self.failed {
@@ -525,7 +578,7 @@ impl Session {
             Ok(state) => {
                 // The terminal emission is forced, because a bar that stops at
                 // 99% is the most common visible failure of this pattern
-                // (ADR-0033 Â§4). An *error* deliberately emits nothing: the
+                // (ADR-0033 Ã‚Â§4). An *error* deliberately emits nothing: the
                 // caller already got a stronger signal than a progress update.
                 self.emit(state != SessionState::InProgress);
                 Ok(state)
@@ -646,9 +699,63 @@ impl Session {
 
     fn finished(&self) -> bool {
         match &self.role {
-            Role::Sending { engine, .. } => engine.phase() == Phase::Done,
-            Role::Receiving { engine, .. } => engine.phase() == Phase::Done,
+            Role::Sending { engine, .. } => {
+                // `Rejected` ends the session as surely as `Done` does. Before
+                // QYR-0089 there was nothing to end it: a refused sender kept
+                // stepping against a peer that had stopped listening.
+                matches!(engine.phase(), Phase::Done | Phase::Rejected)
+            }
+            Role::Receiving { engine, .. } => {
+                matches!(engine.phase(), Phase::Done | Phase::Rejected)
+            }
         }
+    }
+
+    /// Why the receiver refused, if it did.
+    ///
+    /// QYR-0089. `SessionState::Rejected` says the transfer did not happen; this
+    /// says why, and it is the difference between Â«could not send itÂ» and Â«they
+    /// said noÂ» on a screen.
+    #[must_use]
+    pub fn rejection(&self) -> Option<RejectReason> {
+        match &self.role {
+            Role::Sending { engine, .. } => engine.rejection().map(RejectReason::from_wire),
+            Role::Receiving { .. } => None,
+        }
+    }
+
+    /// Refuses the offered transfer, with a reason the sender will see.
+    ///
+    /// The receiving half of QYR-0089, and the operation the receive screen
+    /// needs: without it the only Â«noÂ» a person could express was a cancel,
+    /// which says something else.
+    ///
+    /// Everything already written is released â€” `FileSink::abandon` â€” so a
+    /// refusal leaves the destination as it found it.
+    ///
+    /// # Errors
+    ///
+    /// [`SessionError::BadArgument`] on a sending session, and
+    /// [`SessionError::TransferRefused`] when the engine is already finished.
+    pub fn reject(&mut self, reason: RejectReason) -> Result<(), SessionError> {
+        let Role::Receiving { engine, sink, .. } = &mut self.role else {
+            return Err(SessionError::BadArgument);
+        };
+        let bytes = engine
+            .reject_transfer(reason.to_wire())
+            .map_err(|_| SessionError::TransferRefused)?;
+        // The refusal goes on the wire before the parts are removed: a receiver
+        // that cleaned up and then failed to send would leave the sender waiting
+        // for chunks nobody will ever accept.
+        self.stream
+            .write_frame(&bytes)
+            .map_err(|error| net_error(&error))?;
+        // `Option`, because a receiver that never saw a manifest has no sink to
+        // abandon — and refusing before the manifest is a legitimate «no».
+        if let Some(sink) = sink.as_mut() {
+            sink.abandon();
+        }
+        Ok(())
     }
 
     fn verdict(&mut self) -> SessionState {
@@ -677,7 +784,7 @@ impl Session {
     /// # Errors
     ///
     /// [`SessionError::StorageRefused`] when an item the engine accepted fails
-    /// to verify on disk â€” two checks over the same bytes disagreeing means one
+    /// to verify on disk Ã¢â‚¬â€ two checks over the same bytes disagreeing means one
     /// of them is wrong.
     pub fn finish(&mut self) -> Result<u32, SessionError> {
         let Role::Receiving { engine, sink, .. } = &mut self.role else {
@@ -712,7 +819,7 @@ impl Session {
 ///
 /// Deliberately not exposed and deliberately not a parameter: an identity is a
 /// `qyro_crypto` type, and letting one cross this crate's public surface is
-/// exactly what ADR-0032 Â§2 bounds. Persistent identity arrives in phase 06
+/// exactly what ADR-0032 Ã‚Â§2 bounds. Persistent identity arrives in phase 06
 /// through the platform stores, still on this side of the boundary.
 fn new_identity() -> Result<qyro_crypto::DeviceIdentity, SessionError> {
     qyro_crypto::DeviceIdentity::generate().map_err(|_| SessionError::NotAuthenticated)
@@ -723,7 +830,7 @@ fn new_identity() -> Result<qyro_crypto::DeviceIdentity, SessionError> {
 /// `tests/session_behaviour.rs` proves the budget holds over a real socket, and
 /// that is the test worth having. But a ceiling and a strict inequality between
 /// two sizes are satisfied by **any** formula that stays under the ceiling and
-/// grows with the file, so seven mutants inside `Emitter` survived it â€” `/`
+/// grows with the file, so seven mutants inside `Emitter` survived it Ã¢â‚¬â€ `/`
 /// swapped for `%` among them (QYR-0321).
 ///
 /// The lesson, and the reason these live here: two sizes and a strict inequality
@@ -745,7 +852,7 @@ mod tests {
         Emitter, PROGRESS_MIN_STEP, PROGRESS_TARGET_EMISSIONS, Progress, ProgressObserver,
     };
 
-    /// The size at which the fraction first ties the floor: 256 KiB Ã— 100.
+    /// The size at which the fraction first ties the floor: 256 KiB Ãƒâ€” 100.
     const ELBOW: u64 = PROGRESS_MIN_STEP * PROGRESS_TARGET_EMISSIONS;
 
     type Log = Arc<Mutex<Vec<Progress>>>;
@@ -902,7 +1009,7 @@ mod tests {
     #[test]
     fn an_ending_emits_even_when_it_is_nowhere_near_a_boundary() {
         // Without this the bar stops at 99%, which is the visible failure the
-        // forced terminal emission exists to prevent (ADR-0033 Â§4).
+        // forced terminal emission exists to prevent (ADR-0033 Ã‚Â§4).
         const TOTAL: u64 = 4 * 1024 * 1024;
         let (log, sink) = recorder();
         let mut emitter = Emitter::new(sink);
@@ -918,7 +1025,7 @@ mod tests {
 
     #[test]
     fn the_whole_budget_is_bounded_by_a_constant_and_not_by_the_file() {
-        // The property ADR-0033 Â§1 exists for, checked on sizes no socket test
+        // The property ADR-0033 Ã‚Â§1 exists for, checked on sizes no socket test
         // could afford: a gigabyte must not cost more emissions than 4 MiB does.
         for total in [
             4 * 1024 * 1024_u64,

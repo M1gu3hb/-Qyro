@@ -450,6 +450,41 @@ impl FileSink {
 
         Ok(part.resolved.final_path)
     }
+
+    /// Abandons the transfer: every partial this sink opened is removed.
+    ///
+    /// QYR-0088. Until this existed, the only thing that deleted a `.qyro-part`
+    /// was `finish_item` failing its digest check — so the way to abandon a
+    /// transfer was to **ask it to finish knowing it would fail**. That works and
+    /// it is the wrong shape: a caller had to know that «reject it and the
+    /// cleanup falls out» is how you give up, which is a side effect, not an
+    /// interface.
+    ///
+    /// Returns how many partials it removed, so a caller can assert on it rather
+    /// than trust it.
+    ///
+    /// **Total on purpose.** A partial that cannot be deleted — a handle held by
+    /// a virus scanner, a read-only directory — must not stop the others from
+    /// being deleted, and there is no useful thing a caller could do with a
+    /// per-file error here. What it can do is compare the count.
+    ///
+    /// Also removes the resume metadata: leaving it would describe a transfer
+    /// whose parts no longer exist, and the next run would resume into nothing.
+    pub fn abandon(&mut self) -> usize {
+        let mut removed = 0_usize;
+        for (_, part) in std::mem::take(&mut self.open) {
+            let path = part.resolved.part_path.clone();
+            // The handle first: Windows refuses to delete a file that is open,
+            // and a `remove_file` that quietly failed would leave the partial
+            // behind while this reported success.
+            drop(part.handle);
+            if fs::remove_file(&path).is_ok() {
+                removed = removed.saturating_add(1);
+            }
+        }
+        let _ = fs::remove_file(Self::resume_path(&self.root));
+        removed
+    }
 }
 
 impl ContentSink for FileSink {

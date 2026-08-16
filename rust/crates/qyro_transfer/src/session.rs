@@ -22,7 +22,9 @@ use qyro_protocol::{DecodedFrame, Frame, FrameDecoder, MessageType};
 use sha2::{Digest, Sha256};
 
 use crate::error::{ItemVerdict, TransferError};
-use crate::wire::{self, Accept, Ack, ChunkRef, Complete, Control, Integrity, ItemStart, Offer};
+use crate::wire::{
+    self, Accept, Ack, ChunkRef, Complete, Control, Integrity, ItemStart, Offer, RejectReason,
+};
 
 /// Content bytes per chunk. ADR-0026 §2.
 pub const CHUNK_SIZE: usize = 65_536;
@@ -69,6 +71,12 @@ pub enum Phase {
     Done,
     /// Terminal by request.
     Cancelled,
+    /// Terminal because the **receiver refused the transfer** (QYR-0089).
+    ///
+    /// Not `Cancelled`. Until this existed the two were one event in the code,
+    /// so «the receiver said no» and «somebody hit stop» were indistinguishable
+    /// downstream — and the interface has to tell a person which happened.
+    Rejected,
     /// Terminal by refusal. Nothing more is accepted.
     Poisoned,
 }
@@ -76,7 +84,10 @@ pub enum Phase {
 impl Phase {
     /// Whether this phase accepts anything at all.
     const fn is_terminal(self) -> bool {
-        matches!(self, Self::Done | Self::Cancelled | Self::Poisoned)
+        matches!(
+            self,
+            Self::Done | Self::Cancelled | Self::Rejected | Self::Poisoned
+        )
     }
 }
 
@@ -142,6 +153,8 @@ pub struct Sender {
     /// exists: a wall clock on a shared runner measures the runner.
     #[cfg(test)]
     pub(crate) peak_content_held: usize,
+    /// The reason the receiver gave, if it refused (QYR-0089).
+    rejection: Option<RejectReason>,
 }
 
 impl Sender {
@@ -170,6 +183,7 @@ impl Sender {
             items,
             total_sent: 0,
             integrity: None,
+            rejection: None,
             #[cfg(test)]
             peak_content_held: 0,
         }
@@ -179,6 +193,15 @@ impl Sender {
     #[must_use]
     pub const fn phase(&self) -> Phase {
         self.phase
+    }
+
+    /// The reason the receiver gave, if it refused.
+    ///
+    /// QYR-0089. `Phase::Rejected` says *that* it refused; this says *why*, and
+    /// an interface needs the second to write a sentence a person can act on.
+    #[must_use]
+    pub const fn rejection(&self) -> Option<RejectReason> {
+        self.rejection
     }
 
     /// The verdicts the receiver reported, once it has.
@@ -490,6 +513,16 @@ impl Sender {
                 self.phase = Phase::Cancelled;
                 Ok(())
             }
+            // QYR-0089. The reason is kept, not merely the fact: «no room on the
+            // device» and «the person said no» are different things to show, and
+            // a sender that only knew «rejected» would have to guess.
+            (_, MessageType::TransferReject) if !self.phase.is_terminal() => {
+                let control =
+                    Control::decode(payload, message_type).map_err(|error| self.poison(error))?;
+                self.rejection = Some(RejectReason::from_byte(control.reason));
+                self.phase = Phase::Rejected;
+                Ok(())
+            }
             (Phase::AwaitingIntegrity, MessageType::IntegrityResult) => {
                 let result = Integrity::decode(payload).map_err(|error| self.poison(error))?;
                 self.integrity = Some(result.verdicts);
@@ -614,6 +647,32 @@ impl Receiver {
         }
         let bytes = self.emit(MessageType::Cancel, Control::USER.encode())?;
         self.phase = Phase::Cancelled;
+        Ok(bytes)
+    }
+
+    /// **Refuses the transfer**, with a reason the sender will see.
+    ///
+    /// QYR-0089. `MessageType::TransferReject` has been in the protocol and in
+    /// ADR-0026 §1 since the format was frozen, and nothing emitted it: the only
+    /// refusal a receiver could express was `Cancel`, which is a different
+    /// sentence. This is the one an interface needs, because «I do not want this»
+    /// and «stop what we agreed to do» are not the same answer.
+    ///
+    /// Terminal here immediately. A receiver that refused and then kept reading
+    /// chunks would be accepting what it just declined.
+    ///
+    /// # Errors
+    ///
+    /// Framing failures, or a session that already ended.
+    pub fn reject_transfer(&mut self, reason: RejectReason) -> Result<Vec<u8>, TransferError> {
+        if self.phase.is_terminal() {
+            return Err(TransferError::SessionPoisoned);
+        }
+        let body = Control {
+            reason: reason.as_byte(),
+        };
+        let bytes = self.emit(MessageType::TransferReject, body.encode())?;
+        self.phase = Phase::Rejected;
         Ok(bytes)
     }
 

@@ -716,6 +716,96 @@ fn a_revoked_descriptor_mid_transfer_is_a_typed_error_not_a_hang() {
     );
 }
 
+// ------------------------------------------------------------- the receiver's «no»
+
+#[test]
+fn a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind() {
+    // QYR-0089 and QYR-0088 together, because neither is worth anything alone:
+    // a refusal the sender never learns about is a hang, and a refusal that
+    // leaves half a file on disk is a lie about what the destination contains.
+    //
+    // Until this existed the only «no» a receiver could express was `Cancel`,
+    // which says «stop what we agreed to do» — a different sentence from «I do
+    // not want this», and the receive screen needs the second one.
+    let source = Scratch::new("reject-src");
+    let destination = Scratch::new("reject-dst");
+    let original = source.path("payload.bin");
+    write_pattern(&original, CROSSES_THE_WINDOW);
+
+    let address = loopback(a_free_port());
+    let destination_dir = destination.dir.clone();
+
+    let receiving = thread::spawn(move || {
+        let mut session = Session::open_receiver(address, &destination_dir, None)?;
+        // One step to take the offer and the manifest, then refuse. Refusing
+        // before reading anything would prove a different, easier thing.
+        let _ = session.step();
+        session.reject(qyro_session::RejectReason::NoRoom)?;
+        Ok::<_, SessionError>(())
+    });
+
+    let mut sender = open_sender_when_ready(address, &source.dir, &[original.clone()]);
+    let (sent, _) = drive(sender.as_mut().expect("the sender opened"));
+
+    receiving.join().unwrap().expect("the receiver refused");
+
+    // 1. The sender **stopped**, and did not complete.
+    assert_eq!(
+        sent,
+        Ok(SessionState::Rejected),
+        "a refused transfer ended {sent:?}; a sender that keeps stepping against \
+         a peer that already said no is the hang this closes"
+    );
+    // 2. It learned **why**, and the reason is the one that was sent — not a
+    //    default. `NoRoom` was chosen precisely because it is not the first
+    //    variant, so a reason that came from `Default` fails here.
+    let sender = sender.expect("the sender opened");
+    assert_eq!(
+        sender.rejection(),
+        Some(qyro_session::RejectReason::NoRoom),
+        "the sender did not learn the reason it was given"
+    );
+    assert_ne!(
+        sender.rejection(),
+        Some(qyro_session::RejectReason::Declined)
+    );
+
+    // 3. The destination has **no new file**, checked by listing it rather than
+    //    by asking about one name: a `.qyro-part` left behind has a different
+    //    name, and a test that only looked for `payload.bin` would not see it.
+    let left: Vec<String> = fs::read_dir(&destination.dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        left.is_empty(),
+        "the destination is not empty after a refusal: {left:?}"
+    );
+}
+
+#[test]
+fn a_leftover_partial_would_be_visible_to_that_directory_listing() {
+    // R2 §1.7 for the assertion above. «The directory is empty» passes for free
+    // if the listing cannot see a file, so this puts one there and requires the
+    // same listing to report it.
+    let destination = Scratch::new("listing-control");
+    fs::write(destination.path("payload.bin.qyro-part"), b"half a file").unwrap();
+
+    let left: Vec<String> = fs::read_dir(&destination.dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+
+    assert_eq!(
+        left,
+        vec!["payload.bin.qyro-part".to_owned()],
+        "the listing cannot see a partial, so the emptiness asserted above means \
+         nothing"
+    );
+}
+
 // ------------------------------------------------------------------- the trust half
 
 /// Opens a sender against a fresh receiver and hands back the live session.

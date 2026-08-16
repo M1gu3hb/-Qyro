@@ -1836,6 +1836,16 @@
   es la manera de abandonar, que es un efecto secundario y no una interfaz
 - Sin ello, una cancelación deja un `.qyro-part` por elemento empezado y nada lo
   recoge nunca
+- **Resolución (2026-08-14, fase 04a):** `FileSink::abandon` existe. Suelta el
+  handle **antes** de borrar —Windows se niega a borrar un archivo abierto, y un
+  `remove_file` que fallara en silencio dejaría el parcial ahí mientras esto
+  reportaba éxito—, quita también los metadatos de reanudación, y devuelve
+  **cuántos borró**, para que quien llame pueda comprobarlo en vez de confiar
+- Estado: cerrado
+- Evidencia: `a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind`
+  lista el directorio de destino y exige que esté vacío; su contra-prueba
+  `a_leftover_partial_would_be_visible_to_that_directory_listing` pone un
+  `.qyro-part` a propósito y exige que el mismo listado lo vea
 - Resolución: no arreglado. `rust/crates/qyro_fs/**` es del otro agente en este
   run. El arnés llama a `finish_item` y documenta por qué
 - Estado: abierto
@@ -1852,8 +1862,18 @@
   lo emita ni ninguna que lo maneje. La única forma de rechazo que un receptor
   puede expresar hoy es `Cancel`. Es decir: «el receptor rechaza el manifest» y
   «el receptor cancela» son, en el código, el mismo suceso
-- Resolución: no arreglado. La prueba del final correspondiente usa el rechazo que
-  existe y lo dice en su propio comentario, en vez de fingir el otro
+- **Resolución (2026-08-14, fase 04a):** `Receiver::reject_transfer(reason)` emite
+  `TransferReject`, el emisor lo entiende, y hay una `Phase::Rejected` que **no**
+  es `Cancelled`: «el receptor dijo que no» y «alguien pulsó parar» dejan de ser
+  el mismo suceso, que es justo lo que la interfaz tiene que poder distinguir. El
+  motivo viaja en el byte de `Control`, así que el formato no crece, y
+  `RejectReason::from_byte` es total — un motivo que este build no conoce se lee
+  como `Unspecified` en vez de convertir un «no» claro en un fallo de framing
+- Estado: cerrado
+- Evidencia: `a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind`.
+  El emisor termina en `SessionState::Rejected` y **aprende el motivo exacto**; se
+  usa `NoRoom` y no la primera variante a propósito, así que un motivo que viniera
+  de un `Default` falla la aserción
 - Estado: abierto
 - Fecha: 2026-08-11
 

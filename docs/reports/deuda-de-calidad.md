@@ -24,6 +24,8 @@ arregla.
 | Ficha | Sev | Qué | Se cierra en |
 |---|---|---|---|
 | QYR-0317 | P2 | El receptor no informa de progreso: `done` se queda en cero | 05 |
+| ~~QYR-0088~~ | P2 | ~~`FileSink` no tiene forma de abandonar una transferencia~~ | **cerrada en 04a** — `FileSink::abandon` |
+| ~~QYR-0089~~ | P2 | ~~`TransferReject` que nadie emite~~ | **cerrada en 04a** — es la condición 5 de los botones |
 | QYR-0318 | P2 | `Progress::item` se documenta uno-based y no se asigna nunca | 05 |
 | QYR-0320 | P2 | Los finales que fallan de `qyro_session` no están cubiertos | 09 |
 | QYR-0322 | P2 | Un receptor no puede decir su puerto antes de que alguien se conecte | 05 |

@@ -48,5 +48,5 @@ mod trust;
 mod guards;
 
 pub use error::SessionError;
-pub use session::{Progress, ProgressObserver, Session, SessionState};
+pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState};
 pub use trust::{PeerTrust, TrustBook, fingerprint_text};

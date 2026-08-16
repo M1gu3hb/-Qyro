@@ -1,4 +1,4 @@
-//! The Qyro transfer session: moves a whole transfer over sealed frames.
+﻿//! The Qyro transfer session: moves a whole transfer over sealed frames.
 //!
 //! Specification: `docs/adr/ADR-0026-transfer-session.md`.
 //!
@@ -45,4 +45,6 @@ mod tests;
 
 pub use error::{ItemVerdict, TransferError};
 pub use session::{CHUNK_SIZE, ContentSink, ContentSource, Phase, Receiver, Sender, WINDOW_CHUNKS};
-pub use wire::{Accept, Ack, ChunkRef, Complete, Control, Integrity, ItemStart, Offer};
+pub use wire::{
+    Accept, Ack, ChunkRef, Complete, Control, Integrity, ItemStart, Offer, RejectReason,
+};
