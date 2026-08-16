@@ -289,3 +289,71 @@ invita a Dart a reanudar desde ahí.
   procesos auxiliares. Descartado por la plataforma, no por el coste.
 - **Fundir `qyro_ffi` y `qyro_session` en un crate.** Estrictamente peor: la
   división en dos es precisamente lo que crea el límite comprobable de §3.1.
+
+
+---
+
+## Enmienda 1 (2026-08-14) — la superficie crece de once a diecinueve, y ninguna cruza un tipo
+
+Las fases 04a y 05 necesitan cuatro cosas al otro lado de la frontera que la
+superficie de la fase 01 no tenía: la **huella** del peer, el **veredicto de
+confianza**, el **rechazo** del receptor y la **cadena de emparejamiento**. Sin
+ellas el motor las tiene y la aplicación no puede pedirlas, que es la definición
+exacta de una función que no existe.
+
+### La regla que no cambia
+
+**Ninguna función nueva cruza un tipo.** Todas devuelven `i32`, y los valores
+salen por out-parámetros: enteros, o **texto en un búfer que el llamante prestó**
+(ADR-0038). No hay struct, no hay puntero a memoria de Rust que Dart tenga que
+liberar, y no hay enum de otro crate: `PeerTrust` y `RejectReason` son de
+`qyro_session`, que es lo único que `qyro_ffi` puede nombrar además de
+`qyro_core`.
+
+### El contrato del texto, escrito una vez para las cinco que lo usan
+
+```
+qyro_*(..., out: *mut u8, capacity: usize, out_len: *mut usize) -> i32
+```
+
+- `out_len` recibe **siempre** la longitud que hacía falta, quepa o no.
+- Si no cabe: `QYRO_ERR_BAD_ARGUMENT`, **nada escrito**, y `out_len` con lo que
+  se necesita. El llamante reserva y repite. *Un búfer a medio escribir junto a
+  un código de error es cómo se lee media huella y se compara en voz alta.*
+- `capacity == 0` con `out` nulo es legítimo: es la forma de **preguntar** el
+  tamaño sin reservar nada.
+
+### Las ocho operaciones
+
+| Símbolo | Qué devuelve |
+|---|---|
+| `qyro_session_peer_fingerprint` | La huella del peer **ya formateada** por el core |
+| `qyro_session_local_address` | La dirección que este extremo ligó, para poder anunciarla |
+| `qyro_session_peer_trust` | 0 conocido · 1 **cambiado** · 2 nuevo |
+| `qyro_session_remember_peer` | — |
+| `qyro_trust_forget_peer` | 1 si había algo que olvidar, 0 si no |
+| `qyro_trust_list_peers` | Los nombres, separados por NUL |
+| `qyro_session_reject` | — |
+| `qyro_session_rejection` | 0 declinó · 1 sin sitio · 2 manifiesto · 3 sin especificar · −1 no rechazó |
+| `qyro_pairing_parse` | La dirección de una cadena válida, o un código si no lo es |
+
+*(Nueve filas para «las ocho»: `qyro_pairing_parse` valida y extrae a la vez, y
+contarla aparte sería contar dos veces la misma operación.)*
+
+### El libro de confianza es del proceso, y es una decisión
+
+`TrustBook` vive en un `Mutex` estático de `qyro_ffi`, no en una segunda tabla de
+handles. **Una aplicación tiene un libro.** Una tabla de handles para un objeto
+único es una tabla que sólo se puede usar mal, y la que ya existe está ahí porque
+las sesiones son varias.
+
+**No persiste**, y no es un olvido: `seal_known_peers` necesita un
+`SecretWrapper`, que en Android no existe hasta la fase 06. Lo que funciona hoy
+es la decisión —una clave conocida que cambia se refuta por nombre— dentro de una
+ejecución.
+
+### Lo que esta enmienda NO promete
+
+- **No promete descubrimiento.** `qyro_pairing_parse` lee una cadena que una
+  persona escribió o escaneó. Nada busca nada.
+- **No promete que la confianza sobreviva a un reinicio.** Eso es la fase 06.
