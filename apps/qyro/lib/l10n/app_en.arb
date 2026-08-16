@@ -145,8 +145,276 @@
   "@homeReceive": {
     "description": "Disabled receive action label."
   },
-  "homeTransferUnavailable": "Transfer features are not implemented yet.",
-  "@homeTransferUnavailable": {
-    "description": "Honest explanation for disabled transfer actions."
+  "homeTransferReady": "Send a file to another device on this network.",
+  "@homeTransferReady": {
+    "description": "Transfer interface string: homeTransferReady."
+  },
+  "navPeers": "Peers",
+  "@navPeers": {
+    "description": "Transfer interface string: navPeers."
+  },
+  "navSend": "Send",
+  "@navSend": {
+    "description": "Transfer interface string: navSend."
+  },
+  "navReceive": "Receive",
+  "@navReceive": {
+    "description": "Transfer interface string: navReceive."
+  },
+  "navHistory": "History",
+  "@navHistory": {
+    "description": "Transfer interface string: navHistory."
+  },
+  "peersNone": "No peers remembered yet.",
+  "@peersNone": {
+    "description": "Transfer interface string: peersNone."
+  },
+  "peersManualHint": "Type a pairing code, or scan one from the other device.",
+  "@peersManualHint": {
+    "description": "Transfer interface string: peersManualHint."
+  },
+  "peersManualLabel": "Pairing code",
+  "@peersManualLabel": {
+    "description": "Transfer interface string: peersManualLabel."
+  },
+  "peersManualInvalid": "That is not a Qyro pairing code.",
+  "@peersManualInvalid": {
+    "description": "Transfer interface string: peersManualInvalid."
+  },
+  "peersScan": "Scan a code",
+  "@peersScan": {
+    "description": "Transfer interface string: peersScan."
+  },
+  "peersOwnCode": "This device's pairing code",
+  "@peersOwnCode": {
+    "description": "Transfer interface string: peersOwnCode."
+  },
+  "peersOwnCodeUnavailable": "Not connected, so there is no code to show.",
+  "@peersOwnCodeUnavailable": {
+    "description": "Transfer interface string: peersOwnCodeUnavailable."
+  },
+  "peersTrustKnown": "Known",
+  "@peersTrustKnown": {
+    "description": "Transfer interface string: peersTrustKnown."
+  },
+  "peersTrustChanged": "This device's key has changed",
+  "@peersTrustChanged": {
+    "description": "Transfer interface string: peersTrustChanged."
+  },
+  "peersTrustNew": "New",
+  "@peersTrustNew": {
+    "description": "Transfer interface string: peersTrustNew."
+  },
+  "peersChangedExplain": "Qyro will not send to this device. Its key is not the one saved under this name. Forget it only if you know why it changed.",
+  "@peersChangedExplain": {
+    "description": "Transfer interface string: peersChangedExplain."
+  },
+  "peersForget": "Forget",
+  "@peersForget": {
+    "description": "Transfer interface string: peersForget."
+  },
+  "peersForgetConfirm": "Forget {name}?",
+  "@peersForgetConfirm": {
+    "description": "Transfer interface string: peersForgetConfirm.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "peersNameLabel": "Name for this device",
+  "@peersNameLabel": {
+    "description": "Transfer interface string: peersNameLabel."
+  },
+  "peersNameInvalid": "That name cannot be used.",
+  "@peersNameInvalid": {
+    "description": "Transfer interface string: peersNameInvalid."
+  },
+  "peersSave": "Remember this device",
+  "@peersSave": {
+    "description": "Transfer interface string: peersSave."
+  },
+  "sendChoose": "Choose files",
+  "@sendChoose": {
+    "description": "Transfer interface string: sendChoose."
+  },
+  "sendNoFiles": "No files chosen yet.",
+  "@sendNoFiles": {
+    "description": "Transfer interface string: sendNoFiles."
+  },
+  "sendChosen": "{count} file(s), {bytes}",
+  "@sendChosen": {
+    "description": "Transfer interface string: sendChosen.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "bytes": {
+        "type": "String"
+      }
+    }
+  },
+  "sendCancelled": "The picker was cancelled.",
+  "@sendCancelled": {
+    "description": "Transfer interface string: sendCancelled."
+  },
+  "sendTo": "Send to {name}",
+  "@sendTo": {
+    "description": "Transfer interface string: sendTo.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sendUnreachable": "That address answered nothing.",
+  "@sendUnreachable": {
+    "description": "Transfer interface string: sendUnreachable."
+  },
+  "sendRefused": "The other device refused: {reason}",
+  "@sendRefused": {
+    "description": "Transfer interface string: sendRefused.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "sendKeyChanged": "Refused: this device's key is not the one saved under that name.",
+  "@sendKeyChanged": {
+    "description": "Transfer interface string: sendKeyChanged."
+  },
+  "sendIntegrity": "Something arrived that did not verify. Nothing was kept.",
+  "@sendIntegrity": {
+    "description": "Transfer interface string: sendIntegrity."
+  },
+  "sendCancelledByUser": "Stopped.",
+  "@sendCancelledByUser": {
+    "description": "Transfer interface string: sendCancelledByUser."
+  },
+  "sendDelivered": "{count} file(s) delivered.",
+  "@sendDelivered": {
+    "description": "Transfer interface string: sendDelivered.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "reasonDeclined": "they said no",
+  "@reasonDeclined": {
+    "description": "Transfer interface string: reasonDeclined."
+  },
+  "reasonNoRoom": "no room on the device",
+  "@reasonNoRoom": {
+    "description": "Transfer interface string: reasonNoRoom."
+  },
+  "reasonManifest": "the file list was refused",
+  "@reasonManifest": {
+    "description": "Transfer interface string: reasonManifest."
+  },
+  "reasonUnspecified": "no reason given",
+  "@reasonUnspecified": {
+    "description": "Transfer interface string: reasonUnspecified."
+  },
+  "receiveWaiting": "Waiting for a device to connect.",
+  "@receiveWaiting": {
+    "description": "Transfer interface string: receiveWaiting."
+  },
+  "receiveStart": "Wait for a transfer",
+  "@receiveStart": {
+    "description": "Transfer interface string: receiveStart."
+  },
+  "receiveOfferFrom": "A device wants to send you {count} file(s), {bytes}",
+  "@receiveOfferFrom": {
+    "description": "Transfer interface string: receiveOfferFrom.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "bytes": {
+        "type": "String"
+      }
+    }
+  },
+  "receiveOfferUnknown": "You have never accepted this device before.",
+  "@receiveOfferUnknown": {
+    "description": "Transfer interface string: receiveOfferUnknown."
+  },
+  "receiveAccept": "Accept",
+  "@receiveAccept": {
+    "description": "Transfer interface string: receiveAccept."
+  },
+  "receiveRefuse": "Refuse",
+  "@receiveRefuse": {
+    "description": "Transfer interface string: receiveRefuse."
+  },
+  "receiveRefused": "Refused. Nothing was written.",
+  "@receiveRefused": {
+    "description": "Transfer interface string: receiveRefused."
+  },
+  "receiveDelivered": "{count} file(s) saved in {destination}",
+  "@receiveDelivered": {
+    "description": "Transfer interface string: receiveDelivered.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "receiveNoRoom": "There is no room for this.",
+  "@receiveNoRoom": {
+    "description": "Transfer interface string: receiveNoRoom."
+  },
+  "historyEmpty": "Nothing has been transferred yet.",
+  "@historyEmpty": {
+    "description": "Transfer interface string: historyEmpty."
+  },
+  "historyFailed": "Failed",
+  "@historyFailed": {
+    "description": "Transfer interface string: historyFailed."
+  },
+  "historySucceeded": "Delivered",
+  "@historySucceeded": {
+    "description": "Transfer interface string: historySucceeded."
+  },
+  "historySent": "Sent",
+  "@historySent": {
+    "description": "Transfer interface string: historySent."
+  },
+  "historyReceived": "Received",
+  "@historyReceived": {
+    "description": "Transfer interface string: historyReceived."
+  },
+  "progressOf": "{done} of {total}",
+  "@progressOf": {
+    "description": "Transfer interface string: progressOf.",
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Transfer interface string: commonCancel."
+  },
+  "commonClose": "Close",
+  "@commonClose": {
+    "description": "Transfer interface string: commonClose."
+  },
+  "commonRetry": "Try again",
+  "@commonRetry": {
+    "description": "Transfer interface string: commonRetry."
+  },
+  "fingerprintCompare": "Read this out loud and check it matches the other device.",
+  "@fingerprintCompare": {
+    "description": "Transfer interface string: fingerprintCompare."
   }
 }

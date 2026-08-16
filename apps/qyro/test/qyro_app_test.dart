@@ -166,12 +166,30 @@ void main() {
     expect(find.text('Send'), findsOneWidget);
     expect(find.text('Receive'), findsOneWidget);
     expect(
-      find.text('Transfer features are not implemented yet.'),
+      find.text('Send a file to another device on this network.'),
       findsOneWidget,
+    );
+    // The sentence that explained why the buttons were off is gone. Asserting
+    // its absence and not only the new one's presence, because leaving it in
+    // place beside working buttons would be lying in the other direction
+    // (ADR-0036 §5).
+    expect(
+      find.text('Transfer features are not implemented yet.'),
+      findsNothing,
     );
   });
 
-  testWidgets('Home keeps transfer actions visibly disabled', (tester) async {
+  testWidgets('Home offers both transfer actions and neither is disabled',
+      (tester) async {
+    // This test used to assert the opposite, and it was right to: the buttons
+    // were `onPressed: null` from the first commit because enabling them before
+    // the engine existed would have been the one lie this project spent seven
+    // months not telling.
+    //
+    // The five conditions of ADR-0036 §5 are met and evidenced in
+    // `docs/reports/fase-05-la-interfaz-y-los-botones.md`, so the assertion is
+    // inverted rather than deleted — the property still matters, its value
+    // changed.
     await tester.pumpWidget(
       QyroApp(
         locale: const Locale('es'),
@@ -184,11 +202,26 @@ void main() {
     await tester.tap(find.byKey(const Key('boot-skip')));
     await tester.pumpAndSettle();
 
-    final actions = tester.widgetList<FilledButton>(find.byType(FilledButton));
-    expect(actions, isNotEmpty);
-    expect(actions.every((button) => button.onPressed == null), isTrue);
+    final buttons = tester.widgetList<FilledButton>(find.byType(FilledButton));
+    expect(
+      buttons.length,
+      2,
+      reason: 'Home should offer exactly Send and Receive, found '
+          '${buttons.length}',
+    );
+    for (final button in buttons) {
+      expect(
+        button.onPressed,
+        isNotNull,
+        reason: 'a transfer action is still disabled',
+      );
+    }
     expect(find.text('Enviar'), findsOneWidget);
     expect(find.text('Recibir'), findsOneWidget);
+    expect(
+      find.text('Funciones de transferencia aún no implementadas.'),
+      findsNothing,
+    );
   });
 }
 

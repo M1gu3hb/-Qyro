@@ -2,9 +2,34 @@ import 'package:flutter/material.dart';
 
 import '../generated/branding.g.dart';
 import '../l10n/generated/app_localizations.dart';
+import '../transfer/native_transfer_service.dart';
+import '../transfer/transfer_screens.dart';
+import '../transfer/transfer_service.dart';
 
+/// The first screen, and the two buttons this project kept switched off.
+///
+/// They were `onPressed: null` from the first commit with a line of text saying
+/// so, because enabling them before the engine existed would have been the one
+/// lie this project spent seven months not telling. They are on now, and the
+/// text is gone: leaving it would be lying in the other direction.
+///
+/// The five conditions of ADR-0036 §5 and their evidence are in
+/// `docs/reports/fase-05-la-interfaz-y-los-botones.md`.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({this.service, super.key});
+
+  /// Injected by tests. Production builds the native one on first use, so a
+  /// widget test never opens a dynamic library it does not need.
+  final QyroTransferService? service;
+
+  void _open(BuildContext context, int tab) {
+    final engine = service ?? NativeTransferService();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => TransferHome(service: engine, initialTab: tab),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +54,7 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                   ],
                   Text(
-                    strings.homeBaseline,
+                    strings.homeTransferReady,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
@@ -37,16 +62,13 @@ class HomeScreen extends StatelessWidget {
                   _PrimaryAction(
                     icon: Icons.upload_file,
                     label: strings.homeSend,
+                    onPressed: () => _open(context, 1),
                   ),
                   const SizedBox(height: 16),
                   _PrimaryAction(
                     icon: Icons.download,
                     label: strings.homeReceive,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    strings.homeTransferUnavailable,
-                    textAlign: TextAlign.center,
+                    onPressed: () => _open(context, 2),
                   ),
                 ],
               ),
@@ -59,15 +81,20 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _PrimaryAction extends StatelessWidget {
-  const _PrimaryAction({required this.icon, required this.label});
+  const _PrimaryAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
-      onPressed: null,
+      onPressed: onPressed,
       icon: Icon(icon),
       label: Padding(
         padding: const EdgeInsets.symmetric(vertical: 18),
