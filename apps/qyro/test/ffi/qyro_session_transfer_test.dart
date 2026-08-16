@@ -24,6 +24,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qyro/ffi/qyro_file_picker.dart';
 import 'package:qyro/ffi/qyro_session_api.dart';
+import 'package:qyro/ffi/qyro_trust_api.dart';
 
 /// Two chunk windows and a bit more than the phase asks for.
 ///
@@ -275,6 +276,155 @@ void main() {
         isFalse,
       );
     }, timeout: const Timeout(Duration(minutes: 5)));
+
+    test('a_known_peer_whose_key_changed_is_refused_by_name', () async {
+      // Phase 04a's acceptance test, from the side that matters: Dart. The
+      // engine has had this property since the trust layer landed, and until
+      // the FFI carried it the application could not ask — which is the same as
+      // not having it.
+      //
+      // Two receiver *processes*, therefore two identities, under one name. In
+      // SSH a changed host key is a shouted warning; the assertion below is that
+      // it does not quietly soften into `newPeer`.
+      final trust = QyroTrustBindings.openDefault(bindings);
+      final source = Directory('${scratch.path}/send')..createSync();
+      final original = File('${source.path}/payload.bin');
+      _writePattern(original, 4096);
+
+      Future<QyroSession> connect() async {
+        final destination = Directory(
+          '${scratch.path}/recv-${DateTime.now().microsecondsSinceEpoch}',
+        )..createSync(recursive: true);
+        final receiver = await _startReceiver(smoke!, destination);
+        return QyroSession.send(
+          bindings: bindings,
+          to: '127.0.0.1:${receiver.port}',
+          root: source.path,
+          files: <String>[original.path],
+        );
+      }
+
+      const name = 'the-laptop';
+      // A clean slate: the book is process-wide and this test owns this name.
+      trust.forgetPeer(name);
+
+      final first = await connect();
+      try {
+        expect(
+          trust.peerTrust(first, name),
+          QyroPeerTrust.newPeer,
+          reason: 'a peer nobody remembered is not new',
+        );
+        trust.rememberPeer(first, name);
+        expect(trust.peerTrust(first, name), QyroPeerTrust.known);
+        expect(trust.listPeers(), contains(name));
+
+        final firstFingerprint = trust.peerFingerprint(first);
+        // The fingerprint is the core's grouped form and not a placeholder: an
+        // empty string or a bare hash would satisfy a weaker assertion.
+        expect(firstFingerprint, contains('-'));
+        expect(firstFingerprint.length, greaterThanOrEqualTo(32));
+
+        final second = await connect();
+        try {
+          expect(
+            trust.peerFingerprint(second),
+            isNot(firstFingerprint),
+            reason: 'the two receivers produced the same fingerprint, so this '
+                'test cannot tell a changed key from an unchanged one',
+          );
+          final verdict = trust.peerTrust(second, name);
+          expect(
+            verdict,
+            QyroPeerTrust.changed,
+            reason: 'a peer whose key changed reported $verdict',
+          );
+          expect(verdict, isNot(QyroPeerTrust.newPeer));
+
+          // Forgetting is the only way back, and it is a separate act.
+          expect(trust.forgetPeer(name), isTrue);
+          expect(trust.peerTrust(second, name), QyroPeerTrust.newPeer);
+          expect(trust.listPeers(), isNot(contains(name)));
+          expect(trust.forgetPeer(name), isFalse);
+        } finally {
+          second.dispose();
+        }
+      } finally {
+        first.dispose();
+        trust.forgetPeer(name);
+      }
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
+    test('the_fingerprint_the_ffi_shows_is_the_one_the_engine_authenticated',
+        () async {
+      // Two paths to the same value, not one call twice. The left side crosses
+      // the C boundary; the right side is the address the smoke receiver bound,
+      // read back through a different symbol. They are different questions about
+      // the same live session, so a boundary that returned a constant fails.
+      final trust = QyroTrustBindings.openDefault(bindings);
+      final source = Directory('${scratch.path}/fp')..createSync();
+      final original = File('${source.path}/payload.bin');
+      _writePattern(original, 4096);
+
+      final destination = Directory('${scratch.path}/fp-recv')..createSync();
+      final receiver = await _startReceiver(smoke!, destination);
+      final session = QyroSession.send(
+        bindings: bindings,
+        to: '127.0.0.1:${receiver.port}',
+        root: source.path,
+        files: <String>[original.path],
+      );
+      try {
+        final fingerprint = trust.peerFingerprint(session);
+        expect(fingerprint, isNotEmpty);
+        // Grouped hex: eight groups of eight, separated. Asserting the shape
+        // rather than a value, because the value is a fresh key every run.
+        expect(fingerprint.split('-').length, greaterThan(1));
+        expect(
+          RegExp(r'^[0-9a-f-]+$').hasMatch(fingerprint),
+          isTrue,
+          reason: '$fingerprint is not the core grouped-hex form',
+        );
+
+        // And the local address, which is the other half of a pairing string.
+        final local = trust.localAddress(session);
+        expect(local, contains('127.0.0.1'));
+        expect(local, isNot(equals('127.0.0.1:${receiver.port}')),
+            reason: 'the local address is the port this end dialled *from*; '
+                'equal to the peer port would mean it reported the far end');
+      } finally {
+        session.dispose();
+      }
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
+    test('a_pairing_string_round_trips_through_the_ffi', () async {
+      final trust = QyroTrustBindings.openDefault(bindings);
+
+      expect(
+        trust.addressOfPairingString(
+          'QYRO1|192.168.1.7:47001|00112233445566778899aabbccddeeff',
+        ),
+        '192.168.1.7:47001',
+      );
+      expect(
+        trust.addressOfPairingString(
+          'QYRO1|[fe80::1]:47001|00112233445566778899aabbccddeeff',
+        ),
+        '[fe80::1]:47001',
+      );
+      // Every way it can be wrong is null, and null is distinguishable from an
+      // address, which is the whole point of not returning an empty string.
+      for (final bad in <String>[
+        'NOTQYRO|192.168.1.7:47001|00112233445566778899aabbccddeeff',
+        'QYRO1|192.168.1.7:47001',
+        'QYRO1|0.0.0.0:47001|00112233445566778899aabbccddeeff',
+        'QYRO1|192.168.1.7:47001|00112233445566778899AABBCCDDEEFF',
+        '',
+      ]) {
+        expect(trust.addressOfPairingString(bad), isNull,
+            reason: '$bad parsed');
+      }
+    });
 
     test('a_corrupted_transfer_is_detected_by_this_test', () async {
       // R2 §1.7. The byte-for-byte comparison above is only evidence if it can

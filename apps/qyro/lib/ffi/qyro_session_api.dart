@@ -253,6 +253,14 @@ final class QyroSessionBindings {
 
   _OpenSenderFdDart? _openSenderFdCached;
 
+  /// The library both halves of the boundary share.
+  ///
+  /// Readable rather than private because `QyroTrustBindings` looks up its
+  /// nine symbols in the *same* library: opening it twice would give two
+  /// handle tables and a session created through one would be invalid in
+  /// the other.
+  DynamicLibrary get library => _library;
+
   final DynamicLibrary _library;
 
   // Private because their types are private: the eight symbols are an
@@ -276,17 +284,17 @@ final class QyroSessionBindings {
 /// The length travels beside the pointer because the free side needs the exact
 /// number it was allocated with, and that is the one obligation the boundary
 /// cannot check. No caller in this repository has to remember it.
-final class _Borrowed {
-  _Borrowed._(this._bindings, this.pointer, this.length);
+final class QyroBorrowed {
+  QyroBorrowed._(this._bindings, this.pointer, this.length);
 
-  factory _Borrowed.ofUtf8(QyroSessionBindings bindings, String value) {
+  factory QyroBorrowed.ofUtf8(QyroSessionBindings bindings, String value) {
     final bytes = utf8.encode(value);
-    return _Borrowed.ofBytes(bindings, bytes);
+    return QyroBorrowed.ofBytes(bindings, bytes);
   }
 
-  factory _Borrowed.ofBytes(QyroSessionBindings bindings, List<int> bytes) {
+  factory QyroBorrowed.ofBytes(QyroSessionBindings bindings, List<int> bytes) {
     if (bytes.isEmpty) {
-      return _Borrowed._(bindings, nullptr, 0);
+      return QyroBorrowed._(bindings, nullptr, 0);
     }
     final pointer = bindings._alloc(bytes.length);
     if (pointer == nullptr) {
@@ -294,7 +302,7 @@ final class _Borrowed {
     }
     final view = pointer.asTypedList(bytes.length);
     view.setAll(0, bytes);
-    return _Borrowed._(bindings, pointer, bytes.length);
+    return QyroBorrowed._(bindings, pointer, bytes.length);
   }
 
   final QyroSessionBindings _bindings;
@@ -305,7 +313,7 @@ final class _Borrowed {
 }
 
 /// Runs [body] with every buffer released afterwards, on every path out.
-T _withBorrowed<T>(List<_Borrowed> borrowed, T Function() body) {
+T _withBorrowed<T>(List<QyroBorrowed> borrowed, T Function() body) {
   try {
     return body();
   } finally {
@@ -354,10 +362,10 @@ final class QyroSession {
     // exactly that.
     final joined = files.join(_pathSeparator);
 
-    final address = _Borrowed.ofUtf8(bindings, to);
-    final rootBuffer = _Borrowed.ofUtf8(bindings, root);
-    final paths = _Borrowed.ofUtf8(bindings, joined);
-    final out = _Borrowed.ofBytes(bindings, List<int>.filled(8, 0));
+    final address = QyroBorrowed.ofUtf8(bindings, to);
+    final rootBuffer = QyroBorrowed.ofUtf8(bindings, root);
+    final paths = QyroBorrowed.ofUtf8(bindings, joined);
+    final out = QyroBorrowed.ofBytes(bindings, List<int>.filled(8, 0));
 
     final context = _nextContext++;
     NativeCallable<_ProgressNative>? callable;
@@ -421,8 +429,8 @@ final class QyroSession {
       );
     }
 
-    final address = _Borrowed.ofUtf8(bindings, to);
-    final joined = _Borrowed.ofUtf8(bindings, names.join(_pathSeparator));
+    final address = QyroBorrowed.ofUtf8(bindings, to);
+    final joined = QyroBorrowed.ofUtf8(bindings, names.join(_pathSeparator));
     // Four bytes each, little-endian, which is what `const int32_t *` expects on
     // every platform this ships to.
     final fdBytes = <int>[];
@@ -430,8 +438,8 @@ final class QyroSession {
       fdBytes.addAll(
           [fd & 0xFF, (fd >> 8) & 0xFF, (fd >> 16) & 0xFF, (fd >> 24) & 0xFF]);
     }
-    final fds = _Borrowed.ofBytes(bindings, fdBytes);
-    final out = _Borrowed.ofBytes(bindings, List<int>.filled(8, 0));
+    final fds = QyroBorrowed.ofBytes(bindings, fdBytes);
+    final out = QyroBorrowed.ofBytes(bindings, List<int>.filled(8, 0));
 
     final context = _nextContext++;
     NativeCallable<_ProgressNative>? callable;
@@ -472,9 +480,9 @@ final class QyroSession {
     required String destination,
     QyroProgressCallback? onProgress,
   }) {
-    final bindBuffer = _Borrowed.ofUtf8(bindings, bind);
-    final destinationBuffer = _Borrowed.ofUtf8(bindings, destination);
-    final out = _Borrowed.ofBytes(bindings, List<int>.filled(8, 0));
+    final bindBuffer = QyroBorrowed.ofUtf8(bindings, bind);
+    final destinationBuffer = QyroBorrowed.ofUtf8(bindings, destination);
+    final out = QyroBorrowed.ofBytes(bindings, List<int>.filled(8, 0));
 
     final context = _nextContext++;
     NativeCallable<_ProgressNative>? callable;
@@ -507,6 +515,14 @@ final class QyroSession {
   }
 
   final QyroSessionBindings _bindings;
+
+  /// The table slot this session occupies.
+  ///
+  /// Readable so the trust operations can name the same session. It is an
+  /// opaque integer: nothing outside this library can do anything with it
+  /// except hand it back.
+  int get handle => _handle;
+
   final int _handle;
   final NativeCallable<_ProgressNative>? _callable;
   final int _context;
@@ -518,7 +534,7 @@ final class QyroSession {
   /// that can block without a bound, so it must not run on the UI isolate.
   QyroSessionState stepBlocking() {
     _refuseIfDisposed();
-    final out = _Borrowed.ofBytes(_bindings, List<int>.filled(4, 0));
+    final out = QyroBorrowed.ofBytes(_bindings, List<int>.filled(4, 0));
     try {
       final code = _bindings._step(_handle, out.pointer.cast<Int32>());
       if (code != QyroCode.ok) {
@@ -552,9 +568,9 @@ final class QyroSession {
 
   QyroProgress progress() {
     _refuseIfDisposed();
-    final done = _Borrowed.ofBytes(_bindings, List<int>.filled(8, 0));
-    final total = _Borrowed.ofBytes(_bindings, List<int>.filled(8, 0));
-    final item = _Borrowed.ofBytes(_bindings, List<int>.filled(4, 0));
+    final done = QyroBorrowed.ofBytes(_bindings, List<int>.filled(8, 0));
+    final total = QyroBorrowed.ofBytes(_bindings, List<int>.filled(8, 0));
+    final item = QyroBorrowed.ofBytes(_bindings, List<int>.filled(4, 0));
     try {
       final code = _bindings._readProgress(
         _handle,
