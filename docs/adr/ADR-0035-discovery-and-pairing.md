@@ -176,3 +176,59 @@ eso se comprueba con `cargo tree --target`, no se afirma.
   aparatos en una Wi-Fi, y eso no cambia hasta la fase 07.
 - **No promete que el QR se lea con una cámara.** Esta fase congela la cadena y
   la prueba; leerla es interfaz, y la interfaz es la fase 05.
+
+---
+
+## Enmienda 1 (2026-08-14) — la fase se parte en 04a y 04b, y la 04b va después de la 05
+
+**Qué cambia:** nada de lo decidido arriba. Cambia **cuándo**.
+
+| | Qué | Cuándo |
+|---|---|---|
+| **04a** | El accesor de identidad, la confianza por la fachada y el FFI, y la cadena manual entre dos procesos | **Antes de la 05** |
+| **04b** | `NsdManager` con `FLAG_SHOW_PICKER` en Android y `mdns-sd` bajo `cfg(windows)` | **Después de la 05** |
+
+**El motivo, y es de producto, no de esfuerzo.** Con la cadena de §2 dentro de un
+QR, **escanear ya es emparejar**: la huella viaja dentro, y §2.1 la convierte en
+una expectativa que el handshake tiene que satisfacer. Dos personas, dos
+aparatos, uno enseña el código y el otro lo escanea. **Eso es el producto.**
+
+El descubrimiento automático ahorra teclear. Es comodidad, no funcionalidad, y
+**no puede funcionar en todas las redes**: con aislamiento de cliente en el
+router —doméstico común, y casi universal en Wi-Fi pública— dos clientes no se
+ven, y ninguna cantidad de mDNS lo arregla. La cadena manual funciona ahí. Poner
+lo que cubre el 100 % de las redes en el camino crítico y lo que cubre menos
+después es el orden correcto; el inverso sería construir la comodidad antes que
+la función.
+
+**Y la trampa que hay que recordar al retomar la 04b**, escrita aquí porque en un
+informe se pierde:
+
+> Cualquier cosa que no sea `NsdManager` necesita `WifiManager.MulticastLock`. El
+> stack Wi-Fi de Android **filtra los paquetes multicast por debajo del socket**:
+> un `UdpSocket` de Rust hace `join_multicast_v4` **con éxito** y no recibe nada,
+> **sin error**. El lock sólo se adquiere desde Java/Kotlin.
+
+`mdns-sd` 0.20.3 sigue pre-autorizada, sigue siendo la única dependencia externa
+que este plan contempla, y sigue siendo sólo bajo `cfg(windows)`.
+
+### Y una corrección medida sobre §5(a)
+
+**§5(a) decía que `qyro_net::Session` no publica la identidad del peer. La mitad
+era falsa.** `peer_fingerprint()` existe desde el sprint 6A y devuelve la huella
+de 32 bytes. Lo que no existía es la **identidad pública**, y `decide_trust` la
+necesita: el almacén registra la identidad completa, no su hash, y decidir sobre
+hashes convertiría una colisión en una decisión de confianza.
+
+El ensanche que se hizo es por tanto más pequeño que el que la ADR anunciaba: un
+accesor a un valor que el `Session` ya guardaba a medias.
+
+### Lo que la confianza NO hace todavía, y no es una omisión
+
+**No persiste.** `seal_known_peers` necesita un `SecretWrapper`: DPAPI en Windows,
+y en Android **nada hasta la fase 06**. Así que el libro de peers vive en memoria
+y muere con el proceso — exactamente como la identidad de Android hoy.
+
+Lo que funciona hoy es **la decisión**: una clave conocida que cambia se refuta
+por nombre dentro de una ejecución. Lo que no funciona es **la memoria** de esa
+decisión entre ejecuciones, y eso llega con el almacén seguro de la fase 06.
