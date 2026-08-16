@@ -181,6 +181,39 @@ fn the_ffi_names_exactly_two_crates() {
 ///
 /// A foreign re-export would widen the bound guard 1 establishes: everything
 /// `qyro_session` republishes is reachable from `qyro_ffi` by name.
+/// The modules `qyro_session/src/lib.rs` declares.
+///
+/// Read from the source rather than listed, so a new module is local the moment
+/// it is declared and not when somebody remembers to update a guard.
+fn facade_modules() -> BTreeSet<String> {
+    let facade = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../qyro_session/src/lib.rs"
+    ))
+    .expect("the facade is readable");
+
+    let mut found = BTreeSet::new();
+    for line in facade.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed
+            .strip_prefix("mod ")
+            .or_else(|| trimmed.strip_prefix("pub mod "))
+        else {
+            continue;
+        };
+        let name = rest.trim_end_matches(';').trim();
+        if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            found.insert(name.to_owned());
+        }
+    }
+    assert!(
+        found.contains("session"),
+        "the facade's module list came back without `session`, so this guard is \
+         reading nothing and every re-export would look local"
+    );
+    found
+}
+
 fn re_export_is_local(line: &str) -> bool {
     let Some(path) = line.trim().strip_prefix("pub use ") else {
         return true;
@@ -190,7 +223,12 @@ fn re_export_is_local(line: &str) -> bool {
         .split([':', ' ', '{', ';'])
         .next()
         .unwrap_or_default();
-    matches!(head, "crate" | "self" | "super" | "error" | "session")
+    // Derived, not listed. This used to enumerate the modules that happened to
+    // exist -- `error` and `session` -- so adding a module to the facade made
+    // the guard fail for republishing something it owns. A hand-written list of
+    // your own modules is a list that goes stale by construction; the `mod`
+    // declarations in the facade are the same fact, already written down.
+    matches!(head, "crate" | "self" | "super") || facade_modules().contains(head)
 }
 
 #[test]
@@ -230,7 +268,7 @@ fn qyro_session_re_exports_nothing_it_does_not_own() {
 /// rather than claims. It is kept because a set that changes without anyone
 /// noticing is how a dependency arrives unexamined, and it is documented as a
 /// changelog so nobody mistakes it for the guard it replaced.
-const CLOSURE: [&str; 51] = [
+const CLOSURE: [&str; 52] = [
     "aead",
     "block-buffer",
     "cfg-if",
@@ -260,6 +298,7 @@ const CLOSURE: [&str; 51] = [
     "qyro_crypto",
     "qyro_ffi",
     "qyro_fs",
+    "qyro_identity_store",
     "qyro_manifest",
     "qyro_net",
     "qyro_protocol",

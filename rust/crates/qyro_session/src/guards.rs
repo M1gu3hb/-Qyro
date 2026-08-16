@@ -22,7 +22,7 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 3] = ["lib.rs", "error.rs", "session.rs"];
+const PRODUCTION_FILES: [&str; 4] = ["lib.rs", "error.rs", "session.rs", "trust.rs"];
 
 #[test]
 fn no_production_path_can_panic() {

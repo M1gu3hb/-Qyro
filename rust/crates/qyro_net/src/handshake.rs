@@ -35,7 +35,7 @@ use std::time::Instant;
 
 use qyro_crypto::aead::{AuthenticatedFrame, FrameOpener, FrameSealer};
 use qyro_crypto::handshake::{InitiatorStart, ResponderStart};
-use qyro_crypto::{DeviceIdentity, IdentityFingerprint};
+use qyro_crypto::{DeviceIdentity, IdentityFingerprint, PublicIdentity};
 use qyro_protocol::{DecodedFrame, Frame, MessageType, SessionId};
 
 use crate::error::NetError;
@@ -55,6 +55,7 @@ pub struct Session {
     opener: FrameOpener,
     session_id: SessionId,
     peer_fingerprint: IdentityFingerprint,
+    peer_identity: PublicIdentity,
     poisoned: bool,
 }
 
@@ -73,6 +74,24 @@ impl Session {
     #[must_use]
     pub const fn peer_fingerprint(&self) -> &IdentityFingerprint {
         &self.peer_fingerprint
+    }
+
+    /// The **public** identity the peer proved it holds.
+    ///
+    /// ADR-0035 §5(a). The fingerprint above is what a person compares out
+    /// loud; this is what `decide_trust` needs, because a fingerprint is a hash
+    /// and the peer store records the whole public identity — comparing hashes
+    /// would make a collision a trust decision.
+    ///
+    /// **Not key material.** This is exactly the 33 bytes that travelled in
+    /// clear inside the handshake's `hello`, and the only thing that changed
+    /// between then and now is that the signature over the transcript verified.
+    /// Before the handshake it was a claim; here it is a fact, which is the
+    /// whole reason ADR-0035 §3 decides the trust question *after* the
+    /// handshake and not before it.
+    #[must_use]
+    pub const fn peer_identity(&self) -> &PublicIdentity {
+        &self.peer_identity
     }
 
     /// Whether a frame has failed to authenticate on this session.
@@ -258,6 +277,7 @@ pub fn initiate_within(
 
     let session_id = established.session_id();
     let peer_fingerprint = *established.peer_fingerprint();
+    let peer_identity = established.peer_identity().clone();
     let (sealer, opener) = established.into_frame_crypto().map_err(NetError::Sealing)?;
 
     stream.mark_authenticated();
@@ -267,6 +287,7 @@ pub fn initiate_within(
         opener,
         session_id,
         peer_fingerprint,
+        peer_identity,
         poisoned: false,
     })
 }
@@ -301,6 +322,7 @@ pub fn respond_within(
 
     let session_id = established.session_id();
     let peer_fingerprint = *established.peer_fingerprint();
+    let peer_identity = established.peer_identity().clone();
     let (sealer, opener) = established.into_frame_crypto().map_err(NetError::Sealing)?;
 
     stream.mark_authenticated();
@@ -310,6 +332,7 @@ pub fn respond_within(
         opener,
         session_id,
         peer_fingerprint,
+        peer_identity,
         poisoned: false,
     })
 }

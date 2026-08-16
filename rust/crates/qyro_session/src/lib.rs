@@ -1,4 +1,4 @@
-//! The only crate `qyro_ffi` sees.
+﻿//! The only crate `qyro_ffi` sees.
 //!
 //! Specification: `docs/adr/ADR-0032-engine-ffi.md`.
 //!
@@ -11,9 +11,9 @@
 //!
 //! Driving a transfer needs the engine, and the engine needs the AEAD, so the
 //! cryptographic stack necessarily enters the library Dart loads. **The
-//! measurement in ADR-0032 §1 is the one that shapes this crate**: once
+//! measurement in ADR-0032 Â§1 is the one that shapes this crate**: once
 //! `qyro_crypto` is inside the closure, a closure-shaped test is blind to
-//! `qyro_ffi` taking a *direct* edge to it — the difference is the empty set.
+//! `qyro_ffi` taking a *direct* edge to it â€” the difference is the empty set.
 //!
 //! So the boundary moves from reachability to **nameability**, and this crate is
 //! what makes that checkable. Rust puts only *direct* dependencies in a crate's
@@ -42,9 +42,11 @@
 
 mod error;
 mod session;
+mod trust;
 
 #[cfg(test)]
 mod guards;
 
 pub use error::SessionError;
 pub use session::{Progress, ProgressObserver, Session, SessionState};
+pub use trust::{PeerTrust, TrustBook, fingerprint_text};

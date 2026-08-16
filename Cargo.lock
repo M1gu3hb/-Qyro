@@ -353,6 +353,7 @@ version = "0.0.1"
 dependencies = [
  "qyro_crypto",
  "qyro_fs",
+ "qyro_identity_store",
  "qyro_manifest",
  "qyro_net",
  "qyro_transfer",

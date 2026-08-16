@@ -716,6 +716,159 @@ fn a_revoked_descriptor_mid_transfer_is_a_typed_error_not_a_hang() {
     );
 }
 
+// ------------------------------------------------------------------- the trust half
+
+/// Opens a sender against a fresh receiver and hands back the live session.
+///
+/// The receiver thread is left parked in `open_receiver`; the caller drops the
+/// sender when done and the thread ends with it. Nothing is transferred: what
+/// this test family is about happens **after** the handshake and **before** a
+/// manifest crosses, which is exactly the window ADR-0035 §3 decides.
+fn a_handshaken_sender(source: &Scratch) -> Session {
+    let original = source.path("payload.bin");
+    if !original.exists() {
+        write_pattern(&original, 4096);
+    }
+    let address = loopback(a_free_port());
+    let destination = Scratch::new("trust-dst");
+    let destination_dir = destination.dir.clone();
+
+    thread::spawn(move || {
+        // A fresh identity per receiver, because `open_receiver` generates one.
+        // That is what makes «the key changed» reachable at all here.
+        let _ = Session::open_receiver(address, &destination_dir, None);
+        // Held so the directory outlives the handshake.
+        drop(destination);
+    });
+
+    open_sender_when_ready(address, &source.dir, &[original]).unwrap()
+}
+
+#[test]
+fn a_known_peer_whose_key_changed_is_refused_by_name() {
+    // The case that matters. In SSH this is a shouted warning; ADR-0035 §3 says
+    // it is one here too, and that it must never soften into `New`.
+    let source = Scratch::new("trust-src");
+    let mut book = qyro_session::TrustBook::new();
+
+    let first = a_handshaken_sender(&source);
+    first.remember_peer(&mut book, "laptop").unwrap();
+    assert_eq!(
+        first.peer_trust(&book, "laptop").unwrap(),
+        qyro_session::PeerTrust::Known,
+        "the peer that was just remembered is not recognised, so the two \
+         verdicts below would mean nothing"
+    );
+
+    // A second receiver, therefore a second identity, under the *same* name.
+    let second = a_handshaken_sender(&source);
+    assert_ne!(
+        second.peer_fingerprint(),
+        first.peer_fingerprint(),
+        "the two receivers produced the same fingerprint, so this test cannot \
+         tell a changed key from an unchanged one"
+    );
+
+    let verdict = second.peer_trust(&book, "laptop").unwrap();
+    assert_eq!(
+        verdict,
+        qyro_session::PeerTrust::Changed,
+        "a peer whose key changed reported {verdict:?}"
+    );
+    // And specifically **not** `New`, which is the softening this guards
+    // against: `New` asks a person, `Changed` refuses.
+    assert_ne!(verdict, qyro_session::PeerTrust::New);
+
+    drop(first);
+    drop(second);
+}
+
+#[test]
+fn forgetting_a_peer_makes_it_new_again_and_not_trusted() {
+    // The only way back from `Changed`, and it has to be an explicit act.
+    let source = Scratch::new("forget-src");
+    let mut book = qyro_session::TrustBook::new();
+
+    let session = a_handshaken_sender(&source);
+    session.remember_peer(&mut book, "phone").unwrap();
+    assert_eq!(book.names(), vec!["phone".to_owned()]);
+    assert_eq!(
+        session.peer_trust(&book, "phone").unwrap(),
+        qyro_session::PeerTrust::Known
+    );
+
+    assert!(
+        book.forget("phone"),
+        "forget said there was nothing to forget"
+    );
+    assert!(book.is_empty());
+    assert_eq!(
+        session.peer_trust(&book, "phone").unwrap(),
+        qyro_session::PeerTrust::New,
+        "a forgotten peer is not new again"
+    );
+    // Forgetting twice is not an error and is not a lie either.
+    assert!(!book.forget("phone"));
+
+    drop(session);
+}
+
+#[test]
+fn the_fingerprint_the_session_shows_matches_the_one_the_store_recorded() {
+    // Two paths, not one call twice: the left side reads the identity the
+    // handshake authenticated on this session, the right side reads the copy
+    // the book stored under a name. They are the same value arrived at through
+    // different objects, which is the only version of this assertion worth
+    // making.
+    let source = Scratch::new("fp-src");
+    let mut book = qyro_session::TrustBook::new();
+    let session = a_handshaken_sender(&source);
+
+    session.remember_peer(&mut book, "desk").unwrap();
+    let shown = session.peer_fingerprint();
+    let recorded = book.fingerprint_of("desk").expect("the peer was recorded");
+
+    assert_eq!(shown, recorded);
+    // The format is the core's, and it is not empty or a placeholder: grouped
+    // hex with separators, so a `String::new()` on either side fails here.
+    assert!(shown.contains('-'), "{shown} is not the grouped form");
+    assert!(
+        shown.len() >= 32,
+        "{shown} is too short to be a fingerprint"
+    );
+    // And a *different* peer's fingerprint differs, so the equality above is
+    // not satisfied by every pair of strings this code can produce.
+    let other = a_handshaken_sender(&source);
+    assert_ne!(other.peer_fingerprint(), shown);
+
+    drop(session);
+    drop(other);
+}
+
+#[test]
+fn a_name_the_peer_store_refuses_is_refused_here_too() {
+    // One validator, not two. The rules live in qyro_identity_store and this
+    // crate asks them rather than restating them, so a rule can never hold in
+    // one place and not the other.
+    let source = Scratch::new("name-src");
+    let mut book = qyro_session::TrustBook::new();
+    let session = a_handshaken_sender(&source);
+
+    for bad in ["", "with\u{0}a control", "with\u{7f}another"] {
+        assert_eq!(
+            session.remember_peer(&mut book, bad),
+            Err(SessionError::BadArgument),
+            "{bad:?} was accepted as a peer name"
+        );
+    }
+    assert!(book.is_empty(), "a refused name still entered the book");
+    // The control: a name with nothing wrong is accepted, so the refusals above
+    // are about the names and not about the method refusing everything.
+    assert!(session.remember_peer(&mut book, "kitchen tablet").is_ok());
+
+    drop(session);
+}
+
 // ------------------------------------------------------------- the progress bridge
 
 /// Sends `size` bytes with an observer attached, and counts both.

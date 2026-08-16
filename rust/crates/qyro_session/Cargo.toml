@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "qyro_session"
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ description = "The only crate qyro_ffi sees: transfer operations, and no type th
 [lib]
 path = "src/lib.rs"
 
-# ADR-0032 §2. This crate exists to be the machine-verified boundary: because
+# ADR-0032 Â§2. This crate exists to be the machine-verified boundary: because
 # Rust puts only *direct* dependencies in a crate's extern prelude, qyro_ffi
 # naming exactly qyro_core and qyro_session is a resolver-checkable proof that
 # everything it can reach of the cryptographic stack is bounded by this crate's
@@ -20,6 +20,7 @@ path = "src/lib.rs"
 # qyro_crypto, and this crate is where that naming is confined and audited.
 qyro_crypto = { path = "../qyro_crypto" }
 qyro_fs = { path = "../qyro_fs" }
+qyro_identity_store = { path = "../qyro_identity_store" }
 qyro_manifest = { path = "../qyro_manifest" }
 qyro_net = { path = "../qyro_net" }
 qyro_transfer = { path = "../qyro_transfer" }
