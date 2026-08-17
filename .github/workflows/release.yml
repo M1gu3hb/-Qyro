@@ -173,7 +173,17 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
           "$hash  qyro-windows-x64.zip" | Out-File -FilePath (Join-Path $artifacts 'SHA256SUMS.txt') -Encoding utf8
           Write-Host "qyro-windows-x64.zip  $hash"
-          "### Windows`n`n``````\n$hash  qyro-windows-x64.zip`n``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          # One string per line rather than embedded escapes: `\n` in a
+          # PowerShell double-quoted string is a literal backslash-n, not a
+          # newline, and a summary full of `\n` is a summary nobody can copy a
+          # hash out of.
+          @(
+              '### Windows'
+              ''
+              '```'
+              "$hash  qyro-windows-x64.zip"
+              '```'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: qyro-windows-x64-release

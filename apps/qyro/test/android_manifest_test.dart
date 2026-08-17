@@ -60,7 +60,17 @@ const _intermediateRoots = <String>[
 ];
 
 /// The exact paths, newest Android Gradle Plugin layout first.
+///
+/// **Release as well as debug.** Phase 10 added a workflow that builds the
+/// release APK and runs this assertion on it, and the release APK is the one
+/// people install. Listing only `debug` would have made this test fall through
+/// to the wide sweep on the build that matters -- or, if the sweep also missed,
+/// skip on the artifact whose permissions are the whole point.
 const _mergedCandidates = <String>[
+  'merged_manifests/release/processReleaseMainManifest/AndroidManifest.xml',
+  'merged_manifests/release/processReleaseManifest/AndroidManifest.xml',
+  'merged_manifests/release/AndroidManifest.xml',
+  'merged_manifest/release/AndroidManifest.xml',
   'merged_manifests/debug/processDebugMainManifest/AndroidManifest.xml',
   'merged_manifests/debug/processDebugManifest/AndroidManifest.xml',
   'merged_manifests/debug/AndroidManifest.xml',
