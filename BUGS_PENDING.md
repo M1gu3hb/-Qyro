@@ -4167,3 +4167,36 @@
 - Fecha: 2026-08-17
 - Evidencia: hashes nuevos `e550e56d…` y `a1cf050d…`, verificados **descargando
   los assets publicados** y comparando, no sólo los locales
+
+## QYR-0360 — El control de `+crt-static` falló, y eso es el hallazgo
+
+- Plataforma: build de Windows; `scripts/verify_static.ps1`, `.cargo/config.toml`
+- Severidad: P2
+- Esperado: el mismo binario compilado **sin** `+crt-static` importa
+  `vcruntime140.dll`, y la comprobación lo caza
+- Actual: **los dos binarios tienen el conjunto de imports idéntico** y hashes
+  distintos. Con el flag y sin él: `kernel32`, `ws2_32`,
+  `api-ms-win-core-synch-l1-2-0`, `ntdll`, `bcryptprimitives`, `CRYPT32`. Ni
+  rastro de `vcruntime140.dll` en ninguno
+- **Es exactamente lo que R8 §6 avisó** —«el flag fue **ignorado** y produjo un
+  binario byte-idéntico. Verifica los imports, no asumas»— reproducido en otro
+  target. En Rust 1.88 MSVC un programa con la forma de `qyro` no nombra el
+  runtime de C de ninguna manera, así que **una comprobación de `vcruntime` pasa
+  para los dos y no distingue nada**
+- **El flag se queda** —no cuesta nada y sí importa para programas que sí
+  arrastran el runtime— pero el script **deja de afirmar que lo verifica**. Una
+  comprobación que pasa igual con y sin la cosa que dice comprobar es
+  exactamente el antipatrón que este proyecto lleva cuatro fases quitando
+- **Lo que el control destapó, y vale más:** los imports llevan
+  `api-ms-win-core-synch-l1-2-0.dll`, que es **Windows 8 mínimo** (R8 §10). Al
+  ser import estático, el cargador falla antes de `main`: no hay degradación,
+  sólo «falta la DLL». **El binario de hoy no arranca en Windows 7**, y eso no se
+  sabía medido hasta ahora
+- Arreglo: `verify_static.ps1` comprueba ahora lo que sí decide si el binario
+  arranca. `-ExpectWindows7` **falla hoy a propósito** y es lo que la fase 17
+  tendrá que poner en verde con los targets `*-win7-windows-msvc`
+- Estado: cerrado
+- Dueño: build
+- Fecha: 2026-08-17
+- Evidencia: `dumpbin /imports` sobre los dos binarios, conjuntos idénticos;
+  `verify_static.ps1 -ExpectWindows7` sale 1 nombrando la DLL
