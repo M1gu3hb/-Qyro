@@ -383,3 +383,35 @@ Android. La constante cuenta lo declarado en la fuente, que es lo que se revisa.
 Ninguno cruza un tipo: una ruta y una huella por búfer prestado, dos punteros a
 función de escalares y un `uintptr_t`. El precedente del puntero a función es
 `QyroProgressFn` de ADR-0033.
+
+---
+
+## Enmienda 3 (2026-08-17) — el símbolo veinticuatro, y la pregunta que faltaba
+
+**`Session::finish()` no tenía símbolo, y sin él un archivo recibido nunca
+llega.** Es lo que verifica el digest y renombra el `.qyro-part` a su nombre
+definitivo (ADR-0027 §4). La superficie tenía veintitrés símbolos, ninguno lo
+alcanzaba, y el resultado es el peor de los posibles: **el producto decía
+«entregado» y dejaba una parte** (QYR-0357).
+
+```c
+/* Materialises what arrived and releases what did not. Returns the number of
+   items that reached their final name through `out_count`. */
+int32_t qyro_session_finish(uint64_t handle, uint32_t *out_count);
+```
+
+Un entero por out-parámetro, como todo lo demás. **Veinticuatro.**
+
+### Por qué no se vio, y qué se cambia además del código
+
+`qyro_net_smoke serve` —el receptor de Rust— llama a `finish` desde el sprint 6A.
+Ninguna prueba de este proyecto había puesto nunca un **receptor de Dart** frente
+a un emisor real: `qyro_session_transfer_test.dart` prueba Dart-como-emisor. La
+mitad receptora de la frontera nunca se ejercitó de extremo a extremo.
+
+**La regla que sale de aquí, y vale más que el símbolo:** cuando una operación
+existe en los dos lados —emitir y recibir, sellar y abrir, envolver y
+desenvolver— **las dos mitades necesitan su prueba de extremo a extremo, y con
+el producto en cada rol.** Las tres veces que este proyecto ha enviado una
+capacidad inalcanzable han sido costuras que ninguna prueba cruzaba, y las tres
+se habrían visto preguntando quién llama.

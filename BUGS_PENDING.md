@@ -4035,3 +4035,36 @@
 - Dueño: interfaz
 - Fecha: 2026-08-17
 - Evidencia: `flutter test` con la biblioteca real, 104 pasadas, 0 saltadas
+
+## QYR-0357 — El receptor decía «entregado» y dejaba un `.qyro-part`
+
+- Plataforma: Android, Windows; frontera C y
+  `apps/qyro/lib/transfer/native_transfer_service.dart`
+- Severidad: **P0**
+- Esperado: un archivo recibido aparece con su nombre final
+- Actual: aparece como `payload.bin.qyro-part` y **nunca se renombra**, mientras
+  la pantalla dice «entregado». Medido: la prueba de dos procesos ve
+  `QyroConnecting → QyroAwaitingDecision → QyroMoving ×7 → QyroDelivered`, cero
+  errores, y en el destino queda `in\payload.bin.qyro-part`
+- **La causa:** `Session::finish()` —`rust/crates/qyro_session/src/session.rs`—
+  es lo que verifica el digest y renombra la parte a su nombre definitivo, y
+  **no tiene ningún llamante**. No hay `qyro_session_finish` entre los
+  veintitrés símbolos de la superficie C, y `grep` sobre `qyro_ffi` y `rust/tools`
+  no encuentra una sola llamada
+- **Es la tercera vez en esta fase**, y la misma forma exacta: `KeystoreWrapper`
+  sin llamante (fase 11), `qyro_session_local_address` sin llamante (QYR-0322), y
+  ahora `Session::finish`. Escrito, probado en Rust, e inalcanzable desde el
+  producto. Es literalmente para lo que se añadió la comprobación 14
+- **Por qué P0 y no P1:** el producto **afirma un éxito que no ocurrió**. Un
+  fallo ruidoso deja a una persona reintentando; éste la deja creyendo que tiene
+  el archivo. Y publicar la Release con esto dentro pondría en abierto un binario
+  cuyo mensaje de éxito es falso
+- **Por qué no lo cazó nada antes:** ninguna prueba de este proyecto había puesto
+  nunca un **receptor de Dart** frente a un emisor real.
+  `qyro_session_transfer_test.dart` prueba Dart-como-emisor contra
+  `qyro_net_smoke serve`, que es un receptor de Rust y sí llama a `finish`
+- Estado: cerrado
+- Dueño: frontera
+- Fecha: 2026-08-17
+- Evidencia: `two_process_pairing_test.dart`, que falló mostrando el árbol del
+  destino con el `.qyro-part` dentro
