@@ -27,7 +27,7 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 | Paquete | `dev.qyro.app`, firmado con clave propia (fase 08) |
 | Pruebas | Rust **639 / 0 / 2 ignoradas**; Dart **92 pasadas, 9 saltadas** |
 | Dependencias | `Cargo.lock` **80**; `pubspec.lock` **45**. Cero externas de Rust en Android |
-| Ledger | **154 fichas, 0 abiertas** |
+| Ledger | **155 fichas, 0 abiertas** |
 
 ---
 
@@ -40,7 +40,7 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 5. **La puerta se pasa por exit code**, no por leer la salida.
 6. **Dos destinos para una ficha: cerrada, o descartada con argumento.** Nunca
    «pendiente».
-7. IDs nuevos desde **QYR-0355 en adelante**.
+7. IDs nuevos desde **QYR-0356 en adelante**.
 
 ---
 

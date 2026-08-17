@@ -3936,3 +3936,31 @@
 - Dueño: android
 - Fecha: 2026-08-16
 - Evidencia: ADR-0037 enmienda 1 y ADR-0040 §6
+
+## QYR-0355 — El paso que empaqueta la release se bloqueaba a sí mismo
+
+- Plataforma: CI, `release.yml`, job `windows`
+- Severidad: P1
+- Esperado: el ZIP portable se empaqueta con su `SHA256SUMS.txt` dentro
+- Actual: `Get-FileHash` falla con «The process cannot access the file … because
+  it is being used by another process», sobre el propio `SHA256SUMS.txt` que el
+  paso está escribiendo. El job de Android pasó; el de Windows murió al final
+- **La causa es que PowerShell transmite en vez de materializar.**
+  `Get-ChildItem $bundle -Recurse -File | ForEach-Object { … } | Out-File $sums`
+  enumera perezosamente, y `$sums` está **dentro** de `$bundle`: `Out-File` crea
+  el archivo en el directorio que `Get-ChildItem` sigue recorriendo, y cuando
+  llega a él lo tiene abierto
+- **Por qué `platform-builds.yml` nunca lo vio:** escribe su copia fuera del
+  bundle y luego la copia dentro. El paso nuevo la escribía directamente en su
+  sitio, que parece más simple y es la diferencia entera
+- Arreglo: `@(Get-ChildItem …)` y `@(… | ForEach-Object …)` para enumerar y
+  calcular **entero** antes de abrir la salida
+- **Lo que no rompía:** el binario. `flutter build windows --release` y el
+  verificador del paquete pasaron; lo que falló fue listar los hashes. La
+  etiqueta `v1.0.0` nombra un árbol cuyo producto compila y cuyo script de
+  empaquetado no
+- Estado: cerrado
+- Dueño: ci
+- Fecha: 2026-08-16
+- Evidencia: run 31993870492, job `windows`, paso «Package, verify and hash the
+  portable ZIP»

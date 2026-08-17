@@ -143,11 +143,21 @@ jobs:
 
           # Checksums of every file, inside the package. A checksum a person
           # cannot see after downloading verifies the transfer and nothing else.
+          #
+          # Enumerated and hashed **completely** before the output file is
+          # opened. `Get-ChildItem | ForEach-Object | Out-File` streams, so
+          # `Out-File` creates SHA256SUMS.txt inside the very directory being
+          # walked and `Get-ChildItem` then reaches it while it is still held:
+          # "The process cannot access the file ... because it is being used by
+          # another process". `platform-builds.yml` never hit this because it
+          # writes its copy outside the bundle first.
           $sums = Join-Path $bundle 'SHA256SUMS.txt'
-          Get-ChildItem -LiteralPath $bundle -Recurse -File | ForEach-Object {
+          $files = @(Get-ChildItem -LiteralPath $bundle -Recurse -File)
+          $lines = @($files | ForEach-Object {
               $relative = $_.FullName.Substring($bundle.Length + 1)
               "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $relative"
-          } | Out-File -FilePath $sums -Encoding utf8
+          })
+          $lines | Out-File -FilePath $sums -Encoding utf8
 
           @(
               'Qyro v1.0 Windows x64 portable.'
