@@ -3428,7 +3428,7 @@
   `qyro_session` —algo como un `Bound` que sepa su dirección y del que salga una
   `Session` al aceptar—. Cambia la forma de la API pública del crate frontera, así
   que lleva su cláusula de ADR
-- Estado: **abierto**
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-14
 - Evidencia: `qyro_net_smoke` resuelve el mismo problema imprimiendo
@@ -3478,6 +3478,44 @@
 
   El cierre de la fase 09 se conserva encima, sin tocar. Un cierre equivocado
   documentado vale más que un cierre borrado.
+
+- **Fase 12 (2026-08-17), CERRADA, y esta vez respondiendo a lo que preguntaba.**
+
+  **La pregunta era:** «lo que no se puede es preguntarla **a tiempo**», y
+  «sube en cuanto Dart tenga que recibir, que es la fase 05».
+
+  **La comprobación de la condición, que es lo que faltó la vez anterior.** Sí,
+  la condición ocurrió: la fase 05 llegó, Dart tuvo que recibir, y el defecto
+  estaba vivo — `ownPairingString()` devolvía `null` en cada transferencia que
+  el producto intentó jamás.
+
+  **La respuesta:** ADR-0041 §2 disuelve la pregunta en vez de contestarla. Si
+  el puerto se conoce de antemano no hay nada que preguntarle al socket, así que
+  la cadena se compone **antes de ligar** y no hace falta partir `bind` de
+  `accept`. `qyroDefaultPort = 49517`, del rango que IANA nunca asigna, fijo
+  porque el firewall de Windows concede el permiso una vez por programa y puerto
+  (R8 §9) y un puerto efímero devolvería el diálogo en cada sesión.
+
+  **Medido, no afirmado.** `two_process_pairing_test.dart` pone dos procesos de
+  verdad con `NativeTransferService` —la clase de producción, no un fake— en el
+  papel de receptor:
+
+      QyroConnecting -> QyroAwaitingDecision -> QyroMoving x7 -> QyroDelivered
+      destino: in\payload.bin
+
+  Un segundo proceso recibe **sólo** el código que este aparato compuso, lo
+  parsea con el mismo motor que usaría el otro aparato, se conecta, y 256 KiB
+  cruzan y se comparan byte a byte. Con control de falsabilidad: mandar a un
+  puerto donde nadie escucha falla por nombre y con un final distinto.
+
+  **Y dos defectos que sólo aparecieron al arreglar éste**, los dos P0 y los dos
+  cerrados: QYR-0356 —recibir congelaba la aplicación entera, porque la sesión
+  corría en el isolate que dibuja— y QYR-0357 —el receptor decía «entregado» y
+  dejaba un `.qyro-part`, porque `Session::finish()` no tenía llamante—.
+
+  La separación de `bind` y `accept` que esta ficha proponía **sigue siendo la
+  forma correcta a largo plazo** y la hace la fase 14, que la necesita para
+  ligar por interfaz mientras APIPA tarda sus decenas de segundos.
 
 ## QYR-0323 — `file_selector_android` copia el archivo elegido a la caché antes de que Dart lo vea
 

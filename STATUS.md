@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-16T12:00:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: c330a424f6fd6b6085057d1b5c3272da530ef9d9
+- Verified commit: 928e41fa73c6390ba28556d290dbbac56355a2eb
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
