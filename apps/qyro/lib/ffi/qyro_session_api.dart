@@ -34,6 +34,14 @@ abstract final class QyroCode {
   static const cancelled = -11;
   static const unknown = -12;
 
+  /// No usable device identity for this process. ADR-0040.
+  ///
+  /// Distinct from [notAuthenticated] on purpose: that one means the **peer**
+  /// did not prove who it is, and this means **this device** does not know who
+  /// it is. Collapsing them would tell a person to distrust the other end when
+  /// the problem is at home.
+  static const identityUnreadable = -13;
+
   static const names = <int, String>{
     ok: 'ok',
     invalidHandle: 'invalid_handle',
@@ -45,6 +53,7 @@ abstract final class QyroCode {
     peerUnreachable: 'peer_unreachable',
     notAuthenticated: 'not_authenticated',
     transferRefused: 'transfer_refused',
+    identityUnreadable: 'identity_unreadable',
     storageRefused: 'storage_refused',
     cancelled: 'cancelled',
     unknown: 'unknown',

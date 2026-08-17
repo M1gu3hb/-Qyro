@@ -11,6 +11,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:qyro/ffi/qyro_file_picker.dart';
+import 'package:qyro/ffi/qyro_identity_api.dart';
 import 'package:qyro/ffi/qyro_session_api.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 import 'package:qyro/transfer/transfer_service.dart';
@@ -30,6 +31,27 @@ String defaultDestination() {
   return '${Directory.current.path}${Platform.pathSeparator}Qyro';
 }
 
+/// Where this device's identity blob lives.
+///
+/// ADR-0040 §4. Rust never guesses a directory: the caller names it, so there
+/// is one code path on both platforms and a test can point at a temporary
+/// directory — which is what makes the two-process check possible at all.
+///
+/// On Android the Kotlin side is what knows `getNoBackupFilesDir()`; until it
+/// passes one in, the app's working directory is the honest answer rather than
+/// a guessed path that would fail at write time. Same precedent as
+/// [defaultDestination].
+String defaultIdentityPath() {
+  if (Platform.isWindows) {
+    final local = Platform.environment['LOCALAPPDATA'] ??
+        Platform.environment['USERPROFILE'] ??
+        '.';
+    return '$local${Platform.pathSeparator}Qyro'
+        '${Platform.pathSeparator}identity.bin';
+  }
+  return '${Directory.current.path}${Platform.pathSeparator}identity.qyro';
+}
+
 /// The library path this process loads the engine from.
 String? _libraryOverride() {
   final value = Platform.environment['QYRO_FFI_LIBRARY_PATH'];
@@ -47,10 +69,41 @@ final class NativeTransferService implements QyroTransferService {
   NativeTransferService({QyroSessionBindings? bindings})
       : _bindings = bindings ?? QyroSessionBindings.openDefault() {
     _trust = QyroTrustBindings.openDefault(_bindings);
+    _identity = QyroIdentityBindings.open(_bindings);
   }
 
   final QyroSessionBindings _bindings;
   late final QyroTrustBindings _trust;
+  late final QyroIdentityBindings _identity;
+
+  /// Opens this device's identity. **Must succeed before any transfer.**
+  ///
+  /// ADR-0040. Without it every session answers `identity_unreadable` rather
+  /// than quietly generating a throwaway keypair, which is what it used to do
+  /// and why the fingerprint on the peers screen changed between one transfer
+  /// and the next.
+  ///
+  /// [QyroProtection.sandbox] off Windows because stage A has no Keystore
+  /// bridge: the seed sits in the app's private directory with the per-UID
+  /// sandbox as its only protection, and `THREAT_MODEL.md` says so in those
+  /// words rather than in a footnote.
+  void openIdentity({String? at}) {
+    final path = at ?? defaultIdentityPath();
+    _identity.open(
+      path,
+      Platform.isWindows ? QyroProtection.platform : QyroProtection.sandbox,
+    );
+  }
+
+  /// This device's own fingerprint, or null before [openIdentity] succeeds.
+  String? ownFingerprint() {
+    try {
+      final text = _identity.fingerprint();
+      return text.isEmpty ? null : text;
+    } on QyroSessionFailure {
+      return null;
+    }
+  }
 
   /// What the peers screen shows. Names and fingerprints only.
   ///
@@ -73,17 +126,55 @@ final class NativeTransferService implements QyroTransferService {
   @override
   Future<bool> forgetPeer(String name) async => _trust.forgetPeer(name);
 
+  /// What the book says about the peer on the other end of [session].
+  ///
+  /// Keyed by the fingerprint, because the peers screen has no other name for a
+  /// device nobody has named yet, and a verdict under a name the person never
+  /// chose would be a verdict about the wrong thing. Once they name it,
+  /// `rememberPeer` records it under that name and the next verdict is about the
+  /// name they chose.
+  QyroPeerTrust _verdictFor(QyroSession session, String fingerprint) {
+    try {
+      return _trust.peerTrust(session, fingerprint);
+    } on QyroSessionFailure {
+      // A book that cannot answer is not a reason to claim the peer is known.
+      return QyroPeerTrust.newPeer;
+    }
+  }
+
   @override
   Future<String?> addressOfPairingString(String text) async =>
       _trust.addressOfPairingString(text);
 
-  /// Null until this device has a session to read an address from.
+  /// This device's pairing code, once it is receiving.
   ///
-  /// A pairing string needs an address **and** a fingerprint, and both come from
-  /// a live session (ADR-0035 §2). Inventing one before there is a session would
-  /// be showing a code that does not work.
+  /// **This returned `null` unconditionally until phase 11**, so the peers
+  /// screen always showed "there is no code to show" and nobody could ever hand
+  /// their code to anyone — the manual pairing path, the one that works on every
+  /// network including one with client isolation, could not be used in either
+  /// direction. The reason given was that a code needs an address *and* a
+  /// fingerprint and both come from a live session; the fingerprint half was
+  /// true only because the engine had no stable identity, and ADR-0040 fixed
+  /// that.
+  ///
+  /// The address half still needs a listener, so this answers null until one
+  /// exists and says which half is missing rather than showing a code that does
+  /// not work (ADR-0035 §2).
   @override
-  Future<String?> ownPairingString() async => null;
+  Future<String?> ownPairingString() async {
+    final fingerprint = ownFingerprint();
+    if (fingerprint == null) {
+      return null;
+    }
+    final address = _listeningAddress;
+    if (address == null) {
+      return null;
+    }
+    return 'QYRO1|$address|${fingerprint.replaceAll('-', '')}';
+  }
+
+  /// Where this device is listening, while it is.
+  String? _listeningAddress;
 
   @override
   Future<List<QyroPicked>> pickFiles() => pickerForPlatform().pickFiles();
@@ -235,9 +326,13 @@ final class NativeTransferService implements QyroTransferService {
         // before anything else is accepted (ADR-0036 §1).
         session.stepBlocking();
         final progress = session.progress();
+        // The real verdict, not a hardcoded `newPeer`. With ADR-0040 the
+        // fingerprint on the other end is stable between transfers, so
+        // `Changed` finally means what ADR-0031 says it means.
+        final fingerprint = _trust.peerFingerprint(session);
         final offer = QyroAwaitingDecision(
-          fingerprint: _trust.peerFingerprint(session),
-          trust: QyroPeerTrust.newPeer,
+          fingerprint: fingerprint,
+          trust: _verdictFor(session, fingerprint),
           fileNames: const <String>[],
           totalBytes: progress.total,
         );

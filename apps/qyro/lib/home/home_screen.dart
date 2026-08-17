@@ -22,8 +22,26 @@ class HomeScreen extends StatelessWidget {
   /// widget test never opens a dynamic library it does not need.
   final QyroTransferService? service;
 
+  /// The native engine, with its identity opened before anything else.
+  ///
+  /// ADR-0040. The order is the point: a session opened before the identity
+  /// answers `identity_unreadable` rather than generating a throwaway keypair.
+  /// One engine per process, so this runs once — the `OnceLock` underneath makes
+  /// a second call a no-op for the same path anyway.
+  ///
+  /// A failure here is **not** swallowed into "carry on without an identity":
+  /// that is exactly what the engine used to do implicitly, and it is what made
+  /// the fingerprint change between one transfer and the next. It surfaces as
+  /// the failure it is.
+  static NativeTransferService _nativeEngine() {
+    final engine = _engine ??= NativeTransferService()..openIdentity();
+    return engine;
+  }
+
+  static NativeTransferService? _engine;
+
   void _open(BuildContext context, int tab) {
-    final engine = service ?? NativeTransferService();
+    final engine = service ?? _nativeEngine();
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => TransferHome(service: engine, initialTab: tab),
