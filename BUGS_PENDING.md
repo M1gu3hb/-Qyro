@@ -3779,3 +3779,32 @@
 - Dueño: android
 - Fecha: 2026-08-16
 - Evidencia: `flutter test` 90 pasadas / 10 saltadas, exit 0
+
+## QYR-0350 — El job de Android llevaba dos commits en rojo y el barrido no lo miraba
+
+- Plataforma: CI, `platform-builds.yml`, job `android`
+- Severidad: P1
+- Esperado: el test instrumentado de Keystore corre en el emulador
+- Actual: `:app:mergeDebugAndroidTestAssets` falla con «Cannot find a version of
+  `androidx.test:runner` that satisfies the version constraints», y el job entero
+  muere antes de arrancar una sola prueba. Rojo en `ce66f72` y en `63f4ca2`
+- **La causa no es un artefacto que falte.** El plugin `integration_test` de
+  Flutter declara `api("androidx.test:runner:1.2+")` y
+  `api("androidx.test.espresso:espresso-core:3.3+")`, que entran en
+  `debugRuntimeClasspath` y resuelven a 1.3.0. La **resolución consistente** de
+  AGP reimpone eso como `strictly 1.3.0` sobre el classpath de androidTest, y un
+  `1.6.2` declarado a mano no puede satisfacer un `strictly`
+- Arreglo: declarar `runner` y `rules` **sin versión** —la restricción la
+  provee— y `androidx.test.ext:junit` en `1.1.2`, que es la que empareja con
+  runner 1.3.0. Así el proyecto sigue lo que resuelva `integration_test` en vez
+  de competir con él en cada actualización de Flutter
+- **Lo que esto enseña, y es lo que importa:** la fase 06 dio el test
+  instrumentado por hecho porque el código estaba escrito y `flutter test` pasaba.
+  El único sitio donde ese test puede correr es CI, CI estaba en rojo, y la fase
+  se cerró sin mirar. **Un job rojo es una afirmación sin evidencia**, aunque el
+  código sea correcto — y aquí lo era
+- Estado: cerrado
+- Dueño: ci
+- Fecha: 2026-08-16
+- Evidencia: run 31983279320 en rojo antes; el run de cierre de la fase 10
+  después, citado en `STATUS.md`
