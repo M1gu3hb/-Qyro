@@ -1,4 +1,4 @@
-# Fase 10 — La etiqueta, y las tres promesas rotas que encontró
+# Fase 10 — La etiqueta, y las cuatro cosas que encontró
 
 **Base:** `63f4ca2`. **Rama:** `claude/qyro-net-6a`.
 
@@ -12,9 +12,11 @@
 
 **No objetivo:** función nueva. Esta fase no debía escribir código.
 
-**Escribió código en tres sitios**, y los tres son la misma clase de hallazgo:
-comparar un documento con el código encuentra defectos **en el código**, porque
-el documento fue una decisión que alguien tomó y nadie ejecutó.
+**Escribió código en cuatro sitios**, y tres de ellos son la misma clase de
+hallazgo: comparar un documento con el código encuentra defectos **en el
+código**, porque el documento fue una decisión que alguien tomó y nadie ejecutó.
+El cuarto lo encontró CI, que es donde se encuentra lo que esta máquina no puede
+construir.
 
 ---
 
@@ -26,7 +28,8 @@ el documento fue una decisión que alguien tomó y nadie ejecutó.
    propia sección.
 3. **`STATUS.md` corregido en once entradas** que afirmaban lo contrario del
    estado real.
-4. **Tres defectos encontrados y arreglados**: QYR-0348, QYR-0349, QYR-0350.
+4. **Cuatro defectos encontrados y arreglados**: QYR-0348, QYR-0349, QYR-0350 y
+   QYR-0351.
 5. **`release.yml`**: los artefactos de la v1.0, con SHA256SUMS dentro del
    paquete.
 6. **La regla de deriva de capacidades sustituida**, porque había expirado.
@@ -139,6 +142,23 @@ donde ese test puede correr es CI, CI estaba en rojo, y la fase se cerró sin
 mirar. **Un job rojo es una afirmación sin evidencia, aunque el código sea
 correcto** — y aquí lo era.
 
+### QYR-0351, P2 — un guion doble en un comentario XML
+
+El comentario que explica la decisión de QYR-0349 llevaba «and refuse **--**
+which is exactly what it should say», y un comentario XML no puede contener `--`.
+El build murió en `:app:parseDebugLocalResources`, dos minutos dentro de una
+corrida de Gradle, sobre un archivo que había añadido el commit anterior.
+
+**Ningún paso de la puerta podía verlo.** `flutter test` no compila recursos de
+Android, `flutter analyze` no mira XML, y el único consumidor es `aapt`, dentro
+de un build que esta máquina no puede ejecutar (QYR-0324). Es la forma exacta de
+QYR-0350 otra vez, con menos consecuencia: **lo que sólo CI puede comprobar, sólo
+CI lo comprueba, y hay que mirarlo.**
+
+La guarda nueva es deliberadamente estrecha: no es un validador de XML, es el
+único error que es fácil de cometer escribiendo prosa dentro de un comentario e
+imposible de ver releyéndolo.
+
 ### La guarda nueva falló en su primera ejecución, contra su propio comentario
 
 `promised_capabilities_test.dart` busca `Icons.qr_code_scanner` en `lib/`, y lo
@@ -154,7 +174,7 @@ número 5 en `ESTADO-ACTUAL.md`.
 
 ## 5. Qué se arregló y qué no
 
-**Arreglado:** los tres P1, más la regla vencida y su falso positivo.
+**Arreglado:** los tres P1, el P2, la regla vencida y su falso positivo.
 
 **No arreglado, y dicho:** todo lo que está en `THREAT_MODEL.md` §5. La lista es
 más larga que antes de esta fase, y eso es el resultado: no aparecieron amenazas
@@ -169,6 +189,7 @@ nuevas, aparecieron filas que se hacían pasar por controles.
 | QYR-0348 | Una persona apunta la cámara a un código y no pasa nada | La primera persona que lo usara |
 | QYR-0349 | El blob de identidad sube a Google Drive | Nadie, nunca, porque no rompe nada |
 | QYR-0350 | La evidencia entera de la fase 06 | Sólo quien mirara CI |
+| QYR-0351 | El APK no se construía | CI, dos minutos después de empujar |
 
 Los tres son **invisibles desde dentro**: el código compila, las pruebas locales
 pasan y la aplicación arranca. Lo que los encontró fue comparar dos documentos
@@ -181,6 +202,9 @@ que se contradecían.
 Siete ADR marcadas, el modelo de amenazas reescrito contra el código, `STATUS.md`
 corregido en once entradas, artefactos con su SHA-256 en `docs/release/v1.0.md`,
 y `v1.0.0` etiquetada.
+
+Y cuatro defectos que sólo existían porque nadie había comparado lo que el
+proyecto decía de sí mismo con lo que hacía.
 
 ---
 
@@ -208,7 +232,7 @@ y `v1.0.0` etiquetada.
 | 4 | `cargo clippy -p qyro_session -p qyro_ffi --target aarch64-linux-android -- -D warnings` | 0 |
 | 5 | `cargo audit --deny warnings` | 0, sobre 80 paquetes |
 | 6 | `flutter analyze` | 0 |
-| 7 | `flutter test` | 0 — **90 pasadas, 10 saltadas** |
+| 7 | `flutter test` | 0 — **91 pasadas, 10 saltadas** |
 | 8 | `dart format --set-exit-if-changed .` | 0 |
 | 9–12 | `check_docs_consistency` en Bash y en PowerShell | 0 y 0 |
 | 13 | CI en verde sobre el commit etiquetado | ver §14 |
@@ -237,10 +261,11 @@ devolviendo su entrada tal cual.
 | | Antes | Después |
 |---|---|---|
 | Rust | 633 pasados, 2 ignorados | 633 pasados, 2 ignorados |
-| Dart | 86 pasadas, 10 saltadas | **90 pasadas**, 10 saltadas |
+| Dart | 86 pasadas, 10 saltadas | **91 pasadas**, 10 saltadas |
 
-Las cuatro nuevas de Dart: tres de `promised_capabilities_test.dart` y una de
-`android_manifest_test.dart`.
+Las cinco nuevas de Dart: tres de `promised_capabilities_test.dart` y dos de
+`android_manifest_test.dart` — la de backup y la del guion doble en un
+comentario XML.
 
 ---
 
@@ -264,7 +289,7 @@ runner 1.3.0. Ninguna dependencia nueva.
 | `apps/qyro/lib/transfer/transfer_screens.dart` + 2 catálogos | QYR-0348 |
 | `apps/qyro/test/promised_capabilities_test.dart` | **Nuevo** |
 | `AndroidManifest.xml` + `res/xml/data_extraction_rules.xml` | QYR-0349 |
-| `apps/qyro/test/android_manifest_test.dart` | La prueba de backup |
+| `apps/qyro/test/android_manifest_test.dart` | La prueba de backup y la del guion doble |
 | `apps/qyro/android/app/build.gradle.kts` | QYR-0350 |
 | `.github/workflows/release.yml` | **Nuevo** |
 | `.github/workflows/platform-builds.yml` | El `BUILD-INFO.txt` que mentía |
@@ -304,8 +329,8 @@ clave real. Ningún Android lo ha ejecutado nunca.
 
 ## 16. Ledger y handoff
 
-- `BUGS_PENDING.md`: **150 fichas, 0 abiertas.** Tres nuevas en esta fase —
-  QYR-0348, QYR-0349, QYR-0350—, las tres cerradas con su arreglo.
-- IDs siguientes desde **QYR-0351**.
+- `BUGS_PENDING.md`: **151 fichas, 0 abiertas.** Cuatro nuevas en esta fase —
+  QYR-0348, QYR-0349, QYR-0350, QYR-0351—, las cuatro cerradas con su arreglo.
+- IDs siguientes desde **QYR-0352**.
 - `docs/reports/ESTADO-ACTUAL.md` reescrito, 117 líneas.
 - Siguiente, y única: **la fase 07**, en `docs/testing/hardware-protocol.md`.

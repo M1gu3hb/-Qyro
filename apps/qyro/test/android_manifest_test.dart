@@ -197,6 +197,48 @@ void main() {
     expect(body, contains('<device-transfer'));
   });
 
+  test('no Android XML has a comment that XML cannot parse', () {
+    // QYR-0351. `data_extraction_rules.xml` carried `-- which is exactly` in a
+    // comment, and `--` inside a comment is not well-formed XML. The build died
+    // at `:app:parseDebugLocalResources` with "Failed to parse XML file", two
+    // minutes into a Gradle run in CI, on a file that had been added by the
+    // commit before.
+    //
+    // Narrow on purpose: this is not an XML validator, it is the one mistake
+    // that is easy to make while writing prose in a comment and impossible to
+    // see by reading it. Everything else about these files is already checked
+    // by the tool that consumes them.
+    final offenders = <String>[];
+    for (final file in Directory('android/app/src/main')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((entry) => entry.path.endsWith('.xml'))) {
+      for (final comment in RegExp(r'<!--(.*?)-->', dotAll: true).allMatches(
+        file.readAsStringSync(),
+      )) {
+        if ((comment.group(1) ?? '').contains('--')) {
+          offenders.add(file.path);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'An XML comment may not contain a double hyphen. Use a comma, a '
+          'dash, or a new sentence.',
+    );
+
+    // The control, both ways: the pattern finds the mistake, and does not
+    // report a comment that merely ends in one.
+    const bad = '<!-- a thing -- and another -->';
+    const good = '<!-- a thing, and another -->';
+    String? inner(String xml) =>
+        RegExp(r'<!--(.*?)-->', dotAll: true).firstMatch(xml)?.group(1);
+    expect(inner(bad)!.contains('--'), isTrue);
+    expect(inner(good)!.contains('--'), isFalse);
+  });
+
   test('the merged manifest declares no storage permission', () {
     final merged = _mergedManifest();
     if (merged == null) {

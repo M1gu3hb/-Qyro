@@ -42,6 +42,12 @@ function New-Fixture {
         @('# Document', '', 'Current state: see STATUS.md.') | Set-Content -LiteralPath (Join-Path $root $doc) -Encoding UTF8
     }
     '{"owner":"REPLACE_WITH_OWNER"}' | Set-Content -LiteralPath (Join-Path $root 'config/branding.example.json') -Encoding UTF8
+    # Phase 10. The hardware rule is only armed while the protocol has an
+    # unchecked box, so the fixture must carry one for the rule to be under
+    # test at all. A fixture without it would let the case below pass by
+    # never arming the rule, which is the shape of QYR-0329.
+    New-Item -ItemType Directory -Path (Join-Path $root 'docs/testing') -Force | Out-Null
+    'Resultado: `[ ]` ______' | Set-Content -LiteralPath (Join-Path $root 'docs/testing/hardware-protocol.md') -Encoding UTF8
     return $root
 }
 
@@ -94,9 +100,32 @@ try {
     $scriptsPending = New-Fixture; $fixtures += $scriptsPending
     Add-Content (Join-Path $scriptsPending 'AGENTS.md') 'doctor, bootstrap and test_all are pending' -Encoding UTF8
     Assert-FailsWith $scriptsPending '[BLOCKER] AGENTS script state'
+    # Phase 10. This case used to be 'File transfer: implemented', which the
+    # checker forbade for six sprints because the transfer did not exist. It
+    # exists now, so the rule was replaced rather than deleted.
     $falseClaim = New-Fixture; $fixtures += $falseClaim
-    Add-Content (Join-Path $falseClaim 'README.md') 'File transfer: implemented' -Encoding UTF8
-    Assert-FailsWith $falseClaim '[BLOCKER] Pending capability claim'
+    Add-Content (Join-Path $falseClaim 'README.md') 'Probado en hardware fisico: dos telefonos.' -Encoding UTF8
+    Assert-FailsWith $falseClaim '[BLOCKER] Hardware claim'
+
+    # The denial of the same claim must not trip it. The rule failed exactly
+    # this way on its first run, against a line whose whole point was to say
+    # that nothing had been tested on hardware.
+    $deniedClaim = New-Fixture; $fixtures += $deniedClaim
+    Add-Content (Join-Path $deniedClaim 'README.md') 'No se ha probado en hardware fisico, y no se inventa.' -Encoding UTF8
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $deniedClaim 2>&1
+    if (($output -join "`n") -notmatch '\[OK\] Documentation consistency') {
+        throw "Denying a hardware claim must not be a blocker:`n$($output -join "`n")"
+    }
+
+    # Once every box is marked the rule stands down: the claim becomes
+    # sayable because somebody ran the protocol.
+    $protocolDone = New-Fixture; $fixtures += $protocolDone
+    'Resultado: `[x]` ok' | Set-Content -LiteralPath (Join-Path $protocolDone 'docs/testing/hardware-protocol.md') -Encoding UTF8
+    Add-Content (Join-Path $protocolDone 'README.md') 'Probado en hardware fisico: dos telefonos.' -Encoding UTF8
+    $output = & $powerShellExecutable -NoProfile -File $checker -RepoRoot $protocolDone 2>&1
+    if (($output -join "`n") -notmatch '\[OK\] Documentation consistency') {
+        throw "A marked protocol must make the claim sayable:`n$($output -join "`n")"
+    }
 
     # Reserved ranges describe ownership, not findings. Their endpoints must
     # not require placeholder ledger records outside an agent's allocation.

@@ -38,6 +38,12 @@ EOF
     printf '# Document\n\nCurrent state: see STATUS.md.\n' > "$root/$doc"
   done
   printf '{"owner":"REPLACE_WITH_OWNER"}\n' > "$root/config/branding.example.json"
+  # Phase 10. The hardware rule is only armed while the protocol has an
+  # unchecked box, so the fixture has to carry one for the rule to be under
+  # test at all. A fixture without it would make the case below pass by never
+  # arming the rule, which is the shape of QYR-0329.
+  mkdir -p "$root/docs/testing"
+  printf 'Resultado: `[ ]` ______\n' > "$root/docs/testing/hardware-protocol.md"
 }
 
 assert_fails_with() {
@@ -56,10 +62,11 @@ assert_fails_with() {
 
 valid="$(mktemp -d)"; missing="$(mktemp -d)"; stale="$(mktemp -d)"
 scripts_pending="$(mktemp -d)"; false_claim="$(mktemp -d)"
+denied_claim="$(mktemp -d)"; protocol_done="$(mktemp -d)"
 range_refs="$(mktemp -d)"; concrete_finding="$(mktemp -d)"
 at_open_limit="$(mktemp -d)"; too_many_open="$(mktemp -d)"
 out_of_scope="$(mktemp -d)"
-trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$range_refs" "$concrete_finding" "$at_open_limit" "$too_many_open" "$out_of_scope"' EXIT
+trap 'rm -rf "$valid" "$missing" "$stale" "$scripts_pending" "$false_claim" "$denied_claim" "$protocol_done" "$range_refs" "$concrete_finding" "$at_open_limit" "$too_many_open" "$out_of_scope"' EXIT
 
 make_fixture "$valid"
 output="$(bash "$checker" --repo-root "$valid")"
@@ -77,9 +84,29 @@ make_fixture "$scripts_pending"
 printf '\ndoctor, bootstrap and test_all are pending\n' >> "$scripts_pending/AGENTS.md"
 assert_fails_with "$scripts_pending" "[BLOCKER] AGENTS script state"
 
+# Phase 10. This case used to be "File transfer: implemented", which the
+# checker forbade for six sprints because the transfer did not exist. It
+# exists now, and the rule was replaced rather than deleted: no document may
+# claim hardware evidence while the protocol has an unchecked box.
 make_fixture "$false_claim"
-printf '\nFile transfer: implemented\n' >> "$false_claim/README.md"
-assert_fails_with "$false_claim" "[BLOCKER] Pending capability claim"
+printf '\nProbado en hardware fisico: dos telefonos.\n' >> "$false_claim/README.md"
+assert_fails_with "$false_claim" "[BLOCKER] Hardware claim"
+
+# And the denial of the same claim must not trip it. The rule failed exactly
+# this way on its first run, against a line whose whole point was to say that
+# nothing had been tested on hardware.
+make_fixture "$denied_claim"
+printf '\nNo se ha probado en hardware fisico, y no se inventa.\n' >> "$denied_claim/README.md"
+output="$(bash "$checker" --repo-root "$denied_claim")"
+[[ "$output" == *"[OK] Documentation consistency"* ]]
+
+# Once every box is marked the rule stands down: the claim becomes sayable
+# because somebody ran the protocol.
+make_fixture "$protocol_done"
+printf 'Resultado: `[x]` ok\n' > "$protocol_done/docs/testing/hardware-protocol.md"
+printf '\nProbado en hardware fisico: dos telefonos.\n' >> "$protocol_done/README.md"
+output="$(bash "$checker" --repo-root "$protocol_done")"
+[[ "$output" == *"[OK] Documentation consistency"* ]]
 
 # Reserved ranges describe ownership, not findings. Their endpoints must not
 # force agents to create placeholder ledger records outside their allocation.

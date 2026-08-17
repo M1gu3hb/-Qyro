@@ -3808,3 +3808,31 @@
 - Fecha: 2026-08-16
 - Evidencia: run 31983279320 en rojo antes; el run de cierre de la fase 10
   después, citado en `STATUS.md`
+
+## QYR-0351 — Un guion doble en un comentario XML tumbó el build de Android
+
+- Plataforma: Android;
+  `apps/qyro/android/app/src/main/res/xml/data_extraction_rules.xml`
+- Severidad: P2
+- Esperado: el archivo de reglas de extracción se parsea
+- Actual: `:app:parseDebugLocalResources` falla con «Failed to parse XML file»,
+  dos minutos dentro de una corrida de Gradle en CI. La causa es una regla de XML
+  de 1998: **un comentario no puede contener `--`**, y el comentario que explica
+  la decisión de QYR-0349 llevaba «and refuse -- which is exactly what it should
+  say»
+- **Por qué no se vio antes de empujar:** ningún paso de la puerta lee estos
+  archivos. `flutter test` no compila recursos de Android, `flutter analyze` no
+  mira XML, y el único consumidor es `aapt`, que corre dentro de un build que
+  esta máquina no puede ejecutar (QYR-0324)
+- Arreglo: coma en lugar del guion doble. Y una prueba en
+  `android_manifest_test.dart` que recorre todos los `.xml` de
+  `android/app/src/main` buscando `--` dentro de un comentario, con su control en
+  los dos sentidos
+- **Deliberadamente estrecha:** no es un validador de XML. Es el único error que
+  es fácil de cometer escribiendo prosa dentro de un comentario e imposible de
+  ver releyéndolo. Lo demás de estos archivos ya lo comprueba quien los consume
+- Estado: cerrado
+- Dueño: android
+- Fecha: 2026-08-16
+- Evidencia: run 31984398272 en rojo; `flutter test` 91 pasadas / 10 saltadas
+  después

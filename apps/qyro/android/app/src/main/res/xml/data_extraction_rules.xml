@@ -10,7 +10,7 @@
      useless and at worst a promise broken by omission (ADR-0007, ADR-0025 §3.4).
 
      A new identity on a new device is the correct outcome. The other device
-     will say the key changed, in red, and refuse -- which is exactly what it
+     will say the key changed, in red, and refuse, which is exactly what it
      should say, because the key did change. -->
 <data-extraction-rules>
     <cloud-backup />

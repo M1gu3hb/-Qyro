@@ -39,7 +39,7 @@ contra el código que existe: `THREAT_MODEL.md`.
   **90 pasadas, 10 saltadas** — las diez saltan sin la biblioteca nativa compilada
   o sin el manifiesto fusionado, y saltada no es pasada.
 - `Cargo.lock`: **80 paquetes**. `pubspec.lock`: **45**.
-- `BUGS_PENDING.md`: **150 fichas, 0 abiertas.**
+- `BUGS_PENDING.md`: **151 fichas, 0 abiertas.**
 
 **Lo que NO debe leerse como progreso:**
 
