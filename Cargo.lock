@@ -439,6 +439,7 @@ dependencies = [
  "qyro_manifest",
  "qyro_net",
  "qyro_transfer",
+ "zeroize",
 ]
 
 [[package]]

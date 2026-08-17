@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "qyro_session"
 version.workspace = true
 edition.workspace = true
@@ -24,3 +24,7 @@ qyro_identity_store = { path = "../qyro_identity_store" }
 qyro_manifest = { path = "../qyro_manifest" }
 qyro_net = { path = "../qyro_net" }
 qyro_transfer = { path = "../qyro_transfer" }
+# Already in the graph through qyro_crypto and qyro_identity_store; naming it
+# here adds an edge and not a package. ADR-0037 needs `Zeroizing` for the
+# plaintext the bridge hands back.
+zeroize = { version = "1.9.0", default-features = false, features = ["alloc"] }

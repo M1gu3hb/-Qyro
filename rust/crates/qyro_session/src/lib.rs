@@ -40,6 +40,7 @@
     clippy::indexing_slicing
 )]
 
+mod bridged_wrapper;
 mod error;
 mod session;
 mod trust;
@@ -47,6 +48,9 @@ mod trust;
 #[cfg(test)]
 mod guards;
 
+pub use bridged_wrapper::{
+    BRIDGED_WRAP_ID, BridgedWrapper, DOMAIN_MISMATCH, MAX_WRAPPED_LEN, WrapFn,
+};
 pub use error::SessionError;
 pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState, parse_pairing};
 pub use trust::{PeerTrust, TrustBook, fingerprint_text};

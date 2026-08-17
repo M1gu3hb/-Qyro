@@ -181,7 +181,13 @@ fn every_workspace_crate_has_the_minimum_structural_guards_or_an_exact_exception
             let listed = guard
                 .split("const PRODUCTION_FILES")
                 .nth(1)
-                .and_then(|rest| rest.split("= [").nth(1))
+                // `split_once('[')` and not `split("= [")`: rustfmt writes the
+                // list as `= [` on one line when it fits and as `=\n    [` when
+                // it does not, and a guard that only knew the first shape
+                // reported "no parseable list" for a file it could see
+                // perfectly well. The `=` is skipped by taking everything after
+                // the first bracket instead.
+                .and_then(|rest| rest.split_once('[').map(|(_, tail)| tail))
                 .and_then(|rest| rest.split("];").next())
                 .unwrap_or_else(|| panic!("{name} has no parseable PRODUCTION_FILES list"));
             let files: Vec<&str> = listed

@@ -1,0 +1,27 @@
+# The release signing material. Copy to `key.properties` and fill it in.
+#
+# `key.properties` is in `.gitignore` and must stay there. A signing key in a
+# public repository is not a signing key: anybody who clones the repository can
+# sign an APK that Android will happily install as an update over yours.
+#
+# To create one:
+#
+#   keytool -genkeypair -v \
+#     -keystore D:\qyro-release\qyro-release.jks \
+#     -storetype JKS -keyalg RSA -keysize 4096 -validity 10000 \
+#     -alias qyro
+#
+# Ten thousand days is about twenty-seven years. Android refuses an update
+# signed by a different key, so a certificate that expires before the
+# application does is an application that cannot be updated ever again.
+#
+# The certificate's SHA-256 goes in `docs/release/v1.0.md` so that anybody handed
+# an APK can check it came from this key:
+#
+#   keytool -list -v -keystore D:\qyro-release\qyro-release.jks -alias qyro
+#   apksigner verify --print-certs app-release.apk
+
+storeFile=D:\\qyro-release\\qyro-release.jks
+storePassword=
+keyAlias=qyro
+keyPassword=

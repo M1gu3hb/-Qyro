@@ -87,6 +87,29 @@ jobs:
           # Here a skip is a failure: the APK was just built, so the manifest
           # exists or the path moved, and both deserve a red run.
           QYRO_REQUIRE_MERGED_MANIFEST: "1"
+      # Phase 06, QYR-0064. The Keystore evidence, in the only place Keystore
+      # exists: inside an application process, under `am instrument`. The
+      # finding that stayed open for two phases was that a binary pushed to
+      # /data/local/tmp has no JVM, no Context and no application process, so it
+      # could not reach Keystore however it was written.
+      #
+      # `continue-on-error` is **not** set: a Keystore that refuses is the thing
+      # this job is for.
+      - name: Enable KVM for the emulator
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: The identity survives, checked inside an application process
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: apps/qyro/android
+          script: ./gradlew connectedDebugAndroidTest --stacktrace
       - name: Verify qyro_ffi is packaged in the APK
         shell: bash
         run: |
