@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-18T12:00:00Z
+- Updated UTC: 2026-08-18T18:00:00Z
 - Branch: claude/qyro-cerrar-cadena-12
-- Verified commit: f2194b189c52978e2a19aca5183b0bddcb1bde04
+- Verified commit: ab947ab78da5f47397ef84ad46c4722f01912ee5
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -122,10 +122,23 @@ contra el código que existe: `THREAT_MODEL.md`.
 - **Veinticuatro símbolos C**, ninguno cruza un tipo. (Decía «diecinueve»: la
   cifra se quedó en una fase anterior y la contó la fase 14 con
   `grep -c no_mangle`.)
-- `cargo test --workspace`: **639 passed, 0 failed, 2 ignored**. `flutter test`:
-  **92 pasadas, 9 saltadas** — las diez saltan sin la biblioteca nativa compilada
-  o sin el manifiesto fusionado, y saltada no es pasada.
-- `Cargo.lock`: **80 paquetes**. `pubspec.lock`: **45**.
+- **Canal óptico** (fase 15): `qyro beam <archivo>` saca un archivo por la
+  pantalla como un flujo interminable de QR, y `qyro qr` dibuja el código de este
+  aparato. Código de fuente **Luby Transform propio, cero dependencias**
+  (`qyro_fountain`). **Verificado**: un decodificador real (`rqrr`, sólo de
+  prueba) lee lo que dibuja la terminal y un archivo entero vuelve con uno de
+  cada cuatro frames tirado. **No verificado: una cámara** — desenfoque, moiré,
+  brillo y ángulo son fase 19. El receptor es el teléfono (ADR-0044 §6) y **el
+  lado Android que acumula frames no existe todavía**; el binario de escritorio
+  no lleva decodificador, a propósito.
+- `cargo test --workspace`: **711 pasadas, 0 fallos** (eran 639; la 13 sumó el
+  CLI, la 14 el beacon y la 15 la fuente y el canal óptico). `flutter test`:
+  **105 pasadas** (eran 92; la 14 sumó el cliente de descubrimiento y su
+  pantalla). Las saltadas de Dart siguen saltando sin la biblioteca nativa
+  compilada o sin el manifiesto fusionado, y **saltada no es pasada**.
+- `Cargo.lock`: **110 paquetes**, de los que 16 entran sólo por
+  `dev-dependencies` (`rqrr` y su árbol) y no viajan en el binario.
+  `pubspec.lock`: **45**.
 - `BUGS_PENDING.md`: **155 fichas, 0 abiertas.**
 
 **Lo que NO debe leerse como progreso:**
