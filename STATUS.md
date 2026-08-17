@@ -3,23 +3,49 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-14T23:30:00Z
+- Updated UTC: 2026-08-16T00:00:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: 0aef8eafd171a4378fa0f8716cbede1b0b5d05aa
-- Milestone: **un archivo de ocho megabytes cruza dos procesos de sistema
-  operativo distintos por un socket TCP, cifrado y autenticado, y llega byte a
-  byte idéntico** — comparado byte a byte, no por veredicto, y repetido diez
-  veces seguidas sin intermitencia. Antes de este sprint el «transporte» era un
-  `Vec<u8>` que pasaba de una variable a otra dentro del mismo proceso.
-  **El FFI del motor existe** desde la fase 01 y **Dart conduce una transferencia
-  real** desde la fase 02. **El selector de archivos existe en código** desde la
-  fase 03 y **nadie lo ha visto abrirse**: no hay emulador de Android en la
-  máquina de desarrollo y el Modo Desarrollador de Windows está apagado
-  (QYR-0324). **Sigue sin haber descubrimiento y sin UI: los botones Enviar y
-  Recibir siguen deshabilitados**, y nada de esto ha tocado hardware físico ni
-  dos máquinas distintas — dos procesos en 127.0.0.1 no son dos dispositivos en
-  una Wi-Fi. La persistencia de identidad sigue **IMPLEMENTED sólo en Windows y
-  NOT_IMPLEMENTED en Android y en iOS**
+- Verified commit: 63f4ca23b8dd3b879accda1f4e0c269771c79598
+- Milestone: **v1.0. El producto está completo en código y no lo ha usado
+  nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
+  TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
+  entrega — y hay cuatro pantallas, en dos idiomas, con los botones **encendidos**
+  desde la fase 05. Dos aparatos se encuentran solos por NSD/mDNS (fase 04b) o
+  con un código tecleado, la identidad sobrevive al reinicio en Windows por DPAPI
+  y en Android por Keystore (fase 06), y el paquete se llama `dev.qyro.app` y se
+  firma con una clave real (fase 08). **Lo que sigue sin existir es la
+  evidencia**: ningún teléfono ha ejecutado nunca esta aplicación, ninguna
+  transferencia ha cruzado una Wi-Fi de verdad, y `flutter build` no corre en
+  esta máquina por el Modo Desarrollador (QYR-0324). Dos procesos en
+  `127.0.0.1` no son dos aparatos en una red. Los veinte escenarios que cierran
+  ese hueco están escritos y **sin marcar** en `docs/testing/hardware-protocol.md`
+
+### v1.0 — qué es y qué no es
+
+Documento de release: `docs/release/v1.0.md`. Modelo de amenazas reescrito
+contra el código que existe: `THREAT_MODEL.md`.
+
+**Lo que existe y está ejecutado en Windows 10 real y en CI:**
+
+- **Transferencia completa de extremo a extremo**, conducida desde Dart, entre
+  dos procesos de sistema operativo, con verificación byte a byte.
+- **Descubrimiento**: `NsdManager` con `FLAG_SHOW_PICKER` en Android y `mdns-sd`
+  bajo `cfg(windows)`. Una dependencia externa nueva, sólo en Windows.
+- **Identidad persistente en las dos plataformas** que la v1.0 tiene.
+- **Confianza explícita con interfaz**: una clave cambiada se rechaza por nombre
+  y el botón de enviar **no existe** en ese estado.
+- **Diecinueve símbolos C**, ninguno cruza un tipo.
+- `cargo test --workspace`: **633 passed, 0 failed, 2 ignored**. `flutter test`:
+  **90 passed, 10 skipped** — las diez saltan sin la biblioteca nativa compilada
+  o sin el manifiesto fusionado, y saltada no es pasada.
+- `Cargo.lock`: **80 paquetes**. `pubspec.lock`: **45**.
+- `BUGS_PENDING.md`: **149 fichas, 0 abiertas.**
+
+**Lo que NO debe leerse como progreso:**
+
+- **Cero evidencia de hardware físico.** Es la fase 07 y está sin ejecutar.
+- **iOS está fuera** (ADR-0039): Xcode exige macOS.
+- Sin transferencia en segundo plano, sin cola, sin ajustes, sin cámara.
 
 ### Fase 05 — CERRADA. La interfaz, y los botones ENCENDIDOS
 
@@ -364,37 +390,41 @@ cuatro quedan abiertos y registrados, no omitidos.
 
 ## Not implemented
 
-- **Handshake y frames sobre transporte**: NOT_IMPLEMENTED. El handshake existe,
-  el sellado existe y ambos están probados, pero se ejecutan entre valores en un
-  proceso. No hay sockets, ni descubrimiento, ni integración con el framing en un
-  sentido que mueva bytes.
+- **Handshake y frames sobre transporte**: IMPLEMENTED, EJECUTADO. **Corregido en
+  la fase 10:** esta línea decía NOT_IMPLEMENTED y era cierta hasta el sprint 6A.
+  El handshake corre sobre un socket real desde entonces y Dart conduce la
+  transferencia entera desde la fase 02.
 - **Rotación y rekey de claves de sesión**: NOT_IMPLEMENTED. Una sesión usa una
   clave por dirección hasta agotar la secuencia.
-- **Almacenamiento seguro de identidad**: IMPLEMENTED **solo en Windows**,
-  NOT_IMPLEMENTED en Android y en iOS. Hay DPAPI de ámbito de usuario
-  (`qyro_win_dpapi`, ADR-0024); no hay Android Keystore ni iOS Keychain.
+- **Almacenamiento seguro de identidad**: IMPLEMENTED en **las dos plataformas
+  de la v1.0**. DPAPI de ámbito de usuario en Windows (`qyro_win_dpapi`,
+  ADR-0024) y `AndroidKeyStore` en Android (ADR-0025, ADR-0037): AES-256-GCM con
+  una clave no exportable, alcanzada por dos punteros a función que Kotlin
+  instala en Rust — **sin `jni-sys`**. iOS Keychain queda fuera con ADR-0039.
+  **Corregido en la fase 10:** esta línea decía «sólo en Windows».
 - **FFI criptográfico**: NOT_IMPLEMENTED, y deliberadamente. La biblioteca que
   Dart carga no depende de `qyro_crypto`, así que no hay nada de esto al otro
   lado de la frontera.
 - Golden tests de arranque: NOT_IMPLEMENTED
 - Benchmark de arranque documentado: NOT_IMPLEMENTED
-- Retención de artefactos de desarrollo: **PARCIAL**. El ZIP portable de Windows
-  sí se retiene (`qyro-windows-x64-portable-debug`, 14 días). El APK de Android y
-  el `Runner.app` de iOS **no**. Lo que falta en los tres es el checksum
-  distribuido dentro del paquete y la etiqueta DEVELOPMENT / NOT FOR PUBLIC
-  RELEASE: el digest que GitHub imprime al subir un artefacto identifica el ZIP
-  de ese run, no el contenido que alguien desempaqueta.
+- Retención de artefactos: IMPLEMENTED para la v1.0 (`release.yml`). El APK
+  release y el ZIP portable de Windows se construyen sobre la etiqueta, cada uno
+  con su `SHA256SUMS.txt` **dentro** del paquete y su SHA-256 publicado en
+  `docs/release/v1.0.md`. Los artefactos de desarrollo de `platform-builds.yml`
+  siguen siendo debug y lo dicen en su `BUILD-INFO.txt`.
 - Campaña **exhaustiva** de fuzzing: NOT_IMPLEMENTED. Hay una acotada, semanal,
   de dos minutos por target, en `crypto-fuzz.yml`.
-- Transporte, sockets y TLS: NOT_IMPLEMENTED
-- Transferencia de producto por red/UI: NOT_IMPLEMENTED. El motor y el
-  filesystem local sí mueven una transferencia entre directorios.
+- Transporte y sockets: IMPLEMENTED, EJECUTADO (`qyro_net`, ADR-0028). **TLS:
+  NOT_IMPLEMENTED y descartado** — ADR-0004 queda superada por ADR-0021 y
+  ADR-0022, con la enmienda que dice por qué
+- Transferencia de producto por red y por interfaz: IMPLEMENTED, EJECUTADA
+  entre dos procesos y **nunca en hardware físico**. **Corregido en la fase 10.**
 - **Interfaz de transferencia**: IMPLEMENTED (fase 05, ADR-0036). Cuatro
   pantallas, los dos idiomas, y **los botones encendidos**. NO vista en ninguna
   pantalla: `flutter build` no corre en la máquina de desarrollo (QYR-0324).
 - **Confianza consultada desde la aplicación**: IMPLEMENTED (ADR-0032 enmienda
-  1). Una clave cambiada se refuta por nombre desde Dart. **No persiste**: el
-  libro vive en memoria hasta la fase 06.
+  1). Una clave cambiada se refuta por nombre desde Dart, y **persiste** desde la
+  fase 06.
 - **Rechazo del receptor**: IMPLEMENTED (QYR-0089, QYR-0088). `TransferReject` se
   emite y se entiende, `Phase::Rejected` no es `Cancelled`, y `FileSink::abandon`
   deja el destino como lo encontró.
@@ -405,17 +435,26 @@ cuatro quedan abiertos y registrados, no omitidos.
   filesystem sí está ejecutada: `manifest_from_disk` y `manifest_from_open_files`
   construyen desde el disco y desde descriptores ya abiertos, con transferencias
   verificadas byte a byte en los dos caminos.
-- LAN/discovery/manual IP: NOT_IMPLEMENTED
+- LAN, descubrimiento y código manual: IMPLEMENTED (fase 04b, ADR-0035).
+  `NsdManager` con `FLAG_SHOW_PICKER` en Android, `mdns-sd` bajo `cfg(windows)`,
+  y el código `QYRO1|<socket-addr>|<32 hex>` tecleado, que es el camino que
+  funciona con aislamiento de cliente. **No ejecutado en una red real.**
 - Reanudación por red/UI: NOT_IMPLEMENTED. Los metadatos locales de
   `.qyro-resume` sí sobreviven entre procesos y `qyro_fs` los aplica.
-- UI y política interactiva de emparejamiento: NOT_IMPLEMENTED. El mecanismo de
-  confianza y el rechazo tipado de cambio de clave sí existen (ADR-0031).
+- UI y política interactiva de emparejamiento: IMPLEMENTED (fase 05, ADR-0036;
+  enmienda de ADR-0031 con la tabla de dónde aterrizó cada línea). **Corregido en
+  la fase 10.**
 - Base de datos o historial sincronizado: NOT_IMPLEMENTED. El historial local
   append-only sí existe y deliberadamente usa `Vec<T>` con iteradores.
-- Optical QR/RaptorQ: NOT_IMPLEMENTED
-- Wi-Fi Direct/Multipeer/Bluetooth transports: NOT_IMPLEMENTED
+- Optical QR/RaptorQ: NOT_IMPLEMENTED y **descartado para la v1.0** (ADR-0005
+  enmendada). No hay cámara en la aplicación y hay una prueba que lo mantiene
+  así (QYR-0348)
+- Wi-Fi Direct/Multipeer/Bluetooth: NOT_IMPLEMENTED y **descartado para la
+  v1.0** (ADR-0009 enmendada)
 - Share Target Android, Share Extension iOS, drag and drop Windows: NOT_IMPLEMENTED
-- SBOM y cargo-deny: NOT_IMPLEMENTED
+- SBOM y cargo-deny: NOT_IMPLEMENTED, **descartado con argumento** en la
+  enmienda de ADR-0010: `Cargo.lock` y `pubspec.lock` están versionados y son la
+  lista completa. `cargo audit --deny warnings` sí corre, sobre 80 paquetes
 
 ## Platforms compiled
 
@@ -780,19 +819,23 @@ permaneció invisible durante tres sprints.
 
 ## Blockers
 
-- **No hay transporte.** Hay identidad, handshake autenticado y cifrado de
-  frames, y nada de eso mueve un byte: no hay sockets, ni descubrimiento, ni
-  escritura en disco. Cifrar un frame en memoria no acerca la transferencia por
-  sí solo.
-- **La identidad solo vive en memoria en Android y en iOS.** No hay Keystore ni
-  Keychain: en esas dos plataformas, generar una identidad y cerrar el proceso la
-  pierde. En Windows sí persiste, y aun así **ninguna decisión de confianza
-  sobrevive a un reinicio en ninguna plataforma**, porque no existe el paso de
-  confianza que la usaría.
-- **Nada del producto llama al almacén.** `qyro_ffi` no depende de
-  `qyro_identity_store`, y una prueba lo mantiene así; la aplicación Flutter no
-  guarda ni carga identidad alguna. Lo que persiste en CI es un harness aislado,
-  no la app.
+**El bloqueador de la v1.0, y es uno solo:**
+
+- **Nada se ha ejecutado en hardware físico.** Ni un teléfono, ni una Wi-Fi. Todo
+  lo demás de esta lista es una limitación conocida y acotada; esto es un hueco
+  de evidencia sobre el producto entero. `docs/testing/hardware-protocol.md`
+  tiene los veinte escenarios con su comando literal y **sus veinte huecos en
+  blanco**.
+
+**Corregidos en la fase 10 — tres bloqueadores que ya no lo son:**
+
+- «No hay transporte» — lo hay desde el sprint 6A, y Dart lo conduce desde la
+  fase 02.
+- «La identidad sólo vive en memoria en Android y en iOS» — persiste en Android
+  desde la fase 06 (ADR-0037). En iOS no, y iOS está fuera de la v1.0 (ADR-0039).
+- «Nada del producto llama al almacén» — la aplicación llama, por los dos
+  punteros a función que Kotlin instala. Lo que sigue siendo cierto, y sigue
+  siendo deliberado, es que `qyro_ffi` no depende de `qyro_crypto`.
 - No hay FFI criptográfico; Dart no ve nada de esto, y una prueba lo mantiene
   así. Por eso mismo, **la aplicación Flutter no ejercita `qyro_crypto` en
   ninguna plataforma**: lo que corre en el emulador y en el simulador es un
@@ -806,8 +849,10 @@ permaneció invisible durante tres sprints.
   pero nada en este repositorio lo mide.
 - Golden tests de arranque y benchmark documentado siguen ausentes por tercer
   sprint consecutivo.
-- No se retiene ningún artefacto con checksum distribuido dentro del paquete. El
-  ZIP de Windows sí se retiene; el APK y el `Runner.app` no. Ver «Artifacts».
+- Los artefactos de la v1.0 sí llevan `SHA256SUMS.txt` dentro del paquete y su
+  SHA-256 publicado. Lo que ninguna máquina de este proyecto puede hacer es
+  **construirlos localmente**: el Modo Desarrollador de Windows está apagado
+  (QYR-0324), así que los construye CI y la firma release se aplica aparte.
 - La campaña de fuzzing es **acotada**: dos minutos por target, semanal. Lo que
   encuentre fuera de ese presupuesto sigue siendo desconocido.
 - El plegado de colisiones aplica normalización NFC real y `to_lowercase`
@@ -816,16 +861,16 @@ permaneció invisible durante tres sprints.
   hace es plegar homoglifos, que son deliberadamente rutas distintas. Registrado
   en `docs/security/parser-threats.md`. La descripción anterior de este archivo
   describía la tabla que se sustituyó en el sprint 4A.
-- Ninguna de las tres plataformas se ha probado en **hardware físico**. Este
-  sprint añadió ejecución de `qyro_crypto` en cuatro entornos y ninguno es un
-  teléfono: emulador, simulador y dos hosts. Android arm64 e iOS device se
-  compilan y no se ejecutan.
+- Ninguna plataforma se ha probado en **hardware físico**. Emulador, simulador y
+  dos hosts no son un teléfono. Android arm64 se compila y no se ejecuta.
 - La zeroización **no se ha observado**: se comprueba el tipo, no la memoria.
   Leer memoria liberada es comportamiento indefinido, así que una prueba que
   afirmara verlo estaría mintiendo.
 - No hay SBOM ni `cargo-deny`.
 - Autoría y licencia del logo siguen sin registrar.
-- No existe ninguna función de transferencia: el producto no es usable todavía.
+- **Corregido en la fase 10:** esta línea decía «no existe ninguna función de
+  transferencia: el producto no es usable todavía». Existe y en código está
+  completo. Lo que no existe es una sola persona que lo haya usado.
 
 ## Sprint 4D.1 — qué existe y qué no
 
@@ -1382,12 +1427,14 @@ sprint no había tocado ninguna ruta que vigilen.
 
 ## Next task
 
-**Descubrimiento LAN y conexión del producto.** El mecanismo local ya tiene
-identidad, handshake, confianza, motor, filesystem, reanudación e historial,
-pero nada los conecta a sockets, FFI o UI. El siguiente tramo debe abordar
-descubrimiento Android/Windows con entrada manual o QR de fallback, luego el
-selector de archivos y la UI de emparejamiento/transferencia. Android Keystore
-e iOS Keychain siguen siendo trabajos separados gobernados por ADR-0025.
+**Ejecutar la fase 07: el protocolo de hardware físico.** Todo lo que esta
+sesión podía construir está construido y etiquetado como `v1.0.0`. Lo único que
+queda no es código: son dos aparatos, una Wi-Fi y una persona ejecutando los
+veinte escenarios de `docs/testing/hardware-protocol.md` y anotando lo que pasó,
+incluidos los que fallen.
+
+**Lo que la fase 07 encuentre es lo que decide la v1.1**, y no al revés. Escribir
+hoy una lista de mejoras sería adivinar antes de la única medición que falta.
 
 ## Provisional values
 

@@ -169,7 +169,7 @@
   "@peersNone": {
     "description": "Transfer interface string: peersNone."
   },
-  "peersManualHint": "Type a pairing code, or scan one from the other device.",
+  "peersManualHint": "Type the pairing code the other device is showing.",
   "@peersManualHint": {
     "description": "Transfer interface string: peersManualHint."
   },
@@ -181,9 +181,9 @@
   "@peersManualInvalid": {
     "description": "Transfer interface string: peersManualInvalid."
   },
-  "peersScan": "Scan a code",
-  "@peersScan": {
-    "description": "Transfer interface string: peersScan."
+  "peersUseCode": "Use this code",
+  "@peersUseCode": {
+    "description": "Transfer interface string: peersUseCode."
   },
   "peersOwnCode": "This device's pairing code",
   "@peersOwnCode": {

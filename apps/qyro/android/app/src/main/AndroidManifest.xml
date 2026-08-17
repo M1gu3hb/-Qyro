@@ -11,10 +11,27 @@
          Framework needs none (ADR-0034 section 4), and if one ever appears here the
          design took a wrong turn. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- QYR-0349. ADR-0025 section 3.4 decided `allowBackup=false` and nobody wrote
+         it, so the application shipped with Android's default, which is **true**.
+         Auto Backup would have copied the wrapped identity blob to Google Drive:
+         an application whose first promise is "no cloud" (ADR-0007) uploading
+         part of itself to a cloud, by omission.
+
+         The blob is Keystore-wrapped and the wrapping key is device-bound and
+         non-exportable, so a restored copy would be unopenable rather than
+         dangerous. That is the reason this is not a catastrophe. It is not a
+         reason to leave it: the promise is "nothing leaves this network", and
+         "it leaves but is useless there" is a different promise.
+
+         `dataExtractionRules` covers API 31+, where `allowBackup` alone no
+         longer governs device-to-device transfer. -->
     <application
-        android:label="qyro"
+        android:label="Qyro"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

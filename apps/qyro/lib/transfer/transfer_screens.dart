@@ -159,11 +159,17 @@ class _PeersScreenState extends State<PeersScreen> {
         const SizedBox(height: 8),
         Row(
           children: <Widget>[
+            // QYR-0348. This button used to carry `Icons.qr_code_scanner` and
+            // the label "Scan a code", and what it does is parse the text
+            // field above it. There is no camera, no QR decoder and no plugin
+            // that could provide either -- an icon that promises a scanner is
+            // the same lie as a button that says it works when it does not,
+            // which is the thing phase 05 spent a day removing.
             OutlinedButton.icon(
               key: const Key('pairing-scan'),
               onPressed: _resolve,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: Text(strings.peersScan),
+              icon: const Icon(Icons.link),
+              label: Text(strings.peersUseCode),
             ),
             const SizedBox(width: 12),
             if (_resolvedAddress != null)

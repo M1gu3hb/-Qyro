@@ -1,6 +1,6 @@
 # ADR-0025 — Persistencia de `DeviceIdentity` en Android
 
-- Estado: **congelada** antes de escribir código de almacenamiento en Android.
+- Estado: **superada en el mecanismo** por ADR-0037 — ver la enmienda al final.
 - Fecha: 2026-08-07
 - Sprint: 4D.2a
 - Continúa: ADR-0024 (Windows/DPAPI), ADR-0023 (harness por plataforma).
@@ -367,3 +367,24 @@ clave del TEE ya da, y `android:allowBackup` como decisión de la aplicación.
 [aosp]: https://source.android.com/docs/security/features/keystore
 [ab]: https://developer.android.com/guide/topics/data/autobackup
 [ndk]: https://developer.android.com/ndk/guides/stable_apis
+
+---
+
+## Enmienda de la fase 10 — 2026-08-16
+
+**Las sub-decisiones de esta ADR siguen siendo las que rigen. El mecanismo, no.**
+
+Lo que se conserva entero: TEE sin StrongBox (§3.1), no exigir autenticación de
+usuario (§3.2), `android:allowBackup=false` y dónde vive el blob (§3.4), el IV de
+GCM (§4) y el byte `wrap` nuevo (§5). ADR-0037 no toca ninguna de ellas.
+
+Lo que cambia es **§1.4: no se usa `jni-sys`.** La dependencia estaba
+pre-autorizada y aun así no se añadió, porque el problema se puede dar la vuelta:
+en lugar de que Rust llame a la JVM, **la JVM instala dos punteros a función en
+Rust**. `qyro_session::BridgedWrapper` implementa `SecretWrapper` sobre esos dos
+punteros y Kotlin los implementa con `AndroidKeyStore`. Coste: cero dependencias
+nuevas y cero `unsafe` fuera de `qyro_ffi`.
+
+Y §1.2 tenía razón sobre el harness, que es lo que ADR-0037 arregla: la prueba
+corre bajo `am instrument`, dentro de un proceso de aplicación, que es el único
+sitio desde donde Keystore es alcanzable.

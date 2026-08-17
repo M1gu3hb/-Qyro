@@ -121,14 +121,39 @@ if [[ -f "$agents" ]] && [[ -f "$repo_root/scripts/doctor.sh" ]] && [[ -f "$repo
   fi
 fi
 
-for doc in PROJECT_CONTEXT.md README.md HANDOFF.md TESTING.md; do
-  path="$repo_root/$doc"
-  [[ -f "$path" ]] || continue
-  if grep -Eiq '(file transfer|transferencia de archivos)[[:space:]]*:[[:space:]]*(implemented|complete|ready|implementada|completa|lista)' "$path"; then
-    report "BLOCKER" "Pending capability claim" "$doc marks file transfer implemented"
-    blockers=$((blockers + 1))
-  fi
-done
+# Phase 10, 2026-08-16. This rule used to forbid these four documents from
+# saying "file transfer: implemented", and it was right for six sprints: the
+# transfer did not exist. It exists now, so the rule had expired -- and an
+# expired rule that still blocks is worse than no rule, because it stops the
+# documents saying what is true.
+#
+# What replaces it guards the claim that is still worth guarding, and it is not
+# a matter of opinion: no document may say the transfer is proven on hardware
+# while `docs/testing/hardware-protocol.md` still has an unchecked box. The
+# protocol is the evidence; the boxes are whether anybody ran it.
+hardware_protocol="$repo_root/docs/testing/hardware-protocol.md"
+hardware_unproven=1
+if [[ -f "$hardware_protocol" ]] && ! grep -Fq '`[ ]`' "$hardware_protocol"; then
+  hardware_unproven=0
+fi
+if [[ $hardware_unproven -eq 1 ]]; then
+  for doc in PROJECT_CONTEXT.md README.md HANDOFF.md TESTING.md STATUS.md \
+             docs/release/v1.0.md; do
+    path="$repo_root/$doc"
+    [[ -f "$path" ]] || continue
+    # Two steps, because "no se ha probado en hardware" matches the same words
+    # as "probado en hardware" and means the opposite. The first run of this
+    # rule flagged a line whose whole point was to deny the claim -- which is
+    # the textual guard failing the way textual guards fail, caught here rather
+    # than by someone deleting a true sentence to make a check go green.
+    if grep -Ein '(probad[oa]|verificad[oa]|tested|proven|validated)[^.]{0,40}(en|on) (hardware|un tel|a phone|dispositivos? f)' "$path" \
+       | grep -Eiv '\<(no|nunca|jam.s|sin|not|never|ning[uú]n[ao]?|cero|zero)\>[^.]{0,40}(probad|verificad|tested|proven|validated)' \
+       | grep -q .; then
+      report "BLOCKER" "Hardware claim" "$doc claims hardware evidence that no one has recorded"
+      blockers=$((blockers + 1))
+    fi
+  done
+fi
 
 if grep -Rqs --exclude-dir=.git --exclude-dir=build --exclude-dir=target 'REPLACE_WITH_' "$repo_root"; then
   if ! grep -Fq 'REPLACE_WITH_' "$status_file"; then

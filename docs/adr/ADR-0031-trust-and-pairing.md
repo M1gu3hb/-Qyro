@@ -1,6 +1,6 @@
 # ADR-0031 — Confianza y emparejamiento
 
-- Estado: **congelada antes del código**
+- Estado: **aceptada y cumplida** — ver la enmienda al final
 - Fecha: 2026-08-11
 - Alcance: decisión de confianza, huella humana y almacén de peers conocidos
 
@@ -220,3 +220,26 @@ permitiría que un atacante enseñara la huella de un tercero sin poseerla.
 - La forma humana contiene exactamente 128 bits y una sola codificación.
 - El módulo nuevo pasa un barrido focal de `cargo-mutants` con límite por
   mutante; su inventario va al informe de sprint, nunca al ledger.
+
+---
+
+## Enmienda de la fase 10 — 2026-08-16
+
+**Esta ADR describía una política y dejaba fuera quién la ejecutaba. Ya se sabe.**
+
+«La política interactiva futura podrá mostrar la huella y pedir una aceptación
+explícita» era, en su momento, la parte honesta: el mecanismo existía y la
+persona no. Hoy existen las dos.
+
+| Lo que decía la ADR | Dónde está |
+|---|---|
+| Los tres veredictos tipados | `qyro_session::PeerTrust`, con `code()` escrito a mano |
+| `KnownAndChanged` es rechazo terminal | La tarjeta del peer usa `errorContainer` y `gpp_bad`, y el botón de enviar **no existe** en ese estado — no está deshabilitado, no está |
+| Sin «continuar de todos modos» | No hay ese camino en la interfaz, y ADR-0036 §4 lo prohíbe por escrito |
+| Rotación legítima exige acción separada | «Olvidar este aparato», explícito, en la tarjeta |
+| Comparar todos los grupos antes de aceptar | La huella se muestra agrupada e idéntica en los dos aparatos |
+
+El emparejamiento en sí lo detalla ADR-0035, que es donde vive el formato
+`QYRO1|<socket-addr>|<32 hex>` y la afirmación que más importa: **la huella del
+código es una expectativa, no una credencial**, y la confianza se decide después
+del handshake.

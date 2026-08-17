@@ -274,10 +274,17 @@ jobs:
           @(
               'Qyro Windows x64 portable — DEVELOPMENT BUILD, NOT FOR PUBLIC RELEASE.'
               ''
-              'Debug configuration, unsigned. Qyro does not transfer files: Send and'
-              'Receive are disabled, and there is no transport, no discovery and no'
-              'secure storage. This package exists to prove the Windows build and'
-              'the Dart-to-DLL boundary work, and for nothing else.'
+              # Corrected in phase 10. This text said "Qyro does not transfer
+              # files: Send and Receive are disabled, and there is no transport,
+              # no discovery and no secure storage", which was true when it was
+              # written in phase 02 and false from phase 05 onwards. A false
+              # sentence inside a shipped artifact is worse than one in a
+              # document: it travels with the binary and nobody re-reads it.
+              'Debug configuration, unsigned, built from a branch. It transfers'
+              'files, it discovers peers and it stores an identity — and none of'
+              'that has ever run on physical hardware. For the release build see'
+              'the Release workflow; for what has and has not been proven see'
+              'docs/testing/hardware-protocol.md.'
               ''
               "commit=$env:GITHUB_SHA"
               "workflow_run=$env:GITHUB_RUN_ID"

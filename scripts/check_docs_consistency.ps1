@@ -117,13 +117,38 @@ if (($requiredScripts -notcontains $false) -and (Test-Path -LiteralPath $agentsP
     }
 }
 
-foreach ($doc in @('PROJECT_CONTEXT.md', 'README.md', 'HANDOFF.md', 'TESTING.md')) {
-    $path = Join-Path $RepoRoot $doc
-    if (-not (Test-Path -LiteralPath $path)) { continue }
-    $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
-    if ($content -match '(?i)(file transfer|transferencia de archivos)\s*:\s*(implemented|complete|ready|implementada|completa|lista)') {
-        Write-Status 'BLOCKER' 'Pending capability claim' "$doc marks file transfer implemented"
-        $blockers++
+# Phase 10, 2026-08-16. See the Bash edition for why the previous rule -- these
+# four documents may not say "file transfer: implemented" -- expired: the
+# transfer exists now, and a rule that blocks the truth is worse than no rule.
+# What replaces it guards the claim still worth guarding: nothing may say the
+# transfer is proven on hardware while the hardware protocol has an unchecked
+# box.
+$hardwareProtocol = Join-Path $RepoRoot 'docs/testing/hardware-protocol.md'
+$hardwareUnproven = $true
+if (Test-Path -LiteralPath $hardwareProtocol) {
+    $protocol = Get-Content -LiteralPath $hardwareProtocol -Raw -Encoding UTF8
+    if (-not $protocol.Contains('`[ ]`')) { $hardwareUnproven = $false }
+}
+if ($hardwareUnproven) {
+    $hardwareDocs = @(
+        'PROJECT_CONTEXT.md', 'README.md', 'HANDOFF.md', 'TESTING.md',
+        'STATUS.md', 'docs/release/v1.0.md'
+    )
+    foreach ($doc in $hardwareDocs) {
+        $path = Join-Path $RepoRoot $doc
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $content = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+        # Line by line and with the denial filtered out: "no se ha probado en
+        # hardware" carries the same words as "probado en hardware" and means
+        # the opposite. The Bash edition explains why this is two steps.
+        $claims = $content -split "`r?`n" | Where-Object {
+            $_ -match '(?i)(probad[oa]|verificad[oa]|tested|proven|validated)[^.]{0,40}(en|on) (hardware|un tel|a phone|dispositivos? f)' -and
+            $_ -notmatch '(?i)\b(no|nunca|jam.s|sin|not|never|ning[uú]n[ao]?|cero|zero)\b[^.]{0,40}(probad|verificad|tested|proven|validated)'
+        }
+        if ($claims) {
+            Write-Status 'BLOCKER' 'Hardware claim' "$doc claims hardware evidence that no one has recorded"
+            $blockers++
+        }
     }
 }
 

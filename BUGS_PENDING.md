@@ -3718,3 +3718,64 @@
   handle no buscable fallarían los dos `seek`, no sólo éste. Se deja: cuatro bytes
   de código defensivo cuya única alternativa es borrarlo y confiar en que nadie
   pase nunca un pipe. Lo que se corrigió fue la afirmación, no el código.
+
+## QYR-0348 — Un botón con icono de escáner que no escanea nada
+
+- Plataforma: Android, Windows; `apps/qyro/lib/transfer/transfer_screens.dart`
+- Severidad: P1
+- Esperado: la interfaz no promete capacidades que la aplicación no tiene
+- Actual: el botón de la pantalla de peers llevaba `Icons.qr_code_scanner` y la
+  etiqueta «Escanear un código» / «Scan a code», y lo que hacía era leer el campo
+  de texto de encima. **No hay cámara**: ni paquete que la provea en
+  `pubspec.yaml`, ni permiso de cámara en el manifiesto, ni decodificador de QR
+  en el árbol. El texto de ayuda decía además «o escanea el del otro aparato»
+- **Por qué es P1 y no cosmético:** es exactamente el defecto que la fase 05
+  quitó del Home —un control que afirma algo que el producto no hace— y había
+  vuelto a entrar por la puerta de al lado. Una persona apunta la cámara a un
+  código y no pasa nada, y lo que aprende es que la aplicación miente
+- Arreglo: el icono pasa a `Icons.link`, la clave `peersScan` pasa a
+  `peersUseCode` —«Usar este código» / «Use this code»— y el texto de ayuda deja
+  de mencionar escanear, en los dos catálogos. `docs/release/v1.0.md` decía
+  también que el código «se escanea»; corregido
+- Guarda: `apps/qyro/test/promised_capabilities_test.dart`, con tres pruebas —
+  ningún icono de cámara en `lib/`, ningún paquete del grafo que pudiera dar
+  una, y un control que distingue una mención de un uso
+- **Lo que la guarda enseñó de sí misma:** falló en su primera ejecución contra
+  el propio comentario que explica por qué existe. Es QYR-0328 en el otro
+  lenguaje —una comprobación que no distingue mención de uso— y se arregló igual:
+  `codeOnly` recorre la fuente saltando literales antes de buscar
+- Estado: cerrado
+- Dueño: interfaz
+- Fecha: 2026-08-16
+- Evidencia: `flutter test` 89 pasadas / 10 saltadas, exit 0; `flutter analyze`
+  exit 0
+
+## QYR-0349 — Una decisión de ADR-0025 que nunca se escribió: `allowBackup`
+
+- Plataforma: Android; `apps/qyro/android/app/src/main/AndroidManifest.xml`
+- Severidad: P1
+- Esperado: `android:allowBackup="false"`, decidido en ADR-0025 §3.4
+- Actual: el atributo **no estaba**, así que regía el valor por defecto de
+  Android, que es `true`. Auto Backup habría copiado el blob de identidad
+  envuelto a Google Drive. Una aplicación cuya primera promesa es «sin nube»
+  (ADR-0007) subiendo parte de sí misma a una nube, por omisión
+- **Por qué no es una catástrofe, y por qué se arregla igual:** el blob está
+  envuelto por una clave de Keystore que no sale del aparato, así que una copia
+  restaurada en otro sitio es inservible, no peligrosa. Pero la promesa es «nada
+  sale de esta red», y «sale pero no sirve» es otra promesa distinta
+- **Lo que faltaba además:** en API 31+ `allowBackup` dejó de gobernar la
+  transferencia aparato-a-aparato. Hace falta `dataExtractionRules` con
+  `<cloud-backup />` y `<device-transfer />` vacíos, que es «no incluyas nada»
+- Arreglo: los tres atributos en el manifiesto y
+  `res/xml/data_extraction_rules.xml` nuevo. De paso, `android:label` deja de
+  ser `qyro` en minúscula, que era el marcador de posición de la plantilla
+- Guarda: `android_manifest_test.dart`, prueba «nothing of this application is
+  backed up or transferred» — comprueba los tres atributos, que el archivo de
+  reglas existe, y que no contiene ningún `<include>`
+- **La clase de defecto:** una decisión escrita en una ADR y ausente del archivo
+  que decide no vale nada. Es el mismo hallazgo que QYR-0303 en otra forma, y por
+  eso la guarda lee el manifiesto en vez de confiar en la ADR
+- Estado: cerrado
+- Dueño: android
+- Fecha: 2026-08-16
+- Evidencia: `flutter test` 90 pasadas / 10 saltadas, exit 0

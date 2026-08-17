@@ -61,7 +61,7 @@ void main() {
         english.peersManualInvalid,
         spanish.peersManualInvalid
       ),
-      'peersScan': (english.peersScan, spanish.peersScan),
+      'peersUseCode': (english.peersUseCode, spanish.peersUseCode),
       'peersOwnCode': (english.peersOwnCode, spanish.peersOwnCode),
       'peersOwnCodeUnavailable': (
         english.peersOwnCodeUnavailable,

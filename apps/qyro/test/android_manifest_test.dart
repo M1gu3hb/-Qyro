@@ -166,6 +166,37 @@ void main() {
         declared, <String>['android.permission.CHANGE_WIFI_MULTICAST_STATE']);
   });
 
+  test('nothing of this application is backed up or transferred', () {
+    // QYR-0349. ADR-0025 §3.4 decided `allowBackup=false` and the attribute was
+    // never written, so the application shipped with Android's default of
+    // **true**: Auto Backup would have copied the wrapped identity blob to
+    // Google Drive. A decision written in an ADR and absent from the file it
+    // decides is worth nothing, which is why this is asserted and not trusted.
+    final source = File('android/app/src/main/AndroidManifest.xml');
+    final text = _withoutComments(source.readAsStringSync());
+
+    expect(text, contains('android:allowBackup="false"'));
+    expect(text, contains('android:fullBackupContent="false"'));
+    // API 31+ stopped letting `allowBackup` govern device-to-device transfer,
+    // so the rules file is not optional above that level.
+    expect(text, contains('android:dataExtractionRules='));
+
+    final rules =
+        File('android/app/src/main/res/xml/data_extraction_rules.xml');
+    expect(
+      rules.existsSync(),
+      isTrue,
+      reason: 'the manifest points at a rules file that does not exist, which '
+          'fails the build -- and would fail it at package time, not here',
+    );
+    final body = _withoutComments(rules.readAsStringSync());
+    // Empty sections mean "include nothing". An <include> of any kind would
+    // mean something does leave.
+    expect(body, isNot(contains('<include')));
+    expect(body, contains('<cloud-backup'));
+    expect(body, contains('<device-transfer'));
+  });
+
   test('the merged manifest declares no storage permission', () {
     final merged = _mergedManifest();
     if (merged == null) {
