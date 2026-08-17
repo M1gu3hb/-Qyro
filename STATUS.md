@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-16T12:00:00Z
+- Updated UTC: 2026-08-18T00:00:00Z
 - Branch: claude/qyro-cerrar-cadena-12
-- Verified commit: 928e41fa73c6390ba28556d290dbbac56355a2eb
+- Verified commit: 5459a64c09d4259c754e6b4ec970af04f6c39116
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
