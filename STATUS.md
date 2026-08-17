@@ -20,6 +20,31 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   `127.0.0.1` no son dos aparatos en una red. Los veinte escenarios que cierran
   ese hueco están escritos y **sin marcar** en `docs/testing/hardware-protocol.md`
 
+### v1.0.0 — la etiqueta y sus artefactos
+
+`v1.0.0` apunta a `98200e1`, cuyos tres workflows terminaron en **success** sobre
+`386015a` (ver «Fase 11 — runs de cierre»).
+
+Los artefactos los construyó el run **31994299360** de `release.yml` sobre
+`4c297af`, un commit por delante de la etiqueta. La diferencia son tres archivos
+—`release.yml`, `BUGS_PENDING.md`, `ESTADO-ACTUAL.md`— y **ninguna línea de
+código del producto**, comprobable con `git diff --stat v1.0.0 4c297af`. La
+etiqueta **no se movió**: mover una etiqueta es reescribir historia.
+
+| Artefacto | SHA-256 |
+|---|---|
+| `app-release.apk`, firmado con la clave de release | `d0d7afaa…225f700a` |
+| `qyro-windows-x64.zip` | `4e21923c…c17e0370` |
+| `app-release-debugkey.apk`, el de CI | `f17125de…3a961a2e` |
+
+Los tres completos están en `docs/release/v1.0.md`. El certificado del APK
+firmado se verificó con `apksigner verify --print-certs`: **un solo firmante**,
+`CN=Qyro`, RSA 4096, esquemas v2 y v3, y el digest que ese documento publica.
+
+**No existe una GitHub Release.** La etiqueta es lo que se pidió; publicar
+binarios en abierto es una decisión del propietario, sobre software que nadie ha
+ejecutado nunca en un teléfono.
+
 ### Fase 11 — runs de cierre
 
 Los tres sobre `386015a`, disparados por el `push`, y **es el primer commit de
@@ -87,7 +112,7 @@ contra el código que existe: `THREAT_MODEL.md`.
   **92 pasadas, 9 saltadas** — las diez saltan sin la biblioteca nativa compilada
   o sin el manifiesto fusionado, y saltada no es pasada.
 - `Cargo.lock`: **80 paquetes**. `pubspec.lock`: **45**.
-- `BUGS_PENDING.md`: **151 fichas, 0 abiertas.**
+- `BUGS_PENDING.md`: **155 fichas, 0 abiertas.**
 
 **Lo que NO debe leerse como progreso:**
 
