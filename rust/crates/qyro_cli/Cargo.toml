@@ -1,0 +1,17 @@
+[package]
+name = "qyro_cli"
+version = "1.1.0"
+edition = "2024"
+publish = false
+
+# `qyro`, not `qyro-cli`: the owner's requirement is «en su terminal pongo el
+# comando», and the shortest command is the one that gets typed right.
+[[bin]]
+name = "qyro"
+path = "src/main.rs"
+
+[dependencies]
+# Directly on the engine, never through the C boundary. That boundary exists so
+# Dart can cross a language limit; Rust talking to Rust pays its toll for
+# nothing (ADR-0042 §2).
+qyro_session = { path = "../qyro_session" }

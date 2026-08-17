@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "rust/crates/qyro_cli",
   "rust/crates/qyro_core",
   "rust/crates/qyro_crypto",
   "rust/crates/qyro_ffi",
@@ -27,3 +28,29 @@ edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.88"
 version = "0.0.1"
+
+# The portable-binary profile, already measured in R8 §6 and not re-derived.
+#
+# Two findings from that measurement, both reproduced and both
+# counter-intuitive: `opt-level = "z"` **on its own makes the binary bigger**,
+# and `"s"` beats `"z"` once the other levers are pulled. Measure, do not
+# assume.
+#
+# **`panic = "abort"` is deliberately NOT here, and R8 §6 recommends it.**
+#
+# The guard `no_cargo_profile_sets_panic_abort` (QYR-0305) rejected it within a
+# minute of it being written, and the guard is right: `catch_unwind` catches
+# nothing under `abort`, so every `guard(...)` at the C boundary becomes
+# decoration and a panic in Rust takes the host application down with it.
+#
+# R8's measurement is not wrong — it was taken on a standalone binary with no
+# foreign frontier. This workspace has one, and **an invariant beats a
+# measurement when they disagree**. Measured cost of keeping unwind, on this
+# machine: `qyro.exe` **590 KB con abort, 653 KB sin él**. Sesenta y tres
+# kilobytes por una frontera de pánico que funciona no es un intercambio que
+# haya que pensar dos veces.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

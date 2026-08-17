@@ -343,6 +343,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "qyro_cli"
+version = "1.1.0"
+dependencies = [
+ "qyro_session",
+]
+
+[[package]]
 name = "qyro_core"
 version = "0.0.1"
 
