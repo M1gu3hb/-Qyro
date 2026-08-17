@@ -183,6 +183,10 @@ typedef _ProgressQueryDart = int Function(
     int, Pointer<Uint64>, Pointer<Uint64>, Pointer<Uint32>);
 
 typedef _HandleOnlyNative = Int32 Function(Uint64 handle);
+
+/// `qyro_session_finish(handle, out_count)` -- ADR-0032 amendment 3.
+typedef _FinishNative = Int32 Function(Uint64 handle, Pointer<Uint32> outCount);
+typedef _FinishDart = int Function(int handle, Pointer<Uint32> outCount);
 typedef _HandleOnlyDart = int Function(int);
 
 typedef _AllocNative = Pointer<Uint8> Function(UintPtr len);
@@ -214,6 +218,9 @@ final class QyroSessionBindings {
         ),
         _cancel = library.lookupFunction<_HandleOnlyNative, _HandleOnlyDart>(
           'qyro_session_cancel',
+        ),
+        _finish = library.lookupFunction<_FinishNative, _FinishDart>(
+          'qyro_session_finish',
         ),
         _close = library.lookupFunction<_HandleOnlyNative, _HandleOnlyDart>(
           'qyro_session_close',
@@ -284,6 +291,7 @@ final class QyroSessionBindings {
   final _StepDart _step;
   final _ProgressQueryDart _readProgress;
   final _HandleOnlyDart _cancel;
+  final _FinishDart _finish;
   final _HandleOnlyDart _close;
   final _AllocDart _alloc;
   final _FreeDart _free;
@@ -606,6 +614,33 @@ final class QyroSession {
   }
 
   /// Asks the session to stop. Does not block, and is safe from any isolate.
+  /// Materialises what arrived, and releases what did not.
+  ///
+  /// **QYR-0357.** This is what renames each `.qyro-part` to its final name
+  /// after the digest verifies (ADR-0027 §4). Until phase 12 no symbol reached
+  /// it, so a Dart receiver reported "delivered" and left a part file: the
+  /// worst shape a failure takes, because it leaves a person believing they
+  /// have the file.
+  ///
+  /// Call it on **every** ending, not only the happy one -- a receiver that
+  /// stopped early leaves a part per started item and nothing else removes it.
+  ///
+  /// Returns how many items reached their final name. Zero is legitimate: a
+  /// refused transfer materialises nothing.
+  int finish() {
+    _refuseIfDisposed();
+    final count = QyroBorrowed.ofBytes(_bindings, List<int>.filled(4, 0));
+    try {
+      final code = _bindings._finish(_handle, count.pointer.cast<Uint32>());
+      if (code != QyroCode.ok) {
+        throw QyroSessionFailure(code, 'qyro_session_finish');
+      }
+      return count.pointer.cast<Uint32>().value;
+    } finally {
+      count.release();
+    }
+  }
+
   void cancel() {
     if (_disposed) {
       return;

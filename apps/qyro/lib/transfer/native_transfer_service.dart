@@ -479,6 +479,26 @@ final class NativeTransferService implements QyroTransferService {
       } on QyroSessionFailure catch (failure) {
         return failure.code;
       } finally {
+        // **QYR-0357. Nothing arrives without this.**
+        //
+        // `finish` verifies each item's digest and renames its `.qyro-part` to
+        // the final name (ADR-0027 §4). No symbol reached it until ADR-0032
+        // amendment 3, so this receiver reported "delivered" and left a part
+        // file on disk -- the worst shape a failure takes, because a person is
+        // left believing they have the file.
+        //
+        // In `finally`, so it runs on **every** ending and not only the happy
+        // one: a receiver that stopped early leaves a part per started item and
+        // nothing else removes it (QYR-0087, QYR-0088). A refusal materialises
+        // nothing and releases the parts, which is the same call.
+        try {
+          session.finish();
+        } on QyroSessionFailure {
+          // The ending already decided what this transfer was. A failure to
+          // materialise cannot promote a refusal into a success, and swallowing
+          // it here is not hiding anything: the digest that did not verify is
+          // what `state` already reported.
+        }
         session.dispose();
       }
     });

@@ -508,6 +508,44 @@ pub extern "C" fn qyro_session_cancel(handle: u64) -> i32 {
     })
 }
 
+/// Materialises what arrived, and releases what did not.
+///
+/// **QYR-0357, and without this a received file never arrives.**
+/// `Session::finish` verifies each item's digest and renames its `.qyro-part`
+/// to the final name (ADR-0027 §4). It had no symbol, so the Dart receiver
+/// reported "delivered" and left a part file on disk -- the worst shape a
+/// failure can take, because a noisy one leaves a person retrying and this one
+/// leaves them believing they have the file.
+///
+/// Called on **every** ending and not only the happy one: a receiver that
+/// stopped early leaves a `.qyro-part` per started item and nothing else
+/// removes it (QYR-0087, QYR-0088).
+///
+/// `out_count` receives how many items reached their final name. Zero is a
+/// legitimate answer -- a sender that was refused materialises nothing -- so it
+/// is a count and not a boolean.
+///
+/// # Safety
+///
+/// `out_count` must be null or address four writable, aligned bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qyro_session_finish(handle: u64, out_count: *mut u32) -> i32 {
+    guard(|| {
+        if out_count.is_null() {
+            return QYRO_ERR_NULL_OUT;
+        }
+        with_session(handle, |entry| match entry.session.finish() {
+            Ok(count) => {
+                // SAFETY: checked non-null above; the caller promises four
+                // writable aligned bytes, which is this function's contract.
+                unsafe { out_count.write(count) };
+                QYRO_OK
+            }
+            Err(error) => session_code(error),
+        })
+    })
+}
+
 /// Closes the handle and drops the session.
 ///
 /// A second call is [`QYRO_ERR_INVALID_HANDLE`](crate::abi::QYRO_ERR_INVALID_HANDLE),

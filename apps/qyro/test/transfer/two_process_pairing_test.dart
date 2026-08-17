@@ -153,12 +153,6 @@ void main() {
           reason: 'the receiver never reported a delivery. It saw: $seen',
         );
 
-        // ignore: avoid_print
-        print('SCRATCH TREE: ' +
-            Directory(scratch.path)
-                .listSync(recursive: true)
-                .map((e) => e.path)
-                .join(' | '));
         final arrived = destination
             .listSync(recursive: true)
             .whereType<File>()
@@ -234,7 +228,7 @@ void main() {
       );
       // And it is a *different* ending from the one a real transfer produces,
       // which is what makes the pair of tests mean something.
-      expect(said, isNot(contains('all_ok\":true')));
+      expect(said, isNot(contains('all_ok":true')));
     }, timeout: const Timeout(Duration(minutes: 2)));
   }, skip: skip);
 }
