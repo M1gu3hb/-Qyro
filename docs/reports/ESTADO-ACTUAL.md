@@ -47,18 +47,11 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 ## 4. La puerta — trece comprobaciones, por exit code
 
 ```bash
-cargo test --workspace
-cargo fmt --all --check
+cargo test --workspace && cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy -p qyro_session -p qyro_ffi --all-targets --target aarch64-linux-android -- -D warnings
-cargo audit --deny warnings
-```
-
-```bash
+cargo audit --deny warnings          # cargo-audit vive en D:	ools\cargoin
 cd apps/qyro && flutter analyze && flutter test && dart format --set-exit-if-changed .
-```
-
-```bash
 bash scripts/check_docs_consistency.sh
 powershell -NoProfile -File scripts/check_docs_consistency.ps1
 ```
@@ -105,6 +98,20 @@ $env:PATH="D:\flutter\bin;"+$env:PATH
    equivocada en Rust se lee igual de mal en Dart (QYR-0318).
 7. `apps/qyro/lib/l10n/generated/` está en `.gitignore`: tras tocar un `.arb`,
    `flutter gen-l10n`.
+8. **`flutter test` a secas salta las pruebas que importan.** Sin
+   `QYRO_FFI_LIBRARY_PATH` y `QYRO_NET_SMOKE_PATH` se saltan nueve, y son las que
+   cruzan el FFI de verdad. Con las dos: **101 pasadas, cero saltadas**. Correr
+   sin ellas y dar la suite por verde es cómo se empujan dos ciclos de CI en
+   rojo seguidos:
+
+   ```powershell
+   $env:QYRO_FFI_LIBRARY_PATH="D:\Qyro
+epo	arget
+elease\qyro_ffi.dll"
+   $env:QYRO_NET_SMOKE_PATH="D:\Qyro
+epo	arget
+elease\qyro_net_smoke.exe"
+   ```
 
 ---
 

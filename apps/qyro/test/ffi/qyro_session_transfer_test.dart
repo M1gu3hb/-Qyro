@@ -116,6 +116,34 @@ Future<_Receiver> _startReceiver(String smoke, Directory destination) async {
   return _Receiver(process, port, destination, finished);
 }
 
+/// Where this test binary's identity lives, for the whole binary.
+///
+/// **Not per test, and the reason is the contract.** ADR-0040 makes a process
+/// hold exactly one identity: a second `open` naming a *different* path is
+/// `bad_argument`, because two identities in one process is not a state the
+/// engine can be in. The first draft of this file opened one per `setUp`
+/// against a fresh scratch directory, and every test after the first was
+/// refused — the engine was right and the test was wrong.
+Directory? _identityHome;
+
+/// Opens the identity once per test process.
+///
+/// A session built before one exists answers `identity_unreadable` rather than
+/// minting a throwaway keypair. That refusal *is* the fix: until phase 11 the
+/// engine generated a fresh keypair per session and nothing here noticed,
+/// because nothing here compared one session's fingerprint with the next.
+///
+/// Sandbox rather than platform: this runs on Linux and Windows runners alike,
+/// and `platform` correctly refuses where there is no wrapper.
+void _ensureIdentity(QyroSessionBindings bindings) {
+  final home =
+      _identityHome ??= Directory.systemTemp.createTempSync('qyro-dart-id');
+  QyroIdentityBindings.open(bindings).open(
+    '${home.path}${Platform.pathSeparator}identity.qyro',
+    QyroProtection.sandbox,
+  );
+}
+
 void main() {
   final library = _libraryPath;
   final smoke = _smokePath;
@@ -132,19 +160,7 @@ void main() {
     setUp(() {
       scratch = Directory.systemTemp.createTempSync('qyro-dart-transfer');
       bindings = QyroSessionBindings.open(library!);
-      // ADR-0040. A session opened before an identity answers
-      // `identity_unreadable` rather than generating a throwaway keypair, so
-      // every test that builds one needs an identity first. That refusal *is*
-      // the fix: until phase 11 the engine minted a fresh keypair per session
-      // and nothing here noticed, because nothing here compared one session's
-      // fingerprint with the next one's.
-      //
-      // Sandbox rather than platform: these run on Linux and Windows runners
-      // alike, and `platform` correctly refuses where there is no wrapper.
-      QyroIdentityBindings.open(bindings).open(
-        '${scratch.path}${Platform.pathSeparator}identity.qyro',
-        QyroProtection.sandbox,
-      );
+      _ensureIdentity(bindings);
     });
 
     tearDown(() {
