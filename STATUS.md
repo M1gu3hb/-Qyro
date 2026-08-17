@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-18T00:00:00Z
+- Updated UTC: 2026-08-18T12:00:00Z
 - Branch: claude/qyro-cerrar-cadena-12
-- Verified commit: 5459a64c09d4259c754e6b4ec970af04f6c39116
+- Verified commit: f50ab2c7e342c9449c062898e55fa0cb36de9bd6
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -105,15 +105,23 @@ contra el código que existe: `THREAT_MODEL.md`.
 
 - **Transferencia completa de extremo a extremo**, conducida desde Dart, entre
   dos procesos de sistema operativo, con verificación byte a byte.
-- **Descubrimiento**: NO_ALCANZABLE. `NsdManager` con `FLAG_SHOW_PICKER` y
-  `mdns-sd` bajo `cfg(windows)` están escritos y probados, y **ningún símbolo
-  de la superficie C los alcanza**: `DiscoveryChannel.kt` está registrado y
-  ningún archivo de Dart abre el canal `dev.qyro/discovery`. Se declara fuera
-  de la v1.x aquí en vez de anunciarse; la fase 14 lo conecta.
+- **Descubrimiento**: CONECTADO en la fase 14, con un hueco declarado.
+  `dev.qyro/discovery` ya tiene lado Dart y llamante de producción
+  (`transfer_screens.dart:116, 145, 150`), y el motor levanta **un beacon por
+  interfaz** con `socket2` además del responder de plataforma —los dos cada
+  ronda, desduplicando por huella— con llamante en
+  `qyro_session/src/discovery.rs:139`. El CLI lo estrena con `qyro find`.
+  **El hueco:** `qyro_session::browse` **no cruza la frontera C**, así que la
+  GUI de escritorio sigue sin descubrimiento y lo dice con una frase en vez de
+  devolver una lista vacía. En Windows el consumidor con descubrimiento es el
+  CLI. **Verificado sin red real**: que dos máquinas se vean por un cable es
+  fase 19 y el hueco sigue en blanco.
 - **Identidad persistente en las dos plataformas** que la v1.0 tiene.
 - **Confianza explícita con interfaz**: una clave cambiada se rechaza por nombre
   y el botón de enviar **no existe** en ese estado.
-- **Diecinueve símbolos C**, ninguno cruza un tipo.
+- **Veinticuatro símbolos C**, ninguno cruza un tipo. (Decía «diecinueve»: la
+  cifra se quedó en una fase anterior y la contó la fase 14 con
+  `grep -c no_mangle`.)
 - `cargo test --workspace`: **639 passed, 0 failed, 2 ignored**. `flutter test`:
   **92 pasadas, 9 saltadas** — las diez saltan sin la biblioteca nativa compilada
   o sin el manifiesto fusionado, y saltada no es pasada.
