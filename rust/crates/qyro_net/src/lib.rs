@@ -40,6 +40,7 @@
     clippy::indexing_slicing
 )]
 
+mod beacon;
 mod discovery;
 mod error;
 mod handshake;
@@ -54,6 +55,10 @@ mod guards;
 mod tests;
 
 #[cfg(windows)]
+pub use beacon::{
+    BEACON_PORT, Beacon, BeaconSwarm, MAX_BEACON_PAYLOAD, MDNS_GROUP_V4, announcement_targets,
+    beacon_interfaces,
+};
 pub use discovery::MdnsDiscovery;
 pub use discovery::{
     PeerDiscovery, PeerEndpoint, SERVICE_TYPE, TXT_FINGERPRINT_KEY, fingerprint_from_txt,
@@ -63,7 +68,7 @@ pub use error::{NetError, SocketOp};
 pub use handshake::{Session, initiate, initiate_within, respond, respond_within};
 pub use limits::{
     CONNECT_TIMEOUT, HANDSHAKE_DEADLINE, IDLE_TIMEOUT, MAX_ESTABLISHED_SESSIONS,
-    MAX_PENDING_HANDSHAKES, MAX_PREAUTH_BYTES, READ_BUFFER_LEN, READ_TIMEOUT,
+    MAX_PENDING_HANDSHAKES, MAX_PREAUTH_BYTES, QYRO_PORT, READ_BUFFER_LEN, READ_TIMEOUT,
 };
 pub use listener::{Listener, PendingSlot, REFUSAL_TOO_MANY_PENDING, dial, refusal_of};
 pub use pairing::{

@@ -25,9 +25,13 @@ use crate::term::{self, Vt};
 
 /// The port a receiver binds, unless somebody names another.
 ///
-/// ADR-0041 §3, and the same constant the GUI uses. **Not re-derived**: two
-/// copies of a port number are two ports the day one of them changes.
-pub const DEFAULT_PORT: u16 = 49_517;
+/// ADR-0041 §3. **Now genuinely not re-derived.** This constant used to carry
+/// the literal `49_517` under a comment saying two copies of a port number are
+/// two ports the day one of them changes — while being the second copy, with a
+/// third in Dart. It is the engine's number now, and
+/// `qyro_net::guards::the_two_consumers_agree_on_the_port` fails if the Dart
+/// side drifts from it.
+pub const DEFAULT_PORT: u16 = qyro_session::QYRO_PORT;
 
 /// Where this device's identity lives.
 ///

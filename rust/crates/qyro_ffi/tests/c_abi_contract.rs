@@ -268,7 +268,37 @@ fn qyro_session_re_exports_nothing_it_does_not_own() {
 /// rather than claims. It is kept because a set that changes without anyone
 /// noticing is how a dependency arrives unexamined, and it is documented as a
 /// changelog so nobody mistakes it for the guard it replaced.
-const CLOSURE: [&str; 69] = [
+///
+/// # Entries
+///
+/// **2026-08-18, phase 14, 69 -> 77.** `socket2` arrived in `qyro_net` so that
+/// multicast can name the interface it leaves by (ADR-0043 §5). It looks like
+/// one crate and is nine: it drops `windows-link` and pulls `windows-targets`
+/// plus the eight `windows_<arch>_<abi>` import-library shims, of which the
+/// linker uses one per target.
+///
+/// **Measured, not assumed**, `qyro.exe` for `x86_64-pc-windows-msvc`:
+///
+/// | State | Bytes |
+/// |---|---|
+/// | Before `socket2` | 1 298 432 |
+/// | `socket2` added, nothing calling `Beacon` | 1 298 432 |
+/// | `qyro_session::browse` calling the swarm | 1 306 624 |
+///
+/// The first two being **identical** is comprobación 14 arriving through the
+/// linker: with no production caller the module was discarded whole, so the
+/// dependency was free precisely because it did nothing. It stopped being free
+/// the moment it was reachable, which is the only version of it that ships.
+///
+/// The same measurement across the two commits either side of `qyro find` found
+/// what nobody had looked at: `458d4bd` -> `3ecebed` took the binary from
+/// `666 624` to `1 295 872` bytes. **`mdns-sd` nearly doubled it** — ten times
+/// the 63 KB this workspace deliberated over for panic-unwind. The in-tree
+/// beacon, doing the same job without a responder, costs `8 192`. Recorded as
+/// D9, and not acted on here: a 75-fold difference is an argument for phase 19
+/// to settle with a working network, not for this commit to settle by deleting
+/// the channel that currently works.
+const CLOSURE: [&str; 77] = [
     "aead",
     "block-buffer",
     "cfg-if",
@@ -313,11 +343,6 @@ const CLOSURE: [&str; 69] = [
     "qyro_protocol",
     "qyro_session",
     "qyro_transfer",
-    // ADR-0040: `qyro_session` gained a `cfg(windows)` edge to it. An edge,
-    // not a package -- its only dependencies were already in this list -- and
-    // it appears here because `dependency_closure` deliberately resolves
-    // without `--filter-platform`. This file is a changelog; this is the
-    // deliberate update it exists for.
     "qyro_win_dpapi",
     "r-efi",
     "rand_core",
@@ -338,8 +363,16 @@ const CLOSURE: [&str; 69] = [
     "unicode-normalization",
     "universal-hash",
     "wasi",
-    "windows-link",
     "windows-sys",
+    "windows-targets",
+    "windows_aarch64_gnullvm",
+    "windows_aarch64_msvc",
+    "windows_i686_gnu",
+    "windows_i686_gnullvm",
+    "windows_i686_msvc",
+    "windows_x86_64_gnu",
+    "windows_x86_64_gnullvm",
+    "windows_x86_64_msvc",
     "x25519-dalek",
     "zeroize",
     "zeroize_derive",

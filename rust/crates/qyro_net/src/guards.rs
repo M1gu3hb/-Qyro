@@ -34,7 +34,8 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 8] = [
+const PRODUCTION_FILES: [&str; 9] = [
+    "beacon.rs",
     "lib.rs",
     "discovery.rs",
     "error.rs",
@@ -133,4 +134,49 @@ fn the_analysis_reaches_the_end_of_every_production_file() {
             "src/{file} stripped to nothing, so nothing was analysed"
         );
     }
+}
+
+/// The number ADR-0041 froze, spelled the same in both consumers.
+///
+/// **This guard exists because phase 14 found three copies and no original.**
+/// `qyro_cli` had `DEFAULT_PORT`, Dart had `qyroDefaultPort`, and the engine —
+/// the one place both of them link against — had nothing. Two consumers each
+/// carrying their own copy of a frozen number is the drift this codebase keeps
+/// paying for; the difference here is that a mismatch is silent, and it shows up
+/// as «the other device is not answering» on a network where it is.
+///
+/// Reading the Dart source from a Rust test is not elegant. It is the only
+/// place the two languages can be compared without a running build of both, and
+/// a guard that runs beats an elegance that does not.
+#[test]
+fn the_two_consumers_agree_on_the_port() {
+    let dart = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../apps/qyro/lib/transfer/transfer_service.dart");
+    let source = std::fs::read_to_string(&dart)
+        .unwrap_or_else(|error| panic!("the Dart consumer is at {}: {error}", dart.display()));
+
+    let needle = "const int qyroDefaultPort =";
+    let start = source.find(needle).unwrap_or_else(|| {
+        panic!(
+            "`{needle}` is gone from the Dart side -- if the constant was \
+                                   renamed, rename it here too; if it was deleted, the GUI no \
+                                   longer knows what port to reach and that is the bug"
+        )
+    });
+    let tail = source
+        .get(start + needle.len()..)
+        .unwrap_or_default()
+        .trim_start();
+    let digits: String = tail.chars().take_while(char::is_ascii_digit).collect();
+    let dart_port: u16 = digits
+        .parse()
+        .unwrap_or_else(|error| panic!("the Dart port reads as `{digits}`: {error}"));
+
+    assert_eq!(
+        dart_port,
+        crate::QYRO_PORT,
+        "the GUI reaches port {dart_port} and the engine listens on {} -- ADR-0041 fixed one \
+         number and there are now two",
+        crate::QYRO_PORT
+    );
 }

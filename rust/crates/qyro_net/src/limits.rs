@@ -7,6 +7,21 @@
 
 use core::time::Duration;
 
+/// The port Qyro listens on, everywhere, always.
+///
+/// ADR-0041. It is fixed rather than ephemeral because the Windows firewall
+/// grants inbound **once per program and port**: a port that changes per run
+/// asks the least technical person in the room to approve a dialog every single
+/// time, and the second dialog is where a transfer stops happening. 49517 is in
+/// the IANA Dynamic/Private range, so it is nobody's registered service.
+///
+/// **It lives here because it was already living in two other places.** Phase 14
+/// found it defined in `qyro_cli` and again in Dart's `transfer_service.dart`,
+/// and in neither engine crate — a number ADR-0041 froze, copied once per
+/// consumer. `the_two_consumers_agree_on_the_port` reads the Dart source and
+/// fails if the copies drift.
+pub const QYRO_PORT: u16 = 49_517;
+
 /// Bytes an established connection stages between `read` and the decoder.
 ///
 /// ADR-0028 §2. It bounds syscalls per byte, **not** memory: the memory ceiling
