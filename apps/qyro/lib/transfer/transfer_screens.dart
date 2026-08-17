@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:qyro/discovery/qyro_discovery.dart';
 import 'package:qyro/ffi/qyro_file_picker.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 import 'package:qyro/l10n/generated/app_localizations.dart';
@@ -90,9 +91,15 @@ class _TransferHomeState extends State<TransferHome> {
 // ------------------------------------------------------------------ peers
 
 class PeersScreen extends StatefulWidget {
-  const PeersScreen({required this.service, super.key});
+  const PeersScreen({required this.service, this.discovery, super.key});
 
   final QyroTransferService service;
+
+  /// Injected so the screen can be tested without a platform channel, and left
+  /// null in production so the routing in [discoveryForPlatform] is the thing
+  /// that ships. A screen that only worked with a fake would be a screen nobody
+  /// had run.
+  final QyroDiscovery? discovery;
 
   @override
   State<PeersScreen> createState() => _PeersScreenState();
@@ -105,10 +112,57 @@ class _PeersScreenState extends State<PeersScreen> {
   String? _pairingError;
   String? _resolvedAddress;
 
+  late final QyroDiscovery _discovery =
+      widget.discovery ?? discoveryForPlatform();
+  List<QyroFoundPeer> _nearby = const <QyroFoundPeer>[];
+  bool _looking = false;
+  String? _discoveryError;
+
   @override
   void initState() {
     super.initState();
     _reload();
+    _look();
+  }
+
+  /// Announces this device and asks who else is here.
+  ///
+  /// **This is the production caller `dev.qyro/discovery` never had.**
+  /// `DiscoveryChannel.kt` has been registered since phase 04b and no Dart had
+  /// opened it, which is the same defect this project found four times before.
+  ///
+  /// Failure here is never fatal to the screen: the pairing code above works on
+  /// every network and is the reason it was built first (ADR-0036 §3).
+  Future<void> _look() async {
+    setState(() {
+      _looking = true;
+      _discoveryError = null;
+    });
+    try {
+      final own = await widget.service.ownPairingString();
+      final fingerprint = own?.split('|').last;
+      if (fingerprint != null && fingerprint.isNotEmpty) {
+        await _discovery.advertise(
+          port: qyroDefaultPort,
+          fingerprint: fingerprint,
+        );
+      }
+      final found = await _discovery.browse();
+      if (!mounted) return;
+      setState(() {
+        _nearby = found;
+        _looking = false;
+      });
+    } on QyroDiscoveryUnavailable catch (error) {
+      // Said out loud, not swallowed into an empty list. "This device cannot
+      // look" and "nobody is there" are different sentences, and a person shown
+      // the second when it was the first concludes the other device is off.
+      if (!mounted) return;
+      setState(() {
+        _discoveryError = error.reason;
+        _looking = false;
+      });
+    }
   }
 
   @override
@@ -197,6 +251,57 @@ class _PeersScreenState extends State<PeersScreen> {
           key: const Key('own-pairing-code'),
           style: const TextStyle(fontFamily: 'monospace'),
         ),
+        const Divider(height: 32),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                strings.peersNearbyTitle,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            IconButton(
+              key: const Key('nearby-refresh'),
+              onPressed: _looking ? null : _look,
+              icon: const Icon(Icons.refresh),
+              tooltip: strings.peersNearbyLooking,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (_discoveryError != null)
+          Text(
+            strings.peersNearbyUnavailable,
+            key: const Key('nearby-unavailable'),
+          )
+        else if (_looking)
+          Text(strings.peersNearbyLooking, key: const Key('nearby-looking'))
+        else if (_nearby.isEmpty)
+          Text(strings.peersNearbyNone, key: const Key('nearby-empty'))
+        else
+          ..._nearby.map(
+            (found) => ListTile(
+              key: Key('nearby-${found.fingerprint}'),
+              leading: const Icon(Icons.lan_outlined),
+              title: Text(found.address),
+              subtitle: Text(
+                found.fingerprint,
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+              trailing: TextButton(
+                // It fills the pairing field rather than dialling: what a
+                // discovered device offers is a *code*, and the person still
+                // decides. The trust check that follows is the same one a typed
+                // code goes through, because a device that announced itself has
+                // proved nothing yet.
+                onPressed: () {
+                  _pairing.text = found.pairingCode;
+                  _resolve();
+                },
+                child: Text(strings.peersNearbyUse),
+              ),
+            ),
+          ),
         const Divider(height: 32),
         if (_peers.isEmpty)
           Text(strings.peersNone, key: const Key('peers-empty'))

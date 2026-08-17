@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:qyro/discovery/qyro_discovery.dart';
 import 'package:qyro/ffi/qyro_file_picker.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 import 'package:qyro/l10n/generated/app_localizations.dart';
@@ -102,6 +103,40 @@ Widget _wrap(Widget child, {Locale locale = const Locale('en')}) => MaterialApp(
       home: Scaffold(body: child),
     );
 
+/// Discovery that answers with whatever the test put in it.
+///
+/// Hand-written rather than mocked: the screen's contract with discovery is
+/// three methods, and a fake that implements them is easier to read than a
+/// framework that describes them.
+final class FakeDiscovery implements QyroDiscovery {
+  FakeDiscovery({this.found = const <QyroFoundPeer>[], this.refuse});
+
+  final List<QyroFoundPeer> found;
+  final String? refuse;
+  int advertised = 0;
+
+  @override
+  Future<void> advertise({
+    required int port,
+    required String fingerprint,
+  }) async {
+    if (refuse != null) throw QyroDiscoveryUnavailable(refuse!);
+    advertised++;
+  }
+
+  @override
+  Future<List<QyroFoundPeer>> browse() async {
+    if (refuse != null) throw QyroDiscoveryUnavailable(refuse!);
+    return found;
+  }
+
+  @override
+  Future<void> stop() async {}
+}
+
+/// The same fingerprint, in the compact spelling a pairing code carries.
+const _compact = 'ab12cd34ab12cd34ab12cd34ab12cd34';
+
 const _fingerprint = '49eff48e-89bf12b0-1122aabb-33445566-'
     '778899aa-bbccddee-ff001122-0bff77f7';
 
@@ -117,6 +152,74 @@ void main() {
       // network (ADR-0036 §3).
       expect(find.byKey(const Key('pairing-field')), findsOneWidget);
       expect(find.byKey(const Key('pairing-scan')), findsOneWidget);
+    });
+
+    testWidgets('a device found on the network is offered, not dialled',
+        (tester) async {
+      // ADR-0043: what a discovered device offers is a *code*. The person still
+      // decides, and the trust check that follows is the same one a typed code
+      // goes through -- a device that announced itself has proved nothing.
+      final discovery = FakeDiscovery(
+        found: const <QyroFoundPeer>[
+          QyroFoundPeer(
+            address: '192.168.1.9:49517',
+            fingerprint: 'ab12cd34ab12cd34ab12cd34ab12cd34',
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        _wrap(
+          PeersScreen(
+            // With an identity, because a device with none has nothing to
+            // announce -- and that is a real state, not a test convenience:
+            // `ownPairingString` returns null before the identity exists.
+            service: FakeService(ownCode: 'QYRO1|10.0.0.1:49517|$_compact'),
+            discovery: discovery,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('nearby-ab12cd34ab12cd34ab12cd34ab12cd34')),
+        findsOneWidget,
+      );
+      expect(find.text('192.168.1.9:49517'), findsOneWidget);
+      // And it announced this device too: discovery that only listens finds
+      // nobody, because the other side is also only listening.
+      expect(discovery.advertised, 1);
+    });
+
+    testWidgets('a device that cannot look says so instead of looking empty',
+        (tester) async {
+      // The distinction that cost this project a phase: an empty list from a
+      // platform that cannot ask is indistinguishable from a quiet network.
+      final discovery = FakeDiscovery(refuse: 'this device has no NsdManager');
+      await tester.pumpWidget(
+        _wrap(PeersScreen(service: FakeService(), discovery: discovery)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('nearby-unavailable')), findsOneWidget);
+      expect(
+        find.byKey(const Key('nearby-empty')),
+        findsNothing,
+        reason: 'a device that cannot look was shown as a quiet network',
+      );
+      // The manual path is untouched, which is the whole point of it.
+      expect(find.byKey(const Key('pairing-field')), findsOneWidget);
+    });
+
+    testWidgets('and a quiet network says the other thing', (tester) async {
+      // The control for the test above. A screen that showed "cannot look"
+      // whatever happened would pass it and be useless.
+      await tester.pumpWidget(
+        _wrap(PeersScreen(service: FakeService(), discovery: FakeDiscovery())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('nearby-empty')), findsOneWidget);
+      expect(find.byKey(const Key('nearby-unavailable')), findsNothing);
     });
 
     testWidgets('a pairing code that is not ours says so and resolves nothing',
@@ -192,6 +295,11 @@ void main() {
       await tester.pumpWidget(_wrap(PeersScreen(service: service)));
       await tester.pumpAndSettle();
 
+      // The nearby section sits above this list now, so on a test-sized
+      // viewport the button is below the fold -- exactly as it is on a phone.
+      // Scrolled to rather than asserted away.
+      await tester.ensureVisible(find.byKey(const Key('peer-forget-phone')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('peer-forget-phone')));
       await tester.pumpAndSettle();
 

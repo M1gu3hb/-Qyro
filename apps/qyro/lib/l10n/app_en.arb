@@ -428,5 +428,25 @@
   "receiveSeveralAddresses": "Several networks. Use the one the other device is on.",
   "@receiveSeveralAddresses": {
     "description": "Receive screen string: receiveSeveralAddresses."
+  },
+  "peersNearbyTitle": "Devices on this network",
+  "@peersNearbyTitle": {
+    "description": "Transfer interface string: peersNearbyTitle."
+  },
+  "peersNearbyLooking": "Looking for devices ...",
+  "@peersNearbyLooking": {
+    "description": "Transfer interface string: peersNearbyLooking."
+  },
+  "peersNearbyNone": "Nobody has answered yet. The pairing code above always works.",
+  "@peersNearbyNone": {
+    "description": "Transfer interface string: peersNearbyNone."
+  },
+  "peersNearbyUnavailable": "This device cannot look for others. Use the pairing code.",
+  "@peersNearbyUnavailable": {
+    "description": "Transfer interface string: peersNearbyUnavailable."
+  },
+  "peersNearbyUse": "Use this device",
+  "@peersNearbyUse": {
+    "description": "Transfer interface string: peersNearbyUse."
   }
 }

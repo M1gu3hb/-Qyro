@@ -92,5 +92,10 @@
   "fingerprintCompare": "Léela en voz alta y comprueba que coincide con la del otro aparato.",
   "receiveYourCode": "El código de emparejamiento de este aparato",
   "receiveNoAddress": "Este aparato todavía no tiene dirección de red. Con un cable directo esto puede tardar hasta un minuto.",
-  "receiveSeveralAddresses": "Varias redes. Usa la que tenga el otro aparato."
+  "receiveSeveralAddresses": "Varias redes. Usa la que tenga el otro aparato.",
+  "peersNearbyTitle": "Aparatos en esta red",
+  "peersNearbyLooking": "Buscando aparatos ...",
+  "peersNearbyNone": "Todavía no ha contestado nadie. El código de arriba funciona siempre.",
+  "peersNearbyUnavailable": "Este aparato no puede buscar otros. Usa el código de emparejamiento.",
+  "peersNearbyUse": "Usar este aparato"
 }
