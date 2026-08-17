@@ -34,11 +34,25 @@ pub(crate) const WRAP_DPAPI_USER: u8 = 1;
 /// Android Keystore, AES-256-GCM under a non-exportable key. ADR-0025 §5.
 pub(crate) const WRAP_ANDROID_KEYSTORE: u8 = 2;
 
+/// A wrapper the host installed across the FFI. ADR-0037 §2, ADR-0040 §5.
+///
+/// **This byte was missing and the omission was silent.** `BridgedWrapper`
+/// has returned 3 from `wrap_id()` since ADR-0037, and this list stopped at 2,
+/// so `seal_identity` through the bridge wrote a header that `open_identity`
+/// then refused with `UnsupportedWrap { found: 3 }`: **a blob sealed by the
+/// bridge could never be reopened**.
+///
+/// Nothing caught it because the bridge's own contract exercises the wrapper
+/// against `entropy_for` and never through `seal_identity`/`open_identity` —
+/// two correct pieces and a seam no test crossed, which is the shape of every
+/// defect this project has found the hard way.
+pub(crate) const WRAP_BRIDGED: u8 = 3;
+
 /// Every wrap byte this build knows how to read.
 ///
-/// A list rather than a range: "less than three" would accept a value this
+/// A list rather than a range: "less than four" would accept a value this
 /// build has no wrapper for, and step 5 exists to refuse exactly that by name.
-pub(crate) const KNOWN_WRAPS: [u8; 2] = [WRAP_DPAPI_USER, WRAP_ANDROID_KEYSTORE];
+pub(crate) const KNOWN_WRAPS: [u8; 3] = [WRAP_DPAPI_USER, WRAP_ANDROID_KEYSTORE, WRAP_BRIDGED];
 
 /// Bytes before `wrapped` begins.
 pub(crate) const HEADER_LEN: usize = 16;

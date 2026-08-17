@@ -20,7 +20,7 @@
 
 use super::*;
 use crate::blob::{
-    ENTROPY_HEADER_LEN, HEADER_LEN, VERSION, WRAP_ANDROID_KEYSTORE, WRAP_DPAPI_USER,
+    ENTROPY_HEADER_LEN, HEADER_LEN, VERSION, WRAP_ANDROID_KEYSTORE, WRAP_BRIDGED, WRAP_DPAPI_USER,
 };
 
 /// A stand-in for a platform wrapper.
@@ -547,14 +547,72 @@ fn a_blob_from_another_platform_is_refused_by_wrap_and_not_by_luck() {
 
 #[test]
 fn a_wrap_byte_nobody_implements_is_still_refused_at_parse() {
-    // Adding 0x02 must not turn the wrap check into "anything small is fine".
+    // Adding 0x02, and later 0x03, must not turn the wrap check into "anything
+    // small is fine".
+    //
+    // **This test was inverted on purpose in phase 11, and that is worth
+    // reading twice.** It used to poke 0x03 in, because 0x03 was unknown. It is
+    // known now (`WRAP_BRIDGED`, ADR-0040 §5), so the old body asserted the
+    // absence of the very thing being added, and it failed the moment the byte
+    // was allowed. The right response to a green test that contradicts a fix is
+    // to decide which of the two is wrong — here the test's *constant* was, not
+    // its property — and the wrong response is to delete it, which is how a
+    // repair erases its own evidence.
     let identity = an_identity();
     let mut blob = seal_identity(&identity, &FakeWrapper).unwrap();
-    blob[9] = 0x03;
+    blob[9] = 0x04;
     assert_eq!(
         open_identity(&blob, &FakeWrapper).unwrap_err(),
-        StoreError::UnsupportedWrap { found: 0x03 },
+        StoreError::UnsupportedWrap { found: 0x04 },
         "an unknown wrap must be refused by name at step 5, before any wrapper \
          is asked to do anything"
+    );
+}
+
+#[test]
+fn a_blob_sealed_by_a_bridged_wrapper_can_be_opened_again() {
+    // ADR-0040 §5, and the test that should have existed since ADR-0037.
+    //
+    // `BridgedWrapper::wrap_id()` has returned 3 since the bridge was designed,
+    // and `KNOWN_WRAPS` stopped at 2, so this round trip failed with
+    // `UnsupportedWrap { found: 3 }`: a blob the Android bridge sealed could
+    // never be reopened. The bridge's own contract exercised it against
+    // `entropy_for` and never through `seal_identity`/`open_identity`, so this
+    // seam was the one thing nothing crossed.
+    //
+    // The wrapper here is the fake with the bridge's identifier, not the bridge
+    // itself: what is under test is that the **format** admits the byte and
+    // that the entropy binding still agrees across a seal and an open. Whether
+    // Kotlin's AES-GCM round-trips is `KeystoreIdentityTest`'s job, on a device
+    // this project does not have.
+    struct BridgedIdWrapper;
+
+    impl SecretWrapper for BridgedIdWrapper {
+        fn wrap(&self, plaintext: &[u8], entropy: &[u8]) -> Result<Vec<u8>, StoreError> {
+            FakeWrapper.wrap(plaintext, entropy)
+        }
+
+        fn unwrap(&self, wrapped: &[u8], entropy: &[u8]) -> Result<Zeroizing<Vec<u8>>, StoreError> {
+            FakeWrapper.unwrap(wrapped, entropy)
+        }
+
+        fn wrap_id(&self) -> u8 {
+            WRAP_BRIDGED
+        }
+    }
+
+    let identity = an_identity();
+    let blob = seal_identity(&identity, &BridgedIdWrapper).expect("sealing under wrap 3");
+    assert_eq!(
+        blob[9], WRAP_BRIDGED,
+        "the header must record the wrapper that sealed it"
+    );
+
+    let reopened = open_identity(&blob, &BridgedIdWrapper)
+        .expect("a bridged blob must open again; before ADR-0040 this was UnsupportedWrap");
+    assert_eq!(
+        reopened.fingerprint(),
+        identity.fingerprint(),
+        "the round trip must return the same identity, not merely succeed"
     );
 }
