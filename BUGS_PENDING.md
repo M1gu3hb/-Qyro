@@ -3412,7 +3412,7 @@
 ## QYR-0322 — Un receptor no puede decir su puerto antes de que alguien se conecte
 
 - Plataforma: todas; `rust/crates/qyro_session/src/session.rs`
-- Severidad: P2
+- Severidad: **P0** — reabierta el 2026-08-17; era P2
 - Esperado: abrir un receptor en el puerto 0, preguntarle qué puerto le dio el
   sistema, y **anunciarlo** — que es para lo que sirve atar al puerto 0
 - Actual: `open_receiver` hace `bind` y `accept` dentro de la misma llamada y no
@@ -3428,7 +3428,7 @@
   `qyro_session` —algo como un `Bound` que sepa su dirección y del que salga una
   `Session` al aceptar—. Cambia la forma de la API pública del crate frontera, así
   que lleva su cláusula de ADR
-- Estado: cerrado
+- Estado: **abierto**
 - Dueño: implementación
 - Fecha: 2026-08-14
 - Evidencia: `qyro_net_smoke` resuelve el mismo problema imprimiendo
@@ -3438,6 +3438,46 @@
   1 y devuelve la dirección que este extremo ligó. Lo que la ficha describía era
   que no había forma de preguntarla; ahora la hay, y `Session::local_addr`
   devuelve la propia y no la del peer desde que QYR-0314 se cerró.
+
+- **Fase 12 (2026-08-17), REABIERTA como P0.** El cierre de la fase 09 respondió a
+  una pregunta distinta de la que esta ficha hacía.
+
+  **Lo que la ficha decía**, con sus palabras: «lo que no se puede es preguntarla
+  **a tiempo**». Y en «Por qué P2»: «**Sube en cuanto Dart tenga que recibir, que
+  es la fase 05**».
+
+  **Lo que el cierre contestó:** que `qyro_session_local_address` existe y que
+  `Session::local_addr` devuelve la propia. Las dos cosas son ciertas y ninguna
+  es lo que se preguntaba. La ficha nunca dijo que faltara el getter: decía que
+  cuando existe una sesión a la que preguntar **ya es tarde**, porque
+  `open_receiver` no vuelve hasta que un peer se ha conectado.
+
+  **La condición que la propia ficha ponía se cumplió y nadie la comprobó.** La
+  fase 05 llegó, Dart tuvo que recibir, y la escalada a P0 que este texto anuncia
+  no se hizo. Ésa es la regla que la fase 12 añade a la puerta: una ficha que
+  dice «sube cuando X» no se cierra sin comprobar X y escribir el resultado.
+
+  **Qué pasa hoy, medido sobre `d575ac8`:**
+
+  - `apps/qyro/lib/transfer/transfer_screens.dart:422` liga a `'0.0.0.0:0'`, un
+    puerto efímero que nadie consulta y nadie enseña.
+  - `apps/qyro/lib/transfer/native_transfer_service.dart:169` lee
+    `_listeningAddress`, declarado en la 177 y **sin una sola asignación en el
+    árbol** — dos apariciones en total, comprobado con `grep` sobre `apps/`,
+    `rust/` y `docs/`. `ownPairingString()` devuelve `null` siempre.
+  - `QyroTrustBindings.localAddress` sólo tiene un llamante, y es una prueba:
+    `apps/qyro/test/ffi/qyro_session_transfer_test.dart:427`.
+
+  **Consecuencia:** las dos pantallas dicen a la vez «escribe el código que
+  enseña el otro aparato» y «sin conexión, así que no hay código que mostrar».
+  **Dos aparatos con Qyro instalado no pueden completar una transferencia.**
+
+  **Por qué P0 y no P1:** bloquea el hito del producto entero. No hay camino
+  alternativo — el descubrimiento automático tampoco cruza el FFI, así que el
+  código manual no es un respaldo sino la única vía, y no existe.
+
+  El cierre de la fase 09 se conserva encima, sin tocar. Un cierre equivocado
+  documentado vale más que un cierre borrado.
 
 ## QYR-0323 — `file_selector_android` copia el archivo elegido a la caché antes de que Dart lo vea
 
