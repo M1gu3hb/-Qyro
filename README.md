@@ -19,9 +19,12 @@ pide un Mac y una cuenta de desarrollador de Apple.
 
 ## Qué hace
 
-- Dos aparatos se encuentran solos por mDNS/NSD, o con un código de
-  emparejamiento tecleado — el camino que funciona también con aislamiento de
-  cliente. **No se escanea: no hay cámara.**
+- Dos aparatos se emparejan **tecleando un código**: el receptor lo enseña
+  en su pantalla y el emisor lo escribe. Funciona en cualquier red,
+  incluida una con aislamiento de cliente. **No se escanea** (no hay
+  cámara) y **no se encuentran solos**: el descubrimiento automático está
+  escrito en Kotlin y en Rust y **no cruza la frontera C**, así que no
+  existe para la aplicación. Es la fase 14.
 - Eliges archivos con el selector del sistema. En Android, sin un solo permiso de
   almacenamiento y **sin copiar el archivo** para leerlo.
 - Ves con quién hablas: una huella corta para comparar en voz alta, y su estado.

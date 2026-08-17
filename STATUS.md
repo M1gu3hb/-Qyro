@@ -10,9 +10,12 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
   entrega — y hay cuatro pantallas, en dos idiomas, con los botones **encendidos**
-  desde la fase 05. Dos aparatos se encuentran solos por NSD/mDNS (fase 04b) o
-  con un código tecleado, la identidad sobrevive al reinicio en Windows por DPAPI
-  y en Android por Keystore (fase 06), y el paquete se llama `dev.qyro.app` y se
+  desde la fase 05. Dos aparatos se emparejan **con un código tecleado**, que
+  desde la fase 12 el receptor enseña de verdad (QYR-0322); **no se
+  encuentran solos**, porque el descubrimiento no cruza la frontera C y es
+  la fase 14. La identidad sobrevive al proceso en las dos plataformas
+  (fase 11): DPAPI en Windows y **el sandbox por UID en Android, no
+  Keystore** (ADR-0040 §7), y el paquete se llama `dev.qyro.app` y se
   firma con una clave real (fase 08). **Lo que sigue sin existir es la
   evidencia**: ningún teléfono ha ejecutado nunca esta aplicación, ninguna
   transferencia ha cruzado una Wi-Fi de verdad, y `flutter build` no corre en
@@ -102,8 +105,11 @@ contra el código que existe: `THREAT_MODEL.md`.
 
 - **Transferencia completa de extremo a extremo**, conducida desde Dart, entre
   dos procesos de sistema operativo, con verificación byte a byte.
-- **Descubrimiento**: `NsdManager` con `FLAG_SHOW_PICKER` en Android y `mdns-sd`
-  bajo `cfg(windows)`. Una dependencia externa nueva, sólo en Windows.
+- **Descubrimiento**: NO_ALCANZABLE. `NsdManager` con `FLAG_SHOW_PICKER` y
+  `mdns-sd` bajo `cfg(windows)` están escritos y probados, y **ningún símbolo
+  de la superficie C los alcanza**: `DiscoveryChannel.kt` está registrado y
+  ningún archivo de Dart abre el canal `dev.qyro/discovery`. Se declara fuera
+  de la v1.x aquí en vez de anunciarse; la fase 14 lo conecta.
 - **Identidad persistente en las dos plataformas** que la v1.0 tiene.
 - **Confianza explícita con interfaz**: una clave cambiada se rechaza por nombre
   y el botón de enviar **no existe** en ese estado.

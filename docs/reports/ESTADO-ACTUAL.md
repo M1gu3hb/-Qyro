@@ -20,9 +20,10 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 | | |
 |---|---|
 | Motor | Rust 1.88.0, edition 2024, once crates. Transferencia completa, cifrada y verificada |
-| Frontera | 23 símbolos C, **ninguno cruza un tipo** (ADR-0032 + enmiendas 1 y 2) |
+| Frontera | **24** símbolos C, ninguno cruza un tipo (ADR-0032 + enmiendas 1-3) |
 | Interfaz | Cuatro pantallas, dos idiomas, **botones encendidos** (fase 05, ADR-0036) |
-| Descubrimiento | `NsdManager` + `FLAG_SHOW_PICKER`; `mdns-sd` bajo `cfg(windows)` (fase 04b) |
+| Emparejamiento | Código tecleado. El receptor lo enseña desde la fase 12 (QYR-0322) |
+| Descubrimiento | **NO alcanzable.** Escrito en Kotlin y Rust, sin símbolo en la frontera C. Fase 14 |
 | Identidad | **Persiste entre procesos** (ADR-0040). DPAPI en Windows; en Android sin envolver, bajo el sandbox por UID. Keystore descartado para la v1.0 con argumento |
 | Paquete | `dev.qyro.app`, firmado con clave propia (fase 08) |
 | Pruebas | Rust **639 / 0 / 2 ignoradas**; Dart **92 pasadas, 9 saltadas** |
