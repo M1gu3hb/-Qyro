@@ -40,7 +40,7 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 5. **La puerta se pasa por exit code**, no por leer la salida.
 6. **Dos destinos para una ficha: cerrada, o descartada con argumento.** Nunca
    «pendiente».
-7. IDs nuevos desde **QYR-0352**.
+7. IDs nuevos desde **QYR-0352 en adelante**.
 
 ---
 

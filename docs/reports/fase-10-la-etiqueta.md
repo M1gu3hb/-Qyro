@@ -331,6 +331,6 @@ clave real. Ningún Android lo ha ejecutado nunca.
 
 - `BUGS_PENDING.md`: **151 fichas, 0 abiertas.** Cuatro nuevas en esta fase —
   QYR-0348, QYR-0349, QYR-0350, QYR-0351—, las cuatro cerradas con su arreglo.
-- IDs siguientes desde **QYR-0352**.
+- IDs siguientes desde **QYR-0352 en adelante**.
 - `docs/reports/ESTADO-ACTUAL.md` reescrito, 117 líneas.
 - Siguiente, y única: **la fase 07**, en `docs/testing/hardware-protocol.md`.
