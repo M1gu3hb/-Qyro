@@ -1,68 +1,30 @@
 # Próximos pasos
 
-## P0
+## P0 — y sólo hay uno
 
-1. Golden tests de la secuencia de arranque.
-   - Aceptación: 0/20/50/80/100 %, teléfono, tablet, Windows ancho, reduced
-     motion, branding provisional, branding válido con firma, fallo de
-     biblioteca, fallo de asset, timeout y retry. Seeds deterministas,
-     dimensiones fijas, assets locales y ninguna dependencia de hora o red.
-     Archivos golden versionados y documentado cómo actualizarlos.
-2. Benchmark de arranque documentado.
-   - Aceptación: `docs/benchmarks/boot-baseline.md` con tiempo de preparación
-     del modelo, tiempo de `frameAt`, build y paint por frame, tamaño del asset
-     ASCII, y declaradas máquina, SO, versión de Flutter, modo, resolución y
-     número de muestras. Sin afirmar 60 FPS sin medirlo.
-3. Retener artefactos de desarrollo con SHA-256, etiquetados
-   DEVELOPMENT / NOT FOR PUBLIC RELEASE.
-   - Estado real: el ZIP portable de Windows **sí** se retiene (14 días,
-     `qyro-windows-x64-portable-debug`). El APK de Android y el `Runner.app` de
-     iOS no. Lo que falta en los tres casos es un checksum distribuido **dentro**
-     del paquete y la etiqueta: el digest que GitHub imprime al subir un artefacto
-     identifica el ZIP que produjo ese run, no el contenido que alguien descarga
-     y desempaqueta, y presentarlo como sustituto sería un cambio silencioso de
-     lo que se está afirmando.
+**Ejecutar la fase 07: el protocolo de hardware físico.**
+[docs/testing/hardware-protocol.md](docs/testing/hardware-protocol.md).
 
-## P0 — siguiente sprint (5B.2: los selectores de archivo)
+- Aceptación: los veinte escenarios ejecutados y anotados en
+  `docs/reports/fase-07-hardware-fisico.md`, **incluidos los que fallen y los que
+  no se ejecutaron**, con el modelo del teléfono, su versión de Android, la
+  versión de Windows, y el SHA-256 del APK y del `.exe` que se instalaron.
+- **Un escenario sin marcar no es un aprobado.** No se escribe un resultado que
+  nadie vio.
+- Necesita dos aparatos, una Wi-Fi y una persona. No hay forma de hacerlo desde
+  aquí, y fingir que la hay es la única cosa que arruinaría el proyecto.
 
-- **Storage Access Framework en Android y el picker de Windows**, cruzando el FFI
-  hasta el motor. Es integración de plataforma y necesita su propia ADR: SAF
-  entrega **URIs con permisos delegados, no rutas**, y eso cambia lo que
-  `FileSource` recibe.
-- Las preguntas a resolver **antes** de escribir código: qué cruza el FFI —¿un
-  descriptor de archivo, una ruta, un identificador opaco?—, cómo se mantiene
-  vivo el permiso durante una transferencia larga, y qué pasa si el usuario
-  revoca el acceso a mitad.
+Lo que la fase 07 encuentre decide la v1.1. Escribir hoy la lista sería adivinar
+antes de la única medición que falta.
 
-### Sprint 5B.1 — cerrado
+---
 
-El disco de verdad, sin selector. Un archivo de cinco megabytes cruza dos
-directorios y llega byte a byte idéntico; el manifest se construye por streaming;
-un digest que no coincide no produce nada; un symlink en el destino no redirige
-una escritura. ADR-0027 congelada antes del código. Queda abierto QYR-0072.
-
-### Aparcado: 4D.2 — Android Keystore e iOS Keychain
-
-**ADR-0025 sigue congelada y no caduca.** Lo que paró el sprint es QYR-0064 y no
-un defecto suyo: `AndroidKeyStore` es un proveedor JCA de Java, no hay API en el
-NDK, y el harness de binario empujado por `adb` corre como el usuario `shell`, no
-como la app, así que no puede alcanzar las claves. Hace falta un test
-instrumentado bajo `am instrument`, con andamiaje Gradle y una dependencia JNI.
-
-Se puede aparcar sin coste porque el contrato ya está demostrado contra una
-plataforma real, que era el objetivo de hacer Windows primero. Cuando vuelva:
-`IdentityStore` y `SecretWrapper` no deberían cambiar; si cambian, **eso es el
-hallazgo**. Y quedan abiertos QYR-0065 y QYR-0066.
-
-### Sprint 4D.1 — cerrado
-
-Almacenamiento seguro, primera plataforma. ADR-0024 congelada antes del código y
-enmendada tres veces después con lo que la implementación encontró; el accesor de
-semilla con su guarda; el formato del blob con 448 posiciones de barrido; el
-crate `qyro_win_dpapi` con `unsafe` en tres funciones enumeradas; el harness de
-dos procesos y su paso en CI. **Una identidad sobrevive al cierre del proceso en
-Windows, y no en Android ni en iOS.** Auditoría:
-`docs/audits/SPRINT4D1_SECURE_STORAGE.md`.
+**Lo que había en esta sección hasta la fase 10**, y por qué ya no está: los
+golden tests de arranque, el benchmark de arranque documentado y la retención de
+artefactos eran los tres P0 heredados del sprint 4C. La fase 09 los dispositionó
+uno a uno en `BUGS_PENDING.md` —dos descartados con argumento, el de artefactos
+cerrado por `release.yml`— y `docs/reports/deuda-de-calidad.md` explica el
+criterio. Lo de abajo se conserva como registro; no es trabajo pendiente.
 
 ## P1
 

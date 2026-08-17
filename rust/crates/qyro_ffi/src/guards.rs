@@ -6,7 +6,10 @@
 //! dedicated contract tests", which was true and never sufficient: contract
 //! tests check what the ABI *says*, and the shared minimum checks what the
 //! source *can do*. This is the one crate in the workspace that crosses to C,
-//! and its surface is nineteen functions (ADR-0032 amendment 1).
+//! and its surface is twenty functions -- counted by
+//! `the_c_surface_is_exactly_the_symbols_that_are_written_down`, not
+//! remembered. This line said "nineteen", as did ADR-0032 amendment 1 and
+//! every report that repeated it, and nothing checked (QYR-0352).
 //!
 //! A panic here does not fail a test: it unwinds across a C frontier, which is
 //! undefined behaviour.
@@ -98,6 +101,93 @@ fn the_analysis_reaches_the_end_of_every_production_file() {
 /// optional and is not decided: it is done". A function that skips `guard` lets
 /// a panic unwind into C, and no test elsewhere would notice, because the
 /// undefined behaviour is only reachable when something goes wrong.
+/// Every symbol this crate exports to C.
+///
+/// QYR-0352. ADR-0032 amendment 1 says the surface grew "from eleven to
+/// **nineteen**", every phase report repeats the number, and there are twenty.
+/// Nothing counted, so a sentence and the code drifted apart by one and stayed
+/// that way for four phases.
+///
+/// A changelog would not be enough here. This surface is the entire security
+/// boundary of the application -- everything Dart can reach, it reaches through
+/// one of these -- so a symbol that appears without anybody writing it down is a
+/// symbol nobody reviewed. Adding one should cost an ADR amendment and a line
+/// here, in that order.
+const EXPORTED_SYMBOLS: [&str; 20] = [
+    "qyro_buffer_alloc",
+    "qyro_buffer_free",
+    "qyro_pairing_parse",
+    "qyro_protocol_version_len",
+    "qyro_protocol_version_ptr",
+    "qyro_session_cancel",
+    "qyro_session_close",
+    "qyro_session_local_address",
+    "qyro_session_open_receiver_blocking",
+    "qyro_session_open_sender_blocking",
+    "qyro_session_open_sender_fd_blocking",
+    "qyro_session_peer_fingerprint",
+    "qyro_session_peer_trust",
+    "qyro_session_progress",
+    "qyro_session_reject",
+    "qyro_session_rejection",
+    "qyro_session_remember_peer",
+    "qyro_session_step_blocking",
+    "qyro_trust_forget_peer",
+    "qyro_trust_list_peers",
+];
+
+/// The `extern "C"` functions declared in this crate's production source.
+///
+/// `production_source` and not a raw read: the first draft of this counted
+/// `qyro_test_panicking_boundary` and a test callback called `record`, both of
+/// which live under `#[cfg(test)]` and ship in nothing. That is the same defect
+/// as QYR-0328 and QYR-0348 in a third place, and the reason the shared analysis
+/// exists is so it does not have to be rediscovered a fourth time.
+fn declared_c_symbols() -> BTreeSet<String> {
+    let mut found = BTreeSet::new();
+    for file in PRODUCTION_FILES {
+        let text = production_source(file);
+        let mut rest = text.as_str();
+        while let Some(at) = rest.find("extern \"C\" fn ") {
+            rest = &rest[at + "extern \"C\" fn ".len()..];
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            if !name.is_empty() {
+                found.insert(name);
+            }
+        }
+    }
+    found
+}
+
+#[test]
+fn the_c_surface_is_exactly_the_symbols_that_are_written_down() {
+    let expected: BTreeSet<String> = EXPORTED_SYMBOLS.into_iter().map(str::to_owned).collect();
+    assert_eq!(
+        declared_c_symbols(),
+        expected,
+        "the C surface changed. Every symbol in it is reachable from Dart and is          part of the security boundary, so adding one means amending ADR-0032,          correcting the count in the reports, and updating this list."
+    );
+}
+
+#[test]
+fn the_symbol_sweep_is_not_passing_vacuously() {
+    // A sweep that found nothing would satisfy an empty expectation, and an
+    // empty expectation is what a list that stopped matching gets edited into.
+    assert!(
+        declared_c_symbols().len() >= 11,
+        "the sweep found almost nothing, so it is not reading the source it          thinks it is"
+    );
+    // And it excludes what `#[cfg(test)]` hides: this crate really does declare
+    // a panicking `extern "C"` function under test, and it must not be counted.
+    assert!(
+        !declared_c_symbols().contains("qyro_test_panicking_boundary"),
+        "a cfg(test) symbol reached the production sweep"
+    );
+}
+
 #[test]
 fn every_extern_c_function_sits_behind_the_panic_guard() {
     // The version pair is the documented exception: it returns a pointer to

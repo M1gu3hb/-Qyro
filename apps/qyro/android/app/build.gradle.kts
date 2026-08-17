@@ -91,24 +91,13 @@ android {
 }
 
 dependencies {
-    // QYR-0350. These carried versions -- 1.2.1, 1.6.2, 1.6.1 -- and the build
-    // failed at `:app:mergeDebugAndroidTestAssets` with "Cannot find a version
-    // of 'androidx.test:runner' that satisfies the version constraints".
-    //
-    // The cause is not a missing artifact. Flutter's `integration_test` plugin
-    // declares `api("androidx.test:runner:1.2+")` and
-    // `api("androidx.test.espresso:espresso-core:3.3+")`, which land in
-    // `debugRuntimeClasspath` and resolve to 1.3.0; AGP's **consistent
-    // resolution** then re-imposes that as `strictly 1.3.0` on the androidTest
-    // classpath. A newer version declared here cannot satisfy a `strictly`, so
-    // naming one is naming a conflict.
-    //
-    // Declared without a version on purpose: the constraint supplies it, so
-    // this follows whatever `integration_test` resolves to instead of racing
-    // it on every Flutter upgrade. `androidx.test.ext:junit` is the only one
-    // that needs a version, because nothing else puts it on any classpath, and
-    // 1.1.2 is the release that pairs with runner 1.3.0.
-    androidTestImplementation("androidx.test.ext:junit:1.1.2")
+    constraints {
+        implementation("androidx.test:runner:1.7.0")
+        implementation("androidx.test:rules:1.7.0")
+        implementation("androidx.test.espresso:espresso-core:3.7.0")
+    }
+
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner")
     androidTestImplementation("androidx.test:rules")
 }

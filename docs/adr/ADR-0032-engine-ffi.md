@@ -357,3 +357,29 @@ ejecución.
 - **No promete descubrimiento.** `qyro_pairing_parse` lee una cadena que una
   persona escribió o escaneó. Nada busca nada.
 - **No promete que la confianza sobreviva a un reinicio.** Eso es la fase 06.
+
+---
+
+## Enmienda 2 (2026-08-16) — veinte no era diecinueve, y ahora son veintitrés
+
+**La enmienda 1 dice «de once a diecinueve». Eran veinte.** El error se copió a
+`STATUS.md`, a `docs/release/v1.0.md`, a `ESTADO-ACTUAL.md`, a dos informes de
+fase y al propio doc-comment de `qyro_ffi/src/guards.rs`, y **nada lo contaba**
+(QYR-0352). El mensaje del guard de pánico seguía diciendo «nineteen» mientras la
+constante doscientas líneas más arriba decía veinte.
+
+Ahora lo cuenta `the_c_surface_is_exactly_the_symbols_that_are_written_down`, que
+lee la fuente de producción con el análisis compartido —el mismo que salta
+comentarios y `#[cfg(test)]`, porque su primer borrador contó
+`qyro_test_panicking_boundary` y una callback de prueba llamada `record`— y se ha
+visto fallar al quitar un símbolo de la lista y pasar al devolverlo.
+
+**Un matiz que la cifra única escondía:** `qyro_session_open_sender_fd_blocking`
+es `#[cfg(unix)]`, así que una `cdylib` de Windows exporta uno menos que una de
+Android. La constante cuenta lo declarado en la fuente, que es lo que se revisa.
+
+**ADR-0040 añade tres**: `qyro_identity_open_blocking`,
+`qyro_identity_set_wrapper` y `qyro_identity_fingerprint`. **Veintitrés.**
+Ninguno cruza un tipo: una ruta y una huella por búfer prestado, dos punteros a
+función de escalares y un `uintptr_t`. El precedente del puntero a función es
+`QyroProgressFn` de ADR-0033.

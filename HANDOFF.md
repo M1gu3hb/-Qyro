@@ -1,96 +1,50 @@
 # Handoff operativo
 
-El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no duplica commits, resultados ni capacidades para evitar desincronización.
+El estado actual completo está en [STATUS.md](STATUS.md). Este archivo no
+duplica commits, resultados ni capacidades para evitar desincronización.
 
-## Reanudación
+## Reanudación — v1.0, 2026-08-16
 
-1. Leer STATUS.md.
-2. Confirmar la rama `claude/qyro-filesystem-5b1`, que continúa
-   `claude/qyro-transfer-engine-5a`.
+**El producto está terminado en código y etiquetado `v1.0.0`. Lo único que queda
+no es código.**
 
-   **El motor mueve archivos de verdad, y no hay selector.** `qyro_fs` lee del
-   disco por partes, escribe en un `.qyro-part` y renombra sólo con el digest
-   verificado; un archivo de cinco megabytes cruza dos directorios y llega byte a
-   byte idéntico. Elegir los archivos en Android y en Windows cruza el FFI y es
-   5B.2.
+1. Leer [docs/reports/ESTADO-ACTUAL.md](docs/reports/ESTADO-ACTUAL.md) — 117
+   líneas, y contiene las trampas de la máquina de desarrollo que ya se pagaron
+   una vez cada una. Después [STATUS.md](STATUS.md).
+2. Rama de trabajo: `claude/qyro-net-6a`. **Nunca `main`**, nunca force-push,
+   nunca reescribir historia, nunca borrar una rama.
+3. **Lo siguiente, y sólo hay una cosa: la fase 07.**
+   [docs/testing/hardware-protocol.md](docs/testing/hardware-protocol.md), veinte
+   escenarios con su comando literal y **sus veinte huecos en blanco**. Necesita
+   dos aparatos, una Wi-Fi y una persona.
 
-   Lo que hay que leer antes de tocarlo es ADR-0027 §1, la política de symlinks:
-   `RelativePath` valida una cadena, y la travesía muerde al unir esa cadena a
-   una raíz y abrir. `O_NOFOLLOW` cierra el último componente por completo y no
-   los de en medio (QYR-0072).
+   **No se inventa un resultado que nadie vio.** Es lo único que arruinaría este
+   proyecto, y un hueco en blanco es la verdad hasta que alguien lo llene.
+4. Lo que la fase 07 encuentre decide la v1.1, y no al revés. Escribir hoy una
+   lista de mejoras sería adivinar antes de la única medición que falta.
 
-   El motor de debajo es de 5A: `qyro_transfer` lleva una transferencia completa
-   —varios archivos, varios chunks, digest verificado, ACK con ventana, pausa,
-   reanudación en sesión, cancelación y retransmisión go-back-N— entre dos
-   extremos del **mismo proceso** que sólo intercambian `Vec<u8>` de frames
-   sellados. **Sigue sin haber sockets**, y `qyro_ffi` no depende de
-   `qyro_crypto`, `qyro_transfer` ni `qyro_fs`, así que la aplicación no ejercita
-   nada de esto.
+### Las tres cosas que este proyecto aprendió por las malas
 
-   `ContentSource` y `ContentSink` aguantaron el disco **sin cambiar**, que es la
-   misma comprobación que `SecretWrapper` pasó con la segunda plataforma en
-   4D.2a. Si 5B.2 tiene que ensancharlas para los URIs de SAF, eso es un hallazgo
-   antes que un cambio.
+**Un job rojo es una afirmación sin evidencia, aunque el código sea correcto.**
+La fase 06 cerró dando por hecho un test instrumentado que CI no había podido
+ejecutar nunca (QYR-0350). El único sitio donde algunas pruebas pueden correr es
+CI, y hay que mirarlo.
 
-   **El sprint 4D.2a está aparcado, no cancelado.** ADR-0025 sigue congelada y
-   sigue siendo buena; lo que la paró es QYR-0064, que no es un defecto suyo.
+**Una guarda textual pierde contra la sintaxis.** Tres veces: QYR-0328 en Rust,
+QYR-0348 en Dart, y el falso positivo de la regla de hardware. Si una guarda lee
+fuente, que salte comentarios y literales, y que tenga su control en los dos
+sentidos.
 
-   El sprint 4D.1 fue el primero desde 4A que añadió función: persistencia de
-   identidad, en Windows.
+**Una decisión escrita en una ADR y ausente del archivo que decide no vale
+nada.** `allowBackup=false` estuvo decidido y sin escribir desde la fase 4D.1
+hasta la 10 (QYR-0349). Por eso las guardas leen el archivo, no la ADR.
 
-   **La función existe en Windows y no existe en Android ni en iOS.** Una
-   identidad generada por un proceso la carga otro proceso distinto, ejecutado
-   en CI sobre `windows-latest` con DPAPI de ámbito de usuario. En las otras dos
-   plataformas no hay nada, y cerrar el proceso sigue perdiendo la identidad.
-   Nada del producto llama al almacén todavía: lo que persiste en CI es un
-   harness aislado, no la aplicación.
+### Comprobado antes de decir que algo está hecho
 
-   Lo que abrió el sprint y hay que tratar con cuidado es el **accesor de
-   semilla**. Hasta 4D.1, `identity.rs` decía «there is no accessor for the seed
-   or the private key» y esa frase era toda la protección. Ahora existe
-   `DeviceIdentity::export_secret`, así que cualquier crate que dependa de
-   `qyro_crypto` puede pedir la semilla de una identidad que tenga en la mano, y
-   lo único que lo contiene es que haya que poseer el `DeviceIdentity`. La
-   guarda `every_public_path_returning_key_material_is_listed` enumera los
-   caminos por nombre y falla si aparece un cuarto. Su historia —una versión que
-   fallaba abierta— está en `docs/audits/SPRINT4D1_SECURE_STORAGE.md`, y merece
-   leerse antes de tocar la frontera. Ver «Next task» en STATUS.md.
-
-   **Los workflows ya no nombran ninguna rama.** Disparan sobre
-   `[main, 'claude/**']`, así que una rama nueva con ese prefijo tiene CI sin
-   tocar un solo YAML. Hasta el sprint 4C.3 el nombre estaba escrito a mano en
-   los seis archivos, y cada sprint heredaba el defecto del anterior
-   (QYR-0040). Una regla de `check_docs_consistency` rechaza ahora un nombre
-   literal en cualquier `branches:`.
-3. Leer `docs/audits/CLAUDE_RECOVERY_AUDIT.md` para el contexto de recuperación,
-   más ADR-0014 (logo), ADR-0015 (ramas), ADR-0016 (framing), ADR-0017
-   (manifest), ADR-0020 (identidad, con su enmienda del sprint 4B), ADR-0021
-   (handshake), ADR-0022 (AEAD de frames, con sus tres enmiendas) y ADR-0023
-   (harness de criptografía por plataforma) y ADR-0024 (almacenamiento seguro de
-   identidad, congelada antes de su implementación y enmendada tres veces
-   después: QYR-0048, QYR-0054 y QYR-0059). Las especificaciones están
-   en `docs/protocols/` y `docs/security/` —el formato del blob, byte a byte, en
-   `docs/security/identity-storage.md`—; las auditorías de los últimos sprints,
-   en `docs/audits/SPRINT4C1_CRYPTO_PLATFORM_AUDIT.md`,
-   `docs/audits/SPRINT4C2_AUDIT_CLOSURE.md`,
-   `docs/audits/SPRINT4C3_RESOURCE_BOUNDS.md` y
-   `docs/audits/SPRINT4D1_SECURE_STORAGE.md`. La de 4C.3 lleva los números de
-   coste del decoder antes y después, medidos con el mismo método, y la
-   advertencia que costó descubrir: una mutación que no toca el camino que la
-   prueba recorre sale verde y no prueba nada. La de 4C.2 lleva su propia tabla
-   de mutación —hallazgo, mutación aplicada, prueba que falló, commit en que
-   estuvo roja—, y la de 4D.1 la suya, más los caminos públicos que devuelven
-   material de clave antes y después. Léelas antes de tocar `qyro_manifest`,
-   `qyro_crypto` o la frontera de identidad; explican por qué varias
-   comprobaciones están escritas de una forma que parece rebuscada.
-
-   ADR-0016 lleva la enmienda de coste del sprint 4C.3, y ADR-0017, ADR-0019 y
-   ADR-0021 las del 4C.2 —con la fecha de Unicode corregida en 4C.3. Las
-   afirmaciones anteriores que corrigen están marcadas como corregidas, no
-   borradas.
-4. Leer NEXT_STEPS.md y ADR relacionadas.
-5. Ejecutar doctor y tests relevantes.
-6. Continuar con la única “Next task” de STATUS.md.
+Trece comprobaciones **por exit code**, listadas en
+[docs/reports/ESTADO-ACTUAL.md](docs/reports/ESTADO-ACTUAL.md) §4, y después CI
+en verde. Una ficha del ledger termina **cerrada o descartada con argumento**;
+«pendiente» no es un destino.
 
 ## Reproducir el baseline
 

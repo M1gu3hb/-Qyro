@@ -802,20 +802,38 @@ permaneció invisible durante tres sprints.
 
 ## Artifacts
 
-- **El ZIP portable de Windows sí se retiene**: `qyro-windows-x64-portable-debug`,
-  14 días, desde el job `windows` de `platform-builds.yml`. Este archivo afirmó
-  lo contrario durante varios sprints.
-- El APK de Android y el `Runner.app` de iOS **no** se retienen. Sus salidas
-  existen solo dentro de runners efímeros.
-- Ninguno de los tres lleva checksum distribuido **dentro** del paquete ni la
-  etiqueta DEVELOPMENT / NOT FOR PUBLIC RELEASE. El digest que GitHub imprime al
-  subir un artefacto identifica el ZIP que produjo ese run, no el contenido que
-  alguien descarga y desempaqueta; no se usa como sustituto.
+**Los de la v1.0** (`release.yml`, sobre la etiqueta):
+
+- `qyro-android-release`: el APK, su `SHA256SUMS.txt` y un `BUILD-INFO.txt` que
+  dice en mayúsculas que **está firmado con la clave de depuración**. El APK
+  firmado con la clave release se produce aparte, localmente, y su SHA-256 y el
+  del certificado están en `docs/release/v1.0.md`. La clave privada **no entra en
+  un secreto de repositorio**, así que el paso de firma no puede vivir en CI.
+- `qyro-windows-x64-release`: el ZIP portable, con `SHA256SUMS.txt` de **cada
+  archivo** dentro del paquete y su `BUILD-INFO.txt`. Sin firmar: MSIX y
+  Authenticode quieren un certificado que cuesta dinero (ADR-0010 enmendada), y
+  SmartScreen avisará, con razón.
+- Retención 90 días.
+
+**Los de desarrollo** (`platform-builds.yml`):
+
+- `qyro-windows-x64-portable-debug`, 14 días, con su `SHA256SUMS.txt` y su
+  etiqueta DEVELOPMENT / NOT FOR PUBLIC RELEASE. **Corregido en la fase 10:** su
+  `BUILD-INFO.txt` afirmaba «Qyro does not transfer files: Send and Receive are
+  disabled», cierto en la fase 02 y falso desde la 05. Una frase falsa dentro de
+  un artefacto viaja con el binario y nadie la relee.
+- El APK de debug y el `Runner.app` de iOS **no** se retienen: existen sólo
+  dentro de runners efímeros. Para instalar algo, el artefacto es el de
+  `release.yml`.
+- El digest que GitHub imprime al subir un artefacto identifica el ZIP que
+  produjo ese run, no el contenido que alguien desempaqueta; no se usa como
+  sustituto del `SHA256SUMS.txt` que va dentro.
 - `crypto-fuzz.yml` retiene corpus y artefactos de crash por target, 30 días.
   Son cadenas de bytes que eligió el fuzzer y no contienen material de clave: la
   única sesión en juego es la fija de `qyro_crypto::fuzzing`, cuyas semillas
   están publicadas en este repositorio y comprometidas por definición.
-- No existe release estable, IPA ni MSIX.
+- No hay IPA ni MSIX, y no los habrá en la v1.0: iOS está fuera por ADR-0039 y
+  MSIX quiere un certificado de pago (ADR-0010 enmendada).
 
 ## Blockers
 

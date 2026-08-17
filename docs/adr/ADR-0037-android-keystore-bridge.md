@@ -122,3 +122,36 @@ Windows, que ya dice `"process_invocations":2`.
 - **No promete iOS.** ADR-0039.
 - **No promete nada visto en un teléfono.** Hasta la fase 07 esto corre en un
   emulador de CI, y un emulador no es hardware.
+
+---
+
+## Enmienda 1 (2026-08-16) — el mecanismo se retira, la decisión no
+
+**§3 dice «Dart las registra al arrancar». No es implementable.** ADR-0040 §6 da
+las cuatro razones; la que basta sola es la cuarta: la callback tendría que
+alcanzar Keystore por `MethodChannel`, que completa por el bucle de eventos del
+isolate, dentro de una callback síncrona anidada en una llamada FFI bloqueante
+que **es** ese isolate. El `Future` no puede completarse nunca. Interbloqueo
+garantizado, no carrera.
+
+**Lo que esta ADR decidió bien y se conserva entero:** que Rust no llame a la
+JVM, que crucen dos punteros a función, que `SecretWrapper` sea la costura, y que
+la prueba corra bajo `am instrument` dentro de un proceso de aplicación. Nada de
+eso cambia. Lo que cambia es **quién produce los punteros**: un shim en C
+compilado por el NDK, no Dart.
+
+**Y esta ADR nunca se conectó a nada.** `BridgedWrapper` no se construye en
+ninguna parte del producto: la única referencia fuera de su módulo y de su
+contrato es el re-export de `lib.rs`. El título —«La identidad sobrevive al
+reinicio en Android»— es falso de la aplicación y siempre lo fue.
+
+**Un defecto que este mecanismo escondía.** `BRIDGED_WRAP_ID` es 3 y
+`blob::KNOWN_WRAPS` es `[1, 2]`, así que un blob sellado por el puente **no se
+puede volver a abrir**. El contrato del envoltorio lo ejercitaba contra
+`entropy_for` y nunca a través de `seal_identity`/`open_identity`. Se corrige en
+ADR-0040 §5.
+
+**La v1.0 sale sin Keystore** (ADR-0040 §7), con el sandbox por UID y dicho en
+voz alta en el modelo de amenazas. La etapa B se hace con un teléfono delante,
+porque un shim JNI que nadie ha ejecutado nunca no es una función: es una
+afirmación.
