@@ -60,6 +60,7 @@ enum Command {
         expect: Option<String>,
     },
     WhoAmI,
+    Find,
     Help,
     /// The arguments did not make sense, and the message says which.
     Refused(String),
@@ -83,6 +84,7 @@ fn parse(args: &[String]) -> Command {
     match first {
         "help" | "--help" | "-h" => Command::Help,
         "whoami" => Command::WhoAmI,
+        "find" => Command::Find,
         "send" => {
             let Some(file) = args.get(1).cloned() else {
                 return Command::Refused(
@@ -143,6 +145,7 @@ fn run(command: Command, vt: Vt) -> i32 {
             menu_loop(vt)
         }
         Command::WhoAmI => flows::whoami(vt),
+        Command::Find => flows::find(vt),
         Command::Send { file, to, expect } => flows::send(&file, &to, expect.as_deref(), vt),
         Command::Receive { out, expect } => flows::receive(out.as_deref(), expect.as_deref(), vt),
         Command::Refused(why) => {
@@ -172,6 +175,7 @@ fn menu_loop(vt: Vt) -> i32 {
             "1" => return flows::send_interactive(vt),
             "2" => return flows::receive(None, None, vt),
             "3" => return flows::whoami(vt),
+            "4" => return flows::find(vt),
             "q" | "Q" | "quit" | "exit" => return 0,
             "" => {}
             other => println!("\n  '{other}' is not one of the choices.\n"),

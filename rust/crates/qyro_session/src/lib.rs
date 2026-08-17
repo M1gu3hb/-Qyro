@@ -41,6 +41,7 @@
 )]
 
 mod bridged_wrapper;
+mod discovery;
 mod error;
 mod identity;
 mod session;
@@ -52,6 +53,7 @@ mod guards;
 pub use bridged_wrapper::{
     BRIDGED_WRAP_ID, BridgedWrapper, DOMAIN_MISMATCH, MAX_WRAPPED_LEN, WrapFn,
 };
+pub use discovery::{FoundPeer, browse};
 pub use error::SessionError;
 pub use identity::{Protection, fingerprint, install_wrapper, open};
 pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState, parse_pairing};

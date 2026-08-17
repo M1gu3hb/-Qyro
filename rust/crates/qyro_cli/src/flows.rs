@@ -19,6 +19,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 
 use qyro_session::{Protection, Session, SessionState, parse_pairing};
+use std::time::Duration;
 
 use crate::term::{self, Vt};
 
@@ -352,6 +353,63 @@ fn confirm(prompt: &str) -> bool {
     match ask(prompt) {
         Some(answer) => matches!(answer.trim(), "y" | "Y" | "yes" | "Yes"),
         None => false,
+    }
+}
+
+/// `qyro find` — who is announcing themselves on this network.
+///
+/// **The first production caller `qyro_net::MdnsDiscovery` has ever had.** It
+/// was written in phase 04b and nothing called it for three phases; ADR-0043 §5
+/// says connect it rather than rewrite it, and this is the connection.
+///
+/// An empty list is a **true statement about this network**, not a failure:
+/// routers with client isolation are the common case. The message says so and
+/// points at the typed code, which is the path that works everywhere.
+pub fn find(vt: Vt) -> i32 {
+    if let Err(why) = ensure_identity() {
+        eprintln!("qyro: {why}");
+        return 1;
+    }
+
+    println!(
+        "
+  looking for other devices for 3 seconds ..."
+    );
+    match qyro_session::browse(Duration::from_secs(3)) {
+        Ok(peers) if peers.is_empty() => {
+            println!(
+                "
+  nobody answered."
+            );
+            println!("  That is normal: most routers block devices from seeing");
+            println!("  each other, and every public Wi-Fi does. Ask the other");
+            println!("  device for its pairing code and use that -- it works");
+            println!("  on every network.");
+            0
+        }
+        Ok(peers) => {
+            println!();
+            for peer in &peers {
+                println!("    {}{}{}", vt.green(), peer.pairing_string(), vt.reset());
+            }
+            println!(
+                "
+  copy one of those into: qyro send <file> --to <code>"
+            );
+            0
+        }
+        Err(error) => {
+            // A backend this build does not have is **not** "nobody answered",
+            // and saying so is the whole point: a person told "no devices found"
+            // concludes the other machine is off, and goes looking in the wrong
+            // place.
+            eprintln!(
+                "
+  this build cannot look for devices on this platform: {error}"
+            );
+            eprintln!("  Use the pairing code the other device shows.");
+            1
+        }
     }
 }
 

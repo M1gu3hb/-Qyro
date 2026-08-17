@@ -22,9 +22,10 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 6] = [
+const PRODUCTION_FILES: [&str; 7] = [
     "lib.rs",
     "bridged_wrapper.rs",
+    "discovery.rs",
     "error.rs",
     // ADR-0040. Both guards demanded it the moment the file existed: the
     // production-list guard because it compiles into a release, and the

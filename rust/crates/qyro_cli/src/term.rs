@@ -101,6 +101,7 @@ pub fn menu(version: &str, vt: Vt) -> String {
     let _ = writeln!(out, "  1) Send a file");
     let _ = writeln!(out, "  2) Receive a file");
     let _ = writeln!(out, "  3) This device");
+    let _ = writeln!(out, "  4) Look for devices on this network");
     let _ = writeln!(out, "  q) Quit");
     let _ = writeln!(out);
     let _ = writeln!(
