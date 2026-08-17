@@ -54,7 +54,15 @@ pub struct Progress {
     pub done: u64,
     /// Bytes the manifest declares in total.
     pub total: u64,
-    /// Which manifest item is moving, one-based. Zero before the first.
+    /// Which manifest item is moving, one-based -- **and always zero, because
+    /// the engine never assigns it**.
+    ///
+    /// QYR-0318. This said "one-based, zero before the first", which read as
+    /// "the transfer has not started" for the whole of every transfer. It
+    /// crosses to Dart and no screen reads it: the bar is drawn from `done` and
+    /// `total`. The field stays in the ABI because removing it changes
+    /// `qyro_session_progress` and the progress callback, and the honest fix
+    /// for a wrong sentence is the sentence.
     pub item: u32,
 }
 

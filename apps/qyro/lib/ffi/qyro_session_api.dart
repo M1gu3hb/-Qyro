@@ -65,6 +65,9 @@ final class QyroProgress {
 
   final int done;
   final int total;
+
+  /// Always zero: the engine never assigns it (QYR-0318). Nothing draws from
+  /// it -- the bar comes from [done] and [total].
   final int item;
 
   @override

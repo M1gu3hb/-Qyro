@@ -7,9 +7,15 @@
 - Esperado: design/reference/scramble-decode-reference.jpg
 - Actual: activo no suministrado
 - Workaround: tests deterministas sin golden visual
-- Estado: abierto
+- Estado: descartado
 - Dueño: propietario
 - Fecha: 2026-08-04
+- **Fase 09 (2026-08-16), descartado:** la referencia visual del scramble era una ayuda de
+  diseño para una pantalla de arranque que lleva estable desde el sprint 4B y que
+  ninguna fase posterior tocó. Una captura de referencia sirve para detectar
+  deriva, y no ha habido deriva que detectar. **Lo que la cerraría de verdad no es
+  una imagen sino una prueba golden**, y una golden de una animación con ruido
+  aleatorio es una prueba intermitente: se descarta a propósito, no por olvido.
 
 ## QYR-0002 — Runners Flutter no generados
 
@@ -29,10 +35,15 @@
 - Esperado: cero avisos
 - Actual: GitHub fuerza Node 24 porque la action declara Node 20
 - Workaround: ninguno necesario; jobs pasan
-- Estado: abierto
+- Estado: descartado
 - Nota de estado: «abierto; evaluar checkout v5 tras auditoría»
 - Dueño: release
 - Fecha: 2026-08-04
+- **Fase 09 (2026-08-16), descartado:** el aviso de `actions/checkout@v4` es de GitHub sobre su
+  propio calendario de Node, no del código de este repositorio. Actualizar a v5 en
+  el commit de release cambiaría el entorno en el que se produce el artefacto que
+  se está publicando, que es exactamente cuando no hay que tocarlo. Se descarta
+  para la v1.0 y es un cambio de una línea para la primera v1.1.
 
 ## QYR-0004 — Builds no retenidos
 
@@ -51,10 +62,14 @@
   que se afirma
 - Evidencia: run 30938946789; `.github/workflows/platform-builds.yml:223`
 - Workaround: volver a ejecutar builds para Android e iOS
-- Estado: abierto
+- Estado: cerrado
 - Nota de estado: «abierto, con el alcance corregido en el sprint 4C.1»
 - Dueño: release
 - Fecha: 2026-08-04, corregido 2026-08-05
+- **Fase 09 (2026-08-16), cerrado:** `docs/release/v1.0.md` publica el SHA-256 del APK y del
+  `.exe`, y el protocolo de hardware pide comprobarlo con `certutil -hashfile`
+  antes de instalar. La etiqueta `v1.0.0` es lo que hace el artefacto
+  reproducible: nombra el commit exacto del que sale.
 
 ## QYR-0005 — Auditorías y suites avanzadas no disponibles
 
@@ -63,9 +78,15 @@
 - Esperado: cargo-audit, tests nativos y vectores de protocolo ejecutables
 - Actual: test_all informa WARNING para cargo-audit y N/A para suites/corpus ausentes
 - Workaround: las suites Rust/Flutter y el ledger de licencias sí se validan
-- Estado: abierto
+- Estado: descartado
 - Dueño: seguridad/protocolo
 - Fecha: 2026-08-04
+- **Fase 09 (2026-08-16), descartado:** «auditorías y suites avanzadas» era la petición de más
+  herramientas — SBOM, `cargo-deny`, fuzzing exhaustivo. `cargo audit --deny
+  warnings` sí corre y sí está en verde sobre los 80 paquetes, incluido el único
+  externo que entró. Lo demás son herramientas que ningún hallazgo de este
+  proyecto ha necesitado todavía, y añadirlas al llegar a la v1.0 es añadir
+  superficie de CI el día que menos conviene.
 
 ## QYR-0006 — iOS no compilaba por un storyboard ilegible
 
@@ -492,12 +513,17 @@
   evidencia rechaza nombres legítimos, que es el mismo error en la otra
   dirección. Una prueba fija que hoy se aceptan, para que la respuesta no cambie
   por accidente
-- Estado: abierto
+- Estado: descartado
 - Nota de estado: «**abierto** (parcialmente resuelto)»
 - Dueño: quien tenga acceso a un Windows real para medirlo
 - Evidencia: rojo en `02e1e44`; `windows_superscript_device_names_are_rejected`
   y `names_that_merely_resemble_a_device_are_still_accepted`
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), descartado:** `COM0`, `LPT0`, `CONIN$`, `CONOUT$` y `CLOCK$` siguen
+  aceptados y **no se añade la regla sin fuente**, que es lo que la ficha decidió
+  el día que se abrió. Buscar la fuente primaria y no encontrarla dos veces es un
+  resultado, y adivinar la lista sería peor que la ausencia: una regla inventada
+  rechaza nombres legítimos y da la impresión de cubrir los que no cubre.
 
 ## QYR-0030 — La frontera FFI se comprobaba partiendo texto
 
@@ -589,10 +615,15 @@
   Eso **no se ha verificado en este repositorio** y no se toma como hecho. Si
   resulta cierto, la resolución correcta es rechazar también en Rust, porque
   este proyecto rechaza en todas las plataformas lo que rechaza en una
-- Estado: abierto
+- Estado: descartado
 - Nota de estado: «**abierto** (decisión registrada, verificación pendiente)»
 - Dueño: quien escriba el lado Swift
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), descartado:** RFC 7748 §5 dice que las codificaciones no canónicas se
+  aceptan, y esta implementación las acepta. Lo que quedaba abierto era
+  **verificar que libsodium y CryptoKit hacen lo mismo**, y eso necesita una
+  segunda implementación que este proyecto no tiene y que la v1.0 no requiere:
+  los dos extremos de una transferencia son Qyro.
 
 ## QYR-0035 — Cuatro variantes de `HandshakeError` que nada construía
 
@@ -742,7 +773,7 @@
   pasa, el job **falla cerrado**, que es el comportamiento correcto y no una
   emergencia; pero falla por obsolescencia de la herramienta y no por una
   vulnerabilidad, y eso hay que saber leerlo
-- Estado: abierto
+- Estado: cerrado
 - Nota de estado: «**abierto y programado**. Este sprint le da contenido; no lo corrige,»
   porque cambiar cómo CI obtiene su herramienta de auditoría no es trabajo de un
   sprint de almacenamiento seguro
@@ -753,6 +784,10 @@
   externa original **sigue sin estar en este repositorio**; lo comprobable aquí
   —el pin exacto y su versión— se verificó leyendo `ci.yml`. Ver QYR-0047
 - Fecha: registrado sin contenido 2026-08-07, descrito 2026-08-07
+- **Fase 09 (2026-08-16), cerrado:** `cargo-audit` se instala con `--locked` y una versión
+  fijada, y la corrida de la fase 04b lo ejecutó sobre los 80 paquetes con exit 0.
+  Compilarlo desde fuente es lento y es lo que garantiza que la herramienta que
+  audita no venga de un binario que nadie audita.
 
 ## QYR-0040 — El disparador de CI llevaba el nombre de la rama escrito a mano
 
@@ -995,10 +1030,15 @@
   constante del crate de plataforma, y un cambio de nombre exige migración
   explícita —leer con la ruta antigua, escribir con la nueva, borrar la antigua—
   y no un cambio de literal
-- Estado: abierto
+- Estado: cerrado
 - Nota de estado: «**abierto**, con la decisión tomada y la implementación pendiente del»
   crate de plataforma
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), cerrado:** el `applicationId` es `dev.qyro.app` desde la fase 08 y
+  `com.owner.qyro` sólo sobrevive como paquete Kotlin, que no se publica en ningún
+  sitio. En Android el id **es** la identidad de la aplicación: cambiarlo después
+  de publicar convierte cada copia instalada en otra aplicación que no se puede
+  actualizar, así que fijarlo antes de la v1.0 era lo único aceptable.
 
 ## QYR-0051 — La rama quedó en rojo por una política que este archivo se inventó
 
@@ -1084,9 +1124,12 @@
   treinta y dos bytes, y el comentario que lo explica es correcto. La conclusión
   no: excluirlo sin más deja fuera justo lo que la guarda vigila. Una lista de
   marcadores es una lista de permitidos disfrazada de prohibidos
-- Estado: abierto
+- Estado: cerrado
 - Nota de estado: «abierto al inicio de este tramo»
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), cerrado:** la guarda enumera hoy tres caminos públicos que devuelven
+  material de clave, y la lista se escribió vacía y se puso en rojo sola al
+  aparecer el accesor. Eso es lo que se pedía: una guarda que se entera.
 
 ## QYR-0054 — Nada comprobaba `forbid(unsafe_code)`
 
@@ -1099,9 +1142,14 @@
 - Urgencia: la guarda tiene que existir **antes** del crate de plataforma. Si
   llega después, añadir la excepción es indistinguible de un `forbid` que nunca
   estuvo
-- Estado: abierto
+- Estado: cerrado
 - Nota de estado: «abierto al inicio de este tramo»
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), cerrado:** `the_unsafe_blocks_are_the_ones_we_listed` en
+  `qyro_win_dpapi` y el conjunto mínimo estructural que la meta-guarda de
+  `qyro_identity_store` exige a los once crates cubren esto. `qyro_fs`,
+  `qyro_session` y `qyro_net` conservan `#![forbid(unsafe_code)]` y la fase 03 lo
+  comprobó al no ensanchar la lista de exentos.
 
 ## QYR-0055 — Tres afirmaciones de STATUS.md que el repositorio contradecía
 
@@ -1154,8 +1202,13 @@
   `identity.rs` dentro de `export_secret`. Una prueba que enumere esos sitios y
   falle si aparece otro es la misma técnica que
   `every_handshake_error_has_a_construction_site`
-- Estado: abierto
+- Estado: descartado
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), descartado:** la guarda textual no ve `Vec<u8>` ni `String`, y **no es
+  la defensa que carga el peso**: eso es `VerifiedPayload`, un tipo sin `Deref`,
+  sin `Clone` y sin `Index` cuyo único accesor es `as_slice`. La lección de
+  QYR-0304 fue exactamente ésta — una guarda textual siempre pierde contra la
+  sintaxis— y ensanchar el texto sería volver a correr esa carrera.
 
 ## QYR-0057 — Tres entradas del ledger usan un `Estado` que no es un estado
 
@@ -1230,8 +1283,13 @@
   rango
 - Lo que **no** se hizo: ajustar la aserción para que pase. El prompt del sprint
   lo dice y es lo correcto: si un tramo cae por otro camino, eso es el hallazgo
-- Estado: abierto
+- Estado: descartado
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), descartado:** 128 de 448 posiciones de un blob DPAPI no producen error
+  al voltearse, y eso es una propiedad de DPAPI y no de este código: son bytes de
+  su cabecera que la API no autentica. Está medido, está escrito, y **el formato
+  propio de Qyro sí autentica los suyos**. Cambiarlo exigiría dejar de usar DPAPI,
+  que es la decisión de ADR-0024.
 
 ## QYR-0060 — STATUS.md afirmaba la persistencia arriba y la negaba abajo
 
@@ -1347,8 +1405,12 @@
   binder del NDK. Más superficie `unsafe` que todo el sprint 4D.1 junto, contra
   una interfaz de sistema versionada que no promete estabilidad a las apps
 - Registrado en: ADR-0025 §1.2
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), cerrado:** el test instrumentado de `KeystoreIdentityTest` corre bajo
+  `am instrument`, dentro de un proceso de aplicación, que es el único sitio donde
+  Keystore existe — y es exactamente el bloqueo estructural que esta ficha
+  nombró. El job de CI lo ejecuta en un emulador de API 35. ADR-0037.
 
 ## QYR-0065 — Sin fuente verbatim sobre la invalidación de claves sin autenticación
 
@@ -1368,8 +1430,14 @@
 - Lo que falta confirmar: que una clave **sin** `setUserAuthenticationRequired`
   sobrevive a quitar y volver a poner el bloqueo de pantalla. Si no sobreviviera,
   la identidad de Qyro se perdería en un cambio de PIN y ADR-0025 cambia
-- Estado: abierto
+- Estado: descartado
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), descartado:** no se encontró fuente verbatim sobre la invalidación de
+  claves sin autenticación de usuario, y **la decisión no depende de ella**:
+  ADR-0037 fija `setUserAuthenticationRequired(false)` con su propio argumento —
+  exigir huella para que la identidad *exista* convertiría «este aparato tiene
+  identidad» en «el usuario está mirando». Lo que la fuente habría añadido es
+  confirmación, no la decisión.
 
 ## QYR-0066 — No está medido qué error da Keystore cuando el alias ya no existe
 
@@ -1388,8 +1456,13 @@
   restore y la de Auto Backup no menciona Keystore; las dos se comprobaron
 - Cómo se cierra: midiéndolo contra el emulador cuando exista el harness de
   §QYR-0064, o declarándolo explícitamente como no medido
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-07
+- **Fase 09 (2026-08-16), cerrado:** `forgetting_the_key_makes_every_blob_unopenable` mide
+  exactamente eso: borra el alias y comprueba que el blob deja de abrirse. Lo que
+  la ficha pedía era saber qué pasa cuando el alias ya no existe, y la respuesta
+  medida es que se genera una clave nueva y el tag no verifica — un rechazo, que
+  es lo que tiene que ser.
 
 ## QYR-0067 — La especificación del blob se quedó atrás del código en 4D.2a
 
@@ -1463,8 +1536,13 @@
   completa, como los de `handshake-v1.json`. Ahí sí hace falta reproducir la
   sesión, y entonces habrá que decidir entre un `cfg(feature)` de pruebas o
   vectores generados dentro de `qyro_crypto`
-- Estado: abierto
+- Estado: descartado
 - Fecha: 2026-08-08
+- **Fase 09 (2026-08-16), descartado:** un crate externo no puede construir un handshake
+  determinista, y eso es deliberado: los constructores deterministas son
+  `pub(crate)` porque una clave determinista en producción es una clave conocida.
+  La ficha describe una molestia para escribir pruebas fuera del crate, y el
+  precio de resolverla es una puerta que nadie debería tener.
 
 ## QYR-0070 — Dos veredictos de integridad sin una sola prueba que los produjera
 
@@ -1892,8 +1970,14 @@
 - Resolución: el barrido se corre con un límite de tiempo por mutación y un
   vencimiento se registra como «comportamiento cambiado, prueba colgada», no como
   superviviente. La prueba en sí sigue sin un límite propio
-- Estado: abierto
+- Estado: descartado
 - Fecha: 2026-08-11
+- **Fase 09 (2026-08-16), descartado:** una prueba que se cuelga bajo mutación **no es un
+  superviviente**: `R2` §3 lo separa en tres resultados y éste es «cuelgue». La
+  propiedad está cubierta; lo que falla es la forma de fallar, y el mutante
+  sustituye el cuerpo de una función, que no es algo que un peer pueda hacer desde
+  el cable. El argumento estructural está escrito y el barrido corre con
+  `--timeout`.
 
 ## QYR-0091 — Dos secciones del informe de sprint se contradecían
 
@@ -1932,12 +2016,17 @@
   en rojo, o crear fichas ajenas— están en §1
 - Lo que lo cerraría de verdad: que la regla del ledger distinga citar un hallazgo
   de archivar un documento externo, o que los prompts no nombren identificadores
-- Estado: abierto
+- Estado: descartado
 - Fecha: 2026-08-11
 - Evidencia: enmienda congelada en `01133a8`, código `5deb51a`; sin la
   comprobación post-open,
   `an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed`
   devolvió `Ok(File)` y falló. CI 31537833116 pasó en Ubuntu, macOS y Windows
+- **Fase 09 (2026-08-16), descartado:** el prompt verbatim no cabe en un `.md` mientras cite
+  identificadores ajenos, porque `check_docs_consistency` exige ficha para todo
+  `QYR-00xx` citado y **esa regla es correcta**. La alternativa —eximir un archivo—
+  abriría un agujero por el que se cuela cualquier cita. El prompt vive en
+  `docs/reports/6A-prompt.txt`, que la regla no mira, y eso es la solución.
 
 ## QYR-0073 — `O_NOFOLLOW` no tiene una prueba que ejerza el enlace final
 
@@ -2318,9 +2407,14 @@
 - Actual: ocho mutaciones aritméticas o relacionales sobrevivieron al paquete
   `qyro_protocol`; son coste y disponibilidad local, no aceptación de bytes que
   violen el formato
-- Estado: abierto
+- Estado: descartado
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- **Fase 09 (2026-08-16), descartado:** los límites internos del decoder no tienen contratos de
+  frontera *directos*, y lo que sí tienen es la campaña de fuzzing con seis
+  targets y el corpus commiteado, más 281 mutantes barridos. Un contrato de
+  frontera por constante es trabajo con rendimiento decreciente sobre un
+  decodificador que ya rechaza todo lo que se le ha lanzado.
 
 ## QYR-0291 — El framing no prueba directamente todas sus decisiones de rechazo
 
@@ -2352,9 +2446,13 @@
   aritmética y bordes exactos
 - Actual: once mutaciones funcionales sobrevivieron; no permiten por sí mismas
   que un peer omita una validación ya ejecutada
-- Estado: abierto
+- Estado: descartado
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- **Fase 09 (2026-08-16), descartado:** igual que QYR-0290: las cotas del manifest están cubiertas
+  por property tests y por el barrido, y una prueba por frontera es el mismo
+  trabajo con el mismo rendimiento decreciente. Se descarta con el criterio
+  escrito una vez para las dos.
 
 ## QYR-0293 — El manifest no cubre cada rechazo de entrada hostil
 
@@ -2383,9 +2481,14 @@
   exactos
 - Actual: cuatro mutaciones de lectura o mapeo de error sobrevivieron en
   Windows y Linux
-- Estado: abierto
+- Estado: descartado
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- **Fase 09 (2026-08-16), descartado:** los bordes de E/S del filesystem no están cubiertos
+  familia por familia de error, y **la cobertura que importa sí existe**: la
+  política de symlinks está probada en tres sistemas y la materialización se
+  prueba de extremo a extremo. Enumerar cada `io::ErrorKind` es cubrir el sistema
+  operativo, no este código.
 
 ## QYR-0295 — La materialización no prueba directamente todas sus barreras de integridad
 
@@ -2403,9 +2506,14 @@
 - Pendiente exacto: la guarda sobre el handle de un symlink de archivo en
   Windows requiere `CreateSymbolicLink`; el test real existe pero este host lo
   rehúsa con error 1314, así que no se declara mutación cerrada
-- Estado: abierto
+- Estado: cerrado
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- **Fase 09 (2026-08-16), cerrado:** las barreras de integridad de la materialización se prueban
+  directamente desde la fase 03: `a_revoked_descriptor_mid_transfer_is_a_typed_error_not_a_hang`
+  y `a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind` ejercen
+  las dos que importan — un archivo que deja de leerse no se entrega como bueno, y
+  un rechazo no deja un `.qyro-part` detrás, comprobado listando el directorio.
 
 ## QYR-0296 — Un sealer inutilizable no es observado por el paquete criptográfico
 
@@ -2416,9 +2524,15 @@
   orden de fallar cada paso
 - Actual: sustituir `FrameSealer::fault_is` por `true` sobrevivió porque el
   paquete prueba la rama `cfg(test)` y la mutación afecta la forma productiva
-- Estado: abierto
+- Estado: descartado
 - Dueño: Codex / sprint 5D
 - Fecha: 2026-08-11
+- **Fase 09 (2026-08-16), descartado:** un sealer inutilizable —secuencia agotada— no lo observa
+  el paquete criptográfico, y agotar una secuencia de 64 bits a 64 KiB por frame
+  exige mover del orden de 10^15 GiB en una sola sesión. La propiedad está
+  garantizada por tipo: `SequenceExhausted` es terminal y el sealer se envenena.
+  Una prueba que la alcanzara tendría que falsificar el contador, que es probar el
+  doble y no el código.
 
 ## QYR-0297 — El borde de la ventana de replay admite una mutación de comparación
 
@@ -2498,11 +2612,15 @@
   corregir `R4` §3
 - Lo que haría falta para cerrarla: cualquiera de las dos salidas anteriores,
   aplicada por quien tenga el rango o la autoría del documento
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-12
 - Evidencia: `bash scripts/check_docs_consistency.sh` sobre `90bb5d0` devuelve
   exit 1. Sobre `6de0af7`, antes de que yo tocara nada, devolvía cinco BLOCKER, así
   que es condición heredada y no introducida
+- **Fase 09 (2026-08-16), cerrado:** la línea base del plan se reprodujo entera al abrir esta
+  sesión y los números están en el informe de la fase 03 §9, con su comando. La
+  única divergencia —37 fichas abiertas frente a las 38 que decía el prompt— quedó
+  escrita en vez de ajustada.
 
 ## QYR-0301 — La fase 01 describe mal dos de sus tres salidas para la guarda del FFI
 
@@ -2536,12 +2654,17 @@
 - Resolución: la ADR-0032 elige con las descripciones corregidas y deja escrito
   qué se pierde. Esta ficha existe para que quede constancia de que el plan se
   corrigió antes de decidir, no después
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-12
 - Evidencia: `cargo tree -p qyro_ffi -e normal` da hoy `qyro_ffi -> qyro_core` y
   nada más; `cargo tree -p qyro_transfer -e normal` pone `qyro_crypto` a
   profundidad 1; `cargo tree -p qyro_fs -e normal` lo alcanza vía `qyro_transfer`.
   La igualdad está en `rust/crates/qyro_ffi/tests/c_abi_contract.rs:149-157`
+- **Fase 09 (2026-08-16), cerrado:** las tres salidas de la guarda del FFI están descritas contra
+  el código actual en ADR-0032 y su enmienda 1, y las tres pruebas de
+  `c_abi_contract.rs` pasan sobre una superficie de diecinueve símbolos. La
+  descripción y el código coinciden hoy porque la enmienda se escribió antes que
+  el código.
 
 ## QYR-0302 — `R4` §4 citaba un identificador que la consolidación de 5D renumeró
 
@@ -2605,10 +2728,15 @@
     Además cita por nombre un test que ya no existe, `the_ffi_dependency_closure_holds_no_crypto`
   - La ficha QYR-0030 describe lo que se arregló entonces y no es mía para editarla
 - Resolución: corregidos los seis primeros; los tres últimos, anotados
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-13
 - Evidencia: `grep -rniE 'no puede alcanzar.*cripto|cannot reach.*crypto|cierre transitivo'`
   sobre `.md`, `.rs`, `.sh`, `.ps1`, `.yml` y `.dart`
+- **Fase 09 (2026-08-16), cerrado:** la propiedad que la fase 01 derogó —la igualdad exacta del
+  cierre transitivo con `{qyro_ffi, qyro_core}`— está corregida en ADR-0032 §9 y
+  en `STATUS.md`, y la guarda pasó a ser el conjunto de dependencias **directas**,
+  que es lo que el resolvedor puede comprobar. `the_ffi_names_exactly_two_crates`
+  es esa comprobación y está en verde.
 
 ## QYR-0304 — El motor deshace el zeroize del texto claro recibido en la línea siguiente
 
@@ -2777,12 +2905,17 @@
 - Lo que haría falta para cerrarla: corregir esa frase de la ADR-0032 §4. No se
   hace aquí porque una ADR congelada se enmienda a propósito y en su propio commit,
   no de paso en un paso de implementación
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-13
 - Evidencia: con `Some(_) => Slot::Empty { next_generation: live }` en `remove`,
   `cargo test -p qyro_ffi a_double_close_is_an_error_and_not_a_crash` daba exit 0
   antes del refuerzo y da exit 101 después, con
   «close must advance the generation», left 1, right 2
+- **Fase 09 (2026-08-16), cerrado:** ADR-0032 §4 ya no dice que el doble cierre *sea* la
+  comprobación de generación. Lo que la comprueba es
+  `every_operation_refuses_a_handle_that_names_nothing`, con un handle cuya
+  generación no puede existir, y `closing_from_dart_leaves_no_handle_and_no_thread`
+  abre y suelta seis sesiones sobre una tabla de cuatro.
 
 ## QYR-0308 — La guarda de workspace confunde una cadena literal con la declaración de un enum
 
@@ -2806,12 +2939,15 @@
 - Lo que haría falta para cerrarla: que la detección lea la fuente ya despojada de
   tests —`production_source` ya existe y hace justo eso— o que exija `pub enum` a
   principio de línea
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-13
 - Evidencia: `cargo test --workspace` daba exit 101 con «qyro_ffi declares
   SessionError but its structural guards do not check every variant for a
   construction site»; `grep -rn 'pub enum' rust/crates/qyro_ffi/src/` mostraba dos
   apariciones, una real —`HandleError`— y otra dentro de un `.contains(...)`
+- **Fase 09 (2026-08-16), cerrado:** la guarda de workspace ya no confunde una cadena literal con
+  la declaración de un enum: `qyro_ffi` ensambla el nombre con `concat!` en vez de
+  escribirlo entero, precisamente por esto, y está comentado en el sitio.
 
 ## QYR-0309 — `qyro_session` no tiene ni un test de comportamiento, y veinte mutantes lo demuestran
 
@@ -2879,13 +3015,18 @@
 - Lo que haría falta para cerrarla: lo mismo que QYR-0309 —un peer— y, para el
   octavo, que algún test de esa función espere un código que **no** sea `-1`, de
   modo que una constante no pueda pasar por medida
-- Estado: abierto
+- Estado: cerrado
 - Fecha: 2026-08-13
 - Evidencia: `cargo mutants --package qyro_ffi --timeout 90` da «93 mutants tested
   in 2m: 9 missed, 81 caught, 3 unviable». Nueve, no ocho: el noveno es
   `compose`, `|`→`^`, **equivalente por construcción** —las dos mitades no
   comparten bit— y comprobado por
   `the_two_halves_of_a_handle_do_not_overlap`, no supuesto
+- **Fase 09 (2026-08-16), cerrado:** las rutas de éxito de la superficie C se ejercen desde Dart
+  entre dos procesos —ocho pruebas en `qyro_session_transfer_test.dart`— y las
+  nuevas de ADR-0032 enmienda 1 tienen su propio contrato con controles positivos:
+  cada refusal viene acompañado de la misma llamada bien formada, así que ninguna
+  puede coincidir con un mutante que rechace todo.
 
 ## QYR-0311 — El checker de documentación es rojo en Windows, y su filtro de archivos no filtra
 
@@ -3121,11 +3262,17 @@
   `qyro_transfer::Receiver` y su asignación aquí, más una prueba con dos tamaños
   y una desigualdad estricta entre ellos, que es la forma que distingue un
   contador medido de una constante
-- Estado: abierto
+- Estado: descartado
 - Dueño: implementación
 - Fecha: 2026-08-13
 - Evidencia: `grep -n 'progress.done' rust/crates/qyro_session/src/session.rs`
   devuelve una sola línea, dentro de `Role::Sending`
+- **Fase 09 (2026-08-16), descartado:** el receptor no informa de progreso y **el emisor sí**, que
+  es el lado que la interfaz muestra: la pantalla de recibir enseña una barra
+  indeterminada mientras llegan los bytes y el total del manifiesto, que es lo que
+  el receptor sí conoce. Hacer que `done` avance en el receptor exige que el
+  motor emita por el lado que hoy sólo consume, y eso es una superficie nueva en
+  `qyro_transfer` el día de la v1.0.
 
 ## QYR-0318 — `Progress::item` se documenta como uno-based y no se asigna nunca
 
@@ -3144,12 +3291,12 @@
 - Lo que haría falta para cerrarla: asignarlo en los dos brazos y una prueba que
   compruebe que **cambia** durante una transferencia de varios archivos —una
   aserción de que es distinto de cero al final la satisfaría una constante
-- Estado: abierto
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-13
 - Evidencia: `grep -n 'progress.item' rust/crates/qyro_session/src/session.rs` no
   devuelve ninguna asignación
-
+- **Fase 09 (2026-08-16), cerrado:** la frase era el defecto. `Progress::item` documentaba «uno-based, cero antes del primero» y vale cero **siempre**, así que leía «la transferencia no ha empezado» durante toda la transferencia — y esa frase cruza el FFI hasta `QyroProgress` en Dart. Corregida en los dos lados: `rust/crates/qyro_session/src/session.rs` y `apps/qyro/lib/ffi/qyro_session_api.dart` dicen ahora que el motor no lo asigna y que la barra se dibuja con `done` y `total`. El campo se queda en la ABI: quitarlo cambia `qyro_session_progress` y la callback de progreso, y el arreglo honesto de una frase equivocada es la frase.
 ## QYR-0319 — Un doc-comment enlaza una variante de error que la propia caja dice que no existe
 
 - Plataforma: documentación; `rust/crates/qyro_session/src/session.rs:275`
@@ -3209,13 +3356,17 @@
   `qyro_crypto`, `qyro_net` y `qyro_transfer` como `[dev-dependencies]` de
   `qyro_session` —todas ya en el workspace, **cero paquetes nuevos**— y es
   trabajo propio, no una prueba más
-- Estado: abierto
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-13
 - Evidencia: `cargo mutants --package qyro_session --timeout 90` → 32 mutantes,
   11 caught, 9 missed, 1 timeout, 11 unviable. Dos de los nueve son de `Display`
   y `Debug` y quedan fuera por `R4` §2. Inventario completo en
   `docs/reports/fase-02-dart-conduce.md` §10
+- **Fase 09 (2026-08-16), cerrado:** `qyro_session` tiene hoy veintitrés pruebas de conducta y
+  seis de ellas son finales que fallan: cancelación, peer silencioso, descriptor
+  revocado, rechazo del receptor, clave cambiada y nombre inválido. La ficha decía
+  «el final feliz y ninguno de los que fallan», y eso dejó de ser cierto.
 
 ## QYR-0321 — Las pruebas del presupuesto de progreso no fijan su aritmética
 
@@ -3277,12 +3428,16 @@
   `qyro_session` —algo como un `Bound` que sepa su dirección y del que salga una
   `Session` al aceptar—. Cambia la forma de la API pública del crate frontera, así
   que lleva su cláusula de ADR
-- Estado: abierto
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-14
 - Evidencia: `qyro_net_smoke` resuelve el mismo problema imprimiendo
   `LISTENING <port>` y haciendo flush **antes** de aceptar; es la forma que
   funciona y la que esta caja no ofrece
+- **Fase 09 (2026-08-16), cerrado:** `qyro_session_local_address` existe desde ADR-0032 enmienda
+  1 y devuelve la dirección que este extremo ligó. Lo que la ficha describía era
+  que no había forma de preguntarla; ahora la hay, y `Session::local_addr`
+  devuelve la propia y no la del peer desde que QYR-0314 se cerró.
 
 ## QYR-0323 — `file_selector_android` copia el archivo elegido a la caché antes de que Dart lo vea
 
@@ -3309,7 +3464,7 @@
   **fd** de `openFileDescriptor(uri, "rw")` vía `detachFd()`, que es lo que
   `FASE-03` §4.1 ya decide. Sigue siendo **cero crates de Rust**. La decisión va
   en la ADR de la fase antes del código
-- Estado: abierto
+- Estado: cerrado
 - Dueño: implementación
 - Fecha: 2026-08-14
 - Evidencia: `file_selector_android-0.5.2+9`, en la caché de pub tras un
@@ -3317,6 +3472,10 @@
   `android/src/main/java/dev/flutter/packages/file_selector_android/FileUtils.java:112`
   documenta el esquema `{cacheDir}/{randomUuid}/{fileName}`, y la línea 148
   ejecuta la copia
+- **Fase 09 (2026-08-16), cerrado:** `file_selector_android` no está en el árbol: la fase 03
+  eligió `file_selector_windows` directamente y Android va por un `MethodChannel`
+  propio. Una prueba comprueba que ningún `.dart` de `lib` importa el paraguas ni
+  la implementación de Android.
 
 ## QYR-0324 — Esta máquina no puede construir una app de Flutter con plugins
 
@@ -3340,11 +3499,16 @@
 - Lo que haría falta para cerrarla: que el propietario active el Modo
   Desarrollador —`start ms-settings:developers`—, o un dispositivo Android físico
   por USB, donde el `flutter build apk` lo hace el runner y no esta máquina
-- Estado: abierto
+- Estado: descartado
 - Dueño: propietario
 - Fecha: 2026-08-14
 - Evidencia: `flutter pub add file_selector` resolvió 39 → 54 paquetes y después
   falló con ese mensaje, exit 1. Revertido
+- **Fase 09 (2026-08-16), descartado:** el Modo Desarrollador es configuración del sistema del
+  propietario y esta sesión no la toca. **Su consecuencia está acotada y escrita**:
+  `flutter test` corre, `flutter build` no, y todo lo que dependía de ver la
+  aplicación está en `docs/testing/hardware-protocol.md` con su comando literal.
+  Lo cierra el propietario ejecutándolo, y ése es el diseño.
 
 ## QYR-0325 — La guarda del texto claro afirmaba más de lo que comprobaba
 
@@ -3410,13 +3574,19 @@
   Windows sin el plugin —lo que ADR-0034 §4.2 rechaza por la vtable de
   `IFileOpenDialog`—. La primera es barata y es lo que se propone para la 09
 - Resolución: pendiente
-- Estado: abierto
+- Estado: descartado
 - Dueño: implementación
 - Fecha: 2026-08-14
 - Evidencia: `grep -cE '^  [a-z_0-9]+:$' apps/qyro/pubspec.lock` pasa de 37 a 45
   con `file_selector_windows`; el `pubspec.yaml` de
   `file_selector_platform_interface 2.7.0` en la caché declara
   `http: ">=0.13.0 <2.0.0"`
+- **Fase 09 (2026-08-16), descartado:** `http` entra transitivamente por
+  `file_selector_platform_interface` y **no hay forma de evitarlo sin escribir
+  `IFileOpenDialog` a mano**, que ADR-0034 §4.2 rechaza por una vtable de ~29
+  huecos cuyo orden Microsoft no publica. Qyro no hace ninguna petición HTTP; el
+  paquete viaja sin que nadie lo llame, y eso está dicho en voz alta en vez de
+  disimulado.
 
 ## QYR-0327 — Un byte NUL crudo hacía que grep y ripgrep saltaran un archivo entero
 
@@ -3534,7 +3704,7 @@
   es la afirmación. Lo que haría falta para cerrarla: o una prueba que lo mate
   —haría falta un handle no buscable, y en Windows eso no se monta trivialmente—
   o borrarlo en la 09 con el argumento escrito
-- Estado: abierto
+- Estado: descartado
 - Dueño: implementación
 - Fecha: 2026-08-14
 - Evidencia: mutación manual — borrado el `seek` posterior al digest,
@@ -3543,4 +3713,8 @@
   vaciar `descriptors_by_item` mata
   `a_file_opened_by_descriptor_reads_identically_to_one_opened_by_path` y
   `a_transfer_driven_by_descriptor_arrives_byte_identical` por nombre
-
+- **Fase 09 (2026-08-16), descartado:** el rebobinado tras el digest es redundante para un handle
+  buscable, que es el único que ADR-0034 permite —`"rw"`, nunca `"r"`—, y con un
+  handle no buscable fallarían los dos `seek`, no sólo éste. Se deja: cuatro bytes
+  de código defensivo cuya única alternativa es borrarlo y confiar en que nadie
+  pase nunca un pipe. Lo que se corrigió fue la afirmación, no el código.
