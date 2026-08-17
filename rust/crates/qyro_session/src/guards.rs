@@ -22,11 +22,12 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 7] = [
+const PRODUCTION_FILES: [&str; 8] = [
     "lib.rs",
     "bridged_wrapper.rs",
     "discovery.rs",
     "error.rs",
+    "link.rs",
     // ADR-0040. Both guards demanded it the moment the file existed: the
     // production-list guard because it compiles into a release, and the
     // construction-site guard because `SessionError::IdentityUnreadable` is

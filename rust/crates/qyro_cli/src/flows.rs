@@ -371,6 +371,43 @@ pub fn find(vt: Vt) -> i32 {
         return 1;
     }
 
+    // **The cable assistant** (ADR-0043 §2, phase 14 §3.4). A person who plugs a
+    // cable in and sees nothing for a minute concludes the cable is broken.
+    // `R8` §8 measures that window: the DHCP client tries and fails before
+    // APIPA assigns, and it is tens of seconds. So the wait is counted out loud
+    // rather than hidden, and it ends in advice rather than an error.
+    let start = std::time::Instant::now();
+    let link = qyro_session::wait_for_link(
+        || local_addresses().into_iter().map(|(_, ip)| ip).collect(),
+        move || start.elapsed(),
+        |state| match state {
+            qyro_session::LinkState::Waiting { elapsed } => {
+                print!(
+                    "\r  waiting for a network address ... {}s -- this is normal on a direct cable      ",
+                    elapsed.as_secs()
+                );
+                let _ = std::io::stdout().flush();
+            }
+            qyro_session::LinkState::Ready(address) => {
+                println!("\r  address: {address}                                   ");
+            }
+            qyro_session::LinkState::StillNothing => {
+                println!("\r  still no address after 60 seconds.                     ");
+                // Advice, not an error. Auto-MDI-X is IEEE 802.3 clause 40.4.4,
+                // the **1000BASE-T** clause: a 10/100-only NIC -- exactly the
+                // one in the machine this was built for -- may not have it.
+                println!("  If a cable joins the two machines, try a crossover cable.");
+                println!("  If they share a network, the typed pairing code works anyway.");
+            }
+        },
+        qyro_session::APIPA_BUDGET,
+        std::time::Duration::from_secs(1),
+    );
+
+    if matches!(link, qyro_session::LinkState::StillNothing) {
+        return 1;
+    }
+
     println!(
         "
   looking for other devices for 3 seconds ..."

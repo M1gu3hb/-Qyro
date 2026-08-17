@@ -44,6 +44,7 @@ mod bridged_wrapper;
 mod discovery;
 mod error;
 mod identity;
+mod link;
 mod session;
 mod trust;
 
@@ -56,5 +57,6 @@ pub use bridged_wrapper::{
 pub use discovery::{FoundPeer, browse};
 pub use error::SessionError;
 pub use identity::{Protection, fingerprint, install_wrapper, open};
+pub use link::{APIPA_BUDGET, LinkState, is_apipa, is_reachable_by_a_peer, wait_for_link};
 pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState, parse_pairing};
 pub use trust::{PeerTrust, TrustBook, fingerprint_text};

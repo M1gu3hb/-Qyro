@@ -44,6 +44,7 @@ fecha — fase 14. No son deuda difusa: son trabajo con su fase asignada.
 | D4 | `Progress::item` vale cero siempre | `qyro_session`, `qyro_ffi`, Dart | Superficie nueva del motor. La frase ya está corregida (QYR-0318); el campo sigue sin asignarse |
 | D5 | El receptor no informa de progreso por bytes | `qyro_transfer` | Misma superficie que D4 (QYR-0317) |
 | D6 | `cargo doc -D warnings` no está en la puerta | CI | Un job. Un enlace intra-doc roto no cambia comportamiento |
+| D8 | **Un fallo visto una vez y no reproducido.** `cargo test --workspace` dio `24 passed; 1 failed` en la misma invocación que corrió `cargo fmt --all` antes; tres corridas posteriores en verde | workspace | Se anota en vez de barrerse. La hipótesis —un binario compilado de fuente pre-formato— es plausible y **no está comprobada**, y una hipótesis no comprobada no cierra nada. Si vuelve, el nombre del test es lo primero que hay que capturar |
 | D7 | El paquete `http` viaja en el binario de Windows sin que nadie lo llame | `file_selector_platform_interface` | Evitarlo exige `IFileOpenDialog` a mano, que ADR-0034 §4.2 rechaza (QYR-0326) |
 
 **Nada de esto detiene una fase.** D1 y D2 son cosméticos con fecha en la 18. D3
