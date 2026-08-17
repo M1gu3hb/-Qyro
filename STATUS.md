@@ -20,6 +20,28 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   `127.0.0.1` no son dos aparatos en una red. Los veinte escenarios que cierran
   ese hueco están escritos y **sin marcar** en `docs/testing/hardware-protocol.md`
 
+### Fase 11 — runs de cierre
+
+Los tres sobre `386015a`, disparados por el `push`, y **es el primer commit de
+este proyecto en el que las dos pruebas que importan existen y pasan**.
+
+| Workflow | Run | Conclusión |
+|---|---|---|
+| CI | 31993329781 | **success** |
+| Platform builds | 31993329863 | **success**, 3/3 jobs |
+| Android runtime ABI | 31993329786 | **success** |
+
+Dos pasos concretos, porque son los que sostienen esta fase y la 06:
+
+- **`An identity survives a process, through the engine`** (job `rust`):
+  **success**. Falla en cualquier commit anterior a la fase 11 — dos procesos
+  abren el mismo archivo a través de `qyro_session` y comparan la huella, con su
+  control de falsabilidad.
+- **`The identity survives, checked inside an application process`** (job
+  `android`): **success**. Estuvo en rojo dos commits por QYR-0350 y **no se
+  había ejecutado nunca**, así que la evidencia que la fase 06 daba por hecha
+  existe por primera vez aquí.
+
 ### Fase 11 — CERRADA. La identidad, y lo que costó no tenerla
 
 Informe: `docs/reports/fase-11-la-identidad.md`. Decisión: ADR-0040.
