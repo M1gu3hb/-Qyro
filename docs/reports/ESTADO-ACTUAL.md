@@ -1,112 +1,117 @@
-# ESTADO ACTUAL
+# Estado actual — v1.0
 
-*Se reescribe entero al cerrar cada paso. Techo duro: 120 líneas.*
+**Última actualización:** 2026-08-16. **Rama:** `claude/qyro-net-6a`.
+**Nunca `main`. Nunca force-push. Nunca reescribir historia.**
 
-## 1. Dónde estoy
+---
 
-- **Fase 05 CERRADA. LOS BOTONES ESTÁN ENCENDIDOS.** Las cinco condiciones
-  cumplidas con su prueba con nombre — `docs/reports/fase-05-la-interfaz-y-los-botones.md`.
-- Fase 03 cerrada como PARCIAL. Fase 04a cerrada. **04b va ahora.**
-- Rama `claude/qyro-net-6a`, último commit **`d7d8b50`**.
+## 1. Dónde está esto
 
-## 2. Lo siguiente, en orden
+**Terminado. Fases 00 a 10 cerradas, `v1.0.0` etiquetada.** Lo único que queda no
+es código: es la **fase 07**, que necesita dos aparatos y una persona, y está
+escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 
-1. **04b** — `mdns-sd` 0.20.3 bajo `cfg(windows)` (pre-autorizada, delta de
-   `Cargo.lock` + `cargo audit` en el informe) y `NsdManager` con
-   `FLAG_SHOW_PICKER` en Android. **La trampa está en ADR-0035 enmienda 1**:
-   cualquier cosa que no sea `NsdManager` necesita `WifiManager.MulticastLock`,
-   porque el stack Wi-Fi filtra el multicast por debajo del socket y
-   `join_multicast_v4` tiene éxito sin recibir nada y **sin error**.
-2. **06** — Android Keystore. QYR-0064: test **instrumentado bajo `am instrument`**,
-   no un binario en `/data/local/tmp`. `jni-sys` está pre-autorizada. Sin esto la
-   confianza y la identidad no sobreviven a un reinicio.
-3. **08** — permisos, APK firmado, `.exe`, nombre de paquete y clave de firma
-   (decido yo). QYR-0050 y QYR-0004.
-4. **09** — cerrar o descartar **toda** la deuda: 37 fichas abiertas y
-   `docs/reports/deuda-de-calidad.md` entero.
-5. **10** — ADR superadas marcadas, `THREAT_MODEL.md` reescrito contra lo que
-   existe, `docs/release/v1.0.md`, etiqueta `v1.0.0`, artefactos con SHA-256.
-6. **`docs/testing/hardware-protocol.md`** — veinte escenarios con su comando
-   literal, listos para que el propietario conecte un teléfono. **No se inventa
-   evidencia de hardware.**
+**Nada se ha ejecutado nunca en hardware físico.** No se inventa.
 
-## 3. Números actuales (comandos, no memoria)
+---
 
-| Comprobación | Comando | Valor |
-|---|---|---|
-| Tests Rust | `cargo test --workspace` | **623 passed, 0 failed, 2 ignored** (52 suites, Windows) |
-| Tests Dart | `flutter test` con las 2 variables | **94 passed** |
-| Clippy · fmt | `--workspace --all-targets -D warnings` · `fmt --all --check` | exit **0** |
-| Clippy target unix | `-p <crate> --all-targets --target aarch64-linux-android` | exit **0** |
-| `flutter analyze` · `dart format` | en `apps/qyro` | exit **0** |
-| Docs | `check_docs_consistency` en Bash y PowerShell | exit **0** |
-| Paquetes Rust / Dart | `[[package]]`/`source =` · sección `packages:` | **64 / 50** · **45** |
-| Ledger | script de `R2` §1.10 | **147 fichas, 37 abiertas** |
-| Símbolos C | `extern "C" fn` en `qyro_ffi/src` | **19** |
+## 2. Qué existe
 
-## 4. El entorno (medido)
-
-| Cosa | Dónde |
+| | |
 |---|---|
-| Repo | `D:\Qyro\repo` · Rust 1.88.0 por `rust-toolchain.toml` |
-| Flutter | `D:\flutter\bin\flutter.bat` 3.44.8 / Dart 3.12.2 · `dart.exe` en `D:\flutter\bin\cache\dart-sdk\bin` |
-| `PUB_CACHE` | `D:\pub-cache` — exportar en cada shell |
-| `cargo-mutants` | `D:\tools\cargo\bin\cargo-mutants.exe` 27.1.0 (subcomando `mutants`) |
-| Git Bash | `C:\Program Files\Git\bin\bash.exe` — `bash` a secas es WSL sin distro |
-| PowerShell | 5.1 únicamente, **no hay `pwsh`** |
-| Android SDK | `%LOCALAPPDATA%\Android\Sdk` (adb, android-36) y `D:\android-sdk` (cmdline-tools, android-34). **Sin emulador** |
-| Java | `C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot` |
-| Targets Rust | `x86_64-pc-windows-msvc` y `aarch64-linux-android` |
-| Pruebas FFI de Dart | `cargo build --release -p qyro_ffi -p qyro_net_smoke`, luego `QYRO_FFI_LIBRARY_PATH=…\target\release\qyro_ffi.dll` y `QYRO_NET_SMOKE_PATH=…\qyro_net_smoke.exe` |
+| Motor | Rust 1.88.0, edition 2024, once crates. Transferencia completa, cifrada y verificada |
+| Frontera | 19 símbolos C, **ninguno cruza un tipo** (ADR-0032 + enmienda 1) |
+| Interfaz | Cuatro pantallas, dos idiomas, **botones encendidos** (fase 05, ADR-0036) |
+| Descubrimiento | `NsdManager` + `FLAG_SHOW_PICKER`; `mdns-sd` bajo `cfg(windows)` (fase 04b) |
+| Identidad | DPAPI en Windows, `AndroidKeyStore` en Android, **sin `jni-sys`** (ADR-0037) |
+| Paquete | `dev.qyro.app`, firmado con clave propia (fase 08) |
+| Pruebas | Rust **633 / 0 / 2 ignoradas**; Dart **90 pasadas, 10 saltadas** |
+| Dependencias | `Cargo.lock` **80**; `pubspec.lock` **45**. Cero externas de Rust en Android |
+| Ledger | **150 fichas, 0 abiertas** |
 
-**Modo Desarrollador APAGADO**: `flutter test` sí, `flutter build`/`run` no (QYR-0324).
+---
 
-## 5. Lo que ya está resuelto y no hay que reinvestigar
+## 3. Las reglas que no cambian
 
-1. **La superficie C son diecinueve símbolos** y ninguno cruza un tipo. El
-   contrato de texto vive en `emit_text`: `out_len` siempre, y **nada escrito**
-   si no cabe.
-2. **`qyro_session` posee su vocabulario**: `PeerTrust`, `RejectReason`,
-   `TrustBook`, `parse_pairing`. No reexporta nada ajeno, y la guarda que lo
-   exige **deriva** los módulos del `lib.rs` de la fachada.
-3. **Las pantallas hablan con `QyroTransferService`**, no con el FFI, porque
-   `stepBlocking` bloquea sin cota. `NativeTransferService` corre la sesión en
-   `Isolate.run` y sólo devuelve enteros y texto.
-4. **La confianza no persiste** hasta la fase 06: `seal_known_peers` necesita un
-   `SecretWrapper` y en Android no hay.
-5. **`cargo-mutants` no puede mutar una `extern "C" fn` de forma observable**: el
-   cuerpo sustituido devuelve `0`, que es `QYRO_OK`. Esas se mutan a mano.
+1. **Nunca commits en `main`.** Nunca force-push, nunca borrar una rama.
+2. **No se inventa evidencia de hardware.** Es lo único que arruinaría esto.
+3. **ADR congelada antes del código, en su propio commit.**
+4. **Nunca volcar salida de herramienta en `BUGS_PENDING.md`.**
+5. **La puerta se pasa por exit code**, no por leer la salida.
+6. **Dos destinos para una ficha: cerrada, o descartada con argumento.** Nunca
+   «pendiente».
+7. IDs nuevos desde **QYR-0351**.
 
-## 6. Qué NO hay que rehacer
+---
 
-- **`cargo` no reconstruye con una mtime vieja.** Tras restaurar un backup:
-  `(Get-Item ruta).LastWriteTime = Get-Date`.
-- **Lo `cfg(unix)` no se compila aquí.** `--target aarch64-linux-android`.
-- **`check_docs_consistency` se corre sobre el commit FINAL** y hay que actualizar
-  `Verified commit` en `STATUS.md` cada pocas confirmaciones.
-- Citar un `QYR-00xx` sin ficha bloquea. Para «el siguiente libre» escribe
-  `QYR-nnnn+` con el `+` pegado al número, dentro de las comillas.
-- `flutter pub get` sale 1 la primera vez tras cambiar un plugin y 0 la segunda.
-  Reescribe `apps/qyro/windows/flutter/generated_plugin_*`: `git checkout --`.
-- `dart format --set-exit-if-changed .` **desde `apps/qyro`**, como CI; desde la
-  raíz falla por `tools/branding_generator`.
-- `Select-String` de PS 5.1 no tiene `-Recurse` y `-match` ignora mayúsculas.
-- **Una prueba de widget necesita un `Scaffold`**: `TextField` y `Card` piden un
-  `Material` ancestro y un `home:` pelado no lo tiene.
-- **El analizador de Dart rechaza un U+202E crudo en un literal.** Escríbelo como
-  `'\u202E'`.
+## 4. La puerta — trece comprobaciones, por exit code
 
-## 7. Reglas mínimas
+```bash
+cargo test --workspace
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy -p qyro_session -p qyro_ffi --all-targets --target aarch64-linux-android -- -D warnings
+cargo audit --deny warnings
+```
 
-1. **Sólo un P0 detiene.** El resto → `deuda-de-calidad.md`, y la **09 la vacía**.
-   Excepción: lo que impide construir lo siguiente.
-2. **Autonomía total** salvo `main`, dinero, aparato físico o segunda persona.
-3. **Ningún informe termina con «falta esto».** Dos destinos: HECHA, o
-   cerrada/descartada con argumento en la 09.
-4. **Trece comprobaciones por puerta, por CÓDIGO DE SALIDA.**
-5. **Toda clase de evidencia se nombra.** «Compiló» nunca es «funciona».
-6. **NO se inventa evidencia de hardware.** Es lo único que arruinaría el proyecto.
-7. **Identificadores nuevos desde `QYR-0348+`.**
-8. Toda ADR se congela **antes** del código, en commit propio.
-9. **Nunca commits en `main`.** Sólo `claude/qyro-net-6a`.
-10. Este archivo se reescribe y se commitea al cerrar cada paso.
+```bash
+cd apps/qyro && flutter analyze && flutter test && dart format --set-exit-if-changed .
+```
+
+```bash
+bash scripts/check_docs_consistency.sh
+powershell -NoProfile -File scripts/check_docs_consistency.ps1
+```
+
+Y después: `gh run list --branch claude/qyro-net-6a` en verde. **Un job rojo es
+una afirmación sin evidencia** — es QYR-0350, que estuvo dos commits en rojo
+mientras la fase 06 daba su test instrumentado por hecho.
+
+---
+
+## 5. El entorno de esta máquina
+
+| | |
+|---|---|
+| Repo | `D:\Qyro\repo` (C: no tiene espacio) |
+| Flutter | `D:\flutter`, 3.44.8 / Dart 3.12.2 — **no está en PATH** |
+| Android SDK | `D:\android-sdk`, build-tools 34.0.0. **Sin NDK** |
+| Keystore | `D:\qyro-release\qyro-release.jks`, alias `qyro` |
+| Rust | 1.88.0, targets `aarch64-linux-android` y `x86_64-pc-windows-msvc` |
+
+```powershell
+$env:PATH="D:\flutter\bin;"+$env:PATH
+```
+
+---
+
+## 6. Las trampas de esta máquina, ya pagadas
+
+1. **`flutter build` no corre aquí.** «Building with plugins requires symlink
+   support» — el Modo Desarrollador está apagado y es configuración del
+   propietario (QYR-0324). Los artefactos los construye `release.yml` en CI.
+2. **`Copy-Item` conserva el mtime del backup**, así que cargo no recompila.
+   `(Get-Item ruta).LastWriteTime = Get-Date`.
+3. **PowerShell lee el stderr de `git` como `NativeCommandError`.** No es un
+   fallo: comprobar el resultado, no el flujo.
+4. **`cargo test` en Windows no compila lo que está tras `cfg(unix)`.** Por eso
+   la comprobación 13 usa `clippy --target aarch64-linux-android`, que no
+   necesita linker de Android.
+5. **Las guardas textuales pierden contra la sintaxis.** Ya ha pasado tres
+   veces: QYR-0328 en Rust, QYR-0348 en Dart, y el falso positivo de la regla de
+   hardware. Si una guarda lee fuente, **que salte comentarios y literales** y
+   que tenga su control en los dos sentidos.
+6. **Un `Progress` que cruza el FFI también cruza sus comentarios.** Una frase
+   equivocada en Rust se lee igual de mal en Dart (QYR-0318).
+7. `apps/qyro/lib/l10n/generated/` está en `.gitignore`: tras tocar un `.arb`,
+   `flutter gen-l10n`.
+
+---
+
+## 7. Lo que sigue, y sólo hay una cosa
+
+**La fase 07.** Dos aparatos, una Wi-Fi, una persona, y los veinte escenarios de
+`docs/testing/hardware-protocol.md` anotados — **incluidos los que fallen**.
+
+Lo que la fase 07 encuentre decide la v1.1, y no al revés. Escribir hoy una lista
+de mejoras sería adivinar antes de la única medición que falta.

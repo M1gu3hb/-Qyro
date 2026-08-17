@@ -36,10 +36,10 @@ contra el código que existe: `THREAT_MODEL.md`.
   y el botón de enviar **no existe** en ese estado.
 - **Diecinueve símbolos C**, ninguno cruza un tipo.
 - `cargo test --workspace`: **633 passed, 0 failed, 2 ignored**. `flutter test`:
-  **90 passed, 10 skipped** — las diez saltan sin la biblioteca nativa compilada
+  **90 pasadas, 10 saltadas** — las diez saltan sin la biblioteca nativa compilada
   o sin el manifiesto fusionado, y saltada no es pasada.
 - `Cargo.lock`: **80 paquetes**. `pubspec.lock`: **45**.
-- `BUGS_PENDING.md`: **149 fichas, 0 abiertas.**
+- `BUGS_PENDING.md`: **150 fichas, 0 abiertas.**
 
 **Lo que NO debe leerse como progreso:**
 
