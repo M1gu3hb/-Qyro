@@ -4106,3 +4106,32 @@
 - Fecha: 2026-08-17
 - Evidencia: `two_process_pairing_test.dart`, que falló mostrando el árbol del
   destino con el `.qyro-part` dentro
+
+## QYR-0358 — La pestaña de historial no podía enseñar nada nunca
+
+- Plataforma: Android, Windows;
+  `apps/qyro/lib/transfer/native_transfer_service.dart:551`
+- Severidad: P2
+- Esperado: la pantalla de historial enseña las transferencias que hubo
+- Actual: `history()` devuelve `const <QyroHistoryEntry>[]` escrito a mano.
+  `qyro_fs::history` graba en disco y **ningún símbolo de la superficie C lo
+  lee**, así que la lista está vacía por construcción y la pestaña no puede
+  enseñar nada jamás
+- **Es la cuarta capacidad muerta de la misma forma en dos fases**, después de
+  `KeystoreWrapper`, `qyro_session_local_address` y `Session::finish`. Escrito,
+  probado, e inalcanzable. El propio comentario lo decía —«no C symbol reads it
+  yet»— y aun así la pestaña seguía en la barra
+- **Decisión: se retira de la interfaz, no se cruza el FFI.** Una línea de por
+  qué: una pestaña que no puede enseñar nada es una promesa, y R7 §5 dice que
+  Qyro no lleva funciones que nadie pidió. Cruzar el FFI son ~150 líneas por una
+  capacidad que no está en el camino de R7 —meter un archivo en un PC viejo desde
+  la terminal— y ese trabajo se hace cuando toque, no para tapar una pestaña
+- **Qué NO se pierde:** el motor sigue grabando. No se borra `qyro_fs::history`,
+  ni `HistoryScreen`, ni sus pruebas. La pantalla vuelve el día que un símbolo lea
+  el archivo, y quitarla es más barato de deshacer que explicar una pestaña que
+  miente
+- Estado: cerrado
+- Dueño: interfaz
+- Fecha: 2026-08-17
+- Evidencia: `grep -c history rust/crates/qyro_ffi/src/*.rs` da 0 en los cinco
+  archivos de la frontera

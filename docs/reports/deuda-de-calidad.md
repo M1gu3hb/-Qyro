@@ -1,14 +1,70 @@
-# Deuda de calidad — **vaciada**
+# Deuda de calidad — **reabierta el 2026-08-17**
 
-**Qué era este archivo.** Desde el 2026-08-14 rigió la regla del carril: sólo un
-P0 detenía una fase, y todo lo demás se registraba aquí para arreglarse en la
-fase 09. La regla funcionó: tres sesiones seguidas se habían consumido enteras en
-hallazgos de calidad reales mientras el producto no se movía, y con el carril el
-producto se movió.
+**Qué es este archivo.** La regla del carril: sólo un P0 detiene una fase, y todo
+lo demás se anota aquí para arreglarse en un cierre de deuda. La fase 09 la vació
+y **la fase 12 la volvió a llenar**, que es exactamente para lo que existe.
 
-**La fase 09 vacía la lista. No la hereda.** Este archivo ya no tiene entradas
-abiertas, y `BUGS_PENDING.md` tampoco: **147 fichas, 0 abiertas**, contadas con el
-script de `R2` §1.10.
+**Se vacía en la fase 18.** Hasta entonces esto crece, y crecer no es un fallo:
+lo que sería un fallo es que un hallazgo viviera sólo en un informe de fase que
+nadie vuelve a abrir. Eso pasó — la fase 11 anotó en su línea 52 que
+`qyro_session_local_address` no tenía llamante y **la observación se quedó en el
+informe** hasta que la fase 12 tropezó con ella.
+
+*(El vaciado de la fase 09 —147 fichas, cuatro familias de descarte y las cinco
+entradas del carril— está en el historial de git de este archivo. No se copia
+aquí: lo que importa hoy es lo que está abierto.)*
+
+---
+
+## 1. Capacidades vivas sin llamante de producción
+
+**El patrón que define este proyecto.** Cuatro en dos fases, todas iguales:
+escritas, probadas, e inalcanzables desde el producto. La comprobación 14 existe
+por esto y las encuentra en minutos.
+
+| Qué | Símbolo | Estado |
+|---|---|---|
+| Descubrimiento automático | **ninguno en la superficie C** | **Declarado fuera de la v1.x** (fase 12). `DiscoveryChannel.kt` registrado, ningún Dart abre `dev.qyro/discovery`. Lo conecta la fase 14 |
+| Dirección local de una sesión viva | `qyro_session_local_address` | **Sin llamante, a propósito.** ADR-0041 lo hace innecesario hoy —el puerto es fijo— y la fase 14 lo necesitará de verdad al ligar por interfaz |
+| Historial | ninguno | **Retirado de la interfaz** (QYR-0358). El motor sigue grabando |
+| Materializar lo recibido | `qyro_session_finish` | **Cerrado** (QYR-0357). Tenía cero llamantes y un archivo recibido nunca llegaba |
+
+**Lo que queda abierto de esta tabla:** las dos primeras filas, y las dos tienen
+fecha — fase 14. No son deuda difusa: son trabajo con su fase asignada.
+
+---
+
+## 2. Deuda abierta, con su tamaño
+
+| # | Qué | Dónde | Tamaño |
+|---|---|---|---|
+| D1 | **Mojibake**: 30 secuencias `Ã¢â‚¬â€` y similares, UTF-8 leído como Latin-1 | `rust/crates/qyro_session/src/session.rs`, y algunas en `qyro_ffi` | Mecánico. Un paso de reencodado y una guarda que impida el regreso |
+| D2 | **Dos `- Estado:` duplicados** en la misma ficha | QYR-0088 y QYR-0089 de `BUGS_PENDING.md` | Dos líneas. El script de recuento lee el primero, así que el segundo es ruido que puede mentir |
+| D3 | `qyro_fs::history` graba y nada lo lee | frontera C | ~150 líneas: un símbolo que emita registros como texto. Desbloquea QYR-0358 |
+| D4 | `Progress::item` vale cero siempre | `qyro_session`, `qyro_ffi`, Dart | Superficie nueva del motor. La frase ya está corregida (QYR-0318); el campo sigue sin asignarse |
+| D5 | El receptor no informa de progreso por bytes | `qyro_transfer` | Misma superficie que D4 (QYR-0317) |
+| D6 | `cargo doc -D warnings` no está en la puerta | CI | Un job. Un enlace intra-doc roto no cambia comportamiento |
+| D7 | El paquete `http` viaja en el binario de Windows sin que nadie lo llame | `file_selector_platform_interface` | Evitarlo exige `IFileOpenDialog` a mano, que ADR-0034 §4.2 rechaza (QYR-0326) |
+
+**Nada de esto detiene una fase.** D1 y D2 son cosméticos con fecha en la 18. D3
+tiene dueño y ficha. D4 y D5 son la misma superficie y esperan a que alguien la
+necesite de verdad.
+
+---
+
+## 3. Lo que este archivo enseña sobre el proyecto
+
+**Los cuatro defectos graves de las fases 11 y 12 no estaban aquí.** Ninguno era
+deuda: eran capacidades que el producto anunciaba y no tenía. La deuda de calidad
+es lo que se sabe y se aplaza; **eso otro era lo que no se sabía**, y la
+diferencia importa porque se encuentran de formas distintas.
+
+La deuda se encuentra leyendo. Lo otro se encuentra **preguntando quién llama**,
+y escribiendo una prueba que ponga al producto en los dos papeles.
+
+---
+
+## 4. Cómo se cuenta
 
 ```
 python - <<'PY'
@@ -22,58 +78,6 @@ print('total',len(b),'abiertas',len([x for x in b if estado(x)=='abierto']))
 PY
 ```
 
----
-
-## Cómo se vació
-
-**Dos destinos y ninguno más:** `cerrado` con la evidencia ejecutada, o
-`descartado` con el argumento de por qué la v1.0 sale sin ello. **18 cerradas, 19
-descartadas.** Cada una lleva su párrafo en su propia ficha, fechado, y ninguno
-dice «pendiente».
-
-Una de ellas cambió de destino al escribirla. QYR-0318 —«`Progress::item` se
-documenta uno-based y no se asigna nunca»— iba a descartarse porque asignarlo de
-verdad es superficie nueva del motor. Escribir el argumento enseñó que el defecto
-**no era el campo, era la frase**: decía «cero antes del primero» y valía cero
-siempre, así que leía «la transferencia no ha empezado» durante toda la
-transferencia, y esa frase cruza el FFI hasta Dart. Arreglar la frase cuesta dos
-líneas. **Descartar es un destino, no una salida**, y cuando el argumento no se
-sostiene lo que hay que hacer es el trabajo.
-
-Las cuatro familias de descarte, con el criterio escrito una vez:
-
-| Familia | Cuántas | El argumento |
-|---|---|---|
-| **Cobertura con rendimiento decreciente** | 4 — QYR-0290, 0292, 0294, 0296 | Un contrato de frontera por constante sobre un decodificador que ya resiste seis targets de fuzzing y 281 mutantes. La cobertura que importa existe; enumerar cada `io::ErrorKind` es cubrir el sistema operativo, no este código |
-| **La guarda textual, otra vez** | 2 — QYR-0056, 0090 | Una guarda de texto siempre pierde contra la sintaxis. La defensa que carga el peso es el **tipo** (`VerifiedPayload`), y ensanchar el texto sería volver a correr una carrera ya perdida una vez (QYR-0304) |
-| **Una fuente que no existe** | 3 — QYR-0029, 0034, 0065 | Buscar la fuente primaria y no encontrarla **es un resultado**. Adivinar la regla sería peor que su ausencia: una regla inventada rechaza lo legítimo y aparenta cubrir lo que no cubre |
-| **Fuera del alcance de la v1.0** | 10 | Superficie nueva del motor, herramientas que ningún hallazgo ha necesitado, o cosas que dependen del propietario y tienen su comando escrito en el protocolo de hardware |
-
----
-
-## Lo que quedaba «registrado en el carril, sin ficha propia»
-
-| Qué | Disposición |
-|---|---|
-| La guarda textual de `into_zeroizing_payload` no cubre `deref` ni variables intermedias | **Descartado.** `VerifiedPayload` es la defensa; la guarda textual es cosmética y se dijo así al escribirla |
-| `cargo doc -D warnings` no está en la puerta | **Descartado.** Un enlace intra-doc roto no cambia comportamiento, y la puerta tiene ya trece comprobaciones que sí |
-| No hay job que corra `check_docs_consistency.ps1` en `windows-latest` | **Cerrado por otra vía.** La edición PowerShell se ejecuta en **cada puerta de esta sesión**, en un Windows real, con PowerShell 5.1 — que es una plataforma más hostil que `windows-latest` y donde QYR-0311 apareció |
-| `assert_analysis_reached_the_end` compara la última línea, que en un `.rs` es `}` | **Cerrado.** Lo que escondía era QYR-0328, y eso se arregló en su causa: `item_end` salta ahora los literales de carácter. La comprobación vacua sigue siendo cierta y ya no es la única |
-| El chequeo de formato de Dart no cubre `tools/branding_generator` | **Descartado.** `branding_generator` es una herramienta de compilación que genera un archivo que sí está formateado y sí está comprobado por `branding_generator_test.dart`. Formatear la herramienta no cambia su salida |
-
----
-
-## Lo que este archivo prueba, y lo que no
-
-**Prueba** que ninguna decisión quedó sin argumento: cada una de las 37 fichas
-que estaban abiertas al empezar la fase 09 tiene hoy un párrafo que dice qué se
-hizo o por qué no.
-
-**No prueba** que el software no tenga defectos. Prueba que **los defectos que
-este proyecto conocía están resueltos o descartados a propósito**, que es lo
-único que un ledger puede prometer.
-
-Y sigue habiendo una cosa sin evidencia, dicha aquí porque es la más importante
-de todas: **nada se ha ejecutado en hardware físico.** Eso no es deuda de
-calidad; es la fase 07, necesita dos aparatos y una persona, y está lista para
-ejecutarse en `docs/testing/hardware-protocol.md`.
+`BUGS_PENDING.md` al 2026-08-17: **158 fichas, 0 abiertas.** Este archivo lleva
+las siete entradas de §2, que no son fichas porque ninguna describe un defecto
+con un fallo observable — describen trabajo conocido y aplazado.

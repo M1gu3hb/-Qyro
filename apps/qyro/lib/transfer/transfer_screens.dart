@@ -45,11 +45,21 @@ class _TransferHomeState extends State<TransferHome> {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    // **Three destinations, not four. QYR-0358.**
+    //
+    // `HistoryScreen` is built and works, and `service.history()` can never
+    // return anything: `qyro_fs::history` records to disk and **no C symbol
+    // reads it**, so the list is empty by construction. A tab that can never
+    // show anything is a promise, and R7 §5 says Qyro does not carry features
+    // nobody asked for.
+    //
+    // The engine keeps recording, so nothing is lost and nothing is deleted:
+    // the screen comes back the day a symbol reads the file. Retiring it is
+    // cheaper to undo than a fourth tab that lies is to explain.
     final pages = <Widget>[
       PeersScreen(service: widget.service),
       SendScreen(service: widget.service),
       ReceiveScreen(service: widget.service),
-      HistoryScreen(service: widget.service),
     ];
 
     return Scaffold(
@@ -70,10 +80,6 @@ class _TransferHomeState extends State<TransferHome> {
           NavigationDestination(
             icon: const Icon(Icons.download),
             label: strings.navReceive,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.history),
-            label: strings.navHistory,
           ),
         ],
       ),

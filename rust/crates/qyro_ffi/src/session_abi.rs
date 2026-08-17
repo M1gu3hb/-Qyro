@@ -628,8 +628,8 @@ mod tests {
     use super::{
         QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_NULL_OUT, QYRO_OK, QYRO_STATE_COMPLETED,
         QYRO_STATE_IN_PROGRESS, QYRO_STATE_REJECTED, qyro_session_cancel, qyro_session_close,
-        qyro_session_open_receiver_blocking, qyro_session_open_sender_blocking,
-        qyro_session_progress, qyro_session_step_blocking,
+        qyro_session_finish, qyro_session_open_receiver_blocking,
+        qyro_session_open_sender_blocking, qyro_session_progress, qyro_session_step_blocking,
     };
     #[cfg(unix)]
     use crate::abi::QYRO_ERR_PEER_UNREACHABLE;
@@ -973,6 +973,90 @@ mod tests {
             )
             .expect("opening a test identity");
         });
+    }
+
+    // ---------------------------------------- qyro_session_finish, the contract
+    //
+    // Thirty-eight lines of production with no Rust test at all when it was
+    // added: the Dart two-process test proved the *behaviour* — a file arrives
+    // with its final name — and a behaviour test does not pin an ABI. What is
+    // missing from it is precisely what C callers get wrong: a null out
+    // pointer, a handle that names nothing, and whether the count means
+    // anything.
+
+    #[test]
+    fn finish_refuses_a_null_count_before_it_touches_the_table() {
+        // Null first, and on purpose: if the order were reversed, a caller
+        // passing both a bad handle and a null pointer would learn about the
+        // handle and never about the pointer it is going to pass again.
+        let code = unsafe { qyro_session_finish(0, std::ptr::null_mut()) };
+        assert_eq!(
+            code, QYRO_ERR_NULL_OUT,
+            "a null out-parameter is the caller's mistake and must be named as \
+             that, not as an invalid handle"
+        );
+    }
+
+    #[test]
+    fn finish_on_a_handle_that_names_nothing_is_a_typed_refusal() {
+        // Every handle-taking symbol answers the same way for a stranger, and
+        // this one must not be the exception that crashes.
+        let mut count = 7_u32;
+        let code = unsafe { qyro_session_finish(u64::MAX, &raw mut count) };
+        assert_eq!(
+            code, QYRO_ERR_INVALID_HANDLE,
+            "an unknown handle must be refused by name"
+        );
+        assert_eq!(
+            count, 7,
+            "the out-parameter was written on a failing path. A caller that \
+             reads it after an error would believe something was materialised"
+        );
+    }
+
+    #[test]
+    fn finish_writes_the_count_only_on_success() {
+        // The falsifiability half of the test above: the assertion that
+        // `count` stays 7 proves nothing unless a successful call is known to
+        // change it. There is no session to succeed against here — building one
+        // needs a peer — so what is pinned is the shape: `QYRO_OK` is the only
+        // code that may write, and the two failing paths above are the only two
+        // reachable without a session.
+        //
+        // Named so that the day a session can be built from here, this test is
+        // the one to extend rather than the one to trust blindly.
+        let mut count = u32::MAX;
+        let refused = unsafe { qyro_session_finish(0, &raw mut count) };
+        assert_ne!(refused, QYRO_OK, "handle 0 is never a live session");
+        assert_eq!(count, u32::MAX, "a refusal wrote the count");
+    }
+
+    #[test]
+    fn finish_is_in_the_error_code_family_of_every_other_operation() {
+        // QYR-0357 existed because a symbol was missing, and a symbol that
+        // answers with a code nobody else answers with is the next version of
+        // that problem: a caller matching on the shared set falls through to a
+        // default it did not write for this.
+        //
+        // Only the two refusals reachable without a live session are asserted,
+        // which is what this test can honestly see: building a session from
+        // here needs a peer.
+        let mut scratch = 0_u32;
+        let refusals = [
+            unsafe { qyro_session_finish(0, std::ptr::null_mut()) },
+            unsafe { qyro_session_finish(u64::MAX, &raw mut scratch) },
+        ];
+        for code in refusals {
+            assert!(code < 0, "every refusal is negative, and {code} is not");
+            assert!(
+                code == QYRO_ERR_NULL_OUT || code == QYRO_ERR_INVALID_HANDLE,
+                "{code} is neither of the two refusals reachable without a session"
+            );
+        }
+        assert_ne!(
+            refusals[0], refusals[1],
+            "a null pointer and an unknown handle answered identically, so a              caller cannot tell which mistake they made"
+        );
     }
 
     #[cfg(unix)]

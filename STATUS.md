@@ -4,7 +4,7 @@ Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-16T12:00:00Z
-- Branch: claude/qyro-net-6a
+- Branch: claude/qyro-cerrar-cadena-12
 - Verified commit: 928e41fa73c6390ba28556d290dbbac56355a2eb
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
