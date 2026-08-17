@@ -27,3 +27,15 @@ qyro_fountain = { path = "../qyro_fountain" }
 # encoder, a colour-space conversion and their dependencies. This crate draws
 # into a terminal and never writes a file. MIT OR Apache-2.0.
 qrcode = { version = "0.14", default-features = false }
+
+# **Only for tests, and that is the point.** ADR-0044 §6: the CLI draws and the
+# phone reads, so a decoder has no business in the shipped binary -- it would be
+# 400-700 lines of camera plumbing for a machine with no camera. What it IS good
+# for is proving the renderer produces something a real decoder accepts, which
+# is otherwise a drawing nobody has ever read back.
+#
+# `rqrr` is pure Rust and reads a grayscale buffer, so the round trip needs no
+# image files on disk: fixtures rot, and a fixture that rots fails as "the
+# renderer broke".
+[dev-dependencies]
+rqrr = "0.9"

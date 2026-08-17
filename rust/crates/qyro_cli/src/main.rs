@@ -38,6 +38,9 @@ mod term;
 #[cfg(test)]
 mod guards;
 
+#[cfg(test)]
+mod round_trip;
+
 use std::io::{IsTerminal as _, Write as _};
 
 use term::Vt;
