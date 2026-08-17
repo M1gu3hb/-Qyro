@@ -3836,3 +3836,103 @@
 - Fecha: 2026-08-16
 - Evidencia: run 31984398272 en rojo; `flutter test` 91 pasadas / 10 saltadas
   después
+
+## QYR-0352 — La superficie C eran veinte símbolos y seis documentos decían diecinueve
+
+- Plataforma: todas; `qyro_ffi`
+- Severidad: P2
+- Esperado: el número de símbolos que cruzan la frontera está contado
+- Actual: ADR-0032 enmienda 1 dice «de once a **diecinueve**», y son **veinte**.
+  El error se copió a `STATUS.md`, a `docs/release/v1.0.md`, a
+  `ESTADO-ACTUAL.md`, a dos informes de fase y al propio doc-comment de
+  `qyro_ffi/src/guards.rs`, cuyo mensaje de guarda seguía diciendo «nineteen»
+  mientras la constante doscientas líneas más arriba decía veinte
+- **Por qué importa más que un número:** esta superficie es la frontera de
+  seguridad entera. Todo lo que Dart alcanza lo alcanza por uno de estos, así que
+  un símbolo que aparece sin que nadie lo escriba es un símbolo que nadie revisó
+- Arreglo: `the_c_surface_is_exactly_the_symbols_that_are_written_down` en
+  `qyro_ffi/src/guards.rs`, que lee la fuente de producción con el análisis
+  compartido. Su primer borrador contó `qyro_test_panicking_boundary` y una
+  callback de prueba llamada `record`, las dos bajo `#[cfg(test)]` — por eso usa
+  `production_source` y no una lectura cruda
+- Matiz que la cifra única escondía: `qyro_session_open_sender_fd_blocking` es
+  `#[cfg(unix)]`, así que una `cdylib` de Windows exporta uno menos que una de
+  Android. La constante cuenta lo declarado en la fuente, que es lo que se revisa
+- Estado: cerrado
+- Dueño: ffi
+- Fecha: 2026-08-16
+- Evidencia: la guarda se vio fallar al quitar un símbolo de la lista y pasar al
+  devolverlo. Con ADR-0040 son veintitrés
+
+## QYR-0353 — La aplicación no tenía identidad estable, y con ella no funcionaba ninguna de sus dos promesas
+
+- Plataforma: todas; `qyro_session`, `apps/qyro`
+- Severidad: **P0**
+- Esperado: una identidad de aparato que sobrevive al proceso, que es sobre lo
+  que descansa todo el modelo de confianza
+- Actual: `qyro_session::session::new_identity` llamaba a
+  `DeviceIdentity::generate()` y los tres constructores de `Session` lo llamaban
+  **sin condición y sin `cfg`**. Cada transferencia estrenaba un par de claves,
+  en Windows y en Android por igual
+- Consecuencias, todas medidas:
+  - la huella que una persona compara en voz alta cambiaba en cada transferencia;
+  - `TrustBook` arrancaba vacío en cada proceso, así que ningún peer llegaba a
+    ser conocido y `KnownAndChanged` no podía dispararse nunca;
+  - `NativeTransferService.ownPairingString()` devolvía `null` siempre, así que
+    la aplicación **nunca enseñaba su propio código** y el camino manual de
+    emparejamiento no se podía usar en ninguna de las dos direcciones;
+  - el veredicto de confianza de la pantalla estaba escrito a mano como
+    `newPeer`
+- **La evidencia que lo ocultó.** `STATUS.md` citaba el paso «Persist an identity
+  across two separate process invocations» del job `windows-crypto`. Ese paso
+  ejecuta `qyro_store_smoke`, cuya cabecera dice **«Never shipped»**, y construye
+  `qyro_win_dpapi::WindowsIdentityStore` directamente: probaba que DPAPI hace ida
+  y vuelta, no que el producto conserve una identidad. Cinco fases en verde sobre
+  una propiedad ausente
+- Arreglo: ADR-0040. `new_identity` borrado; `qyro_session::identity` con
+  escritura atómica y sin regenerar nunca un blob ilegible; tres símbolos nuevos;
+  Dart abre la identidad antes de cualquier sesión, enseña su huella y pregunta
+  al libro
+- Guarda: `qyro_store_smoke session-open` en `ci.yml`, dos procesos contra la
+  misma ruta a través de `qyro_session`, con su control de falsabilidad — dos
+  rutas distintas dan identidades distintas y la comparación sale con código 4
+- **Dos pruebas verdes afirmaban el defecto** y se invirtieron a propósito, cada
+  una con su párrafo dentro del test: fabricaban una clave cambiada con «un
+  segundo receptor, luego una segunda identidad»
+- Estado: cerrado
+- Dueño: motor
+- Fecha: 2026-08-16
+- Evidencia: dos procesos, misma ruta, misma huella; medido en Windows local y
+  ejecutado en CI
+
+## QYR-0354 — Keystore no llega a la v1.0, y el mecanismo que ADR-0037 especificó no es implementable
+
+- Plataforma: Android
+- Severidad: P1
+- Esperado: la identidad envuelta por una clave no exportable de `AndroidKeyStore`
+- Actual: ADR-0037 §3 dice «Dart las registra al arrancar», y no se puede.
+  Kotlin no produce punteros a función C; los de Dart son afines al isolate y el
+  motor llama al envoltorio desde otro; `NativeCallable.listener` es asíncrona y
+  devuelve `Void`, y un envoltorio tiene que devolver bytes. Y aunque el puntero
+  fuese válido, la callback tendría que alcanzar Keystore por `MethodChannel`,
+  que completa por el bucle de eventos del isolate, **dentro de la llamada FFI
+  bloqueante que es ese isolate**: interbloqueo garantizado
+- Lo que sí funciona es un shim en C compilado por el NDK haciendo JNI, y no
+  existe: no hay `CMakeLists.txt`, ni `externalNativeBuild`, ni un solo `.c`
+- **Descartado para la v1.0 con argumento**: ese shim hace `AttachCurrentThread`
+  sobre un hilo que la JVM no ha visto, y cada llamada JNI necesita su
+  `ExceptionCheck` o la siguiente es comportamiento indefinido. Es el archivo con
+  más probabilidad de fallar **sólo en un aparato**, y este proyecto no puede
+  ejecutar nada en un aparato. Un emulador tiene Keystore por software, así que
+  ni siquiera probaría la parte que importa
+- Lo que sale en su lugar: la etapa A de ADR-0040 §7. La semilla en
+  `getNoBackupFilesDir()` con el sandbox por UID, `SandboxWrapper` pedido por su
+  nombre, y el byte 4 en el blob para que un build de la etapa B sepa lo que
+  encontró
+- **Lo que cuesta, dicho en el modelo de amenazas con estas palabras:** con
+  Keystore un atacante con root necesitaría además el TEE; con el sandbox, root
+  basta
+- Estado: descartado
+- Dueño: android
+- Fecha: 2026-08-16
+- Evidencia: ADR-0037 enmienda 1 y ADR-0040 §6

@@ -20,14 +20,14 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 | | |
 |---|---|
 | Motor | Rust 1.88.0, edition 2024, once crates. Transferencia completa, cifrada y verificada |
-| Frontera | 19 símbolos C, **ninguno cruza un tipo** (ADR-0032 + enmienda 1) |
+| Frontera | 23 símbolos C, **ninguno cruza un tipo** (ADR-0032 + enmiendas 1 y 2) |
 | Interfaz | Cuatro pantallas, dos idiomas, **botones encendidos** (fase 05, ADR-0036) |
 | Descubrimiento | `NsdManager` + `FLAG_SHOW_PICKER`; `mdns-sd` bajo `cfg(windows)` (fase 04b) |
-| Identidad | DPAPI en Windows, `AndroidKeyStore` en Android, **sin `jni-sys`** (ADR-0037) |
+| Identidad | **Persiste entre procesos** (ADR-0040). DPAPI en Windows; en Android sin envolver, bajo el sandbox por UID. Keystore descartado para la v1.0 con argumento |
 | Paquete | `dev.qyro.app`, firmado con clave propia (fase 08) |
 | Pruebas | Rust **633 / 0 / 2 ignoradas**; Dart **90 pasadas, 10 saltadas** |
 | Dependencias | `Cargo.lock` **80**; `pubspec.lock` **45**. Cero externas de Rust en Android |
-| Ledger | **151 fichas, 0 abiertas** |
+| Ledger | **154 fichas, 0 abiertas** |
 
 ---
 
@@ -40,7 +40,7 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 5. **La puerta se pasa por exit code**, no por leer la salida.
 6. **Dos destinos para una ficha: cerrada, o descartada con argumento.** Nunca
    «pendiente».
-7. IDs nuevos desde **QYR-0352 en adelante**.
+7. IDs nuevos desde **QYR-0355 en adelante**.
 
 ---
 

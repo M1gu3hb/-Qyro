@@ -60,7 +60,7 @@ pantalla»— sigue siendo cierta y está en §15 de ese informe.
 
 **Lo que existe y está ejecutado en Windows 10 real:**
 
-- **La superficie C pasa de once símbolos a diecinueve** y ninguno cruza un tipo:
+- **La superficie C pasa de once símbolos a veintitrés** y ninguno cruza un tipo:
   enteros, o texto en un búfer que el llamante presta. Cuando no cabe **no se
   escribe nada**, porque media huella que coincide no prueba nada.
 - **Una clave cambiada se refuta por nombre desde Dart**, con dos procesos
@@ -396,12 +396,19 @@ cuatro quedan abiertos y registrados, no omitidos.
   transferencia entera desde la fase 02.
 - **Rotación y rekey de claves de sesión**: NOT_IMPLEMENTED. Una sesión usa una
   clave por dirección hasta agotar la secuencia.
-- **Almacenamiento seguro de identidad**: IMPLEMENTED en **las dos plataformas
-  de la v1.0**. DPAPI de ámbito de usuario en Windows (`qyro_win_dpapi`,
-  ADR-0024) y `AndroidKeyStore` en Android (ADR-0025, ADR-0037): AES-256-GCM con
-  una clave no exportable, alcanzada por dos punteros a función que Kotlin
-  instala en Rust — **sin `jni-sys`**. iOS Keychain queda fuera con ADR-0039.
-  **Corregido en la fase 10:** esta línea decía «sólo en Windows».
+- **Identidad persistente en la aplicación**: IMPLEMENTED, EJECUTADO entre dos
+  procesos (ADR-0040). **Corregido dos veces, y la segunda importa más que la
+  primera.** La fase 10 cambió «sólo en Windows» por «las dos plataformas», que
+  era falso de otra manera: nada del producto llamaba al almacén y los tres
+  constructores de `Session` generaban un par de claves por sesión. La fase 11
+  lo arregló de verdad. Hoy:
+  - **Windows**: envuelta con DPAPI de ámbito de usuario (ADR-0024).
+  - **Android**: **sin envolver**, en el directorio privado de la aplicación,
+    protegida por el sandbox por UID (ADR-0040 §7, etapa A). Keystore está
+    descartado para la v1.0 con argumento en QYR-0354, y lo que eso cuesta está
+    en `THREAT_MODEL.md` §4.5 con estas palabras: con Keystore, root necesita
+    además el TEE; sin él, root basta.
+  - iOS queda fuera con ADR-0039.
 - **FFI criptográfico**: NOT_IMPLEMENTED, y deliberadamente. La biblioteca que
   Dart carga no depende de `qyro_crypto`, así que no hay nada de esto al otro
   lado de la frontera.

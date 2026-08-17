@@ -136,7 +136,7 @@ y una prueba que lo observa.
 | Otro usuario del mismo equipo (Windows) | Ámbito de usuario, **sin** `CRYPTPROTECT_LOCAL_MACHINE` |
 | Otra aplicación del mismo usuario | Entropía adicional que separa dominio. **No es un secreto**: está compilada en el binario |
 | Manipulación del blob | El MAC de DPAPI cubre el envoltorio, y la cabecera entra en la entropía |
-| El blob de identidad en Android | Envuelto con AES-256-GCM por una clave de `AndroidKeyStore` **no exportable**, respaldada por el TEE (ADR-0025, ADR-0037) |
+| El blob de identidad en Android | **Nada lo envuelve.** El sandbox por UID de Linux, en `getNoBackupFilesDir()`, y eso es todo (ADR-0040 §7, etapa A) |
 | Copia del blob a la nube por Auto Backup | `allowBackup=false`, `fullBackupContent=false` y `dataExtractionRules` con secciones vacías. **Esto faltaba hasta la fase 10** (QYR-0349) |
 | Permisos de más | El manifiesto declara **una** permission, `CHANGE_WIFI_MULTICAST_STATE`, y hay una prueba que asserta el conjunto **exacto** |
 | Almacenamiento sin permisos | Storage Access Framework en Android; el archivo elegido **no se copia** a la caché (QYR-0323) |
@@ -151,6 +151,7 @@ Esta sección es el punto del documento. Lo que está aquí **no está defendido
 |---|---|
 | **Correlación por la huella anunciada** | El descubrimiento anuncia la huella pública en el TXT del servicio, y es **estable**: cualquiera en esa red puede saber que este aparato ha vuelto. No hay alias rotatorio y no hay ID de sesión rotatorio. La versión anterior de este documento decía que sí, y era falso |
 | **Quién habla con quién** | Las identidades públicas viajan en claro en el handshake. Un observador de la LAN aprende el grafo, aunque no el contenido |
+| **Android: root basta para leer la identidad** | Y ésa es la frase que importa. **Con Keystore, un atacante con root necesitaría además el TEE; con el sandbox, root basta.** ADR-0040 §7 explica por qué la v1.0 sale así: el mecanismo que ADR-0037 especificó no es implementable, y el que sí funciona es un shim JNI en C que este proyecto no puede ejecutar ni una vez. Enviar un shim que nadie ha validado es peor que enviar esto y decirlo. La aplicación **no lo dice en pantalla**, y eso también es una limitación |
 | **Un peer nuevo que miente sobre quién es** | El handshake **autentica, no autoriza**. Un desconocido con una clave válida completa el handshake correctamente; lo que impide que reciba algo es que una persona tiene que decidir. Comparar la huella en voz alta es lo único que ata esa clave a una persona, y eso Qyro no puede hacerlo por nadie |
 | **Disco lleno en el receptor** | **No hay preflight ni cuota.** Se descubre al escribir, se convierte en un error tipado y el `.qyro-part` se recoge, pero un peer puede llenar el disco de destino hasta donde el sistema le deje. Es el escenario E3 del protocolo de hardware |
 | **Contenido a medias legible en disco** | Un `.qyro-part` interrumpido se queda ahí con lo que había llegado, en claro. No se entrega y no lleva el nombre final, pero existe |
@@ -167,10 +168,15 @@ Se dice aquí y no en una nota al pie, porque es la limitación real del diseño
 
 **Un atacante que ya ejecuta código como ese usuario descifra el blob.** En
 Windows llama a `CryptUnprotectData` con la misma constante de entropía —que está
-compilada en un binario que tiene— y obtiene la semilla. En Android llama al
-mismo alias de Keystore desde dentro del proceso de la aplicación, que es
-exactamente lo que la aplicación hace. No hay contraseña que pedir, porque Qyro
-no pide ninguna.
+compilada en un binario que tiene— y obtiene la semilla. **En Android ni siquiera
+hace falta eso: lee el archivo.** No hay contraseña que pedir, porque Qyro no
+pide ninguna.
+
+**Corregido en la fase 11.** Este párrafo decía que en Android el atacante
+«llama al mismo alias de Keystore». Ni había alias en uso ni había identidad
+persistente: el motor generaba un par de claves por sesión y nada llamaba al
+almacén. ADR-0040 arregló la persistencia y aplazó Keystore, así que la frase
+verdadera hoy es la de arriba.
 
 Lo que esto significa: el almacén sube el listón de «copiar un archivo» a
 «ejecutar código como esa persona, en ese aparato». Es una mejora real y no es
@@ -184,9 +190,14 @@ Cuatro cosas más que no promete:
 - **Windows:** el blob vive en `%LOCALAPPDATA%`, que no viaja con el perfil
   móvil — pero la MasterKey sí, así que copiar el archivo a mano lo abre en la
   otra máquina. Mitigación **parcial**, dicho así.
-- **Android:** la clave de Keystore no sale del aparato, así que **un aparato
-  nuevo es una identidad nueva**. Eso es correcto y deliberado, y el otro
-  extremo dirá «la clave cambió», en rojo, porque cambió.
+- **Android, etapa A:** la semilla está en el directorio privado de la
+  aplicación, sin envolver. Desinstalar borra el directorio, así que **una
+  reinstalación es una identidad nueva** — correcto y deliberado, y el otro
+  extremo dirá «la clave cambió», en rojo, porque cambió. Lo que **no** protege
+  es contra root ni contra otro proceso del mismo UID.
+- **Android, etapa B:** cuando exista el shim JNI, el mismo archivo lo envolverá
+  una clave de Keystore no exportable y el byte 4 del blob es lo que permitirá a
+  ese build saber que el archivo que encuentra vivió sin envolver.
 - **La entropía adicional no es un secreto** y no añade fuerza criptográfica;
   separa dominio entre aplicaciones del mismo usuario y nada más.
 
