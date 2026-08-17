@@ -25,7 +25,7 @@ escrita escenario a escenario en `docs/testing/hardware-protocol.md`.
 | Descubrimiento | `NsdManager` + `FLAG_SHOW_PICKER`; `mdns-sd` bajo `cfg(windows)` (fase 04b) |
 | Identidad | **Persiste entre procesos** (ADR-0040). DPAPI en Windows; en Android sin envolver, bajo el sandbox por UID. Keystore descartado para la v1.0 con argumento |
 | Paquete | `dev.qyro.app`, firmado con clave propia (fase 08) |
-| Pruebas | Rust **633 / 0 / 2 ignoradas**; Dart **90 pasadas, 10 saltadas** |
+| Pruebas | Rust **639 / 0 / 2 ignoradas**; Dart **92 pasadas, 9 saltadas** |
 | Dependencias | `Cargo.lock` **80**; `pubspec.lock` **45**. Cero externas de Rust en Android |
 | Ledger | **154 fichas, 0 abiertas** |
 

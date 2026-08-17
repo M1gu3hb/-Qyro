@@ -35,8 +35,8 @@ contra el código que existe: `THREAT_MODEL.md`.
 - **Confianza explícita con interfaz**: una clave cambiada se rechaza por nombre
   y el botón de enviar **no existe** en ese estado.
 - **Diecinueve símbolos C**, ninguno cruza un tipo.
-- `cargo test --workspace`: **633 passed, 0 failed, 2 ignored**. `flutter test`:
-  **90 pasadas, 10 saltadas** — las diez saltan sin la biblioteca nativa compilada
+- `cargo test --workspace`: **639 passed, 0 failed, 2 ignored**. `flutter test`:
+  **92 pasadas, 9 saltadas** — las diez saltan sin la biblioteca nativa compilada
   o sin el manifiesto fusionado, y saltada no es pasada.
 - `Cargo.lock`: **80 paquetes**. `pubspec.lock`: **45**.
 - `BUGS_PENDING.md`: **151 fichas, 0 abiertas.**
