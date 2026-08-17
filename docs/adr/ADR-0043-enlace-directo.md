@@ -115,3 +115,56 @@ por interfaz, que es justo lo que falla con varias NIC.
 
 **Esperar a APIPA antes de probar IPv6 link-local.** Sesenta segundos de espera
 por delante de un transporte que ya estaba listo.
+
+---
+
+## 8. Enmienda 1 (2026-08-18) — dos cosas medidas al implementar la §5
+
+Esta enmienda no cambia ninguna decisión. Añade una dependencia que la §5 daba
+por supuesta sin nombrarla, y **corrige una cifra que esta misma ADR escribió mal
+porque nadie la había medido.**
+
+### 8.1 — `if-addrs` pasa a dependencia declarada de `qyro_net`
+
+La §5 dice «por cada interfaz enumerada» y pre-autoriza `socket2` para *nombrar*
+la interfaz. **Enumerarlas es la otra mitad y `std` no la tiene.** El truco de la
+tabla de rutas que usa el CLI —conectar un UDP a una dirección de documentación y
+preguntar la local— devuelve **una** dirección: la de la ruta por defecto, que es
+justo la que el sistema ya prefiere y justo la equivocada cuando el cable directo
+no es la ruta por defecto.
+
+`if-addrs` 0.15 ya estaba en el grafo auditado a través de `mdns-sd` en Windows.
+Esto la promueve a declarada y la añade en los demás targets. MIT. **El cierre de
+dependencias no cambió en este host** (77 antes, 77 después), que es la
+comprobación de que no es un paquete nuevo aquí.
+
+### 8.2 — La cifra de la §7 está desmentida por la medida
+
+La §7 descarta `mdns-sd` en todos los targets diciendo que «arrastra 16 paquetes
+a un binario que **apunta a 750–950 KB**». Medido con
+`cargo build --locked --release -p qyro_cli --target x86_64-pc-windows-msvc`, el
+mismo comando de `cli-builds.yml`:
+
+| Commit / estado | `qyro.exe` |
+|---|---|
+| `458d4bd` — CLI sin `find` | **666 624 B** |
+| `3ecebed` — llega `qyro find` y con él `mdns-sd` | **1 295 872 B** |
+| `socket2` añadido, nada llamando a `Beacon` | 1 298 432 B |
+| El beacon con llamante de producción | **1 306 624 B** |
+
+**El binario ya está en 1 276 KB, por encima del techo que esta ADR se puso.** Lo
+gastó `mdns-sd`: **+614 KB**, diez veces los 63 KB que este taller discutió para
+conservar el desenrollado de pila. El beacon propio hace el mismo trabajo por
+**8 KB**.
+
+Las dos filas del medio son la comprobación 14 llegando por el enlazador: con el
+módulo escrito y sin llamante el binario **no cambió ni un byte**, porque el
+enlazador lo descartó entero. Una capacidad sin llamante no se envía, se compila.
+
+**Qué se hace con esto: nada todavía, y a propósito.** El descubrimiento por mDNS
+funciona hoy y quitarlo sin sustituto probado es cambiar el producto por una
+cifra. Lo que cambia es que la §7 ya no puede citar un presupuesto que el binario
+no cumple: **la fase 19, con red de verdad, decide si el beacon basta solo.** Si
+basta, `mdns-sd` se va y con él 614 KB. Anotado como **D9** en
+`deuda-de-calidad.md`; **D10** es el puerto duplicado que esta misma
+implementación destapó al ir a escribir la tercera copia.
