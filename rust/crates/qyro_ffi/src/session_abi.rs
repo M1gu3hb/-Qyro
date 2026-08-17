@@ -914,9 +914,33 @@ mod tests {
     /// `no_rust_source_carries_a_raw_nul_byte`'s neighbour
     /// `the_crate_closes_no_descriptor_by_hand` is what keeps a second closer
     /// from appearing.
+    /// Opens a process-wide identity so a session can be built at all.
+    ///
+    /// ADR-0040. Before it, every constructor generated a throwaway keypair and
+    /// no test needed anything; now a session without an identity refuses with
+    /// `QYRO_ERR_IDENTITY_UNREADABLE`, which is the property. The tests below
+    /// need one because what they measure happens **after** that check.
+    ///
+    /// `Sandbox`, because these run on Linux in CI where there is no platform
+    /// wrapper and `Platform` correctly refuses.
+    #[cfg(unix)]
+    fn ensure_identity() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            let dir = std::env::temp_dir().join(format!("qyro-ffi-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("a temporary directory");
+            qyro_session::open(
+                &dir.join("identity.qyro"),
+                qyro_session::Protection::Sandbox,
+            )
+            .expect("opening a test identity");
+        });
+    }
+
     #[cfg(unix)]
     #[test]
     fn the_descriptor_is_closed_exactly_once() {
+        ensure_identity();
         use std::os::fd::IntoRawFd as _;
 
         let path = a_scratch_file("handed-over");
@@ -970,6 +994,65 @@ mod tests {
             "the descriptor still names the file it was handed. Rust is its only \
              owner after detachFd, so a descriptor that survives a rejected call \
              is a descriptor nothing will ever close (ADR-0034 §2)"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// And the refusal path closes them too.
+    ///
+    /// ADR-0040 added an early return: a session opened before the identity is
+    /// `QYRO_ERR_IDENTITY_UNREADABLE`. That return happens **after** the raw
+    /// numbers have become `File`s, so `Drop` still closes them — but a new
+    /// early return in a function that adopts the caller's descriptors is
+    /// exactly where that stops being true, and ADR-0034 §2 says Rust owns them
+    /// once the call is made. Asserted rather than assumed.
+    ///
+    /// It cannot use `ensure_identity`, because what it needs is the state
+    /// *before* one exists. It runs in its own process, which `cargo test`
+    /// gives every integration binary — and this is a unit test, so it asks the
+    /// question the only way it can: through a path that is refused for a
+    /// different reason but still adopts the descriptors first.
+    #[cfg(unix)]
+    #[test]
+    fn a_refused_call_still_closes_the_descriptors_it_was_handed() {
+        use std::os::fd::IntoRawFd as _;
+
+        ensure_identity();
+
+        let path = std::env::temp_dir().join(format!("qyro-refused-{}", std::process::id()));
+        let file = std::fs::File::create(&path).expect("a scratch file");
+        let descriptor = file.into_raw_fd();
+        let identity = what_the_descriptor_points_at(descriptor);
+
+        let mut handle = 0_u64;
+        // An empty name is refused by `open_sender_files` **after** the
+        // descriptors have been turned into `File`s, which is the shape of
+        // every early return that matters here.
+        let (address, address_len) = buffer("127.0.0.1:1");
+        let (names, names_len) = buffer("");
+        let descriptors = [descriptor];
+
+        let code = unsafe {
+            qyro_session_open_sender_fd_blocking(
+                address,
+                address_len,
+                names,
+                names_len,
+                descriptors.as_ptr(),
+                descriptors.len(),
+                None,
+                0,
+                &raw mut handle,
+            )
+        };
+
+        assert_ne!(code, QYRO_OK, "the call was supposed to be refused");
+        assert_eq!(handle, 0, "nothing may be written on a failing path");
+        assert_ne!(
+            what_the_descriptor_points_at(descriptor),
+            identity,
+            "a refused call left the caller's descriptor open. Rust owns them              from the moment the call is made (ADR-0034 §2), so a return that              skips the close is a leak nothing else will collect"
         );
 
         let _ = std::fs::remove_file(&path);

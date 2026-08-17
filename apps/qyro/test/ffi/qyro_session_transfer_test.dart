@@ -23,6 +23,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qyro/ffi/qyro_file_picker.dart';
+import 'package:qyro/ffi/qyro_identity_api.dart';
 import 'package:qyro/ffi/qyro_session_api.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 
@@ -131,6 +132,19 @@ void main() {
     setUp(() {
       scratch = Directory.systemTemp.createTempSync('qyro-dart-transfer');
       bindings = QyroSessionBindings.open(library!);
+      // ADR-0040. A session opened before an identity answers
+      // `identity_unreadable` rather than generating a throwaway keypair, so
+      // every test that builds one needs an identity first. That refusal *is*
+      // the fix: until phase 11 the engine minted a fresh keypair per session
+      // and nothing here noticed, because nothing here compared one session's
+      // fingerprint with the next one's.
+      //
+      // Sandbox rather than platform: these run on Linux and Windows runners
+      // alike, and `platform` correctly refuses where there is no wrapper.
+      QyroIdentityBindings.open(bindings).open(
+        '${scratch.path}${Platform.pathSeparator}identity.qyro',
+        QyroProtection.sandbox,
+      );
     });
 
     tearDown(() {
@@ -332,6 +346,13 @@ void main() {
             isNot(firstFingerprint),
             reason: 'the two receivers produced the same fingerprint, so this '
                 'test cannot tell a changed key from an unchanged one',
+            // Phase 11 note: this still holds, and now for a legitimate
+            // reason. The peers are two `qyro_net_smoke serve` processes and
+            // that harness generates its own identity per process, so they
+            // genuinely differ. The equivalent assertion inside
+            // `qyro_session`'s own suite did **not** survive ADR-0040 and was
+            // rewritten, because there both ends shared one process identity
+            // and the difference had been an artefact of the defect.
           );
           final verdict = trust.peerTrust(second, name);
           expect(
