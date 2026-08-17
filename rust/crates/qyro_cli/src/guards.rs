@@ -28,7 +28,7 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 3] = ["main.rs", "flows.rs", "term.rs"];
+const PRODUCTION_FILES: [&str; 4] = ["main.rs", "flows.rs", "optical.rs", "term.rs"];
 
 #[test]
 fn no_production_path_can_panic() {

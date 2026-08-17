@@ -15,3 +15,15 @@ path = "src/main.rs"
 # Dart can cross a language limit; Rust talking to Rust pays its toll for
 # nothing (ADR-0042 §2).
 qyro_session = { path = "../qyro_session" }
+qyro_fountain = { path = "../qyro_fountain" }
+
+# ADR-0044 §2, pre-autorizada. Encoding a QR is Reed-Solomon over GF(256) plus a
+# mask-penalty search, and getting the penalty rules subtly wrong produces codes
+# that scan on the phone in the room and fail on the next one. That is a
+# specification to implement correctly, not a puzzle to enjoy -- unlike the
+# fountain code, where the alternative was a patent.
+#
+# `default-features = false` drops the `image` feature and with it a PNG
+# encoder, a colour-space conversion and their dependencies. This crate draws
+# into a terminal and never writes a file. MIT OR Apache-2.0.
+qrcode = { version = "0.14", default-features = false }

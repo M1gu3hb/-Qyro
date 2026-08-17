@@ -454,6 +454,176 @@ pub fn find(vt: Vt) -> i32 {
     }
 }
 
+/// `qyro qr` — this device's pairing code, drawn for a camera.
+///
+/// **The direction ADR-0044 §6 fixed: the CLI draws, the phone reads.** There is
+/// no scanner here and there is not going to be one — reading a code needs a
+/// camera this machine does not have, and 400–700 lines of COM `unsafe` to talk
+/// to one it might. The phone already has a camera and an app that can read a
+/// QR, so the work goes where the hardware already is.
+pub fn qr(vt: Vt) -> i32 {
+    if let Err(why) = ensure_identity() {
+        eprintln!("qyro: {why}");
+        return 1;
+    }
+
+    let fingerprint = match qyro_session::fingerprint() {
+        Ok(text) => text,
+        Err(error) => {
+            eprintln!("qyro: could not read this device's fingerprint: {error}");
+            return 1;
+        }
+    };
+
+    let addresses = local_addresses();
+    let Some((_, ip)) = addresses.first() else {
+        println!();
+        println!("  no network address yet, so there is no code to show.");
+        println!("  On a direct cable this can take up to a minute (APIPA).");
+        return 1;
+    };
+
+    let compact = fingerprint.replace('-', "");
+    let code = format!("QYRO1|{ip}:{DEFAULT_PORT}|{compact}");
+
+    println!();
+    println!("  Point the other device's camera at this.");
+    println!("  {}{code}{}", vt.green(), vt.reset());
+    println!();
+
+    match crate::optical::draw(code.as_bytes()) {
+        Ok(drawing) => {
+            print!("{drawing}");
+            println!();
+            // **Measured from the drawing, never estimated.** The first draft
+            // guessed the module count from the payload length and printed
+            // "37 columns" for a code that is 41 wide. Advice that understates
+            // the width is worse than none: somebody widens the terminal to
+            // exactly what it said, the code still wraps, and now the tool has
+            // lied to them once.
+            let columns = drawing
+                .lines()
+                .map(|line| line.chars().count())
+                .max()
+                .unwrap_or(0);
+            let rows = drawing.lines().count();
+            println!(
+                "  If it does not scan, widen the terminal: it needs {columns} columns and {rows} rows."
+            );
+            0
+        }
+        Err(error) => {
+            eprintln!("qyro: {error}.");
+            1
+        }
+    }
+}
+
+/// `qyro beam <file>` — a file, as an endless stream of QR codes.
+///
+/// ADR-0044. **The only channel that works with no network at all**: no cable,
+/// no Wi-Fi, no shared anything. A screen and a camera.
+///
+/// The stream never ends and that is the design, not an oversight. There are no
+/// piece numbers to miss (ADR-0044 §4): the receiver collects frames until it
+/// has enough, and a frame lost at 90 % costs one frame instead of the transfer.
+/// Whoever is holding the phone stops it when their side says it is done.
+pub fn beam(file: &str, vt: Vt) -> i32 {
+    let path = Path::new(file);
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            eprintln!("qyro: could not read '{file}': {error}");
+            return 2;
+        }
+    };
+
+    // ADR-0044 §5: above 20 MB this refuses **and says how long it would have
+    // taken**. A channel that silently accepts a two-hour video is not generous,
+    // it is a trap.
+    const REFUSE_ABOVE: usize = 20 * 1024 * 1024;
+    const BYTES_PER_SECOND: usize = 8 * 1024;
+    if bytes.len() > REFUSE_ABOVE {
+        let minutes = bytes.len() / BYTES_PER_SECOND / 60;
+        eprintln!(
+            "qyro: '{file}' is {} MB. Over a screen that is about {minutes} minutes,
+             and a session that long fails almost every time -- a screensaver, a
+             notification or thermal throttling ends it. Send it over the network,
+             or split it.",
+            bytes.len() / (1024 * 1024)
+        );
+        return 2;
+    }
+
+    // One block per QR. v27-L holds 1 465 bytes (ADR-0044 §2) and that is the
+    // **ceiling, not the size**: a payload smaller than one block gets a block
+    // its own size, so a 4 KB key draws a small code instead of the largest and
+    // hardest-to-scan one the standard offers. The first version of this drew a
+    // full v27 for a 51-byte file.
+    const V27_L_CAPACITY: usize = 1465;
+    let widest = V27_L_CAPACITY - qyro_fountain::FRAME_HEADER_LEN;
+    let block_size = match u16::try_from(widest.min(bytes.len().max(1))) {
+        Ok(size) => size,
+        Err(_) => {
+            eprintln!("qyro: the frame size does not fit a QR");
+            return 1;
+        }
+    };
+    let payload_len = match u32::try_from(bytes.len()) {
+        Ok(len) if len > 0 => len,
+        _ => {
+            eprintln!("qyro: '{file}' is empty, so there is nothing to show");
+            return 2;
+        }
+    };
+
+    let shape = qyro_fountain::Shape {
+        payload_len,
+        block_size,
+    };
+    let blocks = qyro_fountain::split(&bytes, block_size);
+
+    let seconds = bytes.len() / BYTES_PER_SECOND;
+    println!();
+    println!(
+        "  {}{}{} -- {} bytes in {} blocks",
+        vt.green(),
+        file,
+        vt.reset(),
+        bytes.len(),
+        blocks.len()
+    );
+    println!("  About {seconds}s of showing, if the camera keeps up. Ctrl-C to stop.");
+    println!("  The stream never ends on purpose: the other side stops when it has enough.");
+    println!();
+
+    // ADR-0044 §3: five frames a second. The limit is not bandwidth, it is lost
+    // frames -- screen and camera are not synchronised and anything caught
+    // mid-transition is rubbish, so the screen stays well under fps/2. txqr
+    // measured 6-7, Coldcard recommends 4, Sparrow ships 5.
+    let frame_time = Duration::from_millis(200);
+    let mut seed = 1_u64;
+    loop {
+        let frame = qyro_fountain::encode(&blocks, shape, seed);
+        let wire = qyro_fountain::encode_frame(&frame);
+        match crate::optical::draw(&wire) {
+            Ok(drawing) => {
+                // Home the cursor rather than clearing: a clear makes the screen
+                // flash white between frames, and a camera that catches the
+                // flash gets a frame of nothing.
+                print!("{}{drawing}", vt.home());
+                let _ = std::io::stdout().flush();
+            }
+            Err(why) => {
+                eprintln!("qyro: {why}.");
+                return 1;
+            }
+        }
+        seed = seed.wrapping_add(1);
+        std::thread::sleep(frame_time);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(

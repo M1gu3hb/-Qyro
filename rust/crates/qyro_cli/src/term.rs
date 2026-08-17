@@ -58,6 +58,26 @@ impl Vt {
         }
     }
 
+    /// Puts the cursor back at the top-left, without clearing.
+    ///
+    /// **Not a clear.** `ESC[2J` blanks the screen before the next frame is
+    /// drawn, so a camera running at 30 fps against a 5 fps stream catches the
+    /// white flash and reads a frame of nothing — which on this channel is
+    /// indistinguishable from a frame it simply missed, except that it happens
+    /// on a schedule. Homing overwrites in place and never shows an empty
+    /// screen (ADR-0044 §3).
+    ///
+    /// Without a terminal that understands it this is empty and each frame
+    /// scrolls. Ugly, and it still works: the newest code is the one at the
+    /// bottom.
+    #[must_use]
+    pub const fn home(self) -> &'static str {
+        match self {
+            Self::Enabled => "\u{1b}[H",
+            Self::Absent => "",
+        }
+    }
+
     /// Red, for the one thing that must never be missed.
     #[must_use]
     pub const fn red(self) -> &'static str {

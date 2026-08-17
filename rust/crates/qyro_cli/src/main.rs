@@ -32,6 +32,7 @@
 )]
 
 mod flows;
+mod optical;
 mod term;
 
 #[cfg(test)]
@@ -61,6 +62,11 @@ enum Command {
     },
     WhoAmI,
     Find,
+    /// Draw this device's pairing code as a QR the other phone can read.
+    Qr,
+    Beam {
+        file: String,
+    },
     Help,
     /// The arguments did not make sense, and the message says which.
     Refused(String),
@@ -85,6 +91,13 @@ fn parse(args: &[String]) -> Command {
         "help" | "--help" | "-h" => Command::Help,
         "whoami" => Command::WhoAmI,
         "find" => Command::Find,
+        "qr" => Command::Qr,
+        "beam" => {
+            let Some(file) = args.get(1).cloned() else {
+                return Command::Refused("beam needs a file: qyro beam <file>".to_owned());
+            };
+            Command::Beam { file }
+        }
         "send" => {
             let Some(file) = args.get(1).cloned() else {
                 return Command::Refused(
@@ -146,6 +159,8 @@ fn run(command: Command, vt: Vt) -> i32 {
         }
         Command::WhoAmI => flows::whoami(vt),
         Command::Find => flows::find(vt),
+        Command::Qr => flows::qr(vt),
+        Command::Beam { file } => flows::beam(&file, vt),
         Command::Send { file, to, expect } => flows::send(&file, &to, expect.as_deref(), vt),
         Command::Receive { out, expect } => flows::receive(out.as_deref(), expect.as_deref(), vt),
         Command::Refused(why) => {
@@ -192,6 +207,8 @@ fn help_text() -> String {
          \x20 qyro send <file> --to <code>          send without asking\n\
          \x20 qyro recv [--out <directory>]         receive without asking\n\
          \x20 qyro whoami                           this device's code\n\
+         \x20 qyro find                             who else is on this network\n\
+         \x20 qyro qr                               draw this device's code as a QR\n\
          \n\
          OPTIONS\n\
          \x20 --expect <fingerprint>   refuse unless the other device's\n\
