@@ -4135,3 +4135,35 @@
 - Fecha: 2026-08-17
 - Evidencia: `grep -c history rust/crates/qyro_ffi/src/*.rs` da 0 en los cinco
   archivos de la frontera
+
+## QYR-0359 — La Release publicó binarios anteriores a los arreglos que anunciaba
+
+- Plataforma: distribución; `v1.0.0` en GitHub
+- Severidad: **P0**
+- Esperado: los binarios de una Release llevan lo que sus notas describen
+- Actual: los assets salían de `4c297af`, **anterior a los tres arreglos P0 de la
+  fase 12**, mientras las notas decían «el receptor lo enseña en cuanto abre su
+  pantalla» y «se arreglaron tres cosas». El APK que alguien descargaba **no
+  enseñaba el código de emparejamiento, congelaba al pulsar Recibir, y dejaba
+  `.qyro-part` diciendo entregado**
+- **Cómo pasó:** los artefactos se construyeron y firmaron durante la fase 10,
+  antes de que existieran los arreglos, y la fase 12 publicó la Release usando
+  esos archivos sin reconstruir. Los hashes eran correctos —describían
+  exactamente los archivos adjuntos— y **eso es lo que lo hacía invisible**: un
+  hash comprueba que te dieron el archivo que dicen, no que el archivo haga lo
+  que dicen
+- **Por qué P0:** es la única clase de defecto de este proyecto que afecta a
+  alguien que no es el propietario. Un binario público cuyo texto de presentación
+  miente sobre lo que hace
+- Arreglo: `release.yml` sobre `2c01de0`, APK firmado localmente con la misma
+  clave —certificado `b73404ad…`, sin cambios—, los dos assets sustituidos, y la
+  corrección **arriba del todo** de las notas nombrando los hashes viejos para
+  que quien tenga uno lo reconozca. No se borra: se dice
+- **La regla que sale de aquí:** un artefacto se reconstruye desde el commit que
+  se publica, siempre. Reutilizar uno que ya existe es publicar un commit
+  distinto del que se nombra
+- Estado: cerrado
+- Dueño: release
+- Fecha: 2026-08-17
+- Evidencia: hashes nuevos `e550e56d…` y `a1cf050d…`, verificados **descargando
+  los assets publicados** y comparando, no sólo los locales
