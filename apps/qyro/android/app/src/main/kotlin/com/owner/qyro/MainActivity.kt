@@ -8,6 +8,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private var picker: FilePickerChannel? = null
+    private var discovery: DiscoveryChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -17,6 +18,13 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             FilePickerChannel.CHANNEL,
         ).setMethodCallHandler(handler)
+
+        val finder = DiscoveryChannel(this)
+        discovery = finder
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DiscoveryChannel.CHANNEL,
+        ).setMethodCallHandler(finder)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

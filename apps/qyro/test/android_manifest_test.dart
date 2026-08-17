@@ -27,7 +27,24 @@ const _forbidden = <String>[
   'android.permission.READ_MEDIA_IMAGES',
   'android.permission.READ_MEDIA_VIDEO',
   'android.permission.READ_MEDIA_AUDIO',
+  // ADR-0035 section 7 and phase 04b criterion 7. `NsdManager` with
+  // `FLAG_SHOW_PICKER` exists precisely so this one is never needed: the person
+  // picking a service *is* the grant, and it survives a reboot. If this ever
+  // appears, the discovery design lost its whole advantage and became a runtime
+  // permission dialog like everyone else's.
+  'android.permission.ACCESS_LOCAL_NETWORK',
 ];
+
+/// Removes XML comments before looking for a permission.
+///
+/// The source manifest *names* `ACCESS_LOCAL_NETWORK` in a comment explaining
+/// why it is absent, and a substring search over the raw file would read that
+/// explanation as the thing it explains. Stripping comments is what makes the
+/// check about declarations rather than about prose.
+String _withoutComments(String xml) => xml.replaceAll(
+      RegExp(r'<!--.*?-->', dotAll: true),
+      '',
+    );
 
 /// Where the intermediates live, most likely first.
 ///
@@ -110,7 +127,16 @@ void main() {
       isTrue,
       reason: 'the manifest this repository writes must exist to be checked',
     );
-    final text = source.readAsStringSync();
+    final text = _withoutComments(source.readAsStringSync());
+    // The stripping works: the raw file does mention one of these and the
+    // stripped one does not, so a comment can never satisfy or break this.
+    expect(
+      source.readAsStringSync(),
+      contains('ACCESS_LOCAL_NETWORK'),
+      reason: 'the manifest no longer explains why the permission is absent; '
+          'if the explanation went, check that the permission did not arrive',
+    );
+    expect(text, isNot(contains('ACCESS_LOCAL_NETWORK')));
     for (final permission in _forbidden) {
       expect(
         text.contains(permission),
@@ -119,6 +145,25 @@ void main() {
             'genuinely required the design took a wrong turn (ADR-0034 §4)',
       );
     }
+  });
+
+  test(
+      'the manifest declares exactly one permission, and it is the multicast one',
+      () {
+    // Not «no permissions»: discovery needs `CHANGE_WIFI_MULTICAST_STATE`,
+    // which is a normal permission granted at install and is what stops the
+    // Wi-Fi stack filtering multicast beneath the socket. Asserting the exact
+    // set rather than an absence, because a list that only forbids is a list a
+    // new permission slips past.
+    final source = File('android/app/src/main/AndroidManifest.xml');
+    final text = _withoutComments(source.readAsStringSync());
+    final declared = RegExp(r'<uses-permission android:name="([^"]+)"')
+        .allMatches(text)
+        .map((match) => match.group(1))
+        .toList();
+
+    expect(
+        declared, <String>['android.permission.CHANGE_WIFI_MULTICAST_STATE']);
   });
 
   test('the merged manifest declares no storage permission', () {
@@ -150,7 +195,7 @@ void main() {
       return;
     }
 
-    final text = merged.readAsStringSync();
+    final text = _withoutComments(merged.readAsStringSync());
     expect(
       text.contains('<manifest'),
       isTrue,

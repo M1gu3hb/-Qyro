@@ -225,9 +225,24 @@ fn a_peer_that_sends_nothing_times_out_and_says_so() {
     );
     // Waited at least the deadline. Two independent clocks: one the test set,
     // one the test measured.
+    //
+    // One timer tick of slack, and the reason is not fudge. The idle deadline is
+    // reached by summing socket read timeouts, and `SO_RCVTIMEO` on Windows is
+    // rounded to the system timer -- ~15.6 ms by default -- so each wakeup may
+    // return *slightly* early and the sum lands a few milliseconds short of the
+    // deadline. A strict `>=` against a deadline built that way is a flake by
+    // construction, and it flaked here under a loaded machine before this line
+    // existed. The property being asserted is «it waited», not «it waited to the
+    // nanosecond»: at half the deadline the test still fails loudly.
+    const TIMER_SLACK: Duration = Duration::from_millis(32);
     assert!(
-        waited >= deadline,
+        waited + TIMER_SLACK >= deadline,
         "gave up after {waited:?}, before the {deadline:?} deadline"
+    );
+    assert!(
+        waited >= deadline / 2,
+        "gave up after {waited:?}, which is not waiting for a {deadline:?} \
+         deadline by any reading"
     );
 }
 
@@ -656,9 +671,24 @@ fn a_handshake_that_stalls_is_cut_by_the_deadline() {
     }
     // It waited, rather than giving up on the first heartbeat. Two independent
     // values: one the test chose, one the test measured.
+    //
+    // One timer tick of slack, and the reason is not fudge. The idle deadline is
+    // reached by summing socket read timeouts, and `SO_RCVTIMEO` on Windows is
+    // rounded to the system timer -- ~15.6 ms by default -- so each wakeup may
+    // return *slightly* early and the sum lands a few milliseconds short of the
+    // deadline. A strict `>=` against a deadline built that way is a flake by
+    // construction, and it flaked here under a loaded machine before this line
+    // existed. The property being asserted is «it waited», not «it waited to the
+    // nanosecond»: at half the deadline the test still fails loudly.
+    const TIMER_SLACK: Duration = Duration::from_millis(32);
     assert!(
-        waited >= deadline,
+        waited + TIMER_SLACK >= deadline,
         "gave up after {waited:?}, before the {deadline:?} deadline"
+    );
+    assert!(
+        waited >= deadline / 2,
+        "gave up after {waited:?}, which is not waiting for a {deadline:?} \
+         deadline by any reading"
     );
     // And it did not wait for the idle timeout instead, which would mean the
     // handshake deadline was doing nothing.

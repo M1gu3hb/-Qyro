@@ -40,6 +40,7 @@
     clippy::indexing_slicing
 )]
 
+mod discovery;
 mod error;
 mod handshake;
 mod limits;
@@ -52,6 +53,12 @@ mod guards;
 #[cfg(test)]
 mod tests;
 
+#[cfg(windows)]
+pub use discovery::MdnsDiscovery;
+pub use discovery::{
+    PeerDiscovery, PeerEndpoint, SERVICE_TYPE, TXT_FINGERPRINT_KEY, fingerprint_from_txt,
+    fingerprint_to_txt,
+};
 pub use error::{NetError, SocketOp};
 pub use handshake::{Session, initiate, initiate_within, respond, respond_within};
 pub use limits::{

@@ -18,3 +18,10 @@ path = "src/lib.rs"
 # their bytes.
 qyro_crypto = { path = "../qyro_crypto" }
 qyro_protocol = { path = "../qyro_protocol" }
+
+# ADR-0035 §7 and amendment 1. Windows only: on Android and iOS the discovery
+# is not Rust's and cannot be, because the local-network gate sits below the
+# socket API. Pure Rust, no async runtime -- its own thread and channels, which
+# fits the synchronous engine -- Apache-2.0 OR MIT.
+[target.'cfg(windows)'.dependencies]
+mdns-sd = "0.20.3"

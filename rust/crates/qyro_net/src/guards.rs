@@ -34,8 +34,9 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 7] = [
+const PRODUCTION_FILES: [&str; 8] = [
     "lib.rs",
+    "discovery.rs",
     "error.rs",
     "handshake.rs",
     "pairing.rs",
