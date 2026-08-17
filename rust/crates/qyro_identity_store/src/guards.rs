@@ -16,12 +16,16 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 5] = [
+const PRODUCTION_FILES: [&str; 6] = [
     "lib.rs",
     "blob.rs",
     "error.rs",
     "known_peer_types.rs",
     "known_peers.rs",
+    // ADR-0040 amendment 1. Added the moment the file existed, because
+    // `every_production_file_is_listed` refused to compile a release without
+    // it -- which is the guard doing exactly what it is for.
+    "sandbox.rs",
 ];
 
 #[test]

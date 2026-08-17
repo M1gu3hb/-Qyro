@@ -43,6 +43,17 @@ pub enum SessionError {
     StorageRefused,
     /// The session was cancelled by this end.
     Cancelled,
+    /// There is no usable device identity for this process.
+    ///
+    /// ADR-0040. Three situations, deliberately one variant: nobody called
+    /// `identity::open`, the stored blob would not open, or the caller asked
+    /// for platform protection on a platform with no wrapper installed.
+    ///
+    /// **None of them generates a replacement.** A store that mints a new
+    /// identity when it cannot read the old one is a device that silently
+    /// becomes a stranger to every peer that trusted it, and that is the exact
+    /// defect this variant exists to make impossible to reach by accident.
+    IdentityUnreadable,
 }
 
 // There is deliberately no `AlreadyFailed`. ADR-0032 §5 freezes stickiness as
@@ -62,6 +73,7 @@ impl fmt::Display for SessionError {
             Self::TransferRefused => "the transfer was refused",
             Self::StorageRefused => "the destination refused the content",
             Self::Cancelled => "the session was cancelled",
+            Self::IdentityUnreadable => "there is no usable identity for this process",
         })
     }
 }

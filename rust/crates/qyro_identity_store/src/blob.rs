@@ -52,7 +52,25 @@ pub(crate) const WRAP_BRIDGED: u8 = 3;
 ///
 /// A list rather than a range: "less than four" would accept a value this
 /// build has no wrapper for, and step 5 exists to refuse exactly that by name.
-pub(crate) const KNOWN_WRAPS: [u8; 3] = [WRAP_DPAPI_USER, WRAP_ANDROID_KEYSTORE, WRAP_BRIDGED];
+/// No wrapper at all: the filesystem sandbox is the only protection.
+///
+/// ADR-0040 enmienda 1. Android's stage A. It is recorded in the blob **because
+/// a file must say what protected it**: a stage B build that meets a byte 4 can
+/// refuse, migrate or warn, and all three are decisions only a written fact
+/// allows. A format that cannot tell protected from unprotected forces a guess,
+/// and guessing about key material is the thing this project does not do.
+pub(crate) const WRAP_NONE_SANDBOX: u8 = 4;
+
+/// Every wrap byte this build knows how to read.
+///
+/// A list rather than a range: "less than five" would accept a value this
+/// build has no wrapper for, and step 5 exists to refuse exactly that by name.
+pub(crate) const KNOWN_WRAPS: [u8; 4] = [
+    WRAP_DPAPI_USER,
+    WRAP_ANDROID_KEYSTORE,
+    WRAP_BRIDGED,
+    WRAP_NONE_SANDBOX,
+];
 
 /// Bytes before `wrapped` begins.
 pub(crate) const HEADER_LEN: usize = 16;

@@ -548,7 +548,9 @@ fn a_blob_from_another_platform_is_refused_by_wrap_and_not_by_luck() {
 #[test]
 fn a_wrap_byte_nobody_implements_is_still_refused_at_parse() {
     // Adding 0x02, and later 0x03, must not turn the wrap check into "anything
-    // small is fine".
+    // small is fine". The constant has moved twice now -- 0x03 became known as
+    // `WRAP_BRIDGED`, then 0x04 as `WRAP_NONE_SANDBOX` -- and each move was a
+    // decision, not a build fix.
     //
     // **This test was inverted on purpose in phase 11, and that is worth
     // reading twice.** It used to poke 0x03 in, because 0x03 was unknown. It is
@@ -560,10 +562,10 @@ fn a_wrap_byte_nobody_implements_is_still_refused_at_parse() {
     // repair erases its own evidence.
     let identity = an_identity();
     let mut blob = seal_identity(&identity, &FakeWrapper).unwrap();
-    blob[9] = 0x04;
+    blob[9] = 0x05;
     assert_eq!(
         open_identity(&blob, &FakeWrapper).unwrap_err(),
-        StoreError::UnsupportedWrap { found: 0x04 },
+        StoreError::UnsupportedWrap { found: 0x05 },
         "an unknown wrap must be refused by name at step 5, before any wrapper \
          is asked to do anything"
     );

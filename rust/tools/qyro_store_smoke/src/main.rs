@@ -12,6 +12,19 @@
 //!
 //!     qyro_store_smoke create <path>
 //!     qyro_store_smoke load   <path> <expected-fingerprint>
+//!
+//! And the pair that ADR-0040 added, which is the one that matters:
+//!
+//!     qyro_store_smoke session-open <path> [expected-fingerprint]
+//!
+//! The difference is not cosmetic. `create`/`load` drive
+//! `qyro_win_dpapi::WindowsIdentityStore` **directly**, so the CI step
+//! STATUS.md cited as proof that "an identity survives two process
+//! invocations" proved that DPAPI round-trips — not that the product keeps an
+//! identity. `session-open` goes through `qyro_session::open`, which is the
+//! path the application takes. **Run twice against one path on any commit
+//! before phase 11 and the two fingerprints differ**, because every session
+//! generated its own keypair.
 
 // Not `forbid(unsafe_code)`… it is. This harness has no unsafe of its own; the
 // platform crate it calls is the one with the exception.
@@ -33,6 +46,8 @@ mod code {
     pub const CREATE_FAILED: u8 = 2;
     pub const LOAD_FAILED: u8 = 3;
     pub const FINGERPRINT_MISMATCH: u8 = 4;
+    /// `session-open` could not open an identity at all. ADR-0040.
+    pub const SESSION_OPEN_FAILED: u8 = 6;
     #[cfg(not(windows))]
     pub const UNSUPPORTED_PLATFORM: u8 = 5;
 }
@@ -40,10 +55,59 @@ mod code {
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(command) = args.first().map(String::as_str) else {
-        eprintln!("usage: qyro_store_smoke <create|load> <path> [fingerprint]");
+        eprintln!("usage: qyro_store_smoke <create|load|session-open> <path> [fingerprint]");
         return ExitCode::from(code::USAGE);
     };
+    // Available on every platform, unlike `create`/`load`: the sandbox
+    // protection of ADR-0040 needs no platform wrapper, so the cross-process
+    // property can be exercised on the Linux runner as well as on Windows.
+    if command == "session-open" {
+        return session_open(&args);
+    }
     run(command, &args)
+}
+
+/// Opens the identity **through the engine** and prints its fingerprint.
+///
+/// With a third argument, compares and exits `FINGERPRINT_MISMATCH` on
+/// disagreement. Two invocations of this against one path is the whole test:
+/// the second process shares no memory with the first, so an identity that
+/// matches came off the disk.
+fn session_open(args: &[String]) -> ExitCode {
+    let Some(path) = args.get(1) else {
+        eprintln!("usage: qyro_store_smoke session-open <path> [fingerprint]");
+        return ExitCode::from(code::USAGE);
+    };
+
+    // Sandbox rather than Platform so the command behaves identically on every
+    // runner. What is under test is that the engine keeps one identity across
+    // processes, not which wrapper protected it -- that is `create`/`load`'s
+    // job on Windows, and it still runs.
+    if let Err(error) = qyro_session::open(
+        std::path::Path::new(path),
+        qyro_session::Protection::Sandbox,
+    ) {
+        eprintln!("session-open failed: {error}");
+        return ExitCode::from(code::SESSION_OPEN_FAILED);
+    }
+
+    let fingerprint = match qyro_session::fingerprint() {
+        Ok(text) => text,
+        Err(error) => {
+            eprintln!("fingerprint failed: {error}");
+            return ExitCode::from(code::SESSION_OPEN_FAILED);
+        }
+    };
+    println!("{fingerprint}");
+
+    match args.get(2) {
+        None => ExitCode::from(code::OK),
+        Some(expected) if expected == &fingerprint => ExitCode::from(code::OK),
+        Some(expected) => {
+            eprintln!("expected {expected}, got {fingerprint}");
+            ExitCode::from(code::FINGERPRINT_MISMATCH)
+        }
+    }
 }
 
 #[cfg(windows)]

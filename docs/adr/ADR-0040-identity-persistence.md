@@ -236,3 +236,53 @@ Commits, cada uno el suyo: esta ADR y las enmiendas de ADR-0032 y ADR-0037 →
 el byte 3 y su ida y vuelta → `identity.rs` y el borrado de `new_identity` →
 los tres símbolos → el cableado de Dart → las pruebas entre procesos → la
 retractación de lo que la documentación afirmaba.
+
+---
+
+## 11. Enmienda 1 (2026-08-16) — la protección se pide por su nombre
+
+**§2 dice «no hay fallback en claro, nunca» y §7 dice que Android guarda el blob
+bajo el sandbox por UID. Escritas así, se contradicen**, y la contradicción se
+resuelve en la dirección estricta: **no hay fallback, porque no hay nada
+automático que elegir.**
+
+`qyro_identity_open_blocking` toma un argumento más, un entero:
+
+```c
+int32_t qyro_identity_open_blocking(const uint8_t *path, size_t path_len,
+                                    uint32_t protection);
+```
+
+| Valor | Significa | Dónde |
+|---|---|---|
+| `0` **PLATFORM** | El envoltorio de la plataforma: DPAPI bajo `cfg(windows)`, o el que se instaló con `qyro_identity_set_wrapper` | Windows hoy; Android en la etapa B |
+| `1` **SANDBOX** | **Sólo el sandbox del sistema de archivos.** La semilla se guarda sin envolver | Android en la etapa A |
+
+`PLATFORM` sin envoltorio disponible **se niega**. No cae a `SANDBOX`; nadie
+recibe menos protección de la que pidió por no haber mirado.
+
+### Por qué un byte de wrap nuevo, y no «ninguno»
+
+`WRAP_NONE_SANDBOX = 4`, y va en el blob como cualquier otro. **El archivo dice
+qué lo protegía.** Eso importa el día de la etapa B: un build con Keystore que
+encuentra un blob con el byte 4 sabe que esa identidad vivió sin envolver y puede
+negarse, migrarla, o avisar — y las tres son decisiones posibles sólo si el dato
+está escrito. Un formato que no distingue «protegido» de «no protegido» obliga a
+adivinar, y adivinar sobre material de clave es lo que este proyecto no hace.
+
+El envoltorio se llama `SandboxWrapper` y su `wrap` es la identidad. **No es
+criptografía y su nombre no finge que lo sea.** Vive en `qyro_identity_store`
+junto a los demás, no escondido, porque un envoltorio que hay que buscar es un
+envoltorio que alguien reimplementa peor.
+
+### Lo que esto le cuesta al modelo de amenazas
+
+Una fila, con estas palabras:
+
+> **Android, etapa A.** La semilla está en `getNoBackupFilesDir()`, legible por
+> cualquier cosa que sea este UID o sea root. Con Keystore, un atacante con root
+> necesitaría además el TEE. **Con el sandbox, root basta.**
+
+Y una consecuencia que hay que decir aunque incomode: en Android la etapa A es
+**más débil que lo que ADR-0025 decidió**, y la aplicación no lo sabrá decir en
+pantalla. Lo dice el documento de release y lo dice el modelo de amenazas.

@@ -40,9 +40,9 @@ use std::sync::{Mutex, OnceLock};
 use qyro_session::{Progress, ProgressObserver, Session, SessionError, SessionState};
 
 use crate::abi::{
-    QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_CANCELLED, QYRO_ERR_NOT_AUTHENTICATED, QYRO_ERR_NULL_OUT,
-    QYRO_ERR_PEER_UNREACHABLE, QYRO_ERR_POISONED, QYRO_ERR_STORAGE_REFUSED,
-    QYRO_ERR_TRANSFER_REFUSED, QYRO_ERR_UNKNOWN, QYRO_OK, guard,
+    QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_CANCELLED, QYRO_ERR_IDENTITY_UNREADABLE,
+    QYRO_ERR_NOT_AUTHENTICATED, QYRO_ERR_NULL_OUT, QYRO_ERR_PEER_UNREACHABLE, QYRO_ERR_POISONED,
+    QYRO_ERR_STORAGE_REFUSED, QYRO_ERR_TRANSFER_REFUSED, QYRO_ERR_UNKNOWN, QYRO_OK, guard,
 };
 use crate::handle::HandleTable;
 
@@ -76,7 +76,7 @@ fn table() -> &'static Mutex<Table> {
     TABLE.get_or_init(|| Mutex::new(HandleTable::new()))
 }
 
-const fn session_code(error: SessionError) -> i32 {
+pub(crate) const fn session_code(error: SessionError) -> i32 {
     match error {
         SessionError::BadArgument => QYRO_ERR_BAD_ARGUMENT,
         SessionError::PeerUnreachable => QYRO_ERR_PEER_UNREACHABLE,
@@ -84,6 +84,7 @@ const fn session_code(error: SessionError) -> i32 {
         SessionError::TransferRefused => QYRO_ERR_TRANSFER_REFUSED,
         SessionError::StorageRefused => QYRO_ERR_STORAGE_REFUSED,
         SessionError::Cancelled => QYRO_ERR_CANCELLED,
+        SessionError::IdentityUnreadable => QYRO_ERR_IDENTITY_UNREADABLE,
         // Required: `SessionError` is `#[non_exhaustive]`. Never silently an
         // existing code -- see QYRO_ERR_UNKNOWN and the guard below.
         _ => QYRO_ERR_UNKNOWN,
@@ -825,8 +826,8 @@ mod tests {
 
         assert_eq!(
             declared.len(),
-            6,
-            "qyro_session declares {} variants, not the 6 this module translates: {declared:?}. \
+            7,
+            "qyro_session declares {} variants, not the 7 this module translates: {declared:?}. \
              Add the arm in session_code and a code in abi.rs, then update this number.",
             declared.len()
         );

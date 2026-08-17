@@ -77,6 +77,30 @@ impl Drop for Scratch {
 ///
 /// Deterministic on purpose: the comparison at the end has to be able to say
 /// *which* byte differs, and a random file makes a failure unreproducible.
+/// Opens a process-wide identity, once, so a session can be built at all.
+///
+/// **This is the fix of ADR-0040, seen from a test.** Before it, every
+/// constructor generated a throwaway keypair and none of these tests needed
+/// anything; now a session without an identity is `IdentityUnreadable`, and
+/// that refusal is the property. Calling it at the top of each test rather than
+/// hiding it in a helper is deliberate: a reader should see that a session
+/// requires an identity, because that is the thing that was missing.
+///
+/// `Protection::Sandbox`, not `Platform`: these run on Linux in CI, where there
+/// is no platform wrapper and `Platform` correctly refuses.
+fn ensure_identity() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let dir = std::env::temp_dir().join(format!("qyro-behaviour-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("a temporary directory for the test identity");
+        qyro_session::open(
+            &dir.join("identity.qyro"),
+            qyro_session::Protection::Sandbox,
+        )
+        .expect("opening a test identity");
+    });
+}
+
 fn write_pattern(path: &Path, len: u64) {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).unwrap();
@@ -220,6 +244,7 @@ const CROSSES_THE_WINDOW: u64 = 2 * 1024 * 1024 + 7;
 
 #[test]
 fn an_empty_file_list_is_refused_before_anything_is_dialled() {
+    ensure_identity();
     let root = Scratch::new("empty");
 
     // Nothing is listening on this address. A `BadArgument` therefore proves the
@@ -233,6 +258,7 @@ fn an_empty_file_list_is_refused_before_anything_is_dialled() {
 
 #[test]
 fn a_file_outside_the_root_is_refused_rather_than_renamed_to_its_last_component() {
+    ensure_identity();
     let root = Scratch::new("root");
     let elsewhere = Scratch::new("elsewhere");
     let stray = elsewhere.path("photo.jpg");
@@ -247,6 +273,7 @@ fn a_file_outside_the_root_is_refused_rather_than_renamed_to_its_last_component(
 
 #[test]
 fn a_parent_directory_in_the_remainder_is_refused() {
+    ensure_identity();
     let root = Scratch::new("parent");
     let nested = root.path("inner");
     fs::create_dir_all(&nested).unwrap();
@@ -265,6 +292,7 @@ fn a_parent_directory_in_the_remainder_is_refused() {
 
 #[test]
 fn a_file_crosses_two_sessions_on_the_loopback_and_arrives_byte_for_byte() {
+    ensure_identity();
     let source = Scratch::new("send");
     let destination = Scratch::new("recv");
     let original = source.path("payload.bin");
@@ -305,6 +333,7 @@ fn a_file_crosses_two_sessions_on_the_loopback_and_arrives_byte_for_byte() {
 
 #[test]
 fn a_corrupted_arrival_would_be_visible_to_this_comparison() {
+    ensure_identity();
     // The counter-test for the one above (R2 §1.7). A byte-for-byte comparison
     // that cannot see a changed byte is not evidence that none changed, and a
     // comparison of a file with itself is exactly how this repository has
@@ -342,6 +371,7 @@ fn a_corrupted_arrival_would_be_visible_to_this_comparison() {
 
 #[test]
 fn two_files_under_a_common_root_arrive_under_their_own_relative_names() {
+    ensure_identity();
     // The doc-comment on `open_sender` claims this explicitly: naming by file
     // name alone would send `a.txt` twice and make the receiver arbitrate a
     // collision the sender created. Nothing exercised the claim.
@@ -387,6 +417,7 @@ fn two_files_under_a_common_root_arrive_under_their_own_relative_names() {
 
 #[test]
 fn progress_reaches_the_total_and_never_goes_backwards() {
+    ensure_identity();
     let source = Scratch::new("progress-src");
     let destination = Scratch::new("progress-dst");
     let original = source.path("payload.bin");
@@ -516,6 +547,7 @@ fn move_open_files(sources: &[(String, PathBuf)], destination: &Path) -> Moved {
 
 #[test]
 fn a_file_opened_by_descriptor_reads_identically_to_one_opened_by_path() {
+    ensure_identity();
     // ADR-0034's central claim: Android hands out a descriptor and Windows a
     // path, and the *same bytes* come out either way. Two independent transfers
     // of one source into two destinations, compared against the original and
@@ -575,6 +607,7 @@ fn a_file_opened_by_descriptor_reads_identically_to_one_opened_by_path() {
 
 #[test]
 fn a_transfer_driven_by_descriptor_arrives_byte_identical() {
+    ensure_identity();
     // Two files, two different sizes, two names that only the picker knows: a
     // descriptor carries no name of its own, so the names travelling correctly
     // is a property of this API and of nothing else.
@@ -633,6 +666,7 @@ fn a_transfer_driven_by_descriptor_arrives_byte_identical() {
 
 #[test]
 fn a_revoked_descriptor_mid_transfer_is_a_typed_error_not_a_hang() {
+    ensure_identity();
     // ADR-0034 §3 argues that revoking a `content://` permission cannot close a
     // descriptor that is already open, and that *if* a read failed anyway the
     // existing path carries it: `FileSource::read_at` has no error channel, so
@@ -720,6 +754,7 @@ fn a_revoked_descriptor_mid_transfer_is_a_typed_error_not_a_hang() {
 
 #[test]
 fn a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind() {
+    ensure_identity();
     // QYR-0089 and QYR-0088 together, because neither is worth anything alone:
     // a refusal the sender never learns about is a hang, and a refusal that
     // leaves half a file on disk is a lie about what the destination contains.
@@ -786,6 +821,7 @@ fn a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind() {
 
 #[test]
 fn a_leftover_partial_would_be_visible_to_that_directory_listing() {
+    ensure_identity();
     // R2 §1.7 for the assertion above. «The directory is empty» passes for free
     // if the listing cannot see a file, so this puts one there and requires the
     // same listing to report it.
@@ -836,30 +872,41 @@ fn a_handshaken_sender(source: &Scratch) -> Session {
 
 #[test]
 fn a_known_peer_whose_key_changed_is_refused_by_name() {
+    ensure_identity();
     // The case that matters. In SSH this is a shouted warning; ADR-0035 §3 says
     // it is one here too, and that it must never soften into `New`.
-    let source = Scratch::new("trust-src");
+    //
+    // **Rewritten in phase 11, and the reason is the finding.** This test used
+    // to build its second identity out of the defect: "a second receiver,
+    // therefore a second identity", with an `assert_ne!` on the two
+    // fingerprints. That was true only because every session minted a throwaway
+    // keypair, so the test passed *because the product was broken* — and once
+    // ADR-0040 gave the process one identity, the `assert_ne!` failed.
+    //
+    // The property is unchanged and worth keeping. What changed is that the
+    // second identity is now constructed **on purpose**, which is what the test
+    // meant all along, instead of being borrowed from a bug.
     let mut book = qyro_session::TrustBook::new();
 
-    let first = a_handshaken_sender(&source);
-    first.remember_peer(&mut book, "laptop").unwrap();
-    assert_eq!(
-        first.peer_trust(&book, "laptop").unwrap(),
-        qyro_session::PeerTrust::Known,
-        "the peer that was just remembered is not recognised, so the two \
-         verdicts below would mean nothing"
-    );
-
-    // A second receiver, therefore a second identity, under the *same* name.
-    let second = a_handshaken_sender(&source);
+    let laptop = qyro_crypto::DeviceIdentity::generate().expect("an identity");
+    let impostor = qyro_crypto::DeviceIdentity::generate().expect("a second identity");
     assert_ne!(
-        second.peer_fingerprint(),
-        first.peer_fingerprint(),
-        "the two receivers produced the same fingerprint, so this test cannot \
-         tell a changed key from an unchanged one"
+        laptop.public_identity().fingerprint(),
+        impostor.public_identity().fingerprint(),
+        "two generated identities collided, so this test cannot tell a changed          key from an unchanged one"
     );
 
-    let verdict = second.peer_trust(&book, "laptop").unwrap();
+    book.remember("laptop", laptop.public_identity())
+        .expect("remembering a peer");
+    assert_eq!(
+        book.verdict("laptop", laptop.public_identity()).unwrap(),
+        qyro_session::PeerTrust::Known,
+        "the peer that was just remembered is not recognised, so the verdict          below would mean nothing"
+    );
+
+    let verdict = book
+        .verdict("laptop", impostor.public_identity())
+        .expect("a verdict for a known name");
     assert_eq!(
         verdict,
         qyro_session::PeerTrust::Changed,
@@ -868,13 +915,11 @@ fn a_known_peer_whose_key_changed_is_refused_by_name() {
     // And specifically **not** `New`, which is the softening this guards
     // against: `New` asks a person, `Changed` refuses.
     assert_ne!(verdict, qyro_session::PeerTrust::New);
-
-    drop(first);
-    drop(second);
 }
 
 #[test]
 fn forgetting_a_peer_makes_it_new_again_and_not_trusted() {
+    ensure_identity();
     // The only way back from `Changed`, and it has to be an explicit act.
     let source = Scratch::new("forget-src");
     let mut book = qyro_session::TrustBook::new();
@@ -905,6 +950,7 @@ fn forgetting_a_peer_makes_it_new_again_and_not_trusted() {
 
 #[test]
 fn the_fingerprint_the_session_shows_matches_the_one_the_store_recorded() {
+    ensure_identity();
     // Two paths, not one call twice: the left side reads the identity the
     // handshake authenticated on this session, the right side reads the copy
     // the book stored under a name. They are the same value arrived at through
@@ -926,17 +972,31 @@ fn the_fingerprint_the_session_shows_matches_the_one_the_store_recorded() {
         shown.len() >= 32,
         "{shown} is too short to be a fingerprint"
     );
-    // And a *different* peer's fingerprint differs, so the equality above is
-    // not satisfied by every pair of strings this code can produce.
-    let other = a_handshaken_sender(&source);
-    assert_ne!(other.peer_fingerprint(), shown);
+    // And a *different* identity's fingerprint differs, so the equality above
+    // is not satisfied by every pair of strings this code can produce.
+    //
+    // Phase 11: this control used to open a second session and assert its
+    // fingerprint differed — which was only ever true because each session
+    // minted its own keypair. Both ends of a loopback session now share the one
+    // process identity, so the second session is the *same* peer and the
+    // assertion was measuring the defect, not the property. Built on purpose
+    // instead.
+    let stranger = qyro_crypto::DeviceIdentity::generate().expect("a second identity");
+    let mut other_book = qyro_session::TrustBook::new();
+    other_book
+        .remember("stranger", stranger.public_identity())
+        .expect("remembering a stranger");
+    assert_ne!(
+        other_book.fingerprint_of("stranger").expect("recorded"),
+        shown
+    );
 
     drop(session);
-    drop(other);
 }
 
 #[test]
 fn a_name_the_peer_store_refuses_is_refused_here_too() {
+    ensure_identity();
     // One validator, not two. The rules live in qyro_identity_store and this
     // crate asks them rather than restating them, so a rule can never hold in
     // one place and not the other.
@@ -1034,6 +1094,7 @@ fn move_observed(size: u64) -> (Vec<Progress>, usize, Result<SessionState, Sessi
 
 #[test]
 fn a_session_without_an_observer_still_completes() {
+    ensure_identity();
     // ADR-0033 §2: «no observer» must never be a second code path. Every other
     // test in this file passes None, so this one states the property by name
     // rather than leaving it implied.
@@ -1058,6 +1119,7 @@ fn a_session_without_an_observer_still_completes() {
 
 #[test]
 fn the_callback_budget_is_respected_for_a_known_file_size() {
+    ensure_identity();
     let (small, _, small_state) = move_observed(512 * 1024);
     let (large, _, large_state) = move_observed(4 * 1024 * 1024);
     assert_eq!(small_state, Ok(SessionState::Completed));
@@ -1107,6 +1169,7 @@ fn the_callback_budget_is_respected_for_a_known_file_size() {
 
 #[test]
 fn an_emission_per_chunk_would_be_visible_to_this_measurement() {
+    ensure_identity();
     // R2 §1.7, and the reason the helper counts `step` calls as well as
     // emissions. The budget exists to stop the emission count tracking the
     // chunk count; the way to know this measurement could see that failure is
@@ -1141,6 +1204,7 @@ fn an_emission_per_chunk_would_be_visible_to_this_measurement() {
 
 #[test]
 fn a_cancelled_session_reports_cancelled_and_keeps_reporting_it() {
+    ensure_identity();
     let source = Scratch::new("cancel");
     let original = source.path("payload.bin");
     write_pattern(&original, 4096);
@@ -1175,6 +1239,7 @@ fn a_cancelled_session_reports_cancelled_and_keeps_reporting_it() {
 
 #[test]
 fn a_receiver_reports_the_port_it_bound_and_not_the_one_the_peer_dialled_from() {
+    ensure_identity();
     // Half of QYR-0314: `local_addr` returned `peer_addr` -- the *far* end --
     // and nothing noticed, because the C surface does not expose it and no test
     // called it.
@@ -1227,6 +1292,7 @@ fn a_receiver_reports_the_port_it_bound_and_not_the_one_the_peer_dialled_from() 
 
 #[test]
 fn a_receiver_that_never_gets_a_peer_reports_the_peer_and_not_success() {
+    ensure_identity();
     let destination = Scratch::new("no-peer");
     let address = loopback(a_free_port());
 
@@ -1258,6 +1324,7 @@ fn a_receiver_that_never_gets_a_peer_reports_the_peer_and_not_success() {
 
 #[test]
 fn finishing_a_sender_materialises_nothing_and_says_so() {
+    ensure_identity();
     // `finish` is the receiver's operation. A sender answering anything but zero
     // would mean the count came from somewhere other than materialised items.
     let source = Scratch::new("finish-src");

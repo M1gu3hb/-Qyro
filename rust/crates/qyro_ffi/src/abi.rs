@@ -79,6 +79,14 @@ pub const QYRO_ERR_CANCELLED: i32 = -11;
 /// anybody can construct it.
 pub const QYRO_ERR_UNKNOWN: i32 = -12;
 
+/// No usable device identity for this process. ADR-0040.
+///
+/// Distinct from [`QYRO_ERR_NOT_AUTHENTICATED`] on purpose: that one means the
+/// **peer** did not prove who it is, and this one means **this device** does not
+/// know who it is. Collapsing them would tell a person to distrust the other end
+/// when the problem is at home.
+pub const QYRO_ERR_IDENTITY_UNREADABLE: i32 = -13;
+
 impl HandleError {
     /// The code this error crosses the boundary as.
     #[must_use]

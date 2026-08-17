@@ -20,6 +20,7 @@
 // Nothing here can name anything cryptographic; see the module note above.
 pub mod abi;
 pub mod handle;
+mod identity_abi;
 mod session_abi;
 mod trust_abi;
 

@@ -48,7 +48,12 @@ fn book() -> &'static Mutex<TrustBook> {
 ///
 /// `out` must address `capacity` writable bytes, or be null when `capacity` is
 /// 0. `out_len` must point to one writable `usize`.
-unsafe fn emit_text(text: &str, out: *mut u8, capacity: usize, out_len: *mut usize) -> i32 {
+pub(crate) unsafe fn emit_text(
+    text: &str,
+    out: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> i32 {
     if out_len.is_null() {
         return QYRO_ERR_NULL_OUT;
     }

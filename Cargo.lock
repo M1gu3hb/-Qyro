@@ -439,6 +439,7 @@ dependencies = [
  "qyro_manifest",
  "qyro_net",
  "qyro_transfer",
+ "qyro_win_dpapi",
  "zeroize",
 ]
 
@@ -448,6 +449,7 @@ version = "0.0.1"
 dependencies = [
  "qyro_crypto",
  "qyro_identity_store",
+ "qyro_session",
  "qyro_win_dpapi",
 ]
 

@@ -268,7 +268,7 @@ fn qyro_session_re_exports_nothing_it_does_not_own() {
 /// rather than claims. It is kept because a set that changes without anyone
 /// noticing is how a dependency arrives unexamined, and it is documented as a
 /// changelog so nobody mistakes it for the guard it replaced.
-const CLOSURE: [&str; 68] = [
+const CLOSURE: [&str; 69] = [
     "aead",
     "block-buffer",
     "cfg-if",
@@ -313,6 +313,12 @@ const CLOSURE: [&str; 68] = [
     "qyro_protocol",
     "qyro_session",
     "qyro_transfer",
+    // ADR-0040: `qyro_session` gained a `cfg(windows)` edge to it. An edge,
+    // not a package -- its only dependencies were already in this list -- and
+    // it appears here because `dependency_closure` deliberately resolves
+    // without `--filter-platform`. This file is a changelog; this is the
+    // deliberate update it exists for.
+    "qyro_win_dpapi",
     "r-efi",
     "rand_core",
     "rustc_version",

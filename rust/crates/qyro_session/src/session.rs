@@ -357,9 +357,9 @@ impl Session {
             paths.insert(item_id, file.source.clone());
         }
 
-        let identity = new_identity()?;
+        let identity = crate::identity::current()?;
         let stream = dial(address).map_err(|error| net_error(&error))?;
-        let established = initiate(stream, &identity).map_err(|error| net_error(&error))?;
+        let established = initiate(stream, identity).map_err(|error| net_error(&error))?;
         let peer_identity = established.peer_identity().clone();
         let (stream, sealer, opener) = established.into_parts();
 
@@ -436,9 +436,9 @@ impl Session {
             .sum();
         let handles = descriptors_by_item(planned);
 
-        let identity = new_identity()?;
+        let identity = crate::identity::current()?;
         let stream = dial(address).map_err(|error| net_error(&error))?;
-        let established = initiate(stream, &identity).map_err(|error| net_error(&error))?;
+        let established = initiate(stream, identity).map_err(|error| net_error(&error))?;
         let peer_identity = established.peer_identity().clone();
         let (stream, sealer, opener) = established.into_parts();
 
@@ -483,9 +483,9 @@ impl Session {
         observer: Option<ProgressObserver>,
     ) -> Result<Self, SessionError> {
         let listener = Listener::bind(bind).map_err(|_| SessionError::BadArgument)?;
-        let identity = new_identity()?;
+        let identity = crate::identity::current()?;
         let accepted = listener.accept().map_err(|error| net_error(&error))?;
-        let established = respond(accepted, &identity).map_err(|error| net_error(&error))?;
+        let established = respond(accepted, identity).map_err(|error| net_error(&error))?;
         let peer_identity = established.peer_identity().clone();
         let (stream, sealer, opener) = established.into_parts();
 
@@ -843,16 +843,6 @@ impl Session {
         }
         Ok(materialised)
     }
-}
-
-/// A fresh device identity for one session.
-///
-/// Deliberately not exposed and deliberately not a parameter: an identity is a
-/// `qyro_crypto` type, and letting one cross this crate's public surface is
-/// exactly what ADR-0032 Ã‚Â§2 bounds. Persistent identity arrives in phase 06
-/// through the platform stores, still on this side of the boundary.
-fn new_identity() -> Result<qyro_crypto::DeviceIdentity, SessionError> {
-    qyro_crypto::DeviceIdentity::generate().map_err(|_| SessionError::NotAuthenticated)
 }
 
 /// The emission budget, pinned rather than bounded.

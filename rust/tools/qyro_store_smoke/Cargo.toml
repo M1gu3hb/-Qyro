@@ -10,6 +10,10 @@ publish = false
 [dependencies]
 qyro_crypto = { path = "../../crates/qyro_crypto" }
 qyro_identity_store = { path = "../../crates/qyro_identity_store" }
+# ADR-0040. The `session-open` command goes through the engine, which is the
+# thing the old evidence did not do: it drove `qyro_win_dpapi` directly and so
+# proved DPAPI rather than the product.
+qyro_session = { path = "../../crates/qyro_session" }
 
 [target.'cfg(windows)'.dependencies]
 qyro_win_dpapi = { path = "../../crates/qyro_win_dpapi" }

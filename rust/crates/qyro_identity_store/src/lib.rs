@@ -38,6 +38,7 @@ mod blob;
 mod error;
 mod known_peer_types;
 mod known_peers;
+mod sandbox;
 
 #[cfg(test)]
 mod guards;
@@ -51,6 +52,7 @@ pub use known_peers::{
     MAX_PEER_NAME_LEN, MAX_WRAPPED_KNOWN_PEERS_LEN, PeerCandidate, decide_trust, open_known_peers,
     seal_known_peers,
 };
+pub use sandbox::SandboxWrapper;
 
 use qyro_crypto::{DeviceIdentity, IdentitySecret, SEED_LEN};
 use zeroize::Zeroizing;

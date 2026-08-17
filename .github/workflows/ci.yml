@@ -49,6 +49,40 @@ jobs:
       # `cfg(test)` and crate-private, so they no longer need a feature flag and
       # can no longer be skipped by running the default set.
       - run: cargo test --workspace
+      # ADR-0040, and the one step that fails on every commit before phase 11.
+      #
+      # Two **separate processes** open the same identity file through
+      # `qyro_session` -- the path the application takes -- and the second is
+      # handed the first's fingerprint to compare. Two calls inside one process
+      # share a `OnceLock` and prove nothing; the defect was that the second
+      # *process* minted a new key.
+      #
+      # Not the same as the `windows-crypto` step that already existed: that one
+      # drives `qyro_win_dpapi` directly, so it proved DPAPI round-trips and
+      # never touched the engine. That is exactly how the product shipped for
+      # five phases with no identity at all while the evidence looked green.
+      - name: An identity survives a process, through the engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          store="$(mktemp -d)/identity.qyro"
+          smoke=target/debug/qyro_store_smoke
+          cargo build --locked --package qyro_store_smoke
+          first="$($smoke session-open "$store")"
+          echo "process 1: $first"
+          second="$($smoke session-open "$store" "$first")"
+          echo "process 2: $second"
+          # And the control, so a step that compares a value with itself cannot
+          # pass: a different store must give a different identity, and the
+          # comparison must notice.
+          other="$(mktemp -d)/identity.qyro"
+          different="$($smoke session-open "$other")"
+          test "$different" != "$first"
+          if $smoke session-open "$other" "$first"; then
+            echo "[FAIL] the comparison did not notice a different identity" >&2
+            exit 1
+          fi
+          echo "[PASS] one identity per store, across processes, through qyro_session"
       # qyro_fs has one opt-in feature for the privileged Windows reparse-point
       # fixture. This line covers its Unix build; the matrix job below executes
       # the Windows side on a runner that can create the link.

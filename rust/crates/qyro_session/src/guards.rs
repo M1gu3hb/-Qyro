@@ -22,10 +22,16 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 5] = [
+const PRODUCTION_FILES: [&str; 6] = [
     "lib.rs",
     "bridged_wrapper.rs",
     "error.rs",
+    // ADR-0040. Both guards demanded it the moment the file existed: the
+    // production-list guard because it compiles into a release, and the
+    // construction-site guard because `SessionError::IdentityUnreadable` is
+    // produced here and nowhere else, so without this line the variant looked
+    // like one nothing can reach.
+    "identity.rs",
     "session.rs",
     "trust.rs",
 ];
@@ -46,7 +52,7 @@ fn every_session_error_has_a_construction_site() {
         &PRODUCTION_FILES,
         "error.rs",
         "SessionError",
-        6,
+        7,
         &[],
     );
 }
