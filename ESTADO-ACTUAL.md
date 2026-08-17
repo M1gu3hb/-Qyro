@@ -15,6 +15,34 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
+**Fase 15 — HECHA.** Informe en `docs/reports/fase-15-canal-optico.md`, puerta
+corrida en `dc993d3`.
+
+| Commit | Qué |
+|---|---|
+| `3633ec0` | `qyro_fountain`: Luby Transform, cero dependencias, generador congelado porque es formato de cable |
+| `0125f2e` | `qyro qr` y `qyro beam`: medios bloques, invertido a propósito, 5 FPS |
+| `dc993d3` | La vuelta completa: un decodificador real lee lo que dibuja la terminal |
+| `ab947ab` | El informe |
+
+**Lo que corrigió el uso y no el diseño:** el consejo de tamaño mentía (decía 37
+columnas para un código de 41 — un consejo corto es peor que ninguno); un archivo
+de 51 bytes dibujaba una v27 entera, el código más difícil de escanear para el
+payload más pequeño; y `DrawError` no se ganaba el sueldo, porque su único
+consumidor lo imprimía con `{:?}` y «TooLong» le llegaba a una persona como la
+palabra TooLong.
+
+**El receptor de CI se hizo, y no como estaba planteado.** No un directorio de
+imágenes: rasterizando en memoria, con `rqrr` de dev-dependency. Un fixture
+caduca y falla como «se rompió el renderizador»; esto dibuja lo que dibuja
+`qyro beam`, en el momento, y lo vuelve a leer. `zune-jpeg` no hizo falta y la
+trampa del MJPEG sin DHT no llega a existir.
+
+**Coste medido:** +67 KB en el binario (1 306 624 → 1 373 696). `rqrr` no pone
+ninguno: no viaja.
+
+---
+
 **Fase 14 — HECHA.** Informe en `docs/reports/fase-14-sin-router.md`, puerta
 corrida en `07278ff`, el commit que el informe nombra.
 
@@ -45,18 +73,10 @@ corrida en `07278ff`, el commit que el informe nombra.
 ## 2. Lo siguiente, en orden
 
 ```
-15 → 16 → 21 → 22 → 17 → 18 → 19 → 20 → 23
+16 → 21 → 22 → 17 → 18 → 19 → 20 → 23
 ```
 
-- **15 — canal óptico.** ADR-0044 congelada, **cero código**. Códec fuente LT +
-  render de QR en terminal con medios bloques (cp437 `0xDB`/`0xDF`/`0xDC`).
-  Receptor de CI = **un directorio de imágenes**, no una webcam: ADR-0044 §6
-  sigue en pie —el CLI dibuja, el teléfono lee— y `R9` lo cerró. Dependencias ya
-  pre-autorizadas: `qrcode`, `rqrr`, `ur`, `zune-jpeg`.
-  **Trampa medida, no la vuelvas a descubrir:** MJPEG de V4L2 llega sin DHT y los
-  decodificadores puros sólo lo arreglan cuando ven un marcador `AVI1` que V4L2
-  no emite.
-- **16 — canal serie.** Sin abrir.
+- **16 — canal serie.** Sin abrir. **Es lo siguiente.**
 - **21 — las dos caras se hablan.** GUI ↔ CLI. Hoy nadie las ha puesto una
   contra la otra ni una vez.
 - **22 — lo que la gente hace de verdad.** Carpetas, tamaño, interrupción.
@@ -69,6 +89,13 @@ corrida en `07278ff`, el commit que el informe nombra.
   máquinas. Que dos aparatos se encuentren por un cable **no está verificado**.
 - **`NsdManager` no está ejercitado.** Las pruebas Dart usan un `MethodChannel`
   falso: prueban el lado Dart, no Android.
+- **Ninguna cámara ha leído un QR de Qyro.** La vuelta completa la hace un
+  decodificador sobre píxeles perfectos. Desenfoque, obturador rodante, moiré,
+  brillo y pantalla en ángulo son fase 19.
+- **El teléfono no acumula frames todavía.** El motor los produce y son legibles;
+  el lado Android que los junta no existe.
+- **La reanudación del canal óptico no existe** (D11). ADR-0044 §5 la exige para
+  sesiones largas; el límite de 20 MB es lo que hoy impide llegar a una.
 - **La GUI de escritorio no tiene descubrimiento.** No hay símbolo en la
   frontera C. Lo dice con una frase, no con una lista vacía.
 - El binario **no arranca en Windows 7** (`api-ms-win-core-synch-l1-2-0.dll`,
