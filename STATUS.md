@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-16T00:00:00Z
+- Updated UTC: 2026-08-16T12:00:00Z
 - Branch: claude/qyro-net-6a
-- Verified commit: 63f4ca23b8dd3b879accda1f4e0c269771c79598
+- Verified commit: 813eb95d96e4864a27b4299cf5d79e0e8ad3f7d7
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -19,6 +19,32 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   esta máquina por el Modo Desarrollador (QYR-0324). Dos procesos en
   `127.0.0.1` no son dos aparatos en una red. Los veinte escenarios que cierran
   ese hueco están escritos y **sin marcar** en `docs/testing/hardware-protocol.md`
+
+### Fase 11 — CERRADA. La identidad, y lo que costó no tenerla
+
+Informe: `docs/reports/fase-11-la-identidad.md`. Decisión: ADR-0040.
+
+**La aplicación no tenía identidad estable.** Los tres constructores de `Session`
+llamaban a `DeviceIdentity::generate()` sin condición, así que cada transferencia
+estrenaba un par de claves — y con eso ni la comparación de huella ni el código
+de emparejamiento funcionaban. El mecanismo, el formato y el backend DPAPI eran
+reales y nada los unía (QYR-0353, P0).
+
+**La evidencia que lo ocultó cinco fases** era el paso «Persist an identity
+across two separate process invocations», que ejecuta un arnés marcado «Never
+shipped» y no pasa por `qyro_session` ni por `qyro_ffi`.
+
+**Lo que existe ahora:** una identidad por proceso, cargada de un archivo que el
+llamante nombra, que **nunca se regenera** si el blob no abre; tres símbolos
+nuevos; Dart la abre antes de cualquier sesión, enseña su huella y pregunta al
+libro. Y el paso de CI «An identity survives a process, through the engine», que
+falla en cualquier commit anterior.
+
+**Keystore está descartado para la v1.0** con argumento (QYR-0354): el mecanismo
+de ADR-0037 no es implementable y el que sí funciona necesita un shim JNI que
+nadie puede validar aquí. Android guarda la semilla sin envolver, bajo el sandbox
+por UID, y `THREAT_MODEL.md` lo dice con estas palabras: **con Keystore, root
+necesita además el TEE; sin él, root basta.**
 
 ### v1.0 — qué es y qué no es
 
