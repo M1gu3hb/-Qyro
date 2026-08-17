@@ -151,6 +151,48 @@ enum QyroFailureKind {
 
 /// Everything a screen may ask of the engine.
 ///
+/// The port a Qyro receiver listens on, unless a person names another.
+///
+/// ADR-0041 §3. From IANA's **Dynamic/Private** range, 49152-65535, which IANA
+/// states it never assigns to a registered service -- so this cannot collide by
+/// registration with anything, only by coincidence with another program that
+/// also picked at random.
+///
+/// **Fixed rather than ephemeral, and the reason is the firewall.** Windows
+/// blocks inbound by default and a gateway-less link -- the direct cable of
+/// phase 14 -- is classified Public, the most restrictive profile (R8 §9). The
+/// permission is granted **once per program and port**: with a fixed port a
+/// person authorises Qyro once and never sees the dialog again; with an
+/// ephemeral port it returns every session, on the machine where it is least
+/// welcome.
+///
+/// It also makes the pairing string predictable, which is what lets it be
+/// composed **before** the socket is bound -- and that is what dissolves
+/// QYR-0322 instead of answering it.
+const int qyroDefaultPort = 49517;
+
+/// One address this device could be reached at, with the interface it belongs to.
+///
+/// ADR-0041 §4. A device has several addresses and guessing produces a code
+/// that does not work and does not say why, so every candidate is shown with
+/// its interface name and a person picks the one whose network they are on.
+final class QyroListenAddress {
+  const QyroListenAddress({
+    required this.interfaceName,
+    required this.address,
+    required this.pairingString,
+  });
+
+  /// What the operating system calls the interface: `Wi-Fi`, `wlan0`, `eth0`.
+  final String interfaceName;
+
+  /// `host:port`, the literal that goes on the wire.
+  final String address;
+
+  /// The whole `QYRO1|host:port|fingerprint`, ready to read out or type in.
+  final String pairingString;
+}
+
 /// Every method is `Future` or `Stream` even where a real implementation could
 /// answer at once: the real one crosses an isolate, and a signature that is
 /// synchronous for the fake and asynchronous for production is a signature that
@@ -166,7 +208,21 @@ abstract interface class QyroTransferService {
   Future<String?> addressOfPairingString(String text);
 
   /// The pairing string this device would show, or null before it has one.
+  ///
+  /// Null until this device is listening. ADR-0035 §2: a code that names no
+  /// listener is a code that does not work, and showing one is worse than
+  /// showing none. Until phase 12 this returned null **always**, because the
+  /// address half was read from a field nothing ever assigned (QYR-0322).
   Future<String?> ownPairingString();
+
+  /// Every address this device could be reached at, ready to read aloud.
+  ///
+  /// ADR-0041 §4. Composed from the enumerated interfaces and
+  /// [qyroDefaultPort], so it answers **before** anything is bound and before
+  /// any peer connects. Empty when this device has no usable address -- which
+  /// is a real state on a machine still waiting for APIPA (R8 §8) and is shown
+  /// as itself rather than as an empty list of nothing.
+  Future<List<QyroListenAddress>> listenCandidates();
 
   /// Opens the system picker.
   Future<List<QyroPicked>> pickFiles();

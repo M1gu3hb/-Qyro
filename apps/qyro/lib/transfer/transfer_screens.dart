@@ -400,6 +400,27 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   QyroTransferState _state = const QyroIdle();
   QyroAwaitingDecision? _offer;
 
+  /// The codes the other device has to be given.
+  ///
+  /// QYR-0322, and this is the visible half of the fix. They are loaded when
+  /// the screen opens, **before** anything is bound and before any peer
+  /// connects, because the port is known in advance (ADR-0041 §3). Until phase
+  /// 12 this screen showed nothing at all and the peers screen said "no code to
+  /// show", while the other device's screen asked for that very code.
+  List<QyroListenAddress> _candidates = const <QyroListenAddress>[];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCandidates());
+  }
+
+  Future<void> _loadCandidates() async {
+    final found = await widget.service.listenCandidates();
+    if (!mounted) return;
+    setState(() => _candidates = found);
+  }
+
   /// Asked before a single byte is accepted.
   ///
   /// ADR-0036 §1: **nothing is accepted on its own.** This completer is
@@ -419,7 +440,11 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
 
   Future<void> _listen() async {
     final stream = widget.service.receive(
-      bind: '0.0.0.0:0',
+      // ADR-0041 §3. Not `:0`: an ephemeral port is a port nobody can compose
+      // into a code before the socket exists, and it costs a firewall dialog
+      // every session. `0.0.0.0` and not one interface, because the person may
+      // be reached on any of them and the code names which one (§4).
+      bind: '0.0.0.0:$qyroDefaultPort',
       destination: '',
       decide: _decide,
     );
@@ -454,6 +479,48 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           icon: const Icon(Icons.download),
           label: Text(strings.receiveStart),
         ),
+        const SizedBox(height: 16),
+        Text(
+          strings.receiveYourCode,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        if (_candidates.isEmpty)
+          // A real state, not an empty list rendered as nothing: a machine
+          // still waiting for APIPA has no address for tens of seconds
+          // (R8 §8), and saying so beats a blank space.
+          Text(
+            strings.receiveNoAddress,
+            key: const Key('receive-no-address'),
+          )
+        else ...<Widget>[
+          if (_candidates.length > 1)
+            // ADR-0041 §4: several addresses means the person picks, because
+            // they know which network they are on and this program does not.
+            Text(
+              strings.receiveSeveralAddresses,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ..._candidates.map(
+            (candidate) => Padding(
+              key: Key('receive-code-${candidate.interfaceName}'),
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    candidate.interfaceName,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  SelectableText(
+                    candidate.pairingString,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         if (offer != null)
           OfferCard(

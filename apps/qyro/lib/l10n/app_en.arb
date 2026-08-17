@@ -416,5 +416,17 @@
   "fingerprintCompare": "Read this out loud and check it matches the other device.",
   "@fingerprintCompare": {
     "description": "Transfer interface string: fingerprintCompare."
+  },
+  "receiveYourCode": "This device's pairing code",
+  "@receiveYourCode": {
+    "description": "Receive screen string: receiveYourCode."
+  },
+  "receiveNoAddress": "This device has no network address yet. On a direct cable this can take up to a minute.",
+  "@receiveNoAddress": {
+    "description": "Receive screen string: receiveNoAddress."
+  },
+  "receiveSeveralAddresses": "Several networks. Use the one the other device is on.",
+  "@receiveSeveralAddresses": {
+    "description": "Receive screen string: receiveSeveralAddresses."
   }
 }

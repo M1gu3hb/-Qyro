@@ -89,5 +89,8 @@
   "commonCancel": "Cancelar",
   "commonClose": "Cerrar",
   "commonRetry": "Reintentar",
-  "fingerprintCompare": "Léela en voz alta y comprueba que coincide con la del otro aparato."
+  "fingerprintCompare": "Léela en voz alta y comprueba que coincide con la del otro aparato.",
+  "receiveYourCode": "El código de emparejamiento de este aparato",
+  "receiveNoAddress": "Este aparato todavía no tiene dirección de red. Con un cable directo esto puede tardar hasta un minuto.",
+  "receiveSeveralAddresses": "Varias redes. Usa la que tenga el otro aparato."
 }

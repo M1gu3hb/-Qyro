@@ -16,6 +16,17 @@ import 'package:qyro/ffi/qyro_session_api.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 import 'package:qyro/transfer/transfer_service.dart';
 
+/// The worker's way of saying "the person here said no".
+///
+/// Distinct from every `QyroCode`, because an isolate returns one integer
+/// and a refusal is not a transport failure. Negative and far from the
+/// engine's own codes so a collision would be a compile-time-visible
+/// accident rather than a silent remapping.
+const int _receiveRefusedByMe = -1001;
+
+/// The worker's way of saying "it finished and did not verify".
+const int _receiveIntegrity = -1002;
+
 /// Where received files land.
 ///
 /// ADR-0034 §4: the app's own directory on Android and `Downloads/Qyro` on
@@ -126,22 +137,6 @@ final class NativeTransferService implements QyroTransferService {
   @override
   Future<bool> forgetPeer(String name) async => _trust.forgetPeer(name);
 
-  /// What the book says about the peer on the other end of [session].
-  ///
-  /// Keyed by the fingerprint, because the peers screen has no other name for a
-  /// device nobody has named yet, and a verdict under a name the person never
-  /// chose would be a verdict about the wrong thing. Once they name it,
-  /// `rememberPeer` records it under that name and the next verdict is about the
-  /// name they chose.
-  QyroPeerTrust _verdictFor(QyroSession session, String fingerprint) {
-    try {
-      return _trust.peerTrust(session, fingerprint);
-    } on QyroSessionFailure {
-      // A book that cannot answer is not a reason to claim the peer is known.
-      return QyroPeerTrust.newPeer;
-    }
-  }
-
   @override
   Future<String?> addressOfPairingString(String text) async =>
       _trust.addressOfPairingString(text);
@@ -174,7 +169,56 @@ final class NativeTransferService implements QyroTransferService {
   }
 
   /// Where this device is listening, while it is.
+  ///
+  /// **QYR-0322.** This field was read and never written -- two occurrences in
+  /// the whole tree and neither an assignment -- so `ownPairingString()`
+  /// answered null for every transfer the product ever attempted. It is
+  /// assigned now, in [receive], **before** the blocking open, because the
+  /// whole point is that the code exists while somebody is still typing it.
   String? _listeningAddress;
+
+  /// Every address this device could be reached at.
+  ///
+  /// ADR-0041 §4. Loopback is excluded because a code naming it works only
+  /// against oneself; IPv6 link-local is excluded because its zone-id is local
+  /// to the node and does not travel (RFC 4007), so it would be a datum that
+  /// means something else on the machine that types it. Virtual adapters --
+  /// Hyper-V, VirtualBox, WSL, VPN -- are **not** excluded: filtering them
+  /// needs a per-OS list of adapter names, exactly the kind of heuristic that
+  /// ages badly and that this project has paid for twice. Every candidate is
+  /// shown with its interface name and a person decides.
+  @override
+  Future<List<QyroListenAddress>> listenCandidates() async {
+    final fingerprint = ownFingerprint();
+    if (fingerprint == null) {
+      return const <QyroListenAddress>[];
+    }
+    final compact = fingerprint.replaceAll('-', '');
+
+    final interfaces = await NetworkInterface.list(
+      includeLoopback: false,
+      includeLinkLocal: false,
+      type: InternetAddressType.IPv4,
+    );
+
+    final candidates = <QyroListenAddress>[];
+    for (final interface in interfaces) {
+      for (final address in interface.addresses) {
+        // Belt and braces: `includeLoopback: false` is documented, and a code
+        // naming 127.0.0.1 is the single most useless thing this could emit.
+        if (address.isLoopback) continue;
+        final where = '${address.address}:$qyroDefaultPort';
+        candidates.add(
+          QyroListenAddress(
+            interfaceName: interface.name,
+            address: where,
+            pairingString: 'QYRO1|$where|$compact',
+          ),
+        );
+      }
+    }
+    return List<QyroListenAddress>.unmodifiable(candidates);
+  }
 
   @override
   Future<List<QyroPicked>> pickFiles() => pickerForPlatform().pickFiles();
@@ -313,11 +357,74 @@ final class NativeTransferService implements QyroTransferService {
   }) async* {
     final where = destination.isEmpty ? defaultDestination() : destination;
     Directory(where).createSync(recursive: true);
+
+    // QYR-0322, and this is the whole fix. `QyroSession.receive` binds and
+    // accepts inside one call and does not return until a peer connects, so
+    // anything recorded *after* it is recorded too late to be typed into
+    // another machine. The port is known in advance (ADR-0041 §3), so the
+    // address is known in advance too, and it is written down here -- before
+    // the blocking open -- which is what makes `ownPairingString()` answer
+    // while somebody is still reading the code aloud.
+    final candidates = await listenCandidates();
+    _listeningAddress =
+        candidates.isEmpty ? _hostPortOf(bind) : candidates.first.address;
+
     yield const QyroConnecting();
 
-    try {
+    // **The session runs in a worker isolate, and it is not optional.**
+    //
+    // `QyroSession.receive` binds *and* accepts inside one call and does not
+    // return until a peer connects (ADR-0032 §7: a `_blocking` symbol may not
+    // run where frames are drawn). Until phase 12 this ran right here, on the
+    // isolate that draws the interface, so tapping Recibir froze the whole
+    // application -- no repaint, no navigation, no cancel -- until somebody
+    // connected or the process was killed. The send path had used
+    // `Isolate.run` since phase 02; this one never did, and the file header
+    // claimed otherwise.
+    //
+    // What crosses, and nothing else: integers, text, and one boolean back.
+    // No `Pointer` is ever sent, because an address in one isolate's view
+    // means nothing in another's.
+    final library = _libraryOverride();
+    final events = ReceivePort();
+    final sink = events.sendPort;
+    final states = StreamController<QyroTransferState>();
+    SendPort? answerTo;
+
+    events.listen((message) async {
+      if (message is! List || message.isEmpty) return;
+      switch (message[0] as String) {
+        case 'offer':
+          answerTo = message[4] as SendPort;
+          final offer = QyroAwaitingDecision(
+            fingerprint: message[1] as String,
+            trust: QyroPeerTrust.values[message[2] as int],
+            fileNames: const <String>[],
+            totalBytes: message[3] as int,
+          );
+          states.add(offer);
+          // The decision is asked on **this** isolate, which is the one with a
+          // person attached to it, and the answer is the only thing that goes
+          // back. ADR-0036 §1: nothing is accepted on its own.
+          answerTo?.send(await decide(offer));
+        case 'moving':
+          states.add(
+            QyroMoving(
+              done: message[1] as int,
+              total: message[2] as int,
+              fingerprint: message[3] as String,
+            ),
+          );
+      }
+    });
+
+    final outcome = Isolate.run<int>(() async {
+      final bindings = library == null
+          ? QyroSessionBindings.openDefault()
+          : QyroSessionBindings.open(library);
+      final trust = QyroTrustBindings(bindings, bindings.library);
       final session = QyroSession.receive(
-        bindings: _bindings,
+        bindings: bindings,
         bind: bind,
         destination: where,
       );
@@ -329,42 +436,89 @@ final class NativeTransferService implements QyroTransferService {
         // The real verdict, not a hardcoded `newPeer`. With ADR-0040 the
         // fingerprint on the other end is stable between transfers, so
         // `Changed` finally means what ADR-0031 says it means.
-        final fingerprint = _trust.peerFingerprint(session);
-        final offer = QyroAwaitingDecision(
-          fingerprint: fingerprint,
-          trust: _verdictFor(session, fingerprint),
-          fileNames: const <String>[],
-          totalBytes: progress.total,
-        );
-        yield offer;
+        final fingerprint = trust.peerFingerprint(session);
+        // Keyed by the fingerprint, because the peers screen has no other name
+        // for a device nobody has named yet, and a verdict under a name the
+        // person never chose would be a verdict about the wrong thing. A book
+        // that cannot answer is **not** a reason to claim the peer is known.
+        QyroPeerTrust verdict;
+        try {
+          verdict = trust.peerTrust(session, fingerprint);
+        } on QyroSessionFailure {
+          // A book that cannot answer is not a reason to claim the peer is
+          // known. `newPeer` makes the screen ask, which is the safe end of
+          // the mistake.
+          verdict = QyroPeerTrust.newPeer;
+        }
 
-        if (!await decide(offer)) {
-          _trust.reject(session, QyroRejectReason.declined);
-          yield const QyroFailed(kind: QyroFailureKind.refusedByMe);
-          return;
+        // The worker is **not** inside a blocking call at this point, which is
+        // the only reason it can wait for an answer at all.
+        final answer = ReceivePort();
+        sink.send(<Object>[
+          'offer',
+          fingerprint,
+          verdict.index,
+          progress.total,
+          answer.sendPort,
+        ]);
+        final accepted = await answer.first as bool;
+        answer.close();
+
+        if (!accepted) {
+          trust.reject(session, QyroRejectReason.declined);
+          return _receiveRefusedByMe;
         }
 
         var state = QyroSessionState.inProgress;
         while (state == QyroSessionState.inProgress) {
           state = session.stepBlocking();
           final now = session.progress();
-          yield QyroMoving(
-            done: now.done,
-            total: now.total,
-            fingerprint: offer.fingerprint,
-          );
-          await Future<void>.delayed(Duration.zero);
+          sink.send(<Object>['moving', now.done, now.total, fingerprint]);
         }
-        if (state == QyroSessionState.completed) {
-          yield QyroDelivered(fileCount: 1, destination: where);
-        } else {
-          yield const QyroFailed(kind: QyroFailureKind.integrity);
-        }
+        return state == QyroSessionState.completed ? 0 : _receiveIntegrity;
+      } on QyroSessionFailure catch (failure) {
+        return failure.code;
       } finally {
         session.dispose();
       }
-    } on QyroSessionFailure catch (failure) {
-      yield QyroFailed(kind: _kindOf(failure.code));
+    });
+
+    yield* _drainReceive(states.stream, outcome, where);
+    await states.close();
+    events.close();
+  }
+
+  /// Interleaves the worker's states with its ending.
+  Stream<QyroTransferState> _drainReceive(
+    Stream<QyroTransferState> states,
+    Future<int> outcome,
+    String destination,
+  ) async* {
+    final buffered = StreamController<QyroTransferState>();
+    final subscription = states.listen(buffered.add);
+    try {
+      final pending = <QyroTransferState>[];
+      final reader = buffered.stream.listen(pending.add);
+      var code = 0;
+      try {
+        code = await outcome;
+      } on QyroSessionFailure catch (failure) {
+        code = failure.code;
+      }
+      await reader.cancel();
+      for (final state in pending) {
+        yield state;
+      }
+      yield switch (code) {
+        0 => QyroDelivered(fileCount: 1, destination: destination),
+        _receiveRefusedByMe =>
+          const QyroFailed(kind: QyroFailureKind.refusedByMe),
+        _receiveIntegrity => const QyroFailed(kind: QyroFailureKind.integrity),
+        _ => QyroFailed(kind: _kindOf(code)),
+      };
+    } finally {
+      await subscription.cancel();
+      await buffered.close();
     }
   }
 
@@ -406,4 +560,18 @@ final class NativeTransferService implements QyroTransferService {
     }
     return prefix.isEmpty ? separator : prefix.join(separator);
   }
+}
+
+/// The `host:port` a bind string names, when nothing better is available.
+///
+/// Used only when interface enumeration comes back empty -- a real state on a
+/// machine still waiting for APIPA (R8 §8). A wildcard host is rewritten to
+/// loopback rather than left as `0.0.0.0`, because a code that says `0.0.0.0`
+/// is a code that cannot be typed anywhere, and loopback at least says plainly
+/// that this device is only reachable from itself right now.
+String _hostPortOf(String bind) {
+  if (bind.startsWith('0.0.0.0:')) {
+    return '127.0.0.1:${bind.substring('0.0.0.0:'.length)}';
+  }
+  return bind;
 }

@@ -15,11 +15,24 @@ import 'package:qyro/transfer/transfer_screens.dart';
 import 'package:qyro/transfer/transfer_service.dart';
 
 /// A service that answers whatever a test tells it to.
+///
+/// **What this fake can and cannot show, because it already fooled this
+/// project once.** It drives every ugly state of the four screens without a
+/// socket, which is what it is for and what it does well. What it cannot do is
+/// tell a *measured* value from a constant a test wrote next to the assertion:
+/// `ownPairingString()` here returns whatever `ownCode` says, so
+/// "the screen shows the code" passed for months while the production service
+/// returned null for every transfer the product ever attempted (QYR-0322).
+///
+/// Anything that has to be **measured** rather than displayed belongs in
+/// `test/transfer/native_transfer_service_test.dart` against the production
+/// class, or in the two-process test. This file tests rendering.
 final class FakeService implements QyroTransferService {
   FakeService({
     this.peers = const <QyroPeerEntry>[],
     this.pairingAddress,
     this.ownCode,
+    this.candidates = const <QyroListenAddress>[],
     this.picked = const <QyroPicked>[],
     this.states = const <QyroTransferState>[],
     this.entries = const <QyroHistoryEntry>[],
@@ -28,6 +41,7 @@ final class FakeService implements QyroTransferService {
   List<QyroPeerEntry> peers;
   String? pairingAddress;
   String? ownCode;
+  List<QyroListenAddress> candidates;
   List<QyroPicked> picked;
   List<QyroTransferState> states;
   List<QyroHistoryEntry> entries;
@@ -48,6 +62,9 @@ final class FakeService implements QyroTransferService {
 
   @override
   Future<String?> ownPairingString() async => ownCode;
+
+  @override
+  Future<List<QyroListenAddress>> listenCandidates() async => candidates;
 
   @override
   Future<List<QyroPicked>> pickFiles() async => picked;

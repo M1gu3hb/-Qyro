@@ -4004,3 +4004,34 @@
 - Fecha: 2026-08-16
 - Evidencia: run 31993870492, job `windows`, paso «Package, verify and hash the
   portable ZIP»
+
+## QYR-0356 — La pantalla de recibir congelaba la aplicación entera
+
+- Plataforma: Android, Windows;
+  `apps/qyro/lib/transfer/native_transfer_service.dart`
+- Severidad: P0
+- Esperado: pulsar Recibir deja la interfaz viva mientras se espera a un peer
+- Actual: `receive()` llamaba a `QyroSession.receive` **en el isolate que dibuja
+  la interfaz**. Ese constructor liga y acepta dentro de la misma llamada y no
+  vuelve hasta que alguien se conecta, así que la aplicación se quedaba
+  congelada —sin repintar, sin navegar, sin cancelar— hasta que llegara un peer
+  o alguien matara el proceso
+- **Viola ADR-0032 §7 por escrito:** un símbolo `_blocking` no corre donde se
+  dibujan fotogramas. El camino de enviar usa `Isolate.run` desde la fase 02; el
+  de recibir no lo usó nunca, y **la cabecera del propio archivo afirmaba que
+  sí**: «the whole session — open, step to its ending, close — runs inside
+  `Isolate.run`»
+- **Cómo se encontró, y es lo que importa:** la prueba de regresión de QYR-0322
+  se colgó 3 m 54 s. El interbloqueo era exacto — el isolate principal bloqueado
+  dentro del FFI, así que el `Future.delayed` no disparaba nunca y el socket que
+  habría desbloqueado al oyente no llegaba a abrirse. **La prueba no podía pasar
+  hasta que el producto estuviera bien**, que es el sentido correcto
+- Arreglo: la sesión entera se muda a un worker. Cruzan enteros, texto y un
+  booleano de vuelta; ningún puntero, porque una dirección en la vista de un
+  isolate no significa nada en la de otro. La decisión se pregunta en el isolate
+  que tiene una persona delante y el worker la espera **fuera** de toda llamada
+  bloqueante, que es la única razón por la que puede esperarla
+- Estado: cerrado
+- Dueño: interfaz
+- Fecha: 2026-08-17
+- Evidencia: `flutter test` con la biblioteca real, 104 pasadas, 0 saltadas
