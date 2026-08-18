@@ -71,6 +71,10 @@ enum Command {
     Beam {
         file: String,
     },
+    /// Which way to send it, decided by the engine (ADR-0046 §4).
+    How {
+        file: Option<String>,
+    },
     /// The serial channel: ports, and the receiver to paste into the old machine.
     Serial {
         port: Option<String>,
@@ -108,6 +112,9 @@ fn parse(args: &[String]) -> Command {
         "whoami" => Command::WhoAmI,
         "find" => Command::Find,
         "qr" => Command::Qr,
+        "how" => Command::How {
+            file: args.get(1).cloned(),
+        },
         "serial" => Command::Serial {
             port: flag(args, "--port"),
         },
@@ -189,6 +196,7 @@ fn run(command: Command, vt: Vt) -> i32 {
         Command::Find => flows::find(vt),
         Command::Qr => flows::qr(vt),
         Command::Beam { file } => flows::beam(&file, vt),
+        Command::How { file } => flows::how(file.as_deref(), vt),
         Command::Serial { port } => serial::overview(port.as_deref(), vt),
         Command::SerialSend { file, port } => serial::send(&file, &port, vt),
         Command::SerialReceive { port, out } => serial::receive(&port, &out),

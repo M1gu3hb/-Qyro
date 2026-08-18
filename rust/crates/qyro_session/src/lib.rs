@@ -40,6 +40,7 @@
     clippy::indexing_slicing
 )]
 
+mod advisor;
 mod bridged_wrapper;
 mod discovery;
 mod error;
@@ -51,6 +52,9 @@ mod trust;
 #[cfg(test)]
 mod guards;
 
+pub use advisor::{
+    BORING_FIRST, Channel, Situation, advise, channels_for, plain_duration, seconds_for,
+};
 pub use bridged_wrapper::{
     BRIDGED_WRAP_ID, BridgedWrapper, DOMAIN_MISMATCH, MAX_WRAPPED_LEN, WrapFn,
 };

@@ -624,6 +624,62 @@ pub fn beam(file: &str, vt: Vt) -> i32 {
     }
 }
 
+/// `qyro how [file]` — which way to send it, decided by the engine.
+///
+/// **ADR-0046 §4: one module decides and both faces call it.** Phases 14, 15 and
+/// 16 each had something to say about which path to use, and three interfaces
+/// each inventing their own order is how a product ends up contradicting itself.
+/// Nothing here chooses anything: it establishes the facts and prints what
+/// `qyro_session::advise` returned.
+pub fn how(file: Option<&str>, vt: Vt) -> i32 {
+    let payload_len = file
+        .and_then(|path| std::fs::metadata(path).ok())
+        .map_or(1024 * 1024, |meta| meta.len());
+
+    // Facts, established here because this is the face that can see them. The
+    // decision is not made here.
+    let has_network = !local_addresses().is_empty();
+    let peer_discovered = qyro_session::browse(Duration::from_secs(2))
+        .map(|peers| !peers.is_empty())
+        .unwrap_or(false);
+    let has_serial_port = serialport::available_ports()
+        .map(|ports| !ports.is_empty())
+        .unwrap_or(false);
+
+    let situation = qyro_session::Situation {
+        has_network,
+        peer_discovered,
+        has_serial_port,
+        // This face cannot know whether the other machine has a camera, and
+        // guessing would put an option in front of somebody that may not exist.
+        // The optical channel is offered explicitly with `qyro beam`.
+        other_has_camera: false,
+        payload_len,
+    };
+
+    let (advice, channels) = qyro_session::advise(situation);
+    println!();
+    if let Some(path) = file {
+        println!(
+            "  {}{path}{} -- {payload_len} bytes",
+            vt.green(),
+            vt.reset()
+        );
+        println!();
+    }
+    for line in advice.lines() {
+        println!("  {line}");
+    }
+    if channels.is_empty() {
+        println!();
+        return 1;
+    }
+    println!();
+    println!("  If none of those work, QR codes always do: qyro beam <file>");
+    println!();
+    0
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(

@@ -22,7 +22,8 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 8] = [
+const PRODUCTION_FILES: [&str; 9] = [
+    "advisor.rs",
     "lib.rs",
     "bridged_wrapper.rs",
     "discovery.rs",
