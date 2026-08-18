@@ -25,6 +25,14 @@ use core::fmt;
 pub enum SessionError {
     /// The address, port or path the caller supplied was not usable.
     BadArgument,
+    /// More files than one transfer may carry (ADR-0047 §3).
+    ///
+    /// **Separate from `BadArgument` on purpose.** «Too many» is a number the
+    /// person can act on — pick fewer, or send in two goes — and collapsing it
+    /// into the generic refusal would produce the message this project has
+    /// already been bitten by once: an argument error printed as if the network
+    /// were at fault (QYR-0361).
+    TooManyFiles { given: usize, limit: usize },
     /// The peer could not be reached, or the wire ended.
     ///
     /// Collapses every ending in ADR-0028 §5 that means "the peer stopped".
@@ -68,6 +76,7 @@ impl fmt::Display for SessionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::BadArgument => "the address, port or path was not usable",
+            Self::TooManyFiles { .. } => "more files than one transfer can carry",
             Self::PeerUnreachable => "the peer could not be reached, or the wire ended",
             Self::NotAuthenticated => "the peer did not authenticate",
             Self::TransferRefused => "the transfer was refused",

@@ -42,7 +42,8 @@ use qyro_session::{Progress, ProgressObserver, Session, SessionError, SessionSta
 use crate::abi::{
     QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_CANCELLED, QYRO_ERR_IDENTITY_UNREADABLE,
     QYRO_ERR_NOT_AUTHENTICATED, QYRO_ERR_NULL_OUT, QYRO_ERR_PEER_UNREACHABLE, QYRO_ERR_POISONED,
-    QYRO_ERR_STORAGE_REFUSED, QYRO_ERR_TRANSFER_REFUSED, QYRO_ERR_UNKNOWN, QYRO_OK, guard,
+    QYRO_ERR_STORAGE_REFUSED, QYRO_ERR_TOO_MANY_FILES, QYRO_ERR_TRANSFER_REFUSED, QYRO_ERR_UNKNOWN,
+    QYRO_OK, guard,
 };
 use crate::handle::HandleTable;
 
@@ -79,6 +80,7 @@ fn table() -> &'static Mutex<Table> {
 pub(crate) const fn session_code(error: SessionError) -> i32 {
     match error {
         SessionError::BadArgument => QYRO_ERR_BAD_ARGUMENT,
+        SessionError::TooManyFiles { .. } => QYRO_ERR_TOO_MANY_FILES,
         SessionError::PeerUnreachable => QYRO_ERR_PEER_UNREACHABLE,
         SessionError::NotAuthenticated => QYRO_ERR_NOT_AUTHENTICATED,
         SessionError::TransferRefused => QYRO_ERR_TRANSFER_REFUSED,
@@ -864,8 +866,8 @@ mod tests {
 
         assert_eq!(
             declared.len(),
-            7,
-            "qyro_session declares {} variants, not the 7 this module translates: {declared:?}. \
+            8,
+            "qyro_session declares {} variants, not the 8 this module translates: {declared:?}. \
              Add the arm in session_code and a code in abi.rs, then update this number.",
             declared.len()
         );
@@ -874,10 +876,20 @@ mod tests {
             std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/session_abi.rs"))
                 .expect("this module is readable");
         for variant in &declared {
+            // The **name**, not the whole declaration. A struct variant is
+            // declared `TooManyFiles { given: usize, limit: usize }` and its arm
+            // is written `TooManyFiles { .. }`, so comparing the full text made
+            // this guard unsatisfiable for any variant carrying data -- which it
+            // stayed until one did. The intent was always "every variant has an
+            // arm here", and that is about the name.
+            let name = variant
+                .split([' ', '{', '('])
+                .next()
+                .unwrap_or(variant.as_str());
             assert!(
-                this_source.contains(&format!("SessionError::{variant} =>")),
-                "SessionError::{variant} has no arm here, so it would translate to \
-                 QYRO_ERR_UNKNOWN"
+                this_source.contains(&format!("SessionError::{name} =>"))
+                    || this_source.contains(&format!("SessionError::{name} {{")),
+                "SessionError::{name} has no arm here, so it would translate to                  QYRO_ERR_UNKNOWN"
             );
         }
 

@@ -284,6 +284,19 @@ pub fn parse_pairing(text: &str) -> Result<String, SessionError> {
         .map_err(|_| SessionError::BadArgument)
 }
 
+/// How many files one transfer may carry.
+///
+/// **ADR-0047 §3, and the reason is Android, not taste.** The per-process limit
+/// on open file descriptors is hard, and on Android the picker hands back
+/// **descriptors**, not paths (ADR-0034) — so a selection of a few thousand is
+/// not a slow transfer, it is an exhausted process. 256 sits far under any
+/// reasonable `RLIMIT_NOFILE` and above anything anybody picks by hand.
+///
+/// **Refused before anything is opened.** Running out of descriptors halfway
+/// arrives as a system error with a file already in flight; a counted refusal
+/// arrives before the first byte and says the number.
+pub const MAX_FILES_PER_TRANSFER: usize = 256;
+
 impl Session {
     /// Opens a sending session against `address`, naming files relative to
     /// `root`.
@@ -311,6 +324,12 @@ impl Session {
     ) -> Result<Self, SessionError> {
         if files.is_empty() {
             return Err(SessionError::BadArgument);
+        }
+        if files.len() > MAX_FILES_PER_TRANSFER {
+            return Err(SessionError::TooManyFiles {
+                given: files.len(),
+                limit: MAX_FILES_PER_TRANSFER,
+            });
         }
         let mut planned: Vec<PlannedFile> = Vec::with_capacity(files.len());
         for source in files {
@@ -418,6 +437,12 @@ impl Session {
     ) -> Result<Self, SessionError> {
         if files.is_empty() {
             return Err(SessionError::BadArgument);
+        }
+        if files.len() > MAX_FILES_PER_TRANSFER {
+            return Err(SessionError::TooManyFiles {
+                given: files.len(),
+                limit: MAX_FILES_PER_TRANSFER,
+            });
         }
         if files.iter().any(|(name, _)| name.is_empty()) {
             return Err(SessionError::BadArgument);
@@ -903,6 +928,52 @@ mod tests {
         clippy::panic,
         reason = "a test that cannot fail loudly is not a test"
     )]
+
+    #[test]
+    fn more_files_than_the_ceiling_are_refused_by_number_before_anything_opens() {
+        // ADR-0047 §3. The refusal has to arrive **before** the first
+        // descriptor, because running out halfway is a system error with a file
+        // already in flight, and a counted refusal is a sentence somebody can
+        // act on. The address is never dialled: the check runs first.
+        let files: Vec<std::path::PathBuf> = (0..=crate::MAX_FILES_PER_TRANSFER)
+            .map(|index| std::path::PathBuf::from(format!("/root/f{index}")))
+            .collect();
+        let outcome = crate::Session::open_sender(
+            "127.0.0.1:1".parse().expect("a literal address"),
+            std::path::Path::new("/root"),
+            &files,
+            None,
+        );
+        assert!(
+            matches!(
+                outcome,
+                Err(crate::SessionError::TooManyFiles { given, limit })
+                    if given == crate::MAX_FILES_PER_TRANSFER + 1
+                        && limit == crate::MAX_FILES_PER_TRANSFER
+            ),
+            "one over the ceiling was not refused by number"
+        );
+    }
+
+    #[test]
+    fn and_exactly_the_ceiling_is_not_refused_for_being_too_many() {
+        // The control. A check written `>=` would pass the test above and
+        // silently move the real ceiling to 255 -- which nobody would notice
+        // until somebody counted.
+        let files: Vec<std::path::PathBuf> = (0..crate::MAX_FILES_PER_TRANSFER)
+            .map(|index| std::path::PathBuf::from(format!("/root/f{index}")))
+            .collect();
+        let outcome = crate::Session::open_sender(
+            "127.0.0.1:1".parse().expect("a literal address"),
+            std::path::Path::new("/root"),
+            &files,
+            None,
+        );
+        assert!(
+            !matches!(outcome, Err(crate::SessionError::TooManyFiles { .. })),
+            "the ceiling itself was refused, so the real limit is one lower"
+        );
+    }
 
     use std::sync::{Arc, Mutex};
 

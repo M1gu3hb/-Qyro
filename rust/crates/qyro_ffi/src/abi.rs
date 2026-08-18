@@ -87,6 +87,14 @@ pub const QYRO_ERR_UNKNOWN: i32 = -12;
 /// when the problem is at home.
 pub const QYRO_ERR_IDENTITY_UNREADABLE: i32 = -13;
 
+/// More files than one transfer can carry (ADR-0047 §3).
+///
+/// **Its own code and not `BAD_ARGUMENT`**, because «too many» is a number the
+/// person can act on — pick fewer, or send in two goes — and a generic argument
+/// error is exactly the message that cost this project QYR-0361: a refusal about
+/// the call printed as if the network were at fault.
+pub const QYRO_ERR_TOO_MANY_FILES: i32 = -14;
+
 impl HandleError {
     /// The code this error crosses the boundary as.
     #[must_use]

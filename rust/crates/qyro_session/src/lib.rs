@@ -78,5 +78,8 @@ pub use link::{APIPA_BUDGET, LinkState, is_apipa, is_reachable_by_a_peer, wait_f
 /// no `into_parts`. There is still exactly one definition, in `qyro_net`, so
 /// the drift this is meant to end cannot come back through here.
 pub const QYRO_PORT: u16 = qyro_net::QYRO_PORT;
-pub use session::{Progress, ProgressObserver, RejectReason, Session, SessionState, parse_pairing};
+pub use session::{
+    MAX_FILES_PER_TRANSFER, Progress, ProgressObserver, RejectReason, Session, SessionState,
+    parse_pairing,
+};
 pub use trust::{PeerTrust, TrustBook, fingerprint_text};
