@@ -56,9 +56,17 @@ se suelte— así que cada uno es una casilla más:
 
 1. ~~Carpeta con subcarpetas y una vacía~~ **HECHO** (`a932ec2`). Árbol comparado
    entrada por entrada; la carpeta vacía no viaja y está afirmado.
-2. **200 archivos.** Con el techo en 256, el escenario es que 200 pasen y que
-   257 se nieguen por número — la segunda mitad ya tiene prueba unitaria, falta
-   la de extremo a extremo.
+2. **200 archivos — INTENTADO, y falla: QYR-0365.** La prueba se escribió, se
+   ejecutó, terminó en `QyroFailed`, y **se retiró del árbol en vez de dejarla en
+   rojo**. Descartado y medido: no es el techo de 256 (son 200, y ese rechazo es
+   `TooManyFiles`), y no son los límites del manifiesto (`MAX_ITEMS` 100 000,
+   `MAX_ENCODED_LEN` 8 MiB).
+
+   **El siguiente paso es exactamente uno:** imprimir el `kind` del
+   `QyroFailed`, que la prueba tenía a mano y no mostraba. Sin eso, cualquier
+   cosa que se toque del motor es adivinar. Después, los dos sospechosos por
+   orden: descriptores abiertos —que es la razón por la que existe el techo— y
+   algún tiempo de espera que 200 elementos superan y dos no.
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
    ya se comprobó (`done`/`total` son `u64`, ADR-0047 §2.1); **falta la

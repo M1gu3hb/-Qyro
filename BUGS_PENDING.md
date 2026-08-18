@@ -1,5 +1,37 @@
 # Bugs y pendientes verificados
 
+## QYR-0365 — Doscientos archivos de una vez fallan, y no se sabe por qué
+
+- Estado: **ABIERTO**
+- Severidad: **ALTA**
+- Fase: 22, escenario 2
+
+**Lo observado, y es todo lo que se sabe.** Una transferencia de **200 archivos
+pequeños** entre dos `NativeTransferService` sobre loopback termina en
+`QyroFailed`. Un archivo, dos y una carpeta con subcarpetas cruzan sin problema
+(escenario 1, `a932ec2`); doscientos no.
+
+**Lo descartado, medido y no supuesto:**
+
+- **No es el techo de ADR-0047 §3.** Son 200 y el techo es 256; además el techo
+  se rechaza con `TooManyFiles`, que es un error distinto y con su propio código.
+- **No son los límites del manifiesto.** `qyro_manifest::MAX_ITEMS` es **100 000**
+  y `MAX_ENCODED_LEN` **8 MiB**. Doscientas entradas no se acercan a ninguno.
+
+**Lo que falta y es el siguiente paso concreto:** el `kind` del `QyroFailed`. La
+prueba lo tenía a mano y no lo imprimía — ese es el primer arreglo, antes de
+tocar nada del motor. Con el `kind` en la mano, los dos sospechosos por orden son
+los descriptores abiertos (que es la razón por la que existe el techo) y algún
+tiempo de espera que 200 elementos superan y dos no.
+
+**La prueba se retiró del árbol en vez de dejarla en rojo**, y esto es una ficha
+en vez de un comentario en un commit. Escribirla y dejarla fallando habría dejado
+la puerta cerrada para el siguiente trabajo; borrarla sin ficha habría perdido el
+hallazgo, que es lo que le pasó a la fase 11.
+
+**La pregunta que cierra esta ficha:** ¿cruzan 200 archivos, con su contenido
+correcto cada uno? **Hoy no, y no se sabe por qué.**
+
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 
 - Estado: **CERRADO**
