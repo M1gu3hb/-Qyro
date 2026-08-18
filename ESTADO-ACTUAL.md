@@ -44,7 +44,15 @@ salieron de mirar en vez de suponer:
    la GUI enseñaba los archivos desde siempre. `Session::offered_files` existe,
    el receptor los dibuja, y cada nombre pasa por `safe_terminal_name`.
 
-4. **El techo de 256 archivos**, negado por nombre antes de abrir nada.
+4. ~~El techo de 256 archivos~~ **HECHO** (`3520b14`). `TooManyFiles` con código
+   propio `-14` en la frontera, rechazo antes del primer descriptor, y su control:
+   el techo exacto **no** se rechaza, porque un `>=` mal escrito movería el límite
+   real a 255 sin que nadie lo notara.
+
+**Queda de la fase 22: los cinco escenarios de `FASE-22 §4`**, cada uno con su
+control — carpeta con subcarpetas y una vacía, 200 archivos, un archivo > 4 GiB
+esparcido, disco lleno a mitad, y (en vez del quinto, que era reanudar y se
+retiró) **cancelar dejando el destino sin ningún `.qyro-part`**.
 
 ---
 
