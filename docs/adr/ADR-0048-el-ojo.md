@@ -111,3 +111,52 @@ no se puede ejercitar aquí.
   palanca de la §3 es la respuesta y **está sin medir**.
 - **Enfoque a 30 cm sobre una pantalla plana** (`R10` §8 T3): en un aparato de
   lente fija puede no ocurrir nunca, y eso no lo arregla el software.
+
+---
+
+## 7. Enmienda 1 (2026-08-19) — el cruce JNI espera a la fase 19, y por qué
+
+La §2 decidió **`GetDirectBufferAddress` a mano**, siguiendo `R10` §5: el único
+servicio de `JNIEnv` que hace falta, en el **slot 230** de la vtable, ~25 líneas y
+cero crates. Esa decisión **no cambia**. Lo que se decide aquí es *cuándo* se
+escribe, porque al llegar salieron dos cosas que la §2 no pesó:
+
+### 7.1 — Son la segunda excepción a `forbid(unsafe_code)`
+
+Este taller ha concedido **una** en toda su historia: `qyro_win_dpapi`, y le costó
+una ADR entera (ADR-0024 §1). Veinticinco líneas de aritmética sobre desplazamientos
+de una vtable no son veinticinco líneas cualesquiera: **un slot equivocado no da un
+error de compilación, da un salto a una función arbitraria**, y el síntoma es un
+proceso muerto sin traza en el aparato de otra persona.
+
+### 7.2 — Y no hay forma de ejercitarlas aquí
+
+Un `GetDirectBufferAddress` mal indexado se descubre **ejecutándolo**. No hay
+aparato, no hay emulador con cámara en esta máquina, y ninguna prueba de este
+repositorio puede tocar una `JNIEnv`. Escribirlas ahora sería añadir la única
+clase de código que este proyecto trata con más cuidado —`unsafe`— con la única
+clase de evidencia que este proyecto prohíbe: ninguna.
+
+### 7.3 — La decisión
+
+> **El cruce JNI y el `ImageAnalysis.Analyzer` de Kotlin se escriben en la fase
+> 19, con el aparato delante.** No antes.
+
+**Lo que eso NO significa:** que el ojo esté a medias. `qyro_eye` está entero,
+tiene llamante de producción en `qyro beam`, y la cadena
+*dibujar → rasterizar → decodificar → fountain → archivo* está probada de punta a
+punta con uno de cada cuatro frames tirado. **Lo que falta es exactamente un
+transporte de píxeles**, y su forma ya está fijada por la firma de
+`Eye::look(&[u8], usize, usize)` — un plano de luma, que es literalmente el plano 0
+de un `ImageProxy` en `YUV_420_888`.
+
+**Lo que sí significa:** que `R7` sigue prometiendo cuatro canales y hay tres y
+medio, y que el medio que falta **no es medio ojo, es el cable entre el ojo y la
+cámara.** Escrito así para que nadie lea esta fase como terminada.
+
+**La alternativa descartada, con su motivo:** `jni-sys 0.4.1` evitaría el `unsafe`
+propio a cambio de un crate nuevo en el lock. No se descarta *por el crate* —
+se descarta porque **tampoco se puede ejercitar sin aparato**, así que cambia una
+incertidumbre por otra y encima añade una dependencia. Cuando haya aparato, esa
+comparación se hace con las dos cosas ejecutándose, que es la única forma de
+hacerla bien.
