@@ -168,3 +168,51 @@ no cumple: **la fase 19, con red de verdad, decide si el beacon basta solo.** Si
 basta, `mdns-sd` se va y con él 614 KB. Anotado como **D9** en
 `deuda-de-calidad.md`; **D10** es el puerto duplicado que esta misma
 implementación destapó al ir a escribir la tercera copia.
+
+---
+
+## 9. Enmienda 2 (2026-08-18) — el beacon **no** es de Windows, y por qué el árbol decía que sí
+
+**La decisión no cambia. Lo que cambia es que ahora está escrita**, porque
+durante un día el código dijo lo contrario y nadie lo vio.
+
+### Qué pasó
+
+`dab9fa3` añadió los `pub use` del beacon en `qyro_net/src/lib.rs` **entre un
+`#[cfg(windows)]` y el elemento que ese atributo guardaba**
+(`pub use discovery::MdnsDiscovery;`). El atributo se pegó al bloque nuevo. El
+resultado, en un solo commit y en las dos direcciones a la vez:
+
+- **El beacon desapareció fuera de Windows**, que es justo la plataforma para la
+  que existe.
+- **`MdnsDiscovery` se exportó en todas partes** sin existir fuera de Windows.
+
+`qyro_session::discovery::collect_beacons` llama a `BeaconSwarm::bind_all()` sin
+`cfg` — correctamente, porque el beacon es multiplataforma— así que **el
+repositorio dejó de compilar en Linux**: 193 ejecuciones de CI en rojo.
+
+Es la misma forma que separó `#[cfg(test)]` de `mod tests` el mismo día. Un
+atributo externo se pega al **siguiente** elemento, y lo que se inserta entre
+medias se lo queda.
+
+### La decisión, ahora explícita
+
+> **El beacon es multiplataforma y no lleva `cfg`.** Sólo usa `std`, `socket2` e
+> `if-addrs`. Es la implementación en el árbol que la §5 exige *precisamente*
+> para las plataformas sin responder de mDNS, así que gatearlo por Windows lo
+> deja fuera de su único caso de uso.
+>
+> **`MdnsDiscovery` sí es de Windows**, porque `mdns-sd` está bajo
+> `cfg(windows)` desde ADR-0035 amendment 1.
+
+### Comprobación 17, que sale de aquí
+
+> **Ninguna afirmación de «puerta en verde» vale sin `cargo check --workspace
+> --all-targets` contra Linux, por código de salida.**
+
+El defecto raíz no fue el atributo: fue que **sólo se compilaba en Windows**, así
+que un error que sólo existe en la otra plataforma era invisible por
+construcción. En esta máquina se cumple con
+`rustup target add x86_64-unknown-linux-gnu` y
+`cargo check --workspace --all-targets --target x86_64-unknown-linux-gnu`;
+`check` no enlaza, así que no hace falta un enlazador cruzado.
