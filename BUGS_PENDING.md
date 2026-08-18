@@ -1,6 +1,6 @@
 # Bugs y pendientes verificados
 
-## QYR-0360 — `qyro send` no ha movido nunca un byte
+## QYR-0361 — `qyro send` no ha movido nunca un byte
 
 - Estado: **CERRADO**
 - Severidad: **P0**

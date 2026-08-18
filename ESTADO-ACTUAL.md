@@ -17,7 +17,7 @@ resultante**, que es la comprobación 16 aplicada a sí misma.
 
 ## 0. LO PRIMERO DE LA SIGUIENTE SESIÓN — una Release rota, publicada
 
-**QYR-0360, P0, arreglado en `9274393`.** `qyro send` **no ha movido nunca un
+**QYR-0361, P0, arreglado en `9274393`.** `qyro send` **no ha movido nunca un
 byte**: pasaba a `open_sender` el nombre pelado del archivo con `root` = el
 directorio padre, y `strip_prefix` falla siempre, así que toda invocación
 devolvía `BadArgument` impreso como *«could not connect»*. Desde la fase 13, el

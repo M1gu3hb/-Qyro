@@ -181,7 +181,7 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
     // because both halves were tested apart -- `open_sender` has its own tests
     // with correct arguments, and the CLI's tests never reached a socket. It
     // took putting the two faces against each other, which is what phase 21 is
-    // for. QYR-0360.
+    // for. QYR-0361.
     let mut session = match Session::open_sender(address, root, &[path.to_path_buf()], None) {
         Ok(session) => session,
         Err(error) => {
