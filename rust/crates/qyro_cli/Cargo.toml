@@ -16,6 +16,7 @@ path = "src/main.rs"
 # nothing (ADR-0042 §2).
 qyro_session = { path = "../qyro_session" }
 qyro_fountain = { path = "../qyro_fountain" }
+qyro_eye = { path = "../qyro_eye" }
 qyro_serial = { path = "../qyro_serial" }
 
 # ADR-0044 §2, pre-autorizada. Encoding a QR is Reed-Solomon over GF(256) plus a
@@ -48,4 +49,4 @@ serialport = { version = "4.9", default-features = false }
 # image files on disk: fixtures rot, and a fixture that rots fails as "the
 # renderer broke".
 [dev-dependencies]
-rqrr = "0.9"
+rqrr = "0.10.1"

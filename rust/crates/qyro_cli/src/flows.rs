@@ -556,6 +556,45 @@ pub fn qr(vt: Vt) -> i32 {
     }
 }
 
+/// Comprueba que lo que esta terminal dibuja se puede volver a leer.
+///
+/// **El llamante de producción de `qyro_eye`, y no es una prueba disfrazada.**
+/// Lo que se imprime depende de la fuente de la terminal: una que dibuje los
+/// medios bloques con un píxel de separación, o que no tenga `U+2584` y sustituya
+/// por un cuadro, produce un código **perfecto a la vista e ilegible para
+/// cualquier lector**. Sin esto, la forma de enterarse es que alguien sostenga
+/// un teléfono diez minutos delante de una pantalla que nunca iba a funcionar.
+///
+/// Cuesta un dibujo y una decodificación —decenas de milisegundos— una vez, al
+/// principio, contra una sesión que dura minutos.
+fn preflight(sample: &[u8], vt: Vt) -> bool {
+    let Ok(drawing) = crate::optical::draw(sample) else {
+        return false;
+    };
+    // 4 px/módulo: la banda fiable de `R10` §8 T1. Comprobar a una escala más
+    // generosa que la real diría que sí donde la cámara dirá que no.
+    let (luma, width, height) = crate::optical::rasterise(&drawing, 4);
+    let mut eye = qyro_eye::Eye::new();
+    if eye.look(&luma, width, height) != qyro_eye::Look::Nothing {
+        return true;
+    }
+
+    eprintln!();
+    eprintln!(
+        "{}qyro: esta terminal dibuja un codigo que un lector no reconoce.{}",
+        vt.red(),
+        vt.reset()
+    );
+    eprintln!("  Casi siempre es la fuente: hace falta una que tenga los medios");
+    eprintln!("  bloques U+2580 y U+2584 y los dibuje pegados, sin separacion.");
+    eprintln!("  Prueba con otra fuente de terminal, o usa otro canal.");
+    eprintln!();
+    eprintln!("  Se comprueba aqui y no despues porque la otra forma de");
+    eprintln!("  enterarse es apuntar un telefono diez minutos a una pantalla");
+    eprintln!("  que nunca iba a funcionar.");
+    false
+}
+
 /// `qyro beam <file>` — a file, as an endless stream of QR codes.
 ///
 /// ADR-0044. **The only channel that works with no network at all**: no cable,
@@ -633,6 +672,14 @@ pub fn beam(file: &str, vt: Vt) -> i32 {
     println!("  About {seconds}s of showing, if the camera keeps up. Ctrl-C to stop.");
     println!("  The stream never ends on purpose: the other side stops when it has enough.");
     println!();
+
+    // El vuelo de comprobación, antes del primer frame de verdad.
+    if !preflight(
+        &qyro_fountain::encode_frame(&qyro_fountain::encode(&blocks, shape, 1)),
+        vt,
+    ) {
+        return 1;
+    }
 
     // ADR-0044 §3: five frames a second. The limit is not bandwidth, it is lost
     // frames -- screen and camera are not synchronised and anything caught

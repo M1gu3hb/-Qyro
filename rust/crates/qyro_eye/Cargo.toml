@@ -1,0 +1,26 @@
+[package]
+name = "qyro_eye"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "El ojo: píxeles de luma entran, un archivo sale. No sabe qué es una cámara."
+
+[lib]
+path = "src/lib.rs"
+
+# **Cero crates nuevos en el lock** (ADR-0048 §2). Los dos ya estaban: `rqrr`
+# como dev-dependency del CLI desde la fase 15, y el fountain es de casa.
+#
+# `rqrr` pasa aquí a dependencia **normal** porque el ojo de Android necesita el
+# decodificador dentro del producto, y eso hace real un aviso que antes no lo
+# era: ver `.cargo/audit.toml`, que lo dice con su condición de caducidad.
+[dependencies]
+qyro_fountain = { path = "../qyro_fountain" }
+rqrr = "0.10.1"
+
+# Sólo para la prueba de vuelta completa: dibuja lo que dibuja `qyro beam` para
+# poder rasterizarlo y dárselo al ojo. En el producto, quien dibuja es el CLI y
+# quien mira es esto; que la prueba haga las dos cosas es lo que permite
+# ejercitar la cadena entera **sin cámara** (ADR-0048 §5).
+[dev-dependencies]
+qrcode = { version = "0.14", default-features = false }

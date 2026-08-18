@@ -1,34 +1,48 @@
-# `cargo audit` exceptions. Two, both argued, both with the condition that ends
-# them written down.
+# Excepciones de `cargo audit`. **Una, y con su condición de caducidad escrita.**
 #
-# **The rule this file lives under:** an ignore with no argument is a silenced
-# alarm, and a silenced alarm is worse than no alarm because it reads as "clean".
-# Every entry below says what it is, why it does not reach the product, and what
-# has to happen for it to be deleted.
+# **La regla bajo la que vive este archivo:** un ignore sin argumento es una
+# alarma silenciada, y una alarma silenciada es peor que ninguna alarma porque se
+# lee como «limpio». Toda entrada dice qué es, por qué no llega al producto, y
+# **qué tiene que pasar para borrarla**.
+#
+# ## Lo que pasó el 2026-08-19, y no fue lo previsto
+#
+# Había dos entradas contra `lru` 0.12.5 vía `rqrr` 0.9.3, y su condición de
+# borrado decía: *«cuando `rqrr` publique una versión que tome `lru` 0.13 o
+# posterior, o cuando algo haga `rqrr` dependencia normal»*.
+#
+# La fase 24 hace las dos cosas: `rqrr` sube a 0.10.1 —que trae `lru` 0.16.4— y
+# pasa a dependencia normal, porque el ojo de Android necesita el decodificador
+# **dentro** del producto.
+#
+# **Y al medirlo, la condición se cumplió sólo a medias:**
+#
+# - **RUSTSEC-2026-0002** (`IterMut` violando Stacked Borrows) — **arreglada** en
+#   `lru` 0.16.4. Entrada borrada.
+# - **RUSTSEC-2026-0253** (use-after-free si `pop()` entra en pánico) — **sigue
+#   viva**. `cargo audit --json` da `patched: >=0.18.2`, y `rqrr` 0.10.1 fija
+#   `lru ^0.16`, así que `cargo update -p lru --precise 0.18.2` **falla**: no hay
+#   forma de llegar al parche sin cambiar de decodificador.
+#
+# Se anota tal cual en vez de borrar las dos: **borrar la segunda porque se
+# esperaba que caducara sería exactamente la alarma silenciada que este archivo
+# prohíbe.**
 
 [advisories]
 ignore = [
-    # RUSTSEC-2026-0002 and RUSTSEC-2026-0253, both against `lru` 0.12.5:
-    # `IterMut` violating Stacked Borrows, and a use-after-free if `pop()`
-    # panics. Both are **unsoundness**, not known-exploitable vulnerabilities.
+    # RUSTSEC-2026-0253, `lru` 0.16.4 <- rqrr 0.10.1 <- qyro_eye (normal).
     #
-    # Path, verified with `cargo tree -i lru -e normal,dev` on 2026-08-18:
+    # **Es unsoundness, no una vulnerabilidad explotable conocida**, y lo que la
+    # dispara es que `pop()` entre en pánico — lo cual requiere que el `Hash` o
+    # el `Eq` de la clave entren en pánico. Las claves de esa caché son internas
+    # de `rqrr` y **no las controla lo que entre por la cámara**: unos píxeles
+    # hostiles no llegan a ese camino.
     #
-    #     lru 0.12.5 <- rqrr 0.9.3 <- qyro_cli [dev-dependencies]
+    # No es gratis y no se presenta como gratis: es la primera vez que este
+    # proyecto acepta un aviso en código que **sí** viaja en el producto.
     #
-    # `rqrr` is the QR decoder that reads back what `qyro beam` draws
-    # (ADR-0044 §6 keeps the decoder out of the shipped binary on purpose), so
-    # **this code is not in any artefact Qyro distributes** -- it runs in
-    # `cargo test` and nowhere else. Measured: adding it moved the release
-    # binary by zero bytes.
-    #
-    # `cargo update -p lru` does not move it: `rqrr` 0.9.3 pins `lru 0.12`, and
-    # the fix is in a later minor.
-    #
-    # **Delete these two lines when either happens:**
-    #   * `rqrr` releases a version that takes `lru` 0.13 or later, or
-    #   * anything makes `rqrr` a normal dependency rather than a dev one --
-    #     at which point this argument is void and the advisory is real.
-    "RUSTSEC-2026-0002",
+    # **Bórrala cuando `rqrr` publique una versión que tome `lru` >= 0.18.2.**
+    # Es una sola línea de `Cargo.toml` y una corrida de `cargo audit` para
+    # comprobarlo.
     "RUSTSEC-2026-0253",
 ]

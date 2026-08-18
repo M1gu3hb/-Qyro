@@ -1,26 +1,49 @@
-# Estado actual — cinco arreglos, y la puerta que los habría cazado
+# Estado actual — la fase 24, con el hueco que no se puede llenar
 
-**2026-08-19** · **rama única: `main`**
+**2026-08-19** · **rama única: `main`** · ADR-0048 congelada en `349a63f`.
 
-## Comprobación 18 — la puerta se corre con **el mismo** comando que CI
+## Lo que hay del ojo, y lo que no
 
-La 17 decía «compila en Linux» y yo la cumplía con `cargo check`. **CI corre
-`cargo clippy --all-targets -- -D warnings`**, que es un comando *parecido* y no
-el mismo, así que un `clippy::ptr_arg` de Linux pasó mi puerta y tumbó CI.
+**`qyro_eye`**: píxeles de luma entran, un archivo sale. **No sabe qué es una
+cámara** — ni CameraX, ni JNI, ni Android. Eso es ADR-0048 §5 y tiene una
+consecuencia concreta: **la cadena entera se ejercita sin cámara**, porque
+rasterizar lo que dibuja `qyro beam` produce exactamente la clase de píxeles que
+CameraX entregará.
 
-Y al mirar la lista entera salió otro: **`cargo test --workspace --all-features`
-lo corre CI y no lo corría nadie aquí. La primera vez que se ejecutó, falló.**
+- **15 pruebas**, incluida la vuelta completa con **uno de cada cuatro frames
+  tirado**, y sus controles: el mismo código seis veces seguidas es `Repeat` y no
+  progreso —a 30 fps de cámara contra 5 de pantalla eso es lo normal—, y un QR
+  que no es de Qyro no entra pero **sí se cuenta como leído**, porque «no veo
+  nada» y «veo códigos ajenos» piden acciones distintas.
+- **Llamante de producción, y no es una prueba disfrazada:** `qyro beam`
+  comprueba, antes del primer frame, que **lo que esta terminal imprime se puede
+  volver a leer**. Una fuente sin `U+2584`, o que separe las celdas, dibuja un
+  código perfecto a la vista e ilegible para cualquier lector; sin esto, la forma
+  de enterarse es sostener un teléfono diez minutos delante de una pantalla que
+  nunca iba a funcionar. Probado **con su control**: una fuente que separa celdas
+  no pasa.
+- **Coste medido:** el binario pasa de 1 373 696 a **1 647 104 bytes**. `rqrr` en
+  el producto son **267 KB**.
 
-**`scripts/gate.ps1` es la comprobación 18 en ejecutable**, y no lleva su propia
-lista: **lee `.github/workflows/ci.yml`** y ejecuta los `cargo` que encuentra,
-más el objetivo de Linux. Una lista escrita a mano se separa del flujo el día que
-alguien toca uno de los dos, y separarse es justo el defecto que esto evita.
+## El hueco, en blanco
 
-```
-pwsh -File scripts/gate.ps1
-```
+> **`R10` §8 T1 manda medir píxeles por módulo en el aparato real antes de
+> escribir nada más. NO HAY APARATO.**
 
-Hoy: **5 comandos de `ci.yml` + Linux, todos en verde.**
+Lo que sí se hizo: **reproducir la aritmética** de forma independiente y dejarla
+en código con prueba. Salen los dos números de `R10` idénticos — **3,07
+px/módulo a 640×480 y 4,60 a 1280×720** para una v27. La decisión de ADR-0048 §3
+es pedir ≥1280×720 y quedarse en v27, con la palanca escrita.
+
+**Falta el glue de Kotlin y JNI**, que es la parte que no se puede ejercitar aquí.
+
+## La comprobación 18, que ya cazó dos cosas
+
+`scripts/gate.ps1` **lee `ci.yml`** y corre sus comandos más el objetivo de
+Linux. Hoy cazó un `#![cfg(test)]` duplicado **antes** de empujar — el mismo error
+de forma que en la fase 15, esta vez detenido por la puerta y no por CI.
+
+---
 
 ## Los cinco arreglos
 

@@ -159,6 +159,63 @@ pub fn draw(payload: &[u8]) -> Result<String, &'static str> {
     Ok(render(&modules))
 }
 
+/// Convierte el dibujo en los píxeles que vería una cámara.
+///
+/// Cada carácter de medio bloque son **dos filas de módulos**, así que una celda
+/// se vuelve un parche de `scale` × `2 * scale`. Los módulos oscuros se vuelven
+/// píxeles oscuros, deshaciendo la inversión deliberada del renderizador —
+/// una cámara apuntada a una terminal clara sobre oscuro ve exactamente eso.
+///
+/// **Está en producción y no en una prueba a propósito.** Es lo que deja que
+/// `qyro beam` compruebe *lo que realmente imprime* antes de pedirle a nadie que
+/// apunte un teléfono: una fuente que dibuje mal los medios bloques produce un
+/// código perfecto a la vista e ilegible para cualquier lector, y descubrir eso
+/// a los diez minutos es descubrirlo tarde.
+#[must_use]
+pub fn rasterise(drawing: &str, scale: usize) -> (Vec<u8>, usize, usize) {
+    let rows: Vec<&str> = drawing.lines().collect();
+    let columns = rows
+        .iter()
+        .map(|row| row.chars().count())
+        .max()
+        .unwrap_or(0);
+    let width = columns * scale;
+    let height = rows.len() * scale * 2;
+    if width == 0 || height == 0 {
+        return (Vec::new(), 0, 0);
+    }
+    // 255 es blanco, que es el campo claro que un QR necesita.
+    let mut pixels = vec![255_u8; width * height];
+
+    for (row_index, row) in rows.iter().enumerate() {
+        for (column_index, cell) in row.chars().enumerate() {
+            // El renderizador dibuja la LUZ como tinta, así que las mitades se
+            // leen de vuelta con ese mismo sentido.
+            let (top_light, bottom_light) = match cell {
+                FULL => (true, true),
+                UPPER => (true, false),
+                LOWER => (false, true),
+                _ => (false, false),
+            };
+            for (half, light) in [top_light, bottom_light].into_iter().enumerate() {
+                if light {
+                    continue;
+                }
+                let y0 = row_index * scale * 2 + half * scale;
+                let x0 = column_index * scale;
+                for y in y0..y0 + scale {
+                    for x in x0..x0 + scale {
+                        if let Some(pixel) = pixels.get_mut(y * width + x) {
+                            *pixel = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    (pixels, width, height)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -169,7 +226,7 @@ mod tests {
         reason = "a test that cannot fail loudly is not a test"
     )]
 
-    use super::{EMPTY, FULL, Modules, QUIET_ZONE, render};
+    use super::{EMPTY, FULL, Modules, QUIET_ZONE, draw, rasterise, render};
 
     /// How many terminal rows and columns a code of `module_count` needs.
     ///
@@ -187,6 +244,52 @@ mod tests {
 
     fn checker(size: usize) -> Modules {
         Modules::new(size, (0..size * size).map(|i| i % 2 == 0).collect()).expect("a square grid")
+    }
+
+    #[test]
+    fn lo_que_se_dibuja_lo_lee_el_ojo_y_una_fuente_rota_no() {
+        // El vuelo de comprobación de `qyro beam` en sus dos mitades. Sin la
+        // segunda, una comprobación que devolviera «bien» siempre pasaría la
+        // primera y no serviría para nada.
+        // Un frame de fountain de verdad, que es lo que `qyro beam` dibuja.
+        // El primer intento de esta prueba paso un codigo de emparejamiento y el
+        // ojo lo rechazo -- **con razon**: `Eye::look` decodifica el QR y luego
+        // exige que sea un frame de Qyro, asi que un QR ajeno da `Nothing`. La
+        // prueba estaba mal, no el ojo.
+        let bytes: Vec<u8> = (0..300).map(|i| ((i * 7 + 3) % 251) as u8).collect();
+        let shape = qyro_fountain::Shape {
+            payload_len: 300,
+            block_size: 150,
+        };
+        let blocks = qyro_fountain::split(&bytes, 150);
+        let payload = qyro_fountain::encode_frame(&qyro_fountain::encode(&blocks, shape, 1));
+        let drawing = draw(&payload).expect("un frame de este tamano cabe");
+
+        let (luma, width, height) = rasterise(&drawing, 4);
+        let mut eye = qyro_eye::Eye::new();
+        assert_ne!(
+            eye.look(&luma, width, height),
+            qyro_eye::Look::Nothing,
+            "el ojo no encontro codigo en lo que la terminal dibuja"
+        );
+
+        // Y la fuente rota que esto existe para cazar: una que meta un espacio
+        // entre celdas. Se ve *casi* igual y no la lee nadie.
+        let rota: String = drawing
+            .lines()
+            .map(|line| line.chars().flat_map(|c| [c, ' ']).collect::<String>())
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            );
+        let (luma, width, height) = rasterise(&rota, 4);
+        let mut eye = qyro_eye::Eye::new();
+        assert_eq!(
+            eye.look(&luma, width, height),
+            qyro_eye::Look::Nothing,
+            "una fuente que separa las celdas paso la comprobacion, asi que la              comprobacion no comprueba nada"
+        );
     }
 
     #[test]
