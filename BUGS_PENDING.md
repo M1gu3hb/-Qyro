@@ -2,7 +2,7 @@
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 
-- Estado: **ABIERTO**
+- Estado: **CERRADO**
 - Severidad: **ALTA**
 - Fase: 22
 - Encontrado: 2026-08-18, buscándole un llamante al saneado de nombres
@@ -15,23 +15,34 @@ ADR-0036 §1 dice que *nada se acepta solo*. Una pregunta sin objeto **no es una
 decisión**: es un trámite. La GUI sí lo enseña; la terminal no, y eso es una
 celda de paridad que la tabla no tenía porque nadie había mirado.
 
-**Por qué no se arregló en el sitio.** `qyro_session::Session` **no expone los
-nombres del manifiesto antes de aceptar**. Hace falta superficie nueva del motor
-—y, para la GUI, un símbolo más en la frontera C— y eso es trabajo con su propio
-tamaño, no una línea.
+**El arreglo.** `Session::offered_files` devuelve nombre y tamaño de lo ofrecido.
+Las piezas ya estaban todas: `qyro_transfer::Receiver::manifest()` existía y el
+`Role::Receiving` de `qyro_session` ya guardaba el motor — **lo único que faltaba
+era el accesor**, que es la forma habitual de este defecto en esta casa.
 
-**Lo que esto bloqueó, y es la parte útil.** ADR-0047 §6 decide el saneado de
-nombres para terminal (controles C0 y C1 a `U+FFFD`, sustituyendo y no
-eliminando). Se escribió con sus cinco pruebas —incluida la del retorno de carro
-que reescribe la línea— y **se revirtió sin commitear**, porque no tenía ningún
-llamante de producción posible: el único sitio donde se dibujaría un nombre
-ajeno en una terminal es justo el que no existe.
+Devuelve `display_name` y no la ruta relativa (ADR-0019): una ruta dibujada en
+una confirmación es un sitio donde un par puede escribir algo que parezca un
+directorio que la persona reconoce.
 
-Enviarlo habría sido la décima capacidad viva e inalcanzable de este proyecto, y
-esta vez con la ironía de haberla escrito el mismo día que se retiró la novena.
+**No sanea aquí.** Los nombres salen exactamente como el par los mandó, porque
+esta función también alimenta código de sistema de archivos; el saneado de
+terminal de ADR-0047 §6 va **en el sitio donde se dibuja**, y las reglas más
+estrictas de ADR-0027 se quedan donde estaban.
+
+**Lo que esto desbloqueó.** El saneado de ADR-0047 §6 se había escrito con sus
+cinco pruebas —incluida la del retorno de carro que reescribe la línea que la
+persona está leyendo— y **se revirtió sin commitear** porque no tenía ningún
+llamante de producción posible: el único sitio donde se dibujaría un nombre ajeno
+en una terminal era justo el que no existía. Con el accesor puesto, ese sitio
+existe, y `safe_terminal_name` entra con su llamante en
+`qyro_cli/src/flows.rs:276`.
+
+Enviarlo antes habría sido la décima capacidad viva e inalcanzable de este
+proyecto, y el mismo día que se retiró la novena. **La comprobación 14 aplicada
+antes de escribir el código en vez de después.**
 
 **La pregunta que cierra esta ficha:** ¿ve la persona qué archivos le están
-ofreciendo, antes de decir que sí, en las dos caras? **Hoy sólo en una.**
+ofreciendo, antes de decir que sí, en las dos caras? **Sí, en las dos.**
 
 ## QYR-0363 — Una ruta con barras normales mandaba el archivo a otro sitio
 

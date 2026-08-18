@@ -53,7 +53,8 @@ mod trust;
 mod guards;
 
 pub use advisor::{
-    BORING_FIRST, Channel, Situation, advise, channels_for, plain_duration, seconds_for,
+    BORING_FIRST, Channel, Situation, advise, channels_for, plain_duration, safe_terminal_name,
+    seconds_for,
 };
 pub use bridged_wrapper::{
     BRIDGED_WRAP_ID, BridgedWrapper, DOMAIN_MISMATCH, MAX_WRAPPED_LEN, WrapFn,

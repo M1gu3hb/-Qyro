@@ -199,6 +199,49 @@ pub fn advise(situation: Situation) -> (String, Vec<Channel>) {
     (text, channels)
 }
 
+/// A name that cannot rewrite the line it is drawn in.
+///
+/// Specification: ADR-0047 §6.
+///
+/// # What a hostile name does to a terminal
+///
+/// A filename is attacker-controlled text and a terminal is an interpreter. A
+/// name containing a carriage return **rewrites the line the person is
+/// reading**; one containing an escape sequence can move the cursor, change
+/// colours, or clear the screen. The receiver is about to be asked whether to
+/// accept this file, so the one moment the name is drawn is the one moment it
+/// must not lie.
+///
+/// # The rule, and it is one rule
+///
+/// Every C0 and C1 control (`U+0000`–`U+001F`, `U+007F`–`U+009F`) becomes
+/// `U+FFFD`. **Substituted, never deleted**, for the reason ADR-0036 gave the
+/// GUI: a name that was only controls must not collapse into an empty row,
+/// because an empty row is a row nobody sees. One replacement per control also
+/// keeps the length comparable, so a name padded with controls still looks
+/// suspicious rather than short.
+///
+/// # This is for drawing only
+///
+/// The name that goes into the manifest and the name written to disk go through
+/// ADR-0027's rules, which are stricter and different. Confusing the two would
+/// mean sanitising for a screen and trusting the result on a filesystem.
+#[must_use]
+pub fn safe_terminal_name(name: &str) -> String {
+    name.chars()
+        .map(|character| {
+            let code = character as u32;
+            let is_c0 = code <= 0x1F || code == 0x7F;
+            let is_c1 = (0x80..=0x9F).contains(&code);
+            if is_c0 || is_c1 {
+                '\u{FFFD}'
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -210,10 +253,64 @@ mod tests {
     )]
 
     use super::{
-        BORING_FIRST, Channel, Situation, advise, channels_for, plain_duration, seconds_for,
+        BORING_FIRST, Channel, Situation, advise, channels_for, plain_duration, safe_terminal_name,
+        seconds_for,
     };
 
     const ONE_MEGABYTE: u64 = 1024 * 1024;
+
+    #[test]
+    fn a_carriage_return_cannot_rewrite_the_line_it_is_drawn_in() {
+        // **The attack.** A file named with a carriage return and some
+        // reassuring text draws that text *over* what the person was reading —
+        // and they are about to decide whether to accept it.
+        let hostile = "factura.pdf\r      <-- seguro";
+        let safe = safe_terminal_name(hostile);
+        assert!(!safe.contains('\r'), "{safe:?}");
+        assert!(safe.starts_with("factura.pdf"));
+    }
+
+    #[test]
+    fn an_escape_sequence_cannot_move_the_cursor() {
+        let hostile = "nota\u{1b}[2J\u{1b}[Hborrado";
+        let safe = safe_terminal_name(hostile);
+        assert!(!safe.contains('\u{1b}'));
+        // The brackets and letters survive: they are ordinary text once the
+        // escape that gave them meaning is gone.
+        assert!(safe.contains("[2J"), "{safe:?}");
+    }
+
+    #[test]
+    fn a_name_that_was_only_controls_does_not_become_an_empty_row() {
+        // ADR-0036 decided this for the GUI and ADR-0047 §6 keeps it: an empty
+        // row is a row nobody sees, and "nothing" is not a safe rendering of a
+        // name somebody chose to make hostile.
+        let safe = safe_terminal_name("\u{0}\u{1}\u{7f}\u{9b}");
+        assert_eq!(safe.chars().count(), 4);
+        assert!(safe.chars().all(|c| c == '\u{FFFD}'), "{safe:?}");
+    }
+
+    #[test]
+    fn the_c1_range_is_covered_and_not_just_the_obvious_c0() {
+        // `U+009B` is CSI — one character that starts a control sequence on a
+        // terminal decoding Latin-1. Sanitising only C0 leaves the same attack
+        // available in one byte less.
+        assert_eq!(safe_terminal_name("\u{9b}2J"), "\u{FFFD}2J");
+    }
+
+    #[test]
+    fn ordinary_names_including_accents_and_emoji_are_untouched() {
+        // The control. A sanitiser that mangled normal names would be worse
+        // than none: people would stop trusting what they read.
+        for name in [
+            "informe.pdf",
+            "año-2026.txt",
+            "foto \u{1f4f7}.jpg",
+            "отчёт.txt",
+        ] {
+            assert_eq!(safe_terminal_name(name), name, "{name:?} was altered");
+        }
+    }
 
     #[test]
     fn the_order_is_the_one_adr_0046_fixed_and_serial_beats_optical() {

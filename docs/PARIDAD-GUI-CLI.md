@@ -34,20 +34,22 @@ primera semana y sigue leyéndose como verdad; eso ya pasó aquí, en la fase 11
 | Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/transfer_screens.dart:116` | `rust/crates/qyro_cli/src/flows.rs:419` |
 | Canal optico (fase 15) | `NO -- ADR-0044 §6: el CLI dibuja y el telefono lee. La GUI de escritorio no dibuja QR porque la maquina que los necesita es la que no tiene GUI, y el lado Android que acumula frames todavia no existe -- esta anotado en STATUS.md como hueco en blanco, no como capacidad` | `rust/crates/qyro_cli/src/flows.rs:530` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
-| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:201` | `NO -- TODAVIA. El receptor del CLI enseña la huella y pregunta accept from this device, sin decir que archivos ni cuantos ni cuanto pesan. ADR-0036 §1 dice que nada se acepta solo, y una pregunta sin objeto es un tramite, no una decision. Bloqueado por QYR-0364: qyro_session no expone los nombres del manifiesto antes de aceptar` |
+| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:201` | `rust/crates/qyro_cli/src/flows.rs:276` |
 | Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:552` |
 
 <!-- PARIDAD-FIN -->
 
-## Una fila dice «todavía», y es nueva
+## Dos filas dijeron «todavía» y las dos se cerraron llenándolas
 
-**Ver qué se ofrece antes de aceptar** — la GUI lo enseña, la terminal no.
-Apareció el 2026-08-18 buscándole llamante al saneado de nombres de ADR-0047 §6,
-y es QYR-0364. No estaba antes porque **nadie había mirado esa fila**: la tabla
-la añade ahora precisamente para que deje de depender de que alguien mire.
+**Ver qué se ofrece antes de aceptar** (QYR-0364) apareció el 2026-08-18
+buscándole un llamante al saneado de nombres de ADR-0047 §6: la GUI enseñaba los
+archivos y la terminal preguntaba «¿aceptas?» con una huella y nada más. No
+estaba en esta tabla porque **nadie había mirado esa fila**, y se añadió
+precisamente para que dejara de depender de que alguien mire. Cerrada el mismo
+día: `Session::offered_files` existe, el receptor del CLI los dibuja, y cada
+nombre pasa por `safe_terminal_name`.
 
-Hubo otra durante unas horas: **el consejero de canal**, que el CLI alcanzaba y la
-GUI no. Estaba escrita como «TODAVÍA» y no como «NO», a propósito — las otras
+La otra fue **el consejero de canal**, que el CLI alcanzaba y la GUI no. Estaba escrita como «TODAVÍA» y no como «NO», a propósito — las otras
 cinco negativas son decisiones de producto, con un argumento por el que esa cara
 no lo tiene y no lo va a tener; aquélla era trabajo pendiente, y llamarla
 decisión habría sido convertir un pendiente en una frase que se lee como cerrada.

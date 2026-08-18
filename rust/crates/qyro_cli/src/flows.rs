@@ -262,6 +262,32 @@ pub fn receive(out: Option<&str>, expect: Option<&str>, vt: Vt) -> i32 {
     println!("\n  someone connected. They say they are:");
     println!("    {}{peer}{}", vt.green(), vt.reset());
 
+    // **QYR-0364: a question with no object is a formality, not a decision.**
+    // This used to ask «accept from this device?» with a fingerprint and nothing
+    // else — no names, no count, no sizes — while the GUI had shown the files all
+    // along. ADR-0036 §1 says nothing is ever accepted on its own.
+    //
+    // Every name goes through `safe_terminal_name` (ADR-0047 §6), because a
+    // filename is attacker-controlled text and a terminal is an interpreter: a
+    // carriage return in a name rewrites the line the person is reading, at the
+    // exact moment they are deciding whether to accept it.
+    let offered = session.offered_files();
+    if offered.is_empty() {
+        println!("  they have not said what they are sending yet.");
+    } else {
+        let total: u64 = offered.iter().map(|(_, size)| *size).sum();
+        println!(
+            "\n  they want to send {} file(s), {total} bytes:",
+            offered.len()
+        );
+        for (name, size) in &offered {
+            println!(
+                "    {} ({size} bytes)",
+                qyro_session::safe_terminal_name(name)
+            );
+        }
+    }
+
     if let Some(wanted) = expect {
         if !fingerprint_matches(&peer, wanted) {
             eprintln!(

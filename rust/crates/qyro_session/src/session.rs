@@ -544,6 +544,44 @@ impl Session {
     /// ADR-0035 Ã‚Â§4. Not the raw bytes: if the interface formatted this itself,
     /// two devices could render the same fingerprint differently and comparing
     /// it out loud Ã¢â‚¬â€ the only thing a fingerprint is for Ã¢â‚¬â€ would prove nothing.
+    /// What the peer is offering, once the manifest has arrived.
+    ///
+    /// **QYR-0364.** The receiver used to be asked «accept from this device?»
+    /// with a fingerprint and nothing else — no names, no count, no sizes.
+    /// ADR-0036 §1 says nothing is ever accepted on its own, and **a question
+    /// with no object is not a decision, it is a formality**. The GUI showed the
+    /// files; the terminal could not, because this accessor did not exist.
+    ///
+    /// Empty before a manifest crosses, which is a real state and not an error:
+    /// the trust decision about *who* is connected happens first, on purpose, so
+    /// that a name never gets a chance to argue for its own acceptance.
+    ///
+    /// The names come back **exactly as the peer sent them**. Sanitising here
+    /// would be sanitising for a screen inside a function that also feeds
+    /// filesystem code; ADR-0047 §6 puts the terminal rule at the drawing site
+    /// and ADR-0027 keeps the stricter filesystem rules where they belong.
+    #[must_use]
+    pub fn offered_files(&self) -> Vec<(String, u64)> {
+        match &self.role {
+            Role::Sending { .. } => Vec::new(),
+            Role::Receiving { engine, .. } => {
+                let Some(manifest) = engine.manifest() else {
+                    return Vec::new();
+                };
+                manifest
+                    .items()
+                    .iter()
+                    // `display_name` and not the whole relative path: ADR-0019
+                    // decided that a person is shown the file's name, and a
+                    // relative path drawn in a confirmation is a place for a
+                    // peer to write something that looks like a directory the
+                    // person recognises.
+                    .map(|item| (item.display_name().to_owned(), item.size()))
+                    .collect()
+            }
+        }
+    }
+
     #[must_use]
     pub fn peer_fingerprint(&self) -> String {
         crate::trust::fingerprint_text(&self.peer_identity)
