@@ -49,10 +49,24 @@ salieron de mirar en vez de suponer:
    el techo exacto **no** se rechaza, porque un `>=` mal escrito movería el límite
    real a 255 sin que nadie lo notara.
 
-**Queda de la fase 22: los cinco escenarios de `FASE-22 §4`**, cada uno con su
-control — carpeta con subcarpetas y una vacía, 200 archivos, un archivo > 4 GiB
-esparcido, disco lleno a mitad, y (en vez del quinto, que era reanudar y se
-retiró) **cancelar dejando el destino sin ningún `.qyro-part`**.
+**Queda de la fase 22: cuatro de los cinco escenarios de `FASE-22 §4`.** Todos
+viven en `apps/qyro/test/transfer/gui_cli_matrix_test.dart`, que ya tiene el
+arnés montado —biblioteca, binario, y el `tearDown` que espera a que el puerto
+se suelte— así que cada uno es una casilla más:
+
+1. ~~Carpeta con subcarpetas y una vacía~~ **HECHO** (`a932ec2`). Árbol comparado
+   entrada por entrada; la carpeta vacía no viaja y está afirmado.
+2. **200 archivos.** Con el techo en 256, el escenario es que 200 pasen y que
+   257 se nieguen por número — la segunda mitad ya tiene prueba unitaria, falta
+   la de extremo a extremo.
+3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
+   progreso del último frame **no es menor** que el del anterior. La aritmética
+   ya se comprobó (`done`/`total` son `u64`, ADR-0047 §2.1); **falta la
+   evidencia**, que es otra cosa.
+4. **Disco lleno a mitad.** El destino no queda con ningún `.qyro-part`, y su
+   contra-prueba: dejar uno a propósito y exigir que el mismo listado lo vea.
+5. **Cancelar a mitad** — sustituye al escenario de reanudación, que ADR-0047 §5
+   retiró. El destino tiene que quedar limpio.
 
 ---
 
