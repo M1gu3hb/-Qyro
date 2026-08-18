@@ -29,9 +29,19 @@ resultante**, que es la comprobación 16 aplicada a sí misma.
 
 **Lo que falta, y está dicho también en las notas públicas:**
 
-1. **El APK.** `app-release.apk` sigue siendo el de antes y **no lleva el arreglo
-   de QYR-0362**: la aplicación sigue sin poder enviar. Rehacerlo necesita la
-   tubería de empaquetado de Flutter entera. **Es lo primero.**
+1. **El APK — y hay un bloqueo con nombre.** `app-release.apk` sigue siendo el de
+   antes y **no lleva el arreglo de QYR-0362**: la aplicación sigue sin poder
+   enviar.
+
+   **No se puede reconstruir en esta máquina y no es falta de tiempo:**
+   `flutter doctor` encuentra el SDK de Android 36.0.0 pero **las licencias no
+   están aceptadas** (`Android license status unknown`). Aceptarlas es aceptar un
+   acuerdo legal en nombre del dueño, y eso no lo hace el implementador —
+   **lo tiene que hacer una persona**, con `flutter doctor --android-licenses`, o
+   hacerlo el CI con sus propias credenciales.
+
+   Hasta entonces el hueco se queda en blanco y **está dicho en las notas
+   públicas de la Release**, no sólo aquí.
 2. **`qyro-windows-x64.zip`**, el paquete completo con la GUI de escritorio,
    tampoco está rehecho.
 

@@ -355,6 +355,73 @@ void main() {
       expect(landed.readAsBytesSync(), equals(payload));
     }, timeout: const Timeout(Duration(minutes: 2)));
 
+    test('a path written with forward slashes lands where it was named',
+        () async {
+      // **The control for QYR-0363.** Windows accepts a forward slash in every
+      // path API, so a path can arrive spelled that way -- from an argument, a
+      // drag-and-drop, or a script. `_commonRoot` split on the platform
+      // separator alone, so the last segment came out as `out<slash>payload.bin`
+      // entire, the root as the grandparent, and the name that travelled
+      // carried a directory nobody had named. The receiver then wrote the file
+      // **one level deeper than anybody looked**, and reported success.
+      //
+      // This writes the path the broken way on purpose.
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
+      final payload = _pattern(16 * 1024);
+      final original = File(_join(source.path, 'payload.bin'))
+        ..writeAsBytesSync(payload);
+      final slashed = original.path.replaceAll(Platform.pathSeparator, '/');
+      expect(slashed, isNot(equals(original.path)),
+          reason: 'this platform already uses forward slashes, so this control '
+              'would pass without testing anything');
+
+      final receiver = NativeTransferService(
+        bindings: QyroSessionBindings.open(library!),
+      );
+      final session = receiver
+          .receive(
+            bind: '0.0.0.0:$port',
+            destination: destination.path,
+            decide: (_) async => true,
+          )
+          .listen((_) {}, onError: (_) {});
+
+      try {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final sent = <QyroTransferState>[];
+        await for (final state in service.send(
+          address: '127.0.0.1:$port',
+          files: <QyroPicked>[
+            QyroPickedPath(
+              path: slashed,
+              name: 'payload.bin',
+              size: payload.length,
+            ),
+          ],
+        )) {
+          sent.add(state);
+          if (state is QyroDelivered || state is QyroFailed) break;
+        }
+        expect(sent.last, isA<QyroDelivered>(), reason: '${sent.last}');
+        await Future<void>.delayed(const Duration(seconds: 1));
+      } finally {
+        await session.cancel();
+      }
+
+      expect(
+        File(_join(destination.path, 'payload.bin')).existsSync(),
+        isTrue,
+        reason: 'the file did not land where it was named',
+      );
+      expect(
+        Directory(_under(destination, 'out')).existsSync(),
+        isFalse,
+        reason: 'the file landed a directory deeper than anybody asked for, '
+            'which is the defect this control exists for',
+      );
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
     test('with nobody listening, the CLI fails by name and does not hang',
         () async {
       // Control 1 of the phase document. A refusal that hangs is the failure

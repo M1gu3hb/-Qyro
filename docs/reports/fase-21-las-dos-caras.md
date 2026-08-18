@@ -131,7 +131,7 @@ Tres pararon el trabajo y **las tres tenían razón**:
 | Comprobación | Resultado |
 |---|---|
 | `cargo test --workspace` | **739 pruebas, 0 fallos** |
-| `flutter test` | **120 pruebas, 0 fallos** (eran 105) |
+| `flutter test` | **121 pruebas, 0 fallos** (eran 105) |
 | `cargo clippy --workspace --all-targets -D warnings` | 0 errores |
 | `cargo audit --deny warnings` | 0 avisos (2 ignorados, con argumento y guarda) |
 | `dart analyze` | sin incidencias |
@@ -144,9 +144,10 @@ Tres pararon el trabajo y **las tres tenían razón**:
 
 - **Dos máquinas.** Todo es loopback en un host: una NIC, un switch, un
   cortafuegos y un cable quedan fuera. **Fase 19.**
-- **Que QYR-0363 tenga control.** Está arreglado y verificado a mano; la prueba
-  que lo guardaría se quedó colgada y **se retiró en vez de dejarla en rojo**. La
-  ficha lo dice: un arreglo cuya prueba nunca ha fallado es una conjetura.
+- ~~Que QYR-0363 tenga control.~~ **Lo tiene, y se ha visto fallar.** Al primer
+  intento se colgaba y se retiró en vez de dejarla en rojo; lo que la colgaba era
+  el puerto compartido, no ella. Con el `tearDown` esperando a que el socket se
+  suelte, la prueba pasa con la normalización y **no pasa sin ella**.
 - **Que la Release publicada esté arreglada.** Los dos P0 están corregidos en la
   rama; la Release sigue rota y su retractación es lo primero de la siguiente
   sesión.

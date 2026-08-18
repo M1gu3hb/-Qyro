@@ -2,7 +2,7 @@
 
 ## QYR-0363 — Una ruta con barras normales mandaba el archivo a otro sitio
 
-- Estado: **ARREGLADO**, control pendiente
+- Estado: **CERRADO**
 - Severidad: **ALTA** (no P0: el selector del sistema no produce estas rutas)
 - Fase: 21
 
@@ -25,15 +25,21 @@ corrompería nombres en vez de arreglar rutas.
 «nothing was materialised». Los bytes **sí** habían llegado; estaban en
 `destino/salida/`.
 
-**Lo que falta, y por eso el estado no es CERRADO:** el control. Se escribió una
-prueba que manda una ruta con barras a propósito y **se queda colgada**, sin
-diagnosticar. Se retiró del árbol en vez de dejarla en rojo. **Un arreglo cuya
-prueba nunca ha fallado es una conjetura**, y ésta es una conjetura bien
-argumentada y verificada de refilón — no una comprobación.
+**El control, y por qué tardó dos intentos.** La primera vez la prueba se quedó
+colgada y **se retiró del árbol en vez de dejarla en rojo**. Lo que la colgaba no
+era ella: las cuatro casillas comparten el puerto fijo de ADR-0041 y no pueden
+solaparse, y hasta que el `tearDown` no esperó a que el socket se soltara,
+cualquier prueba añadida al final se quedaba esperando un puerto ocupado.
+
+Con eso arreglado, el control existe y **se ha visto fallar a propósito**:
+quitando la normalización de `_commonRoot`, la prueba no pasa; poniéndola, pasa.
+Falla por agotar el tiempo y no por la aserción —el envío con la raíz mal
+derivada no llega a completarse— y eso es más lento y menos claro de lo ideal,
+pero **distingue**, que es lo que se le pide a un control.
 
 **La pregunta que cierra esta ficha:** ¿aterriza en `destino/` un archivo cuya
-ruta se escribió con barras normales? Se ha visto a mano, **no hay prueba que lo
-guarde**.
+ruta se escribió con barras normales? **Sí, y hay una prueba que lo guarda y que
+se ha visto fallar sin el arreglo.**
 
 ## QYR-0362 — La GUI tampoco había enviado nunca un archivo
 
