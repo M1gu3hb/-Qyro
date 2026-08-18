@@ -1,0 +1,15 @@
+[package]
+name = "qyro_serial"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The serial channel: a file into a machine that cannot read a QR, over a line that can answer back."
+
+[lib]
+path = "src/lib.rs"
+
+# **Nothing.** The protocol talks to `Read + Write` and has no idea what is
+# underneath, which is what lets the whole thing be tested over a pipe without a
+# port in the building (ADR-0045 §3). Opening a real port is a separate,
+# swappable adapter and its dependency lives with the consumer, not here.
+[dependencies]

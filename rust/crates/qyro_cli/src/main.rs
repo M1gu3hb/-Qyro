@@ -33,6 +33,7 @@
 
 mod flows;
 mod optical;
+mod serial;
 mod term;
 
 #[cfg(test)]
@@ -70,6 +71,18 @@ enum Command {
     Beam {
         file: String,
     },
+    /// The serial channel: ports, and the receiver to paste into the old machine.
+    Serial {
+        port: Option<String>,
+    },
+    SerialSend {
+        file: String,
+        port: String,
+    },
+    SerialReceive {
+        port: String,
+        out: String,
+    },
     Help,
     /// The arguments did not make sense, and the message says which.
     Refused(String),
@@ -95,6 +108,9 @@ fn parse(args: &[String]) -> Command {
         "whoami" => Command::WhoAmI,
         "find" => Command::Find,
         "qr" => Command::Qr,
+        "serial" => Command::Serial {
+            port: flag(args, "--port"),
+        },
         "beam" => {
             let Some(file) = args.get(1).cloned() else {
                 return Command::Refused("beam needs a file: qyro beam <file>".to_owned());
@@ -107,9 +123,14 @@ fn parse(args: &[String]) -> Command {
                     "send needs a file: qyro send <file> --to <code>".to_owned(),
                 );
             };
-            let Some(to) = flag(args, "--to") else {
+            let to = flag(args, "--to");
+            if let Some(port) = flag(args, "--serial") {
+                return Command::SerialSend { file, port };
+            }
+            let Some(to) = to else {
                 return Command::Refused(
-                    "send needs --to <code>, the pairing code the other device shows".to_owned(),
+                    "send needs --to <code>, the pairing code the other device shows,                      or --serial <port>"
+                        .to_owned(),
                 );
             };
             Command::Send {
@@ -118,6 +139,10 @@ fn parse(args: &[String]) -> Command {
                 expect: flag(args, "--expect"),
             }
         }
+        "recv" | "receive" if flag(args, "--serial").is_some() => Command::SerialReceive {
+            port: flag(args, "--serial").unwrap_or_default(),
+            out: flag(args, "--out").unwrap_or_else(|| "qyro-received.bin".to_owned()),
+        },
         "recv" | "receive" => Command::Receive {
             out: flag(args, "--out"),
             expect: flag(args, "--expect"),
@@ -164,6 +189,9 @@ fn run(command: Command, vt: Vt) -> i32 {
         Command::Find => flows::find(vt),
         Command::Qr => flows::qr(vt),
         Command::Beam { file } => flows::beam(&file, vt),
+        Command::Serial { port } => serial::overview(port.as_deref(), vt),
+        Command::SerialSend { file, port } => serial::send(&file, &port, vt),
+        Command::SerialReceive { port, out } => serial::receive(&port, &out),
         Command::Send { file, to, expect } => flows::send(&file, &to, expect.as_deref(), vt),
         Command::Receive { out, expect } => flows::receive(out.as_deref(), expect.as_deref(), vt),
         Command::Refused(why) => {
