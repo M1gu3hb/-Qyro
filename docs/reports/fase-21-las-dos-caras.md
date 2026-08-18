@@ -1,9 +1,9 @@
 # Fase 21 — las dos caras se hablan
 
-**Rama** `claude/qyro-cerrar-cadena-12` · **Commit del informe** `52fa4d5` ·
+**Rama** `claude/qyro-cerrar-cadena-12` · **Commit del informe** `c111cb0` ·
 **2026-08-18**
 
-**Puerta ejecutada en `52fa4d5`, el commit que este informe nombra**
+**Puerta ejecutada en `c111cb0`, el commit que este informe nombra**
 (comprobación 16).
 
 ---
@@ -130,7 +130,7 @@ Tres pararon el trabajo y **las tres tenían razón**:
 
 ---
 
-## 6. La puerta, en `52fa4d5`
+## 6. La puerta, en `c111cb0`
 
 | Comprobación | Resultado |
 |---|---|
