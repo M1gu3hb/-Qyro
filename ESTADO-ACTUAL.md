@@ -15,6 +15,29 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
+**Fase 16 — HECHA.** Informe en `docs/reports/fase-16-canal-serie.md`, puerta
+corrida en `5699fcd`.
+
+| Commit | Qué |
+|---|---|
+| `4e88f37` | **ADR-0045 congelada**, en commit propio antes del código |
+| `5699fcd` | `qyro_serial` (ARQ + CRC32 + Base64), los tres comandos, y el generador del receptor |
+
+**El defecto que encontró ejecutar el script generado, antes de enviar nada:**
+`BLOCK_BYTES` era 512, que no es múltiplo de tres, así que cada bloque codificaba
+con relleno `=` y al concatenarlos el `=` quedaba en medio del flujo.
+`certutil` lo rechaza —*«DecodeFile devolvió Datos no válidos. 0x8007000d»*— y la
+transferencia habría informado de éxito con la otra máquina vacía. Ninguna prueba
+interna lo veía: el decodificador de Qyro trabaja línea a línea y estaba de
+acuerdo consigo mismo. **510**, y la invariante es un `const assert`.
+
+**La puerta se puso en rojo y no por el código:** `rqrr` arrastra `lru` 0.12.5
+con dos avisos de unsoundness y fija esa minor. Ignorados en `.cargo/audit.toml`
+con qué son, por qué no llegan al producto y **qué los borra** — y con una guarda
+que falla si `rqrr` deja de ser `dev-dependency`.
+
+---
+
 **Fase 15 — HECHA.** Informe en `docs/reports/fase-15-canal-optico.md`, puerta
 corrida en `dc993d3`.
 
@@ -73,12 +96,11 @@ corrida en `07278ff`, el commit que el informe nombra.
 ## 2. Lo siguiente, en orden
 
 ```
-16 → 21 → 22 → 17 → 18 → 19 → 20 → 23
+21 → 22 → 17 → 18 → 19 → 20 → 23
 ```
 
-- **16 — canal serie.** Sin abrir. **Es lo siguiente.**
 - **21 — las dos caras se hablan.** GUI ↔ CLI. Hoy nadie las ha puesto una
-  contra la otra ni una vez.
+  contra la otra ni una vez. **Es lo siguiente.**
 - **22 — lo que la gente hace de verdad.** Carpetas, tamaño, interrupción.
 
 ---
@@ -94,6 +116,11 @@ corrida en `07278ff`, el commit que el informe nombra.
   brillo y pantalla en ángulo son fase 19.
 - **El teléfono no acumula frames todavía.** El motor los produce y son legibles;
   el lado Android que los junta no existe.
+- **Ningún cable serie ha llevado un byte de Qyro.** El protocolo se probó
+  sobre una cola en proceso y `certutil` sobre bytes reales; los dos puertos de
+  esta máquina son endpoints Bluetooth, no un par enlazado. Fase 19.
+- **El canal serie no llega a la GUI.** No hay símbolo en la frontera C, y
+  ninguna pantalla lo menciona.
 - **La reanudación del canal óptico no existe** (D11). ADR-0044 §5 la exige para
   sesiones largas; el límite de 20 MB es lo que hoy impide llegar a una.
 - **La GUI de escritorio no tiene descubrimiento.** No hay símbolo en la
