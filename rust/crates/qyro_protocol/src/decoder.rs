@@ -314,7 +314,7 @@ impl FrameDecoder {
 
     /// Returns the next complete frame, or `None` when more bytes are needed.
     ///
-    /// The declared lengths are validated by [`FrameHeader::decode`] before this
+    /// The declared lengths are validated by [`crate::FrameHeader::decode`] before this
     /// method computes how many bytes to wait for, so a hostile length becomes
     /// an error instead of a reservation or an unbounded wait.
     ///

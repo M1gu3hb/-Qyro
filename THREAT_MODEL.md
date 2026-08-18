@@ -143,6 +143,49 @@ y una prueba que lo observa.
 
 ---
 
+---
+
+## 4.bis. Los tres canales que este documento no describía (fase 18)
+
+Hasta aquí, **todo lo de arriba describe un canal**: TCP autenticado sobre una
+LAN, con un handshake de cuatro mensajes. Los otros tres tienen adversarios
+distintos, y no tenerlos escritos era la mentira por omisión más grande que
+quedaba en este archivo.
+
+### El canal óptico — **es difusión, no punto a punto**
+
+> **Una pantalla que enseña un QR se lo enseña a la habitación entera.**
+
+Eso no es una metáfora. Es la propiedad que lo separa de todo lo demás en este
+documento, y de ella salen las cuatro filas siguientes.
+
+| Amenaza | Qué pasa de verdad |
+|---|---|
+| **El handshake de cuatro mensajes no llega hasta aquí, y no puede** | El producto **sí tiene** handshake autenticado —`qyro_crypto/src/handshake`, ADR-0028— y es lo que protege el canal de red. **Por este canal no pasa**: necesita ida y vuelta, la pantalla no ve a la cámara, y aquí sólo hay ida. **Todo lo que ese handshake garantiza —que el otro lado prueba poseer una clave— no llega a este canal.** Se declara perdido aquí, no reconquistado |
+| **Una segunda cámara en la habitación** | Recibe exactamente lo mismo que la primera, y el emisor **no se entera**. No hay nada que detectar: un observador pasivo de un canal de difusión no deja rastro |
+| **Una grabación, una foto con teleobjetivo, un hombro** | Igual. Y peor: una grabación se puede decodificar **después**, con calma, tantas veces como haga falta. Los frames que este canal emite en bucle durante minutos son un regalo para eso |
+| **Lo que `qyro beam` mueve va en claro** | El fountain **codifica, no cifra**: `qyro_fountain` es XOR de bloques con una semilla que viaja en la cabecera. Cualquiera que lea los QR reconstruye el archivo con el mismo código que el destinatario. **Este canal no tiene confidencialidad ninguna** |
+
+**La consecuencia, dicha como regla de producto y no como advertencia:** por el
+canal óptico se manda lo que se mandaría por un cartel en la pared. Una clave, un
+certificado o un `.env` **no**, salvo que ya estén cifrados por su cuenta.
+
+### El canal serie — el cable es una ventaja, y el modo degradado no autentica
+
+| Amenaza | Qué pasa de verdad |
+|---|---|
+| **El modo degradado no autentica nada** | El receptor de 15 líneas de PowerShell que `qyro serial` imprime **no hace handshake, no comprueba huellas y no cifra**. Escribe lo que llegue por el puerto. Es lo que permite recibir en una máquina que no puede instalar nada, y es exactamente por eso que no puede verificar nada |
+| **Quien tenga acceso físico al puerto** | Está dentro. No hay capa que lo impida |
+| **Y la ventaja, porque este documento tiene que ser honesto en las dos direcciones** | **Un cable físico es mucho más difícil de interceptar que el aire.** Para leer un RS-232 hay que estar en el cable; para leer una LAN basta con estar en la LAN, y para leer un QR basta con ver la pantalla. En un cuarto cerrado con dos máquinas y un cable, el serie es el canal **más** privado de los cuatro |
+
+### El enlace directo — la dirección nunca es identidad
+
+| Amenaza | Qué pasa de verdad |
+|---|---|
+| **El anuncio lleva la huella pública, y ahora también por broadcast** | Ya estaba dicho para mDNS. **Sigue siendo exacto y es peor en alcance**: el beacon de la fase 14 emite también a `255.255.255.255`, que por definición llega a todos los de la red física. La huella es estable, así que cualquiera sabe que este aparato volvió |
+| **ARP es inseguro, y por tanto una IP no dice quién es nadie** | RFC 3927 §5: *«The ARP protocol is insecure. A malicious host may send fraudulent ARP packets…»*. **La dirección de un peer no es su identidad.** Lo único que ata una conversación a alguien es la clave que prueba poseer en el handshake — y en un enlace directo, la huella leída en voz alta. Un código de emparejamiento con la IP correcta y una huella distinta es un aparato distinto, y por eso la comparación de huellas no es opcional |
+| **APIPA no cambia nada de lo anterior** | Un enlace sin router no tiene menos adversarios: tiene los mismos, en un cable |
+
 ## 5. Amenazas reconocidas SIN control
 
 Esta sección es el punto del documento. Lo que está aquí **no está defendido**.

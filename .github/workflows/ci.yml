@@ -73,6 +73,16 @@ jobs:
       # `cfg(test)` and crate-private, so they no longer need a feature flag and
       # can no longer be skipped by running the default set.
       - run: cargo test --workspace
+      # D6 de deuda-de-calidad, cerrada en la fase 18. Un enlace intra-doc roto
+      # no cambia el comportamiento, y por eso llevaba meses sin puerta: la
+      # documentacion de este taller es donde vive el argumento, y un enlace
+      # que no lleva a ningun sitio es un argumento que nadie puede seguir.
+      #
+      # Entra sola en scripts/gate.ps1, que lee este archivo en vez de llevar su
+      # propia lista.
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
       # ADR-0040, and the one step that fails on every commit before phase 11.
       #
       # Two **separate processes** open the same identity file through

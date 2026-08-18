@@ -2,6 +2,24 @@
 
 **2026-08-19** · **rama unica: `main`**
 
+## Fase 18 — la verdad, y dos frases que eran falsas
+
+- **La Release prometia cifrado sin decir por que canal.** Es cierto por la red;
+  el QR y el serie degradado **no cifran nada** — el fountain codifica, que no es
+  lo mismo. Corregido a «**Por la red**...», con las excepciones nombradas.
+- **`THREAT_MODEL.md` describia un canal de cuatro.** §4.bis, nueva: el optico es
+  **difusion, no punto a punto** y no puede haber handshake; el serie degradado
+  no autentica nada **y un cable es el canal mas privado de los cuatro**; y una
+  direccion nunca es una identidad (RFC 3927 §5).
+- **Deuda:** D1 y D6 cerradas. D2 ya lo estaba. Quedan cinco, **y ninguna es una
+  afirmacion falsa**.
+
+**D6 se gano el sueldo al primer intento**: tres enlaces rotos, uno de ellos
+publico apuntando a un item privado. Y **entro sola en la puerta** — `gate.ps1`
+lee `ci.yml`, asi que paso de 5 comandos a 6 sin tocar el script.
+
+---
+
 ## Fase 17 — cerrada, con el binario en CI y no aqui
 
 ADR-0049 congelada. Job `win7-builds.yml` con `-Z build-std` y los cuatro

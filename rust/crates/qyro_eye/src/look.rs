@@ -31,6 +31,6 @@ pub enum Look {
     Repeat,
     /// Código nuevo, con cuántos bloques faltan.
     Progress { solved: usize, total: usize },
-    /// Con éste ya está: el archivo se puede sacar con [`Eye::finish`].
+    /// Con éste ya está: el archivo se puede sacar con [`crate::Eye::finish`].
     Complete,
 }

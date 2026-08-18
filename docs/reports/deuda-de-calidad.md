@@ -38,12 +38,12 @@ fecha — fase 14. No son deuda difusa: son trabajo con su fase asignada.
 
 | # | Qué | Dónde | Tamaño |
 |---|---|---|---|
-| D1 | **Mojibake**: 30 secuencias `Ã¢â‚¬â€` y similares, UTF-8 leído como Latin-1 | `rust/crates/qyro_session/src/session.rs`, y algunas en `qyro_ffi` | Mecánico. Un paso de reencodado y una guarda que impida el regreso |
-| D2 | **Dos `- Estado:` duplicados** en la misma ficha | QYR-0088 y QYR-0089 de `BUGS_PENDING.md` | Dos líneas. El script de recuento lee el primero, así que el segundo es ruido que puede mentir |
+| ~~D1~~ **CERRADA (fase 18)** | ~~**Mojibake**: 30 secuencias `Ã¢â‚¬â€` y similares, UTF-8 leído como Latin-1 | `rust/crates/qyro_session/src/session.rs`, y algunas en `qyro_ffi` | **Cerrada el 2026-08-19.** 46 secuencias reparadas con `tools/fix_mojibake.py` y 13 guiones largos a mano. **Costó dos intentos fallidos y los dos enseñan algo:** parecía Latin-1 y era **Windows-1252** —las secuencias traen U+201A y U+2013, que en Latin-1 no existen—, y encima la codificación era **mixta**: aparece U+009D, un byte que cp1252 **no define** y que se decodificó como Latin-1. Un `encode('cp1252')` a secas revienta ahí. Los 13 últimos no tenían vuelta limpia —los bytes eran `E2 80 E2 80 9D`, un guion estropeado dos veces— y se sustituyeron a mano, con el tool diciendo en voz alta lo que no podía |
+| ~~D2~~ **CERRADA (2026-08-19)** | ~~**Dos `- Estado:` duplicados** en la misma ficha~~ | QYR-0088 y QYR-0089 | **Y era peor de lo que decía esta entrada.** Al arreglarlo, `check_docs_consistency` encontró que **QYR-0089 estaba duplicada entera**, con la copia sobrante pegada al principio del archivo, y que `BUGS_PENDING.md` **no tenía cabecera**. Los dos `- Estado: abierto` fantasma se contaban como fichas abiertas: el registro decía «155 fichas, 0 abiertas» y son **167, 1 abierta** |
 | D3 | `qyro_fs::history` graba y nada lo lee | frontera C | ~150 líneas: un símbolo que emita registros como texto. Desbloquea QYR-0358 |
 | D4 | `Progress::item` vale cero siempre | `qyro_session`, `qyro_ffi`, Dart | Superficie nueva del motor. La frase ya está corregida (QYR-0318); el campo sigue sin asignarse |
 | D5 | El receptor no informa de progreso por bytes | `qyro_transfer` | Misma superficie que D4 (QYR-0317) |
-| D6 | `cargo doc -D warnings` no está en la puerta | CI | Un job. Un enlace intra-doc roto no cambia comportamiento |
+| ~~D6~~ **CERRADA (fase 18)** | ~~`cargo doc -D warnings` no está en la puerta~~ | CI | **Cerrada el 2026-08-19**, y cazó tres enlaces rotos en su primera ejecución: `FrameHeader::decode`, `Eye::finish` y uno **público apuntando a un item privado** en `qyro_identity_store` — un enlace muerto para exactamente quien lee los docs generados y no puede ver ese item. Entra sola en `scripts/gate.ps1`, que lee `ci.yml`: la puerta pasó de 5 comandos a 6 sin tocar el script |
 | D8 | **Un fallo visto una vez y no reproducido.** `cargo test --workspace` dio `24 passed; 1 failed` en la misma invocación que corrió `cargo fmt --all` antes; tres corridas posteriores en verde | workspace | Se anota en vez de barrerse. La hipótesis —un binario compilado de fuente pre-formato— es plausible y **no está comprobada**, y una hipótesis no comprobada no cierra nada. Si vuelve, el nombre del test es lo primero que hay que capturar |
 | D7 | El paquete `http` viaja en el binario de Windows sin que nadie lo llame | `file_selector_platform_interface` | Evitarlo exige `IFileOpenDialog` a mano, que ADR-0034 §4.2 rechaza (QYR-0326) |
 | D9 | **`mdns-sd` casi dobla el binario y nadie lo midió.** `qyro.exe` de `x86_64-pc-windows-msvc`: **666 624 bytes en `458d4bd`, 1 295 872 en `3ecebed`** — el commit que añadió `qyro find`. **+614 KB por una dependencia**, en un producto cuyo argumento es un binario portátil que cabe en cualquier sitio | `qyro_net`, `qyro_cli` | Medido con `cargo build --locked --release -p qyro_cli --target x86_64-pc-windows-msvc`, el mismo comando que usa `cli-builds.yml`. **No se toca ahora**: el descubrimiento funciona y quitarlo sin sustituto es cambiar el producto por una cifra. Lo que sí cambia es que ADR-0043 ya trae un `Beacon` propio con `socket2` —multicast y broadcast por interfaz, sin `mdns-sd`— y **ese camino, ya conectado y medido, cuesta 8 192 bytes.** 614 KB contra 8 KB por el mismo trabajo: **si el beacon basta en la fase 19 con red de verdad, esta dependencia deja de tener dueño.** Decisión con fecha y con cifra, no deuda difusa |
@@ -52,9 +52,14 @@ fecha — fase 14. No son deuda difusa: son trabajo con su fase asignada.
 | D12 | **Sólo se compilaba en Windows**, y por eso un `#[cfg(windows)]` mal pegado tuvo al repositorio sin compilar en Linux durante un día, con 193 ejecuciones de CI en rojo | workspace, CI | **Cerrado en el sitio** (2026-08-18): arreglado, congelado en ADR-0043 enmienda 2, y convertido en la **comprobación 17** — `cargo check --workspace --all-targets` contra Linux por código de salida antes de cualquier informe. En esta máquina, `rustup target add x86_64-unknown-linux-gnu`; `check` no enlaza, así que no hace falta enlazador cruzado |
 | D13 | **El registro tenía un estado inventado.** QYR-0362 estaba en «arreglado, evidencia parcial», que no es `cerrado` ni `descartado` | `BUGS_PENDING.md` | **Cerrado**: era un pendiente disfrazado de estado. Se cerró con la evidencia que entretanto apareció —la matriz entrega desde la GUI byte a byte— y se comprobó el vocabulario de las 165 fichas: **ninguna fuera de `cerrado`, `descartado` o `abierto`** |
 
-**Nada de esto detiene una fase.** D1 y D2 son cosméticos con fecha en la 18. D3
-tiene dueño y ficha. D4 y D5 son la misma superficie y esperan a que alguien la
-necesite de verdad.
+**Nada de esto detiene una fase.** **D1, D2, D6, D10, D12 y D13 están cerradas.**
+D3 tiene dueño y ficha. D4 y D5 son la misma superficie y esperan a que alguien
+la necesite de verdad. D9 y D11 tienen fase asignada — 19 y 22.
+
+**Lo que queda abierto son cinco entradas, y ninguna es una afirmación falsa**,
+que era lo que la fase 18 existía para cazar. Las falsas —la Release prometiendo
+cifrado por cuatro canales, y un modelo de amenazas que describía uno— se
+corrigieron en esa fase.
 
 ---
 

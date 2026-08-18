@@ -135,8 +135,10 @@ pub trait IdentityStore {
 
 /// Builds the byte string a wrapper is handed as additional entropy.
 ///
-/// Twelve header bytes, not sixteen. See [`blob::ENTROPY_HEADER_LEN`] and
-/// QYR-0048.
+/// Twelve header bytes, not sixteen. See `blob::ENTROPY_HEADER_LEN` -- que es
+/// privado, asi que va en comillas y no como enlace: documentacion publica que
+/// enlaza a un item privado deja un enlace muerto para quien lea los docs
+/// generados, que es justo quien no puede ver ese item. QYR-0048.
 #[must_use]
 pub fn entropy_for(version: u8, wrap: u8) -> Vec<u8> {
     let mut out = Vec::with_capacity(QYRO_IDENTITY_ENTROPY_V1.len() + blob::ENTROPY_HEADER_LEN);
