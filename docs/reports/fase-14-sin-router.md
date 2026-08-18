@@ -181,6 +181,32 @@ que este proyecto tiene prohibido inventar.
 
 ---
 
+## 5.bis. CORRECCIÓN (2026-08-18) — la puerta de este informe **no** era verde
+
+Este informe dijo «puerta en verde» y **sólo se había compilado en Windows**.
+
+`dab9fa3` —el commit del beacon de esta misma fase— insertó los `pub use` **entre
+un `#[cfg(windows)]` y el elemento que guardaba**, así que el atributo se pegó al
+bloque nuevo. Fuera de Windows el beacon desapareció y `MdnsDiscovery` se exportó
+sin existir, y `qyro_session::discovery` dejó de compilar. **El repositorio no
+compilaba en Linux desde esta fase**, y se llevó por delante 193 ejecuciones de
+CI.
+
+**Lo que decían las tablas de abajo era cierto en Windows y falso como
+afirmación.** Se corrige aquí en vez de reescribirse arriba: el informe es
+histórico y lo que se escribió se escribió.
+
+Arreglado moviendo el atributo a su sitio, con la decisión congelada en
+**ADR-0043 enmienda 2** y una comprobación nueva que lo impide en adelante:
+
+> **Comprobación 17** — ninguna afirmación de «puerta en verde» vale sin
+> `cargo check --workspace --all-targets` contra Linux, por código de salida.
+
+Verificado tras el arreglo: `cargo check --workspace --all-targets --target
+x86_64-unknown-linux-gnu` **sale 0**.
+
+---
+
 ## 6. La puerta, en `07278ff`
 
 | Comprobación | Resultado |

@@ -54,11 +54,23 @@ mod guards;
 #[cfg(test)]
 mod tests;
 
-#[cfg(windows)]
+// **El beacon NO lleva `cfg`, y es lo contrario de un descuido.** Es la
+// implementación en el árbol que existe precisamente para las plataformas sin
+// responder de mDNS (ADR-0043 §5): sólo usa `std`, `socket2` e `if-addrs`, los
+// tres multiplataforma.
+//
+// Aquí había un `#[cfg(windows)]` que pertenecía a la línea de abajo y que
+// `dab9fa3` dejó pegado a este bloque al insertarlo **entre el atributo y el
+// elemento que guardaba**. Resultado: el beacon desapareció fuera de Windows y
+// `MdnsDiscovery` se exportó en todas partes sin existir. La misma forma que el
+// `#[cfg(test)]` separado de `mod tests` el mismo día.
 pub use beacon::{
     BEACON_PORT, Beacon, BeaconSwarm, MAX_BEACON_PAYLOAD, MDNS_GROUP_V4, announcement_targets,
     beacon_interfaces,
 };
+
+/// Sólo Windows: `mdns-sd` está bajo `cfg(windows)` en `discovery.rs`.
+#[cfg(windows)]
 pub use discovery::MdnsDiscovery;
 pub use discovery::{
     PeerDiscovery, PeerEndpoint, SERVICE_TYPE, TXT_FINGERPRINT_KEY, fingerprint_from_txt,

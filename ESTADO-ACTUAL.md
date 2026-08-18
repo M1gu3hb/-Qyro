@@ -8,6 +8,27 @@ sesión abajo.
 
 ---
 
+## 0.P0 — EL REPOSITORIO NO COMPILABA EN LINUX. Arreglado.
+
+`qyro_net/src/lib.rs`: `dab9fa3` metió los `pub use` del beacon **entre un
+`#[cfg(windows)]` y el elemento que guardaba**. El atributo se pegó al bloque
+nuevo, así que fuera de Windows el beacon desapareció y `MdnsDiscovery` se
+exportó sin existir. 193 ejecuciones de CI en rojo.
+
+**Decisión congelada en ADR-0043 enmienda 2:** el beacon **es multiplataforma y
+no lleva `cfg`** —sólo usa `std`, `socket2` e `if-addrs`, y es la implementación
+que la §5 exige para las plataformas sin responder de mDNS—; sólo
+`MdnsDiscovery` es de Windows.
+
+**Comprobación 17, que sale de aquí:** ninguna «puerta en verde» sin
+`cargo check --workspace --all-targets` contra Linux por código de salida. En
+esta máquina: `rustup target add x86_64-unknown-linux-gnu` y
+`--target x86_64-unknown-linux-gnu`; `check` no enlaza, no hace falta enlazador
+cruzado. **Medido tras el arreglo: sale 0.**
+
+---
+
+
 ## 1. Lo que se cerró en esta sesión
 
 **El gate rojo, primero.** `check_docs_consistency` estaba en rojo en `5459a64`
