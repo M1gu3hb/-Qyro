@@ -109,12 +109,35 @@ lados hacen `step` en bucle. Si el protocolo necesita una ida y vuelta por
 elemento, los dos extremos se turnan para gastar 250 ms esperando al otro — que
 es exactamente la forma de «1,2 s por elemento, sin importar el tamaño».
 
-**Lo que hay que decidir, y es diseño y no un parche:** o el bucle no vuelve a
-`read_frame` hasta tener algo que hacer, o `read_frame` deja de ser la espera
-—por ejemplo esperando a que el socket sea legible en vez de a que venza un
-reloj— o el protocolo deja de necesitar una ida y vuelta por elemento. Las tres
-son distintas y **ninguna se elige sin medir cuál de los dos lados espera**, que
-es lo primero que no está hecho.
+### Y cuál de los dos lados espera, medido
+
+Contando lecturas vencidas por rol (instrumentación temporal, revertida), **20
+archivos**:
+
+```
+DIAG lecturas-vencidas emisor=75 receptor=1
+```
+
+**El emisor gasta prácticamente todas: ~3,75 lecturas vencidas por archivo, y el
+receptor ninguna.** A 250 ms cada una son ~0,94 s por archivo, que es casi todo
+el 1,24 s medido.
+
+**Eso cierra la pregunta de diseño.** El receptor no está esperando: está
+trabajando y contestando. **El emisor manda un elemento y se bloquea en una
+lectura temporizada** hasta que llega la respuesta, en vez de seguir enviando lo
+que ya tiene listo.
+
+Y hay una pieza que dice que no tenía por qué: `qyro_transfer` ya lleva ventana
+—`WINDOW_CHUNKS` y `chunks_in_flight()`— es decir, el protocolo **ya está pensado
+para tener varias cosas en vuelo**. Lo que hace el bucle de sesión es
+serializarlo igualmente.
+
+**El arreglo, ahora sí acotado:** que el emisor no consuma un `READ_TIMEOUT`
+entero cuando todavía tiene trabajo que poner en el cable. Las otras dos opciones
+—cambiar la espera por «el socket es legible», o quitar la ida y vuelta del
+protocolo— **quedan descartadas como primera medida**: la primera no hace falta
+si el emisor no espera, y la segunda toca el formato de cable para arreglar algo
+que es del bucle.
 
 **Lo que esto ya explica sin más trabajo:** por qué 100 archivos «fallan»
 llegando todos. No hay ningún límite de cantidad — el reloj de 60 s se agota
@@ -145,10 +168,10 @@ que la explicación bonita era falsa.
 para doscientos archivos, y eso es peor producto.
 
 **La pregunta que cierra esta ficha:** ¿cuánto tarda un archivo pequeño, y por
-qué? **1,24 s, y el porqué está medido**: el bucle del receptor espera varias
-lecturas vencidas por elemento, y el tiempo escala con `READ_TIMEOUT` (7,5× al
-bajarlo). Falta el **arreglo**, que no es tocar la constante — por eso la ficha
-sigue abierta.
+qué? **1,24 s, y el porqué está medido de punta a punta**: el **emisor** gasta
+~3,75 lecturas vencidas de 250 ms por archivo mientras el receptor no espera
+nada. Falta el **arreglo** —que el emisor no espere teniendo trabajo— y por eso
+la ficha sigue abierta. **El diagnóstico ya no tiene huecos.**
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 

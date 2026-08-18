@@ -81,11 +81,16 @@ se suelte— así que cada uno es una casilla más:
    bucle, así que una ida y vuelta por elemento significa que ambos se turnan
    para esperar el reloj.
 
-   **Lo primero que falta, y decide entre tres arreglos distintos:** medir
-   **cuál de los dos lados espera**. Después: o el bucle no vuelve a
-   `read_frame` sin tener nada que hacer, o la espera deja de ser un reloj y pasa
-   a ser «el socket es legible», o el protocolo deja de necesitar la ida y vuelta
-   por elemento.
+   **Medido cuál de los dos lados espera: el EMISOR.** Con 20 archivos,
+   `emisor=75 receptor=1` lecturas vencidas — ~3,75 por archivo a 250 ms son
+   ~0,94 s de los 1,24. El receptor no espera: trabaja y contesta.
+
+   **El arreglo queda acotado a uno:** que el emisor no consuma un
+   `READ_TIMEOUT` entero cuando todavía tiene trabajo que poner en el cable.
+   `qyro_transfer` ya tiene ventana (`WINDOW_CHUNKS`, `chunks_in_flight()`), o
+   sea que el protocolo ya está pensado para varias cosas en vuelo — es el bucle
+   de sesión el que lo serializa. Las otras dos opciones quedan descartadas como
+   primera medida y está escrito por qué.
 
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
