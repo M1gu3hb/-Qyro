@@ -126,8 +126,13 @@ fn collect_mdns(window: Duration, peers: &mut Vec<FoundPeer>) {
 /// [`SessionError::BadArgument`] because there was genuinely no backend; now
 /// there is one, and the honest thing is to contribute nothing here rather than
 /// to fail a browse that the beacon can answer.
+///
+/// El parámetro es `&mut [FoundPeer]` y no `&mut Vec<FoundPeer>` **a propósito**:
+/// esta versión no añade nada, y pedir un `Vec` sería pedir la capacidad de
+/// crecer que no se usa. `clippy::ptr_arg` lo dice en Linux, que es el único
+/// sitio donde esta función existe.
 #[cfg(not(windows))]
-fn collect_mdns(_window: Duration, _peers: &mut Vec<FoundPeer>) {}
+fn collect_mdns(_window: Duration, _peers: &mut [FoundPeer]) {}
 
 /// Adds whoever answered the in-tree beacon, on every interface at once.
 ///

@@ -3,7 +3,7 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-19T00:00:00Z
+- Updated UTC: 2026-08-19T09:00:00Z
 - Branch: main (rama única desde 2026-08-18)
 - Verified commit: afaa1521ac9c7a7720af8dcc109b4386a69ce763
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
@@ -142,15 +142,49 @@ contra el código que existe: `THREAT_MODEL.md`.
   aseverados. **No verificado: ningún cable** — los dos puertos de esta máquina
   son endpoints Bluetooth, no un par enlazado. Fase 19. **No llega a la GUI** y
   ninguna pantalla lo menciona.
-- `cargo test --workspace`: **739 pasadas, 0 fallos** (eran 639; la 13 sumó el
-  CLI, la 14 el beacon, la 15 la fuente y el canal óptico, la 16 el serie). `flutter test`:
-  **122 pasadas** (eran 92; la 14 sumó el cliente de descubrimiento y su
-  pantalla). Las saltadas de Dart siguen saltando sin la biblioteca nativa
-  compilada o sin el manifiesto fusionado, y **saltada no es pasada**.
+- `cargo test --workspace`: **son dos números, no uno, y decir uno solo era un
+  error de este archivo.** Las pruebas están gateadas por `cfg`, así que las dos
+  plataformas ejecutan conjuntos distintos **por construcción** — DPAPI y
+  `mdns-sd` sólo existen en Windows; el stub de `collect_mdns` y sus vecinos sólo
+  en Linux. Un número único obliga a que una de las dos plataformas esté mal
+  contada siempre.
+
+  | Plataforma | Pruebas | De dónde sale |
+  |---|---|---|
+  | **Windows** | **753 pasadas, 0 fallos** | medido en esta máquina el 2026-08-19 |
+  | **Linux** | lo que diga el trabajo `rust` de `ci.yml` | **de CI, no de aquí**: esta máquina no ejecuta binarios de Linux, sólo los compila y los lintea con `--target` |
+
+  El último recuento de Linux publicado fue **750**, y es **anterior** a los
+  cambios de hoy —el arreglo de `ptr_arg` y el salto del enlace simbólico—, así
+  que se cita como lo que es: la medida anterior, no la actual. **Inventar la
+  actual sería inventar evidencia.**
+
+  `flutter test`: **122 pasadas** (eran 92; la 14 sumó el cliente de
+  descubrimiento y su pantalla). Las saltadas de Dart siguen saltando sin la
+  biblioteca nativa compilada o sin el manifiesto fusionado, y **saltada no es
+  pasada** — igual que la del enlace simbólico, que ahora dice en voz alta que no
+  se ejecutó cuando a la consola le falta el privilegio.
 - `Cargo.lock`: **122 paquetes**, de los que 16 entran sólo por
   `dev-dependencies` (`rqrr` y su árbol) y no viajan en el binario.
   `pubspec.lock`: **45**.
-- `BUGS_PENDING.md`: **155 fichas, 0 abiertas.**
+- `BUGS_PENDING.md`: **167 fichas, 1 abierta** (QYR-0365).
+
+  Decía «155 fichas, 0 abiertas» y las dos mitades estaban mal. El registro tenía
+  tres defectos, y **el tercero lo encontró una guarda cuando yo creía haber
+  terminado**:
+
+  1. QYR-0088 y QYR-0089 llevaban **dos** `- Estado:` cada una — un `cerrado` y
+     un `abierto` viejo que sobrevivió al cierre.
+  2. **QYR-0089 estaba duplicada entera**, con la copia sobrante pegada al
+     principio del archivo. `check_docs_consistency` lo dijo —*«QYR-0089 has 2
+     entries; a finding has one state, not two»*— justo después de que yo diera
+     por buenos los dos primeros.
+  3. El archivo **no tenía cabecera**: empezaba con la ficha duplicada.
+
+  Ninguno cambiaba lo que informaba el script de recuento —lee el primer estado
+  y la primera aparición—, y los tres contradecían la ficha a quien la leyera
+  entera, que es la única forma en que alguien la lee de verdad. Retirados el
+  2026-08-19.
 
 **Lo que NO debe leerse como progreso:**
 

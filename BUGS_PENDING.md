@@ -1,4 +1,16 @@
-# Bugs y pendientes verificados
+# Registro de hallazgos
+
+Una ficha por hallazgo, **un solo `- Estado:`** y un solo bloque `## QYR-xxxx`.
+`check_docs_consistency` lo comprueba: encontró que QYR-0089 estaba **duplicada
+entera** —esta cabecera ocupa el sitio donde estaba la copia sobrante— y que
+QYR-0088 y QYR-0089 llevaban un `- Estado: abierto` viejo debajo del `cerrado`.
+
+Los tres se retiraron el 2026-08-19. Ninguno cambiaba lo que el script de
+recuento informaba —lee el primer estado y la primera aparición— y los tres
+contradecían la ficha a quien la leyera entera, que es la única forma en que
+alguien la lee de verdad.
+
+Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
 ## QYR-0367 — Un commit de una línea de documentación compilaba el árbol dos veces
 
@@ -2324,7 +2336,7 @@ Release publicada no es algo que se haga con el contexto justo.
   `.qyro-part` a propósito y exige que el mismo listado lo vea
 - Resolución: no arreglado. `rust/crates/qyro_fs/**` es del otro agente en este
   run. El arnés llama a `finish_item` y documenta por qué
-- Estado: abierto
+<!-- Aqui habia un segundo `- Estado: abierto`, del ciclo anterior, que sobrevivio al cierre. El script de recuento lee el PRIMERO, asi que este era ruido capaz de contradecir la ficha a quien la leyera entera. Retirado el 2026-08-19. -->
 - Fecha: 2026-08-11
 
 ## QYR-0089 — `TransferReject` existe en el protocolo y no lo emite ni lo entiende nadie
@@ -2350,7 +2362,7 @@ Release publicada no es algo que se haga con el contexto justo.
   El emisor termina en `SessionState::Rejected` y **aprende el motivo exacto**; se
   usa `NoRoom` y no la primera variante a propósito, así que un motivo que viniera
   de un `Default` falla la aserción
-- Estado: abierto
+<!-- Aqui habia un segundo `- Estado: abierto`, del ciclo anterior, que sobrevivio al cierre. El script de recuento lee el PRIMERO, asi que este era ruido capaz de contradecir la ficha a quien la leyera entera. Retirado el 2026-08-19. -->
 - Fecha: 2026-08-11
 
 ## QYR-0090 — Una prueba mía se cuelga bajo mutación en vez de fallar

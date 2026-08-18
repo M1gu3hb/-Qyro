@@ -1,24 +1,55 @@
-# Estado actual — el árbol limpio, en `main`
+# Estado actual — cinco arreglos, y la puerta que los habría cazado
 
-**2026-08-18** · **rama única: `main`** · informe en
-`docs/reports/limpieza-main.md`.
+**2026-08-19** · **rama única: `main`**
 
-**Esta sesión no abrió ninguna fase.** Dejó lo que había limpio: el P0 que
-impedía compilar en Linux, los 461 commits fusionados en `main`, las 19 ramas
-borradas tras comprobar que estaban contenidas, y las tres causas del diluvio de
-correos cerradas.
+## Comprobación 18 — la puerta se corre con **el mismo** comando que CI
 
-**Reglas nuevas que mandan sobre las anteriores:**
+La 17 decía «compila en Linux» y yo la cumplía con `cargo check`. **CI corre
+`cargo clippy --all-targets -- -D warnings`**, que es un comando *parecido* y no
+el mismo, así que un `clippy::ptr_arg` de Linux pasó mi puerta y tumbó CI.
 
-1. **Se acabaron las ramas.** Todo va a `main` directo. Sigue prohibido el
-   force-push y reescribir historia.
-2. **`ESTADO-ACTUAL.md` se actualiza DENTRO del commit de contenido**, nunca en
-   uno aparte. La comprobación 16 se cumple corriendo la puerta antes de empujar.
-3. **Comprobación 17:** ninguna afirmación de «puerta en verde» sin
-   `cargo check --workspace --all-targets` contra **Linux**, por código de
-   salida.
+Y al mirar la lista entera salió otro: **`cargo test --workspace --all-features`
+lo corre CI y no lo corría nadie aquí. La primera vez que se ejecutó, falló.**
 
-**Lo que sigue roto está en §6 del informe**, y lo primero es QYR-0365.
+**`scripts/gate.ps1` es la comprobación 18 en ejecutable**, y no lleva su propia
+lista: **lee `.github/workflows/ci.yml`** y ejecuta los `cargo` que encuentra,
+más el objetivo de Linux. Una lista escrita a mano se separa del flujo el día que
+alguien toca uno de los dos, y separarse es justo el defecto que esto evita.
+
+```
+pwsh -File scripts/gate.ps1
+```
+
+Hoy: **5 comandos de `ci.yml` + Linux, todos en verde.**
+
+## Los cinco arreglos
+
+1. **`ptr_arg` en Linux** — `collect_mdns` del stub de no-Windows pedía
+   `&mut Vec<FoundPeer>` sin añadir nada. Ahora `&mut [FoundPeer]`.
+2. **Los cuatro enlaces de la Release daban 404** — apuntaban a la rama borrada.
+   Reapuntados a `blob/main/`, y **comprobados los cuatro con `curl`: 200**.
+3. **`ci.yml` decía «No `paths:` filter, deliberately»** diez líneas debajo del
+   bloque `paths:` que lo desmiente.
+4. **El registro de fichas tenía tres defectos, y el tercero lo encontró una
+   guarda cuando yo creía haber terminado**: dos `- Estado:` en QYR-0088 y
+   QYR-0089, **QYR-0089 duplicada entera** al principio del archivo, y ninguna
+   cabecera. **167 fichas, 1 abierta** — antes decía «155, 0».
+5. **`STATUS.md` daba un número de pruebas y son dos.** Windows **753**, medido
+   hoy aquí; Linux, lo que diga CI — esta máquina compila y lintea para Linux
+   pero **no ejecuta sus binarios**, y el último publicado (750) es anterior a
+   los cambios de hoy. Se cita como la medida anterior, no como la actual.
+
+**De regalo:** la prueba del enlace simbólico fallaba en cualquier consola sin
+`SeCreateSymbolicLinkPrivilege` (error 1314) — indistinguible de «el resolvedor
+deja pasar un enlace». Ahora **dice en voz alta que no se ejecutó**, porque
+saltada no es pasada, y en `windows-latest` sigue corriendo de verdad.
+
+## Lo siguiente
+
+**24 → 22 → 17 → 18 → 19 → 20 → 23.** La 24 es la última capacidad que falta:
+`qyro beam` dibuja QR desde la fase 15 y **nadie los lee**. `R10` ya decidió la
+arquitectura y **lo primero no es código: medir píxeles por módulo en el aparato
+real** (`R10` §8 T1 — 640×480 da 3,07 px/módulo, el suelo exacto de `rqrr`).
 
 ---
 

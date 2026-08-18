@@ -36,10 +36,18 @@ on:
       - ".cargo/**"
       - ".github/workflows/ci.yml"
 
-# No `paths:` filter, deliberately. This job is the one that has to run on every
-# push whatever changed — it is what says the workspace still builds, still
-# passes, and still agrees with its own documentation. A filter here is a filter
-# on "is the repository sound" (QYR-0045).
+# **Este comentario decía «No `paths:` filter, deliberately» justo debajo del
+# bloque `paths:` que lo desmiente**, y estuvo así desde que QYR-0367 partió este
+# flujo. Un comentario que contradice a las diez líneas de encima es peor que
+# ninguno: quien lo lea creerá que el filtro no existe y no entenderá por qué su
+# commit no disparó nada.
+#
+# Lo que decía era cierto cuando se escribió, y la mitad que sigue siendo cierta
+# es ésta: **la solidez del repositorio no debe quedar detrás de un filtro.** Por
+# eso el trabajo `documentation` se fue a `documentation.yml` con sus propias
+# rutas — corre cuando cambia la documentación, que es cuando hace falta— y lo
+# que queda aquí compila y prueba código, así que se filtra por lo que se
+# compila (QYR-0045, QYR-0367).
 
 permissions:
   contents: read

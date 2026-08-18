@@ -415,13 +415,37 @@ fn an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed() {
 }
 
 #[cfg(unix)]
-fn symlink_file(target: &Path, link: &Path) {
+fn symlink_file(target: &Path, link: &Path) -> bool {
     std::os::unix::fs::symlink(target, link).unwrap();
+    true
 }
 
+/// Crea el enlace, o dice **por qué no pudo** en vez de fallar como si el
+/// código estuviera roto.
+///
+/// Windows exige `SeCreateSymbolicLinkPrivilege` para esto: sin modo
+/// desarrollador ni elevación, `symlink_file` devuelve el error 1314 y el
+/// `unwrap()` original convertía «a esta consola le falta un privilegio» en un
+/// fallo de prueba idéntico a «el resolvedor deja pasar un enlace». Son dos
+/// cosas distintas y el registro tiene que distinguirlas: la puerta local se
+/// vuelve inservible si un rojo puede significar cualquiera de las dos.
+///
+/// Los runners de `windows-latest` sí tienen el privilegio, así que **en CI esto
+/// se ejecuta de verdad** — que es donde la cobertura tiene que existir. Aquí
+/// devuelve `false` y la prueba lo dice en voz alta, porque **saltada no es
+/// pasada**.
 #[cfg(all(windows, feature = "windows-reparse-test"))]
-fn symlink_file(target: &Path, link: &Path) {
-    std::os::windows::fs::symlink_file(target, link).unwrap();
+fn symlink_file(target: &Path, link: &Path) -> bool {
+    match std::os::windows::fs::symlink_file(target, link) {
+        Ok(()) => true,
+        Err(error) if error.raw_os_error() == Some(1314) => {
+            println!(
+                "SALTADA: esta consola no tiene SeCreateSymbolicLinkPrivilege                  (error 1314). La prueba NO se ha ejecutado. En CI, sobre                  windows-latest, sí corre."
+            );
+            false
+        }
+        Err(error) => panic!("no se pudo crear el enlace: {error}"),
+    }
 }
 
 #[test]
@@ -438,7 +462,11 @@ fn a_symlink_at_the_final_part_component_is_refused_without_touching_its_target(
     let original = b"receiver-owned bytes outside the destination";
     fs::write(&victim, original).unwrap();
     let part_path = to.path("a.bin.qyro-part");
-    symlink_file(&victim, &part_path);
+    if !symlink_file(&victim, &part_path) {
+        // Sin privilegio no hay enlace que refutar, y afirmar sobre un archivo
+        // normal probaría otra cosa mientras aparenta probar ésta.
+        return;
+    }
     assert!(
         fs::symlink_metadata(&part_path)
             .unwrap()
