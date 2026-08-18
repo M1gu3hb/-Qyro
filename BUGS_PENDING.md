@@ -87,11 +87,34 @@ Es el latido que permite a un lector bloqueado notar una cancelación
 que no tiene nada que hacer — cambia una espera visible por consumo de CPU en un
 producto cuyo objetivo son máquinas viejas.
 
-**El defecto es que el bucle del receptor necesite varias lecturas vencidas por
-elemento.** Una lectura sólo debería vencer cuando de verdad no hay nada que
-leer; aquí vence entre elementos que ya están en camino. Lo que hay que mirar,
-por orden: dónde espera el receptor entre el final de un elemento y el principio
-del siguiente, y si hay una ida y vuelta por elemento que podría no existir.
+**El defecto es que el bucle necesite varias lecturas vencidas por elemento.**
+Una lectura sólo debería vencer cuando de verdad no hay nada que leer; aquí vence
+entre elementos que ya están en camino.
+
+### El mecanismo, leído en el código
+
+`qyro_session/src/session.rs:717`, dentro de `advance()`:
+
+```rust
+let inbound = match self.stream.read_frame() {
+    Ok(Some(frame)) => ...,
+    Ok(None) => None,        // <-- la lectura venció: 250 ms gastados
+    ...
+};
+```
+
+**Un `read_frame()` por `step()`, y `Ok(None)` significa «venció».** Así que cada
+`step` que no encuentra un marco cuesta el `READ_TIMEOUT` **entero**, y ambos
+lados hacen `step` en bucle. Si el protocolo necesita una ida y vuelta por
+elemento, los dos extremos se turnan para gastar 250 ms esperando al otro — que
+es exactamente la forma de «1,2 s por elemento, sin importar el tamaño».
+
+**Lo que hay que decidir, y es diseño y no un parche:** o el bucle no vuelve a
+`read_frame` hasta tener algo que hacer, o `read_frame` deja de ser la espera
+—por ejemplo esperando a que el socket sea legible en vez de a que venza un
+reloj— o el protocolo deja de necesitar una ida y vuelta por elemento. Las tres
+son distintas y **ninguna se elige sin medir cuál de los dos lados espera**, que
+es lo primero que no está hecho.
 
 **Lo que esto ya explica sin más trabajo:** por qué 100 archivos «fallan»
 llegando todos. No hay ningún límite de cantidad — el reloj de 60 s se agota

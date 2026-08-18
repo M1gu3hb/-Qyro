@@ -72,10 +72,20 @@ se suelte— así que cada uno es una casilla más:
    código. La constante se revirtió: es el latido de ADR-0028 §4.1, no un botón.
 
    **El arreglo no es bajarla** —multiplicaría por diez los despertares de un
-   hilo ocioso en máquinas viejas— sino que el bucle del receptor **deje de
-   necesitar varias lecturas vencidas por elemento**. Mirar, por orden: dónde
-   espera entre el final de un elemento y el principio del siguiente, y si hay
-   una ida y vuelta por elemento que podría no existir.
+   hilo ocioso en máquinas viejas— sino que el bucle deje de necesitar varias
+   lecturas vencidas por elemento.
+
+   **El mecanismo ya está localizado en el código:**
+   `qyro_session/src/session.rs:717` hace **un `read_frame()` por `step()`**, y
+   su `Ok(None)` es «venció» — 250 ms gastados. Los dos lados hacen `step` en
+   bucle, así que una ida y vuelta por elemento significa que ambos se turnan
+   para esperar el reloj.
+
+   **Lo primero que falta, y decide entre tres arreglos distintos:** medir
+   **cuál de los dos lados espera**. Después: o el bucle no vuelve a
+   `read_frame` sin tener nada que hacer, o la espera deja de ser un reloj y pasa
+   a ser «el socket es legible», o el protocolo deja de necesitar la ida y vuelta
+   por elemento.
 
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
