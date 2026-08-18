@@ -16,7 +16,15 @@ path = "src/lib.rs"
 # era: ver `.cargo/audit.toml`, que lo dice con su condición de caducidad.
 [dependencies]
 qyro_fountain = { path = "../qyro_fountain" }
-rqrr = "0.10.1"
+# **`default-features = false`, y no es cosmetica.** La feature `img` de `rqrr`
+# arrastra el crate `image` entero -- con `moxcms` y `pxfm` de gestion de color--,
+# unos quince paquetes, a una biblioteca que **Dart carga en el telefono**. Este
+# ojo lee un plano de luma que ya viene de la camara: no decodifica PNG ni JPEG
+# ni los va a decodificar.
+#
+# Lo canto el changelog de dependencias de `qyro_ffi` al ver aparecer `image`
+# bajo la frontera C, que es exactamente para lo que ese changelog existe.
+rqrr = { version = "0.10.1", default-features = false }
 
 # Sólo para la prueba de vuelta completa: dibuja lo que dibuja `qyro beam` para
 # poder rasterizarlo y dárselo al ojo. En el producto, quien dibuja es el CLI y

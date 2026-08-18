@@ -298,8 +298,22 @@ fn qyro_session_re_exports_nothing_it_does_not_own() {
 /// D9, and not acted on here: a 75-fold difference is an argument for phase 19
 /// to settle with a working network, not for this commit to settle by deleting
 /// the channel that currently works.
-const CLOSURE: [&str; 77] = [
+/// **2026-08-19, fase 24B, 77 -> 88.** El ojo cruza la frontera C, asi que
+/// `rqrr` y `qyro_fountain` entran bajo ella con `qyro_eye`.
+///
+/// **Y este changelog se gano el sueldo el mismo dia.** El primer intento
+/// declaro `rqrr = "0.10.1"` a secas, y su feature `img` —activa por defecto—
+/// metio el crate `image` entero, con `moxcms` y `pxfm` de gestion de color:
+/// **quince paquetes de decodificar PNG y JPEG dentro de la biblioteca que Dart
+/// carga en el telefono.** El ojo lee un plano de luma que ya viene de la
+/// camara y no decodifica ni un formato de imagen.
+///
+/// `default-features = false` y fuera. Lo que queda es lo que hace falta:
+/// `rqrr` con `g2p`/`g2poly` —su aritmetica de Galois, que es el decodificador
+/// de verdad— y `lru`.
+const CLOSURE: [&str; 88] = [
     "aead",
+    "allocator-api2",
     "block-buffer",
     "cfg-if",
     "chacha20",
@@ -314,12 +328,18 @@ const CLOSURE: [&str; 77] = [
     "digest",
     "ed25519",
     "ed25519-dalek",
+    "equivalent",
     "fastrand",
     "fiat-crypto",
     "flume",
+    "foldhash",
     "futures-core",
     "futures-sink",
+    "g2gen",
+    "g2p",
+    "g2poly",
     "getrandom",
+    "hashbrown",
     "hkdf",
     "hmac",
     "hybrid-array",
@@ -328,6 +348,7 @@ const CLOSURE: [&str; 77] = [
     "libc",
     "lock_api",
     "log",
+    "lru",
     "mdns-sd",
     "mio",
     "poly1305",
@@ -335,7 +356,9 @@ const CLOSURE: [&str; 77] = [
     "quote",
     "qyro_core",
     "qyro_crypto",
+    "qyro_eye",
     "qyro_ffi",
+    "qyro_fountain",
     "qyro_fs",
     "qyro_identity_store",
     "qyro_manifest",
@@ -346,6 +369,7 @@ const CLOSURE: [&str; 77] = [
     "qyro_win_dpapi",
     "r-efi",
     "rand_core",
+    "rqrr",
     "rustc_version",
     "scopeguard",
     "semver",

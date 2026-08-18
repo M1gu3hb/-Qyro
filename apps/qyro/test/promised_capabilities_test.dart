@@ -99,7 +99,18 @@ int _endOfLiteral(String source, int start, String quote) {
 }
 
 void main() {
-  test('no widget promises a scanner this application does not have', () {
+  test('a scanner icon only appears where the camera is real', () {
+    // **QYR-0348 al reves, y por eso esta guarda cambia en vez de irse.**
+    //
+    // Nacio prohibiendo el icono de escaner porque no habia camara: un boton con
+    // `Icons.qr_code_scanner` sobre un parser de texto le dice a alguien algo
+    // que no es verdad. Su propia razon decia como terminaba: *«o se va la
+    // promesa, o llega la camara con su plugin, su permiso, su ADR y su fila en
+    // el modelo de amenazas»*.
+    //
+    // En la fase 24B llegaron las cuatro. Asi que la guarda **no se debilita**:
+    // deja de prohibir el icono y pasa a exigir que, si aparece, las cuatro
+    // cosas esten. Atada a la capacidad es mas fuerte que atada a una lista.
     final offenders = <String>[];
     for (final file in Directory('lib')
         .listSync(recursive: true)
@@ -113,18 +124,43 @@ void main() {
       }
     }
 
+    if (offenders.isEmpty) return;
+
+    // Hay promesa. Entonces las cuatro piezas tienen que estar, y cada
+    // `expect` nombra la que falta en vez de decir «algo falta».
+    final manifest =
+        File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
     expect(
-      offenders,
-      isEmpty,
+      manifest,
+      contains('android.permission.CAMERA'),
       reason:
-          'These promise a camera. Qyro has none -- see the next test, which '
-          'is what makes that a fact rather than an opinion. Either the '
-          'promise goes, or the camera arrives with its plugin, its '
-          'permission, its ADR and its threat-model row.',
+          'hay un icono de escaner y el manifest no pide CAMERA: $offenders',
+    );
+
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    expect(
+      gradle,
+      contains('androidx.camera:camera-core'),
+      reason: 'hay un icono de escaner y nada en el grafo puede capturar',
+    );
+
+    expect(
+      File('../../docs/adr/ADR-0048-el-ojo.md').existsSync(),
+      isTrue,
+      reason: 'hay un icono de escaner y ninguna ADR lo decidio',
+    );
+
+    final threats = File('../../THREAT_MODEL.md').readAsStringSync();
+    expect(
+      threats.toLowerCase(),
+      contains('camera'),
+      reason: 'hay un icono de escaner y el modelo de amenazas no menciona la '
+          'camara. Una superficie de entrada nueva sin fila es una superficie '
+          'que nadie ha pensado.',
     );
   });
 
-  test('and it has none, because nothing in the graph could provide one', () {
+  test('and no pub.dev camera package sneaks in', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final lock = File('pubspec.lock').readAsStringSync();
 

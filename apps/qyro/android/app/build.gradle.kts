@@ -91,6 +91,18 @@ android {
 }
 
 dependencies {
+    // CameraX, ADR-0048 y `R10` §1: Jetpack, **cero Play Services**. Un producto
+    // cuya primera promesa es "sin nube" no puede depender de una biblioteca de
+    // Google Play para mirar por su propia camara.
+    //
+    // Tres artefactos y ni uno mas: `core` por `ImageProxy` y
+    // `ResolutionSelector`, `camera2` por la implementacion, `lifecycle` por
+    // `bindToLifecycle`. **No** entra `camera-view`: el `PreviewView` es una
+    // vista de Android y esta aplicacion dibuja con Flutter.
+    implementation("androidx.camera:camera-core:1.6.1")
+    implementation("androidx.camera:camera-camera2:1.6.1")
+    implementation("androidx.camera:camera-lifecycle:1.6.1")
+
     // QYR-0350. Two failures, one cause, and the cause is a floor that is too
     // low rather than a version that is missing.
     //

@@ -11,6 +11,17 @@
          Framework needs none (ADR-0034 section 4), and if one ever appears here the
          design took a wrong turn. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- El segundo permiso, y el unico que se pide en tiempo de ejecucion.
+         ADR-0048: el telefono lee los QR que el CLI dibuja, que es el canal que
+         funciona sin red de ninguna clase. Sin camara no hay canal optico.
+
+         `required="false"` a proposito: un aparato sin camara **sigue siendo un
+         aparato Qyro**: le quedan la red, el cable directo y el serie, asi
+         que marcarla obligatoria lo sacaria de la tienda por una de cuatro
+         rutas. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <!-- QYR-0349. ADR-0025 section 3.4 decided `allowBackup=false` and nobody wrote
          it, so the application shipped with Android's default, which is **true**.
          Auto Backup would have copied the wrapped identity blob to Google Drive:

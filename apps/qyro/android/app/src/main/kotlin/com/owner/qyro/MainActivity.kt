@@ -9,6 +9,7 @@ class MainActivity : FlutterActivity() {
 
     private var picker: FilePickerChannel? = null
     private var discovery: DiscoveryChannel? = null
+    private var scanner: ScannerChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -25,6 +26,21 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             DiscoveryChannel.CHANNEL,
         ).setMethodCallHandler(finder)
+
+        val eye = ScannerChannel(this)
+        scanner = eye
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ScannerChannel.CHANNEL,
+        ).setMethodCallHandler(eye)
+    }
+
+    override fun onDestroy() {
+        // La cámara se suelta al morir la actividad. Sin esto, un aparato que
+        // vuelve a la aplicación se encuentra la cámara ocupada por su propio
+        // proceso anterior.
+        scanner?.stop()
+        super.onDestroy()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

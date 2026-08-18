@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import 'package:qyro/discovery/qyro_discovery.dart';
 import 'package:qyro/ffi/qyro_file_picker.dart';
+import 'package:qyro/scanner/qyro_scanner.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 import 'package:qyro/l10n/generated/app_localizations.dart';
 import 'package:qyro/transfer/transfer_service.dart';
@@ -91,7 +92,18 @@ class _TransferHomeState extends State<TransferHome> {
 // ------------------------------------------------------------------ peers
 
 class PeersScreen extends StatefulWidget {
-  const PeersScreen({required this.service, this.discovery, super.key});
+  const PeersScreen({
+    required this.service,
+    this.discovery,
+    this.onScan,
+    super.key,
+  });
+
+  /// Que hacer cuando alguien quiere leer codigos.
+  ///
+  /// Se inyecta en vez de abrir la pantalla aqui porque abrirla necesita la
+  /// biblioteca nativa cargada, y esta pantalla se prueba sin ella.
+  final VoidCallback? onScan;
 
   final QyroTransferService service;
 
@@ -252,6 +264,21 @@ class _PeersScreenState extends State<PeersScreen> {
           style: const TextStyle(fontFamily: 'monospace'),
         ),
         const Divider(height: 32),
+        // **El llamante de produccion del escaner** (ADR-0048, fase 24B). El
+        // canal optico es el unico que funciona sin red de ninguna clase, y sin
+        // este boton la aplicacion lo tenia entero y sin puerta.
+        //
+        // Solo en Android: en el escritorio quien DIBUJA los QR es el CLI
+        // (ADR-0044 §6), y ofrecer aqui un escaner que no existe seria prometer
+        // lo que no hay.
+        if (scannerAvailableOn())
+          OutlinedButton.icon(
+            key: const Key('scan-open'),
+            onPressed: widget.onScan,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: Text(strings.peersScanCodes),
+          ),
+        if (scannerAvailableOn()) const Divider(height: 32),
         Row(
           children: <Widget>[
             Expanded(

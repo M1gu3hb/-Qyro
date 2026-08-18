@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-19T15:00:00Z
+- Updated UTC: 2026-08-19T21:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 61853afacda84908082fe86bc872ccdc76152fa0
+- Verified commit: 662eb345789e28a54634281a008ee6be2c6c98ba
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -129,8 +129,12 @@ contra el código que existe: `THREAT_MODEL.md`.
   prueba) lee lo que dibuja la terminal y un archivo entero vuelve con uno de
   cada cuatro frames tirado. **No verificado: una cámara** — desenfoque, moiré,
   brillo y ángulo son fase 19. El receptor es el teléfono (ADR-0044 §6) y **el
-  lado Android que acumula frames no existe todavía**; el binario de escritorio
-  no lleva decodificador, a propósito.
+  lado Android ya existe** desde la fase 24B: `ScannerChannel.kt` saca el plano
+  Y con CameraX a 1280×720, cruza por `dev.qyro/scanner` y entra al motor por
+  seis símbolos nuevos. **Sin JNI y sin una línea de `unsafe` nueva.**
+  El binario de escritorio no lleva decodificador, a propósito.
+  **Ninguna cámara lo ha ejercitado**: los fps que sostiene el aparato son la
+  medida que la fase 24B deja pedida y en blanco.
 - **Canal serie** (fase 16): `qyro serial` enumera los puertos y **primero
   pregunta si esa máquina tiene CD, disquetera, PCMCIA o red**, porque cualquiera
   es entre 10 y 10 000 veces más rápida. Después imprime el receptor —PowerShell

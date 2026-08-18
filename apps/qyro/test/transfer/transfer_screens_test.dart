@@ -154,6 +154,25 @@ void main() {
       expect(find.byKey(const Key('pairing-scan')), findsOneWidget);
     });
 
+    testWidgets('en escritorio no se ofrece un escaner que no existe',
+        (tester) async {
+      // ADR-0044 §6: el escritorio DIBUJA los QR, el telefono los lee. Ofrecer
+      // aqui un boton de escanear seria prometer lo que no hay -- que es el
+      // defecto exacto de QYR-0348, un icono de camara sobre un parser de texto.
+      //
+      // Las pruebas corren en escritorio, asi que `scannerAvailableOn()` es
+      // falso y el boton no debe existir.
+      await tester.pumpWidget(
+        _wrap(PeersScreen(service: FakeService(), discovery: FakeDiscovery())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('scan-open')), findsNothing);
+      // Y el control: la pantalla si se dibujo, asi que el `findsNothing` de
+      // arriba dice algo. Sin esto, una pantalla que no montara pasaria igual.
+      expect(find.byKey(const Key('pairing-field')), findsOneWidget);
+    });
+
     testWidgets('a device found on the network is offered, not dialled',
         (tester) async {
       // ADR-0043: what a discovered device offers is a *code*. The person still

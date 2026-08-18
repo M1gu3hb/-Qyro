@@ -21,6 +21,7 @@
 pub mod abi;
 pub mod handle;
 mod identity_abi;
+mod scanner_abi;
 mod session_abi;
 mod trust_abi;
 

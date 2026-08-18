@@ -448,5 +448,9 @@
   "peersNearbyUse": "Use this device",
   "@peersNearbyUse": {
     "description": "Transfer interface string: peersNearbyUse."
+  },
+  "peersScanCodes": "Read codes with the camera",
+  "@peersScanCodes": {
+    "description": "Transfer interface string: peersScanCodes."
   }
 }

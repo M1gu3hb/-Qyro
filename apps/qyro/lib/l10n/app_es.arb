@@ -97,5 +97,6 @@
   "peersNearbyLooking": "Buscando aparatos ...",
   "peersNearbyNone": "Todavía no ha contestado nadie. El código de arriba funciona siempre.",
   "peersNearbyUnavailable": "Este aparato no puede buscar otros. Usa el código de emparejamiento.",
-  "peersNearbyUse": "Usar este aparato"
+  "peersNearbyUse": "Usar este aparato",
+  "peersScanCodes": "Leer códigos con la cámara"
 }

@@ -32,7 +32,8 @@ include!(concat!(
 ));
 
 /// Every file compiled into a release build of this crate.
-const PRODUCTION_FILES: [&str; 6] = [
+const PRODUCTION_FILES: [&str; 7] = [
+    "scanner_abi.rs",
     "lib.rs",
     "identity_abi.rs",
     "abi.rs",
@@ -114,7 +115,13 @@ fn the_analysis_reaches_the_end_of_every_production_file() {
 /// one of these -- so a symbol that appears without anybody writing it down is a
 /// symbol nobody reviewed. Adding one should cost an ADR amendment and a line
 /// here, in that order.
-const EXPORTED_SYMBOLS: [&str; 25] = [
+const EXPORTED_SYMBOLS: [&str; 31] = [
+    "qyro_scanner_close",
+    "qyro_scanner_look",
+    "qyro_scanner_open",
+    "qyro_scanner_result",
+    "qyro_scanner_result_len",
+    "qyro_scanner_tally",
     "qyro_advice",
     "qyro_buffer_alloc",
     "qyro_buffer_free",

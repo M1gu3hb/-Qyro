@@ -46,6 +46,8 @@ mod discovery;
 mod error;
 mod identity;
 mod link;
+mod scan_state;
+mod scanner;
 mod session;
 mod trust;
 
@@ -63,6 +65,8 @@ pub use discovery::{FoundPeer, browse};
 pub use error::SessionError;
 pub use identity::{Protection, fingerprint, install_wrapper, open};
 pub use link::{APIPA_BUDGET, LinkState, is_apipa, is_reachable_by_a_peer, wait_for_link};
+pub use scan_state::ScanState;
+pub use scanner::Scanner;
 
 /// The port ADR-0041 froze, forwarded so consumers stop keeping their own copy.
 ///

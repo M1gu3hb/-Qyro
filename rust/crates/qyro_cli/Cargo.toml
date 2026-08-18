@@ -49,4 +49,4 @@ serialport = { version = "4.9", default-features = false }
 # image files on disk: fixtures rot, and a fixture that rots fails as "the
 # renderer broke".
 [dev-dependencies]
-rqrr = "0.10.1"
+rqrr = { version = "0.10.1", default-features = false }

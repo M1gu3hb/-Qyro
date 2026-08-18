@@ -157,14 +157,18 @@ void main() {
     }
   });
 
-  test(
-      'the manifest declares exactly one permission, and it is the multicast one',
+  test('the manifest declares exactly two permissions, and they are these two',
       () {
     // Not «no permissions»: discovery needs `CHANGE_WIFI_MULTICAST_STATE`,
     // which is a normal permission granted at install and is what stops the
-    // Wi-Fi stack filtering multicast beneath the socket. Asserting the exact
-    // set rather than an absence, because a list that only forbids is a list a
-    // new permission slips past.
+    // Wi-Fi stack filtering multicast beneath the socket. And since phase 24B,
+    // `CAMERA`: the optical channel is the one that works with no network of
+    // any kind, and without a camera there is no optical channel.
+    //
+    // **The exact set, and the exact count.** Not «at least these» and not «not
+    // these»: a list that only forbids is a list a new permission slips past,
+    // and «at least» would let a third arrive without anybody noticing. Two,
+    // named, in order.
     final source = File('android/app/src/main/AndroidManifest.xml');
     final text = _withoutComments(source.readAsStringSync());
     final declared = RegExp(r'<uses-permission android:name="([^"]+)"')
@@ -172,8 +176,32 @@ void main() {
         .map((match) => match.group(1))
         .toList();
 
-    expect(
-        declared, <String>['android.permission.CHANGE_WIFI_MULTICAST_STATE']);
+    expect(declared, <String>[
+      'android.permission.CHANGE_WIFI_MULTICAST_STATE',
+      'android.permission.CAMERA',
+    ]);
+    expect(declared.length, 2,
+        reason: 'a third permission arrived without an argument next to it');
+  });
+
+  test('the camera is declared optional, so a phone without one still runs',
+      () {
+    // `required="false"` on purpose: a device with no camera **is still a Qyro
+    // device** — it has the network, the direct cable and the serial line. A
+    // required feature would take it out of the store over one of four
+    // channels.
+    final source = File('android/app/src/main/AndroidManifest.xml');
+    final text = _withoutComments(source.readAsStringSync());
+    final features = RegExp(
+            r'<uses-feature android:name="([^"]+)" android:required="([^"]+)"')
+        .allMatches(text)
+        .map((match) => '${match.group(1)}=${match.group(2)}')
+        .toList();
+
+    expect(features, contains('android.hardware.camera=false'));
+    expect(features, contains('android.hardware.camera.autofocus=false'));
+    expect(features.where((entry) => entry.endsWith('=true')), isEmpty,
+        reason: 'a required feature narrows which devices can install this');
   });
 
   test('nothing of this application is backed up or transferred', () {

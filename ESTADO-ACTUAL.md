@@ -1,35 +1,42 @@
-# Estado actual — aqui se corta
+# Estado actual — la fase 24B, y lo que le falta medir
 
-**2026-08-19** · **rama unica: `main`** · **se acaba el contexto.**
+**2026-08-19** · **rama unica: `main`**
 
-## Lo siguiente, y por donde
+## El telefono ya puede mirar
 
-**22 → 17 → 18 → 19 → 20 → 23.** En la 22, **QYR-0365 va primero** y esta sesion
-la dejo mas acotada:
+`R7` prometia cuatro canales y habia tres y medio: `qyro beam` dibujaba QR y
+nadie los leia. **El puente esta montado, y sin JNI:**
 
-- **Descartado que `pump` serialice por elemento.** `is_drained()` es
-  `next_to_send >= chunks_total`, asi que un archivo de un trozo se drena en el
-  mismo envio y el bucle pasa al siguiente sin salir. Veinte archivos salen en
-  **una** llamada, y `WINDOW_CHUNKS` es 16.
-- **Queda un sospechoso:** `Session::advance` maneja un frame por llamada, y su
-  lectura cuesta un `READ_TIMEOUT` **solo cuando el socket esta vacio** — porque
-  `read_frame` vacia primero el decodificador.
-- **Un candidato probado y descartado hoy, con su mecanismo:** escribir en el mismo
-paso lo que `pump` acaba de producir parecia gratis y no lo es. Una prueba lo
-tumbo — escribir a un par que ya cerro provoca un **RST**, y el RST **descarta el
-bufer de recepcion con el frame de rechazo dentro**, asi que el emisor termina en
-«no llegue» en vez de «me dijeron que no». De mejor esfuerzo tampoco vale: el
-daño no es el error de escritura, es el RST. **Cualquier arreglo tiene que no
-escribir a un par que pueda haber terminado la conversacion**, y hoy el emisor no
-puede saberlo antes de leer.
+`ScannerChannel.kt` saca **solo el plano Y** con CameraX a **1280x720** →
+`dev.qyro/scanner` → Dart → `qyro_buffer_alloc` → `qyro_scanner_look` →
+`qyro_eye`. **Cero `unsafe` nuevo, cero excepcion nueva, cero paquetes de
+pub.dev.**
 
-**La medida que lo cierra, y es una:** por lado, cuantas veces entra `advance`,
-  cuantas lecturas vencen, y **que frame estaba en vuelo cuando vencio**. Sin ese
-  tercer dato los otros dos no distinguen «el par no ha contestado» de «contesto
-  y nadie leyo».
+Las tres que no se negociaban, hechas: `ResolutionSelector` pidiendo >=1280x720 ·
+el de-padding fila a fila, porque `buffer.capacity()` puede ser
+`rowStride*(h-1)+w` y leer de mas revienta · y la prueba del manifest en **dos
+permisos exactos**, no «>=1».
 
-**La fase 24 quedo cerrada** con su informe; lo que le falta —el cruce JNI— esta
-cerrado con argumento a la fase 19 en ADR-0048 enmienda 1.
+## Lo que falta medir, y es una sola cifra
+
+**Los fps que sostiene el aparato.** 921 600 bytes por frame a 720p; a 5 fps son
+4,6 MB/s por un MethodChannel y otra copia por FFI. `QyroScanner.framesPerSecond`
+existe para escribir ese numero. **Si sostiene >=5, hecho para siempre; si no,
+entonces el cruce de copia cero por JNI tiene su argumento medido.**
+
+**No hay aparato**, asi que el hueco esta en blanco. Fase 19.
+
+## Lo que encontro una guarda
+
+`promised_capabilities_test` prohibia el icono de escaner **porque no habia
+camara**, y su propia razon decia como terminaba: «o se va la promesa, o llega la
+camara con su plugin, su permiso, su ADR y su fila en el modelo de amenazas».
+Llegaron cuatro y **faltaba la fila**. Ahora esta, y la guarda **no se debilito**:
+dejo de prohibir el icono y pasa a exigir las cuatro piezas si aparece.
+
+Y el changelog de dependencias canto que `rqrr` metia el crate `image` entero
+—con `moxcms` y `pxfm`— en la biblioteca que Dart carga en el telefono.
+`default-features = false` y fuera quince paquetes.
 
 ---
 
