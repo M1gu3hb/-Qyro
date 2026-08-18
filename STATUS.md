@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-18T22:00:00Z
 - Branch: claude/qyro-cerrar-cadena-12
-- Verified commit: ce413a49c0294b29eebc21622ff31b11dedfe409
+- Verified commit: 90a791db6aaa33ba1c9f155e25ab047f471954dc
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -144,7 +144,7 @@ contra el código que existe: `THREAT_MODEL.md`.
   ninguna pantalla lo menciona.
 - `cargo test --workspace`: **739 pasadas, 0 fallos** (eran 639; la 13 sumó el
   CLI, la 14 el beacon, la 15 la fuente y el canal óptico, la 16 el serie). `flutter test`:
-  **105 pasadas** (eran 92; la 14 sumó el cliente de descubrimiento y su
+  **120 pasadas** (eran 92; la 14 sumó el cliente de descubrimiento y su
   pantalla). Las saltadas de Dart siguen saltando sin la biblioteca nativa
   compilada o sin el manifiesto fusionado, y **saltada no es pasada**.
 - `Cargo.lock`: **122 paquetes**, de los que 16 entran sólo por
