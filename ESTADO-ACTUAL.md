@@ -14,7 +14,16 @@ la dejo mas acotada:
 - **Queda un sospechoso:** `Session::advance` maneja un frame por llamada, y su
   lectura cuesta un `READ_TIMEOUT` **solo cuando el socket esta vacio** — porque
   `read_frame` vacia primero el decodificador.
-- **La medida que lo cierra, y es una:** por lado, cuantas veces entra `advance`,
+- **Un candidato probado y descartado hoy, con su mecanismo:** escribir en el mismo
+paso lo que `pump` acaba de producir parecia gratis y no lo es. Una prueba lo
+tumbo — escribir a un par que ya cerro provoca un **RST**, y el RST **descarta el
+bufer de recepcion con el frame de rechazo dentro**, asi que el emisor termina en
+«no llegue» en vez de «me dijeron que no». De mejor esfuerzo tampoco vale: el
+daño no es el error de escritura, es el RST. **Cualquier arreglo tiene que no
+escribir a un par que pueda haber terminado la conversacion**, y hoy el emisor no
+puede saberlo antes de leer.
+
+**La medida que lo cierra, y es una:** por lado, cuantas veces entra `advance`,
   cuantas lecturas vencen, y **que frame estaba en vuelo cuando vencio**. Sin ese
   tercer dato los otros dos no distinguen «el par no ha contestado» de «contesto
   y nadie leyo».

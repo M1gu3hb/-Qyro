@@ -262,6 +262,37 @@ exacta que falta es **cuándo se vacía ese socket**: con decenas de frames en
 vuelo por lado, la mayoría de las lecturas deberían encontrar bytes ya
 almacenados.
 
+### Un candidato probado y descartado, con su mecanismo (2026-08-19)
+
+**La idea:** `advance` escribe al principio y `pump` produce al final, así que lo
+producido espera al paso siguiente. Escribirlo en el mismo paso parecía gratis —
+los mismos bytes, en el mismo orden, sin nada esperando en un `Vec`.
+
+**No es gratis, y lo dijo una prueba:**
+`a_receiver_that_refuses_stops_the_sender_and_leaves_nothing_behind` pasó a
+terminar en `Err(PeerUnreachable)` donde antes daba `Ok(Rejected)`.
+
+**El mecanismo, que es lo que vale de este intento:**
+
+1. El receptor rechaza y cierra, dejando el frame de rechazo en el búfer del
+   emisor.
+2. Con la escritura adelantada, el emisor **manda los trozos siguientes antes de
+   leer nada**.
+3. Escribir a un socket que el par ya cerró provoca un **RST**, y el RST
+   **descarta el búfer de recepción** — con el rechazo dentro.
+4. El emisor lee, encuentra la conexión rota, y `finished()` todavía es `false`
+   porque su motor nunca vio el rechazo. Resultado: «no llegué» en lugar de «me
+   dijeron que no», que son exactamente las dos cosas que esa prueba existe para
+   no confundir.
+
+Hacerlo de mejor esfuerzo **no lo arregla**: el daño no es el error de escritura,
+es el RST que ya ocurrió.
+
+**Revertido.** Y queda escrito para que nadie lo reintente creyendo que es una
+mejora obvia: **cualquier arreglo de esta ficha tiene que no escribir a un par
+que pueda haber terminado la conversación**, y hoy el emisor no tiene forma de
+saberlo antes de leer.
+
 **La medida que lo cierra, y es una:** por lado, cuántas veces entra `advance`,
 cuántas de esas lecturas vencen, y **qué frame estaba en vuelo cuando venció**.
 Sin ese tercer dato los otros dos no distinguen «el par no ha contestado
