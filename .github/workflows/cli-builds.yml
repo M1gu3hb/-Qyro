@@ -61,10 +61,54 @@ jobs:
             exit 1
           }
           "### ${{ matrix.target }}`n`n$kb KB`n`n$hash" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      # **`BUILD-INFO.txt`, y dice en MAYUSCULAS que no esta firmado**
+      # (fase 20 §3.1). Un artefacto sin procedencia obliga a quien lo recibe a
+      # confiar en el nombre del archivo, y el nombre de un archivo no es una
+      # prueba de nada.
+      #
+      # Y el "NO FIRMADO" va en mayusculas a proposito: es la unica linea de
+      # este archivo que cambia lo que alguien deberia hacer al ejecutarlo.
+      - name: BUILD-INFO.txt
+        shell: pwsh
+        run: |
+          $exe = "target/${{ matrix.target }}/release/qyro.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $bytes = (Get-Item $exe).Length
+          @"
+          Qyro CLI
+          ========
+
+          target      ${{ matrix.target }}
+          commit      ${{ github.sha }}
+          construido  $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') UTC
+          tamano      $bytes bytes
+          sha256      $hash
+
+          FIRMA: **NO FIRMADO**
+
+          Este binario no lleva firma de codigo. Windows enseñara una
+          advertencia al ejecutarlo si lo descargaste de internet.
+
+          Si lo copias a un USB con formato FAT32 o exFAT y lo ejecutas desde
+          ahi, la advertencia NO aparece: Windows marca lo que llega por
+          internet en un flujo de NTFS, y esos formatos no tienen donde
+          guardarlo.
+
+          La decision de firmar o no esta en docs/release/DECISION-DE-FIRMA.md,
+          con sus numeros. No la ha tomado nadie todavia.
+
+          Comprueba este binario antes de usarlo:
+            PowerShell:  (Get-FileHash qyro.exe -Algorithm SHA256).Hash
+            Linux:       sha256sum qyro
+          "@ | Out-File "target/${{ matrix.target }}/release/BUILD-INFO.txt" -Encoding utf8
+          Get-Content "target/${{ matrix.target }}/release/BUILD-INFO.txt"
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: qyro-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/qyro.exe
+          path: |
+            target/${{ matrix.target }}/release/qyro.exe
+            target/${{ matrix.target }}/release/BUILD-INFO.txt
           if-no-files-found: error
           retention-days: 30
 

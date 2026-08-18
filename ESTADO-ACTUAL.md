@@ -18,8 +18,15 @@ por USB o por el propio Qyro, y en las dos rutas **el certificado no cambia
 nada**. Firmar compra sobre todo la primera impresion de quien descarga en una
 maquina normal, que es otro publico.
 
-**Queda de la 20:** el `BUILD-INFO.txt` por artefacto y el README de instalacion
-de cinco lineas.
+**Hechos tambien:** `BUILD-INFO.txt` en el artefacto de Windows —con el sha256 y
+**NO FIRMADO en mayusculas**— y `docs/release/INSTALAR.md`, que son cinco pasos y
+el segundo es el USB.
+
+**Queda de la 20, y esta dicho:** la pagina de la Release **no se toco** —la
+redaccion esta lista para copiar en `DECISION-DE-FIRMA.md` §6, y publicar es una
+accion hacia fuera que ya lleva dos correcciones esta semana— y el
+`BUILD-INFO.txt` **solo esta en el artefacto de Windows**; el job de musl tiene su
+propio `upload-artifact` sin tocar.
 
 ---
 
