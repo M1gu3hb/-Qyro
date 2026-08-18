@@ -15,7 +15,36 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
-## 0. LO PRIMERO DE LA SIGUIENTE SESIÓN — una Release rota, publicada
+## 0. LO PRIMERO DE LA SIGUIENTE SESIÓN — **las dos caras tenían el envío roto**
+
+**Ninguna de las dos había enviado nunca un archivo.** Las dos se encontraron el
+mismo día, por la misma razón: la fase 21 pone una cara contra la otra.
+
+- **QYR-0361 (P0, arreglado y verificado, `9274393`).** `qyro send` pasaba a
+  `open_sender` el nombre pelado con `root` = el directorio padre, y
+  `strip_prefix` falla siempre. Todo envío devolvía `BadArgument`. **Verificado
+  ejecutando**: dos copias del binario, huellas distintas, 5 000 bytes que
+  aterrizan.
+- **QYR-0362 (P0, arreglado, evidencia parcial).** `NativeTransferService.send`
+  escribía `port.sendPort` **dentro** del closure de `Isolate.run`, lo que hace
+  capturar el `ReceivePort` — no enviable. Todo envío moría con «object is
+  unsendable» antes de mover un byte. Arreglado sacando `sendPort` fuera.
+  **Falta ver el archivo aterrizar**: la casilla GUI→CLI falla ahora en «nothing
+  was materialised», que es **otra capa y está sin diagnosticar**.
+
+**Y hay una Release publicada con las dos.** Se retracta y se republica, como con
+`2c01de0`. No se hizo aquí porque tocar una Release publicada necesita contexto de
+sobra y la evidencia de la matriz completa.
+
+**Empieza por diagnosticar «nothing was materialised»** en
+`apps/qyro/test/transfer/gui_cli_matrix_test.dart`, casilla «GUI sends, CLI
+receives». La hipótesis a descartar primero: que el `qyro recv` lanzado con
+`--expect` esté rechazando por huella —la GUI manda su huella de identidad y el
+receptor compara contra la del *par*— o que salga antes de materializar.
+
+---
+
+## 0.bis — la Release rota (contexto de arriba)
 
 **QYR-0361, P0, arreglado en `9274393`.** `qyro send` **no ha movido nunca un
 byte**: pasaba a `open_sender` el nombre pelado del archivo con `root` = el
@@ -55,13 +84,13 @@ borrar una fila pasaba en verde. Ahora es el número exacto.
    pasar.** Se corre con `QYRO_FFI_LIBRARY_PATH` y `QYRO_CLI_PATH` puestos.
    - **CLI→CLI: verificado a mano y funciona** tras el arreglo del P0 — dos
      copias del binario, huellas distintas, 5 000 bytes que llegan.
-   - **CLI→GUI**: falla todavía. El emisor va a la dirección LAN que publica
-     `ownPairingString()` y no conecta; **hay que averiguar si es el cortafuegos
-     de Windows contra el proceso `flutter_tester` o algo del receptor**, y la
-     respuesta cambia la prueba: si es el cortafuegos, se documenta y se usa
-     loopback **diciéndolo**; si no, es otro defecto como el de arriba.
-   - **GUI→CLI y GUI→GUI**: sin escribir aún.
-   - Sus controles: el de «nadie escuchando» **ya pasa**.
+   - **CLI→GUI: PASA.** Era el P0 QYR-0361 quien lo bloqueaba, no el
+     cortafuegos.
+   - **CLI→CLI: PASA**, con dos copias del binario y huellas distintas.
+   - **GUI→CLI y GUI→GUI: escritas y fallando** en «nothing was materialised»,
+     ya pasado el arreglo de QYR-0362. Es lo primero de la siguiente sesión.
+   - Los dos controles escritos —«nadie escuchando» y «huella que no coincide»—
+     **pasan los dos**.
 2. ~~El consejero en la GUI~~ — **HECHO** en `3758be3`: `qyro_advice` cruza la
    frontera (24 → 25 símbolos, con enmienda en ADR-0032) y cinco pruebas Dart lo
    ejercen contra la biblioteca de verdad. La tabla de paridad ya no tiene

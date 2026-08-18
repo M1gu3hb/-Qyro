@@ -256,6 +256,18 @@ final class NativeTransferService implements QyroTransferService {
       }
     });
 
+    // **`sendPort`, hoisted, and not `port`.** `Isolate.run` serialises whatever
+    // the closure captures, and a `ReceivePort` is explicitly unsendable while a
+    // `SendPort` is exactly what is meant to cross. Capturing `port` -- which is
+    // what writing `port.sendPort` inside the closure does -- made every send
+    // throw «object is unsendable» before a byte moved.
+    //
+    // **The GUI had therefore never sent a file**, since this was written. It
+    // survived because the screens are tested against a fake service and the
+    // two-process test exercises *receiving*; nothing ever ran this path against
+    // a real peer. That is the same seam as QYR-0361 on the other face, found
+    // the same way and on the same day (QYR-0362).
+    final sendPort = port.sendPort;
     final outcome = Isolate.run<int>(() {
       final bindings = library == null
           ? QyroSessionBindings.openDefault()
@@ -266,7 +278,7 @@ final class NativeTransferService implements QyroTransferService {
         root: root,
         files: paths,
         onProgress: (progress) =>
-            port.sendPort.send(<int>[progress.done, progress.total]),
+            sendPort.send(<int>[progress.done, progress.total]),
       );
       try {
         var state = QyroSessionState.inProgress;

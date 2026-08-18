@@ -1,5 +1,42 @@
 # Bugs y pendientes verificados
 
+## QYR-0362 — La GUI tampoco había enviado nunca un archivo
+
+- Estado: **ARREGLADO, evidencia parcial**
+- Severidad: **P0**
+- Fase: 21
+- Encontrado: 2026-08-18, la misma tarde y por el mismo motivo que QYR-0361
+
+**El defecto.** `NativeTransferService.send` pasa una función a `Isolate.run`, y
+esa función escribía `port.sendPort.send(...)`. Escribir `port.sendPort` **dentro**
+del closure hace que el closure capture `port`, que es un `ReceivePort` — y un
+`ReceivePort` es explícitamente **no enviable** entre isolates. Todo envío moría
+con *«Illegal argument in isolate message: object is unsendable»* **antes de
+mover un byte**.
+
+**El arreglo.** Sacar `final sendPort = port.sendPort;` fuera del closure. Un
+`SendPort` sí cruza; es exactamente lo que existe para cruzar. Una línea.
+
+**Por qué no lo vio nadie.** Las pantallas se prueban contra un servicio falso, y
+la prueba de dos procesos ejercita **recibir**. Nada había puesto nunca este
+camino contra un par real. Es el mismo hueco que QYR-0361 en la otra cara, y las
+dos se encontraron el mismo día por la misma razón: **la fase 21 pone una cara
+contra la otra.**
+
+**Las dos caras tenían el envío roto, cada una a su manera, y ninguna se había
+ejercitado nunca de extremo a extremo.**
+
+**Evidencia.** Antes del arreglo, `send` lanzaba la excepción de isolate en la
+primera llamada. Después, el flujo avanza y llega a estados de transferencia.
+**Lo que todavía NO está verificado** es que el archivo aterrice en el receptor:
+la casilla GUI→CLI falla ahora en *«nothing was materialised»*, que es una capa
+distinta y está sin diagnosticar.
+
+**La pregunta que cierra esta ficha, y todavía no está cerrada:** ¿aterriza un
+archivo enviado por la GUI en el disco del receptor? **Aún no se ha visto.** Por
+eso el estado es «arreglado, evidencia parcial» y no «cerrado»: el arreglo es
+correcto y demostrado, la cadena entera no.
+
 ## QYR-0361 — `qyro send` no ha movido nunca un byte
 
 - Estado: **CERRADO**

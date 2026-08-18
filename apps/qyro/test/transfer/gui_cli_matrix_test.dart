@@ -29,6 +29,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qyro/ffi/qyro_identity_api.dart';
 import 'package:qyro/ffi/qyro_session_api.dart';
 import 'package:qyro/transfer/native_transfer_service.dart';
+import 'package:qyro/ffi/qyro_file_picker.dart';
 import 'package:qyro/transfer/transfer_service.dart';
 
 String? _env(String name) {
@@ -208,6 +209,123 @@ void main() {
         listening.kill();
       }
 
+      final landed = File('${destination.path}/payload.bin');
+      expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
+      expect(landed.readAsBytesSync(), equals(payload));
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('GUI sends, CLI receives -- the scene of R7 §2, entire', () async {
+      // **The cell the whole product is named after**: the phone sends and the
+      // old PC receives in a terminal. Until phase 21 nobody had run it.
+      final source = Directory('${scratch.path}/out')..createSync();
+      final destination = Directory('${scratch.path}/in')..createSync();
+      final payload = _pattern(96 * 1024);
+      final original = File('${source.path}/payload.bin')
+        ..writeAsBytesSync(payload);
+
+      final home = Directory('${scratch.path}/cli')..createSync();
+      final receiver = _privateCli(cli!, home);
+      final who = await Process.run(receiver.path, <String>['whoami']);
+      final receiverPrint = _fingerprintOf(who.stdout.toString());
+      expect(receiverPrint, isNotEmpty);
+
+      // **Not `ownPairingString()`.** That returns null unless this side is
+      // listening, because it is built from a bound address (QYR-0322) -- and
+      // here the GUI is the sender, so it has no address to publish. The
+      // fingerprint is an identity fact, not a session fact, and it comes from
+      // the identity surface.
+      final minePrint = identity.fingerprint().replaceAll('-', '');
+      expect(minePrint, isNotEmpty);
+
+      final listening = await Process.start(
+        receiver.path,
+        <String>['recv', '--out', destination.path, '--expect', minePrint],
+      );
+      try {
+        await Future<void>.delayed(const Duration(seconds: 1));
+
+        final seen = <QyroTransferState>[];
+        await for (final state in service.send(
+          address: '127.0.0.1:$port',
+          files: <QyroPicked>[
+            QyroPickedPath(
+              path: original.path,
+              name: 'payload.bin',
+              size: payload.length,
+            ),
+          ],
+          expectedFingerprint: receiverPrint,
+        )) {
+          seen.add(state);
+          if (state is QyroDelivered || state is QyroFailed) break;
+        }
+
+        expect(
+          seen.last,
+          isA<QyroDelivered>(),
+          reason: 'the GUI did not deliver: ${seen.last}',
+        );
+        await listening.exitCode
+            .timeout(const Duration(seconds: 30), onTimeout: () => -1);
+      } finally {
+        listening.kill();
+      }
+
+      final landed = File('${destination.path}/payload.bin');
+      expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
+      expect(landed.readAsBytesSync(), equals(payload));
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('GUI sends to GUI -- two sessions, one engine, a real socket',
+        () async {
+      // Same process, two independent sessions over loopback. Not a shortcut:
+      // both ends are the production class, and the bytes cross a socket.
+      final source = Directory('${scratch.path}/out')..createSync();
+      final destination = Directory('${scratch.path}/in')..createSync();
+      final payload = _pattern(48 * 1024);
+      final original = File('${source.path}/payload.bin')
+        ..writeAsBytesSync(payload);
+
+      final receiver = NativeTransferService(
+        bindings: QyroSessionBindings.open(library!),
+      );
+      final seen = <QyroTransferState>[];
+      final failures = <Object>[];
+      final session = receiver
+          .receive(
+            bind: '0.0.0.0:$port',
+            destination: destination.path,
+            decide: (_) async => true,
+          )
+          .listen(seen.add, onError: failures.add);
+
+      try {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final sent = <QyroTransferState>[];
+        await for (final state in service.send(
+          address: '127.0.0.1:$port',
+          files: <QyroPicked>[
+            QyroPickedPath(
+              path: original.path,
+              name: 'payload.bin',
+              size: payload.length,
+            ),
+          ],
+        )) {
+          sent.add(state);
+          if (state is QyroDelivered || state is QyroFailed) break;
+        }
+        expect(sent.last, isA<QyroDelivered>(), reason: '${sent.last}');
+
+        for (var attempt = 0; attempt < 100; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          if (seen.any((state) => state is QyroDelivered)) break;
+        }
+      } finally {
+        await session.cancel();
+      }
+
+      expect(failures, isEmpty, reason: 'the receiver errored: $failures');
       final landed = File('${destination.path}/payload.bin');
       expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
       expect(landed.readAsBytesSync(), equals(payload));
