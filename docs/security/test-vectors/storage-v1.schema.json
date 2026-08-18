@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Qyro identity store v1 framing vectors",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "_warning",
+    "_what_is_and_is_not_here",
+    "format",
+    "specification",
+    "magic",
+    "header_len",
+    "entropy_header_len",
+    "entropy_constant",
+    "headers",
+    "notes"
+  ],
+  "properties": {
+    "_warning": { "type": "string" },
+    "_what_is_and_is_not_here": { "type": "string" },
+    "format": { "const": "qyro-identity-store-v1" },
+    "specification": { "type": "string" },
+    "magic": { "const": "5159524f2d494453" },
+    "header_len": { "const": 16 },
+    "entropy_header_len": { "const": 12 },
+    "entropy_constant": { "type": "string", "pattern": "^[0-9a-f]+$" },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "headers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version", "wrap", "wrapped_len", "header", "entropy"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "wrap": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "wrapped_len": { "type": "integer", "minimum": 0 },
+          "header": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+          "entropy": { "type": "string", "pattern": "^[0-9a-f]+$" }
+        }
+      }
+    }
+  }
+}

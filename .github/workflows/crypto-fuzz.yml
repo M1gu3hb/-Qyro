@@ -1,0 +1,143 @@
+name: Crypto fuzz
+
+# A bounded fuzzing campaign over the parsers and the AEAD state a peer reaches.
+#
+# Separate from CI because `cargo-fuzz` needs a nightly toolchain and the
+# project builds and tests on stable 1.88.0. Separate from `crypto-platform.yml`
+# because that one answers "does the crypto work on this platform" and this one
+# answers "can a peer break it", and a single green tick should not mean either.
+#
+# **This is not exhaustive fuzzing.** Two minutes per target finds shallow
+# defects. It is a floor that CI can hold, not a security review.
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds_per_target:
+        description: Seconds to run each target
+        required: false
+        default: "120"
+  schedule:
+    # Weekly, Mondays 04:17 UTC. Off-peak and off-the-hour so it does not queue
+    # behind everything else that fires at :00.
+    - cron: "17 4 * * 1"
+  push:
+    # See crypto-platform.yml: a workflow that has never existed on the default
+    # branch cannot be dispatched, so it has to prove itself on a working branch
+    # first. The pattern below is permanent, not a placeholder.
+    # Any working branch, by pattern. Naming one is what QYR-0040 was:
+    # sprint 4C.2 wrote the then-current branch into six files, which made "CI
+    # runs on the working branch" true of that branch and false of the next one.
+    # A pattern is a property of the repository; a name is a reminder, and the
+    # reminder was not enough.
+    #
+    # `claude/**` and not `**`: covering every branch in the repository spends
+    # runner minutes on work this project did not start.
+    #
+    # Push rather than a pull request, deliberately. A `pull_request` run
+    # executes against a merge commit that exists only inside the Actions run,
+    # so its run ID cannot be cited as evidence for a commit in this branch. A
+    # push run executes on exactly the commit that was pushed, which is the
+    # thing STATUS.md has to name.
+    branches: [main, 'claude/**']
+    paths:
+      - "rust/fuzz/**"
+      - "rust/crates/qyro_crypto/**"
+      - "rust/crates/qyro_protocol/**"
+      - "rust/crates/qyro_manifest/**"
+      # `rust/guards/source_guard.rs` is `include!`d into the test build of
+      # every crate this workflow exercises, so a change to it changes the
+      # result here and must re-run it (QYR-0045).
+      - "rust/guards/**"
+      - ".github/workflows/crypto-fuzz.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crypto-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      # One job per target, and no `fail-fast`: a crash in one target must not
+      # hide whether the others also crash.
+      fail-fast: false
+      matrix:
+        target:
+          - frame_decoder
+          - encrypted_envelope
+          - frame_opener
+          - replay_window
+          - manifest_decoder
+          - relative_path
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install a nightly toolchain for libFuzzer
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup component add --toolchain nightly rust-src
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked --version 0.13.1
+      # Run from the repository root with an explicit `--fuzz-dir`. cargo-fuzz
+      # otherwise looks for `<project root>/fuzz`, finds the workspace manifest
+      # at the repository root, and reports "could not read the manifest file:
+      # .../fuzz/Cargo.toml" — which says nothing about the real problem, that
+      # this project keeps its fuzz crate under `rust/`.
+      - name: Run a bounded campaign
+        shell: bash
+        run: |
+          set -euo pipefail
+          seconds="${{ inputs.seconds_per_target || '120' }}"
+          mkdir -p fuzz-reports
+          # `-max_total_time` bounds the run; `-print_final_stats` is what makes
+          # the log say how many executions actually happened, so "we fuzzed it"
+          # is a number rather than a claim.
+          cargo +nightly fuzz run --fuzz-dir rust/fuzz "${{ matrix.target }}" \
+            -- -max_total_time="$seconds" -print_final_stats=1 \
+            2>&1 | tee "fuzz-reports/${{ matrix.target }}.log"
+      - name: Summarize what the campaign actually did
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="fuzz-reports/${{ matrix.target }}.log"
+          test -f "$report"
+          {
+            echo "target=${{ matrix.target }}"
+            echo "commit=${GITHUB_SHA}"
+            echo "seconds=${{ inputs.seconds_per_target || '120' }}"
+            grep -E '^stat::' "$report" || echo "stat::none (the run ended early)"
+            echo "corpus_entries=$(find rust/fuzz/corpus/${{ matrix.target }} -type f 2>/dev/null | wc -l)"
+            echo "crashes=$(find rust/fuzz/artifacts/${{ matrix.target }} -type f 2>/dev/null | wc -l)"
+          } > "fuzz-reports/${{ matrix.target }}.summary.txt"
+          cat "fuzz-reports/${{ matrix.target }}.summary.txt"
+      - name: Fail if the campaign produced a crash artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find rust/fuzz/artifacts/${{ matrix.target }} -type f 2>/dev/null | grep -q .; then
+            echo "[FAIL] ${{ matrix.target }} produced crash artifacts" >&2
+            find rust/fuzz/artifacts/${{ matrix.target }} -type f >&2
+            exit 1
+          fi
+          echo "[PASS] ${{ matrix.target }} produced no crash artifacts"
+      - name: Retain the corpus and any crash input
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qyro-fuzz-${{ matrix.target }}
+          # Corpus and crash inputs are byte strings the fuzzer chose. They
+          # contain no key material: the only session in play is the fixed one
+          # from `qyro_crypto::fuzzing`, whose seeds are published in this
+          # repository and compromised by definition.
+          path: |
+            fuzz-reports/
+            rust/fuzz/corpus/${{ matrix.target }}/
+            rust/fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: warn
+          retention-days: 30

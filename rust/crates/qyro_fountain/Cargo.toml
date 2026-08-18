@@ -1,0 +1,20 @@
+[package]
+name = "qyro_fountain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Luby Transform fountain coding for the optical channel: frames arrive out of order, some never arrive, and the file still lands."
+
+[lib]
+path = "src/lib.rs"
+
+# **Zero dependencies, and that is the decision** (ADR-0044 §4). RaptorQ is
+# better coding theory and worse for this product: Qualcomm's IPR #2554
+# commitment is unilateral, conditioned on implementing the whole RFC, and
+# carries a reciprocity clause. For a project whose entire point is depending on
+# nobody, that does not enter.
+#
+# Luby Transform has no live patent, costs 5-15% overhead against RaptorQ's
+# 0.02%, and fits in a few hundred lines. On a channel that moves 8 KB/s the
+# overhead is seconds; the licence is forever.
+[dependencies]

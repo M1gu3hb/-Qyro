@@ -11,6 +11,10 @@ config/features.json
 
 # Rust
 target/
+# cargo-mutants working directory. Tool output belongs in a report with its
+# scope declared, never in the tree and never in the ledger (R1 §7).
+mutants.out/
+mutants.out.old/
 
 # Flutter/Dart
 .dart_tool/
@@ -18,6 +22,11 @@ target/
 .flutter-plugins-dependencies
 .packages
 build/
+apps/qyro/lib/l10n/generated/
+
+# Python tooling
+__pycache__/
+*.pyc
 
 # IDE/OS
 .idea/

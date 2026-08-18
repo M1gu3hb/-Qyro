@@ -382,6 +382,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(PROJECT_DIR)/Native/$(PLATFORM_NAME)/libqyro_ffi.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.owner.qyro;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -561,6 +566,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(PROJECT_DIR)/Native/$(PLATFORM_NAME)/libqyro_ffi.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.owner.qyro;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -582,6 +592,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-force_load",
+					"$(PROJECT_DIR)/Native/$(PLATFORM_NAME)/libqyro_ffi.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.owner.qyro;
 				PRODUCT_NAME = "$(TARGET_NAME)";

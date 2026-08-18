@@ -1,0 +1,207 @@
+# Formato del blob de identidad
+
+Especificación: `docs/adr/ADR-0024-secure-identity-storage.md`, donde está
+congelado y donde vive el razonamiento. Este documento es la referencia byte a
+byte. Donde los dos discrepen manda la ADR.
+
+**Estado: formato congelado e implementado.** `qyro_identity_store` coloca los
+bytes y `qyro_win_dpapi` los envuelve; los vectores de `storage-v1.json` deciden
+si el código y este documento coinciden, y una prueba los compara contra las
+primitivas y no contra el módulo que los produce.
+
+Este párrafo decía «implementación no escrita todavía» y se quedó atrás cuando
+el código entró.
+
+## La forma
+
+Big-endian, como QYRO/1.
+
+    offset  bytes  campo         valor
+    0       8      magic         "QYRO-IDS" (ASCII, sin NUL)
+    8       1      version       0x01
+    9       1      wrap          0x01 = DPAPI ámbito de usuario (ADR-0024)
+                                  0x02 = Android Keystore AES-GCM (ADR-0025 §5)
+    10      2      reserved      0x0000, debe ser cero
+    12      4      wrapped_len   u32, longitud de `wrapped`
+    16      N      wrapped       salida opaca del envoltorio que diga `wrap`
+
+Longitud total: `16 + N`. `N` lo elige DPAPI y no es constante: el blob que
+devuelve incluye su propia cabecera, el GUID de la MasterKey, sal y un MAC. No se
+parsea nunca. La [documentación][wdp] es explícita: «Being opaque, application
+developers do not need to parse or understand the format at all.»
+
+Los 16 primeros bytes son **la cabecera**. Sus doce primeros aparecen dos veces
+—en el archivo y dentro de la entropía adicional que se pasa a DPAPI—; los cuatro
+de `wrapped_len`, solo en el archivo, por la razón de QYR-0048 que se explica más
+abajo.
+
+## Qué autentica qué
+
+DPAPI autentica `wrapped` por su cuenta: «The function also adds a Message
+Authentication Code (MAC) (keyed integrity check) to the encrypted data to guard
+against data tampering» ([CryptProtectData][cpd], consultada 2026-08-07).
+
+La cabecera queda autenticada **indirectamente**, y esa indirección es el diseño:
+
+    entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]
+
+**`cabecera[0..12]`, no `[0..16]`.** Los doce primeros bytes son magia, versión,
+`wrap` y `reserved`; los cuatro restantes son `wrapped_len`, y meterlos era
+imposible de implementar: para componer la entropía haría falta `wrapped_len`,
+que solo se conoce después de llamar a `CryptProtectData`, que necesita la
+entropía. Circular. Corregido en la enmienda QYR-0048 de ADR-0024, que explica
+por qué el defecto sobrevivió a la revisión —solo se había especificado un orden
+de lectura, y al leer los dieciséis bytes ya están en disco—.
+
+Como la entropía tiene que ser idéntica al proteger y al desproteger, alterar un
+byte de esos doce cambia la entropía y `CryptUnprotectData` falla. Así la
+cabecera cae bajo el MAC de DPAPI **sin que Qyro añada un MAC propio**, que sería
+criptografía casera sobre una capa que ya autentica.
+
+Lo que liga la entropía es la **interpretación** del envoltorio —qué versión, qué
+algoritmo de envoltura—, no su longitud. `wrapped_len` nunca aportó a esa
+propiedad.
+
+Consecuencia práctica: voltear un bit en **cualquier** posición del archivo
+produce un error tipado. Llegan ahí por **tres** caminos distintos, y una prueba
+que no distinga cuál esperaba en cada tramo puede pasar comprobando otra cosa:
+
+| Tramo | Qué lo atrapa |
+|---|---|
+| `0..12` | la entropía cambia y `CryptUnprotectData` no autentica |
+| `12..16` | el paso 7 del orden de lectura, `LengthMismatch` |
+| `16..` | el MAC propio de DPAPI — **pero no en todas las posiciones; ver QYR-0059** |
+
+Por eso la prueba recorre todas las posiciones y su mensaje de fallo dice por qué
+camino se esperaba cada una.
+
+**Corrección (QYR-0059).** La fila `16..` de esa tabla es **falsa tal como está
+escrita**. El barrido contra DPAPI real encontró **dieciséis bytes contiguos que
+se pueden voltear sin que el blob deje de abrir**: los bytes 20..36, que son el
+offset 4..20 del envoltorio, es decir **el GUID del provider**. DPAPI ni lo
+autentica ni lo consulta. El MAC cubre los datos cifrados, no la estructura que
+los rodea.
+
+La tabla correcta:
+
+| Tramo | Qué lo atrapa |
+|---|---|
+| `0..12` | la entropía cambia y `CryptUnprotectData` no autentica |
+| `12..16` | `LengthMismatch`, paso 7 del orden de lectura |
+| `20..36` | **nada** — GUID del provider, ignorado por DPAPI (QYR-0059) |
+| el resto de `16..` | el MAC de DPAPI |
+
+Las 128 mutaciones supervivientes devuelven **la misma identidad**: el byte
+alterado descifra a la misma semilla. Es maleabilidad en un campo que DPAPI
+ignora, no un camino para sustituir una identidad en silencio, que habría sido
+el resultado grave. Lo que había que corregir era la afirmación, no el formato.
+
+La comprobación está **dentro del bucle del barrido**, así que se aplica a las
+128 y no a una muestra: run 31213769557 y, ya en verde, run 31215102331. El log
+del run 31212494494 lo mostró primero para una sola posición, y esa muestra de
+uno es de donde salió la cota «≤16» que resultó ser falsa.
+
+## La constante de entropía no es un secreto
+
+`QYRO_IDENTITY_ENTROPY_V1` está compilada en un binario que el usuario tiene.
+Quien lo lea la obtiene.
+
+Lo que compra es separación de dominio: otra aplicación que corra como el mismo
+usuario y encuentre el archivo no lo abre llamando a `CryptUnprotectData` a
+secas. Lo que **no** compra es fuerza criptográfica —la [documentación
+archivada][wdp] lo dice de la entropía secundaria: «it doesn't strengthen the key
+used to encrypt the data»— ni defensa contra quien ya ejecuta código como ese
+usuario.
+
+Guardarla junto al blob sería no tener ninguna, y la misma fuente lo advierte:
+«If it is simply saved to a file unprotected, then adversaries could access the
+entropy and use it to unprotect an application's data.»
+
+## Dónde vive el archivo
+
+    %LOCALAPPDATA%\Qyro\identity.bin
+
+`LOCALAPPDATA` y no `APPDATA`, deliberadamente. Un perfil móvil puede
+desproteger datos DPAPI desde otra máquina —«a user with a roaming profile can
+decrypt the data from another computer on the network»—, y si el archivo viajara
+con el perfil, dos máquinas presentarían la misma identidad de dispositivo.
+`LOCALAPPDATA` no viaja.
+
+Esto **reduce** el problema y no lo cierra: la MasterKey sí viaja, así que quien
+copie el archivo a mano a la otra máquina puede abrirlo. Cerrarlo exige atar el
+blob a un valor propio de la máquina, que el sprint 4D.1 no hace.
+
+## Orden de escritura
+
+Numerado, porque no tenerlo es lo que dejó pasar QYR-0048:
+
+1. Obtener la semilla con `DeviceIdentity::export_secret`.
+2. Componer `cabecera[0..12]`: magia, `version`, `wrap`, `reserved`.
+   `wrapped_len` **todavía no se conoce y no se finge**.
+3. `entropía = QYRO_IDENTITY_ENTROPY_V1 ‖ cabecera[0..12]`.
+4. `CryptProtectData(semilla, entropía, UI_FORBIDDEN)` → `wrapped`.
+5. ¿`wrapped.len()` cabe en un `u32`? Si no: error tipado, nunca truncamiento.
+6. Escribir `cabecera[0..12] ‖ wrapped_len ‖ wrapped`.
+7. Borrar la semilla y el búfer intermedio, y `LocalFree` sobre `pbData`
+   **después** de borrarlo: liberar sin borrar deja material sensible en memoria
+   liberada.
+
+El paso 2 es el que la especificación anterior no podía expresar: una cabecera
+que existe a medias mientras dura el procedimiento.
+
+## Orden de lectura
+
+Es un orden, no una lista, y cada paso decide una variante de error distinta:
+
+1. ¿Existe el archivo? Si no: **`IdentityAbsent`**.
+2. ¿Al menos 16 bytes? Si no: `Truncated`.
+3. ¿`magic == "QYRO-IDS"`? Si no: `NotAnIdentityBlob`.
+4. ¿`version == 1`? Si no: `UnsupportedVersion { found }`.
+5. ¿`wrap` conocido? Si no: `UnsupportedWrap { found }`.
+6. ¿`reserved == 0`? Si no: `ReservedNotZero`.
+7. ¿`wrapped_len` == bytes restantes? Si no: `LengthMismatch`.
+8. ¿El `wrap` del blob es el del envoltorio que va a abrirlo? Si no:
+   **`WrapMismatch { blob, wrapper }`**.
+9. El desenvoltorio que corresponda —`CryptUnprotectData` para `0x01`,
+   `Cipher.doFinal` sobre la clave de Keystore para `0x02`—. Si falla:
+   `Unwrap { code }`.
+10. ¿La semilla mide 32 bytes? Si no: `MalformedSecret`.
+
+**El paso 8 no estaba en la especificación y sí en el código.** Lo añadió el
+sprint 4D.2a al aparecer el segundo envoltorio, y este documento no lo recogió
+hasta 5A (QYR-0067). Es una comprobación aparte del paso 9 a propósito: «el tag
+no verifica» es lo que parece un archivo dañado, y «este blob es de otra
+plataforma» no es daño ni se arregla reintentando. El byte `wrap` existe para
+decir precisamente eso.
+
+**El paso 1 y los pasos 2–10 son cosas distintas.** El paso 1 es «no hay
+identidad»; los demás son «hay una y no se puede leer». Confundirlos lleva a
+generar una identidad nueva en silencio cuando en realidad había una ilegible, y
+perder en silencio la identidad de un dispositivo es el peor resultado que este
+formato puede producir. Por eso son variantes separadas del enum y no dos usos
+del mismo error.
+
+La versión futura se rechaza **nombrando la versión encontrada** y sin intentar
+interpretar nada. Un formato que adivina qué quiso decir una versión que no
+conoce es un formato con dos lecturas.
+
+`reserved` se rechaza si no es cero, por lo mismo que ADR-0018: un campo que se
+ignora es un campo que dos versiones leen distinto.
+
+## Lo que este formato no promete
+
+- **No protege contra código que ya corre como ese usuario.** Ese atacante llama
+  a `CryptUnprotectData` con la misma constante y obtiene la semilla. Es la
+  limitación real y está también en `THREAT_MODEL.md`.
+- **No sobrevive a perder la MasterKey.** Un reset administrativo de contraseña
+  sin respaldo de dominio, o una reinstalación que no conserve el perfil, dejan
+  el blob ilegible. La respuesta correcta es un error tipado y que el usuario
+  decida, no una identidad nueva en silencio: el blob es caché, no archivo.
+- **No está probado en hardware.** Corre en `windows-latest`, que es un runner
+  con un perfil recién creado, sin dominio, sin perfil móvil y sin historial de
+  contraseñas. Los tres casos que esta página describe como límites reales
+  —cambio administrativo de contraseña, perfil móvil, migración de máquina— son
+  exactamente los que ese entorno **no** puede ejercitar.
+
+[cpd]: https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata
+[wdp]: https://learn.microsoft.com/en-us/previous-versions/ms995355(v=msdn.10)

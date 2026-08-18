@@ -1,0 +1,13 @@
+[package]
+name = "qyro_win_dpapi"
+description = "Hand-declared DPAPI entry points for the Qyro identity store. Windows only."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+qyro_crypto = { path = "../qyro_crypto" }
+qyro_identity_store = { path = "../qyro_identity_store" }
+zeroize = { version = "1.9.0", default-features = false, features = ["alloc"] }

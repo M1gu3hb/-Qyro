@@ -1,0 +1,332 @@
+{
+  "additionalProperties": false,
+  "description": "Every field is required and every hex field is fixed-width lowercase. TEST ONLY - NEVER PRODUCTION.",
+  "properties": {
+    "_warning": {
+      "const": "TEST ONLY - NEVER PRODUCTION. Every seed and every entropy buffer below is fixed and published. Any identity or session derived from them is compromised by definition.",
+      "type": "string"
+    },
+    "crypto_suite_id": {
+      "const": 1,
+      "type": "integer"
+    },
+    "entropy": {
+      "additionalProperties": false,
+      "properties": {
+        "initiator_handshake_entropy": {
+          "pattern": "^[0-9a-f]{128}$",
+          "type": "string"
+        },
+        "initiator_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "initiator_x25519_public": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "initiator_x25519_secret": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_handshake_entropy": {
+          "pattern": "^[0-9a-f]{128}$",
+          "type": "string"
+        },
+        "responder_nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_x25519_public": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_x25519_secret": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "shared_secret": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "initiator_handshake_entropy",
+        "initiator_nonce",
+        "initiator_x25519_public",
+        "initiator_x25519_secret",
+        "responder_handshake_entropy",
+        "responder_nonce",
+        "responder_x25519_public",
+        "responder_x25519_secret",
+        "shared_secret"
+      ],
+      "type": "object"
+    },
+    "finished": {
+      "additionalProperties": false,
+      "properties": {
+        "initiator_finished_input": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "initiator_finished_mac": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_finished_input": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_finished_mac": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "initiator_finished_input",
+        "initiator_finished_mac",
+        "responder_finished_input",
+        "responder_finished_mac"
+      ],
+      "type": "object"
+    },
+    "format": {
+      "const": "qyro-handshake-v1",
+      "type": "string"
+    },
+    "handshake_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "identities": {
+      "additionalProperties": false,
+      "properties": {
+        "initiator": {
+          "additionalProperties": false,
+          "properties": {
+            "ed25519_public_key": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "fingerprint": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "public_identity_wire": {
+              "pattern": "^[0-9a-f]{66}$",
+              "type": "string"
+            },
+            "seed": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ed25519_public_key",
+            "fingerprint",
+            "public_identity_wire",
+            "seed"
+          ],
+          "type": "object"
+        },
+        "responder": {
+          "additionalProperties": false,
+          "properties": {
+            "ed25519_public_key": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "fingerprint": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "public_identity_wire": {
+              "pattern": "^[0-9a-f]{66}$",
+              "type": "string"
+            },
+            "seed": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ed25519_public_key",
+            "fingerprint",
+            "public_identity_wire",
+            "seed"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "initiator",
+        "responder"
+      ],
+      "type": "object"
+    },
+    "messages": {
+      "additionalProperties": false,
+      "properties": {
+        "initiator_finish": {
+          "pattern": "^[0-9a-f]{198}$",
+          "type": "string"
+        },
+        "initiator_hello": {
+          "pattern": "^[0-9a-f]{200}$",
+          "type": "string"
+        },
+        "responder_finish": {
+          "pattern": "^[0-9a-f]{70}$",
+          "type": "string"
+        },
+        "responder_hello": {
+          "pattern": "^[0-9a-f]{328}$",
+          "type": "string"
+        },
+        "responder_hello_unsigned": {
+          "pattern": "^[0-9a-f]{200}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "initiator_finish",
+        "initiator_hello",
+        "responder_finish",
+        "responder_hello",
+        "responder_hello_unsigned"
+      ],
+      "type": "object"
+    },
+    "schedule": {
+      "additionalProperties": false,
+      "properties": {
+        "hkdf_input_key_material": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "hkdf_salt": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "info_initiator_finished": {
+          "pattern": "^[0-9a-f]{124}$",
+          "type": "string"
+        },
+        "info_initiator_to_responder": {
+          "pattern": "^[0-9a-f]{132}$",
+          "type": "string"
+        },
+        "info_responder_finished": {
+          "pattern": "^[0-9a-f]{124}$",
+          "type": "string"
+        },
+        "info_responder_to_initiator": {
+          "pattern": "^[0-9a-f]{132}$",
+          "type": "string"
+        },
+        "info_session_id": {
+          "pattern": "^[0-9a-f]{108}$",
+          "type": "string"
+        },
+        "initiator_finished_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "initiator_to_responder_traffic_secret": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_finished_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "responder_to_initiator_traffic_secret": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "session_id": {
+          "pattern": "^[0-9a-f]{16}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hkdf_input_key_material",
+        "hkdf_salt",
+        "info_initiator_finished",
+        "info_initiator_to_responder",
+        "info_responder_finished",
+        "info_responder_to_initiator",
+        "info_session_id",
+        "initiator_finished_key",
+        "initiator_to_responder_traffic_secret",
+        "responder_finished_key",
+        "responder_to_initiator_traffic_secret",
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "specification": {
+      "const": "docs/adr/ADR-0021-authenticated-handshake.md",
+      "type": "string"
+    },
+    "transcript": {
+      "additionalProperties": false,
+      "properties": {
+        "auth_transcript_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "base_transcript_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "initiator_signature": {
+          "pattern": "^[0-9a-f]{128}$",
+          "type": "string"
+        },
+        "initiator_signing_input": {
+          "pattern": "^[0-9a-f]{192}$",
+          "type": "string"
+        },
+        "responder_signature": {
+          "pattern": "^[0-9a-f]{128}$",
+          "type": "string"
+        },
+        "responder_signing_input": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "auth_transcript_hash",
+        "base_transcript_hash",
+        "initiator_signature",
+        "initiator_signing_input",
+        "responder_signature",
+        "responder_signing_input"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_warning",
+    "crypto_suite_id",
+    "entropy",
+    "finished",
+    "format",
+    "handshake_version",
+    "identities",
+    "messages",
+    "schedule",
+    "schema_version",
+    "specification",
+    "transcript"
+  ],
+  "title": "Qyro authenticated handshake vectors, version 1",
+  "type": "object"
+}

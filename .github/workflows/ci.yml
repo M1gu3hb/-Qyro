@@ -4,13 +4,36 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main]
+    # Any working branch, by pattern. Naming one is what QYR-0040 was:
+    # sprint 4C.2 wrote the then-current branch into six files, which made "CI
+    # runs on the working branch" true of that branch and false of the next one.
+    # A pattern is a property of the repository; a name is a reminder, and the
+    # reminder was not enough.
+    #
+    # `claude/**` and not `**`: covering every branch in the repository spends
+    # runner minutes on work this project did not start.
+    #
+    # Push rather than a pull request, deliberately. A `pull_request` run
+    # executes against a merge commit that exists only inside the Actions run,
+    # so its run ID cannot be cited as evidence for a commit in this branch. A
+    # push run executes on exactly the commit that was pushed, which is the
+    # thing STATUS.md has to name.
+    branches: [main, 'claude/**']
+
+# No `paths:` filter, deliberately. This job is the one that has to run on every
+# push whatever changed — it is what says the workspace still builds, still
+# passes, and still agrees with its own documentation. A filter here is a filter
+# on "is the repository sound" (QYR-0045).
 
 permissions:
   contents: read
 
 jobs:
   rust:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +42,118 @@ jobs:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Covers the wire contracts, the manifest contracts, the property tests
+      # and the fuzz corpus smoke tests.
+      # Covers the identity vectors and the RFC 8032 known-answer test too: both
+      # moved inside qyro_crypto when the fixed-seed constructor became
+      # `cfg(test)` and crate-private, so they no longer need a feature flag and
+      # can no longer be skipped by running the default set.
+      - run: cargo test --workspace
+      # ADR-0040, and the one step that fails on every commit before phase 11.
+      #
+      # Two **separate processes** open the same identity file through
+      # `qyro_session` -- the path the application takes -- and the second is
+      # handed the first's fingerprint to compare. Two calls inside one process
+      # share a `OnceLock` and prove nothing; the defect was that the second
+      # *process* minted a new key.
+      #
+      # Not the same as the `windows-crypto` step that already existed: that one
+      # drives `qyro_win_dpapi` directly, so it proved DPAPI round-trips and
+      # never touched the engine. That is exactly how the product shipped for
+      # five phases with no identity at all while the evidence looked green.
+      - name: An identity survives a process, through the engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          store="$(mktemp -d)/identity.qyro"
+          smoke=target/debug/qyro_store_smoke
+          cargo build --locked --package qyro_store_smoke
+          first="$($smoke session-open "$store")"
+          echo "process 1: $first"
+          second="$($smoke session-open "$store" "$first")"
+          echo "process 2: $second"
+          # And the control, so a step that compares a value with itself cannot
+          # pass: a different store must give a different identity, and the
+          # comparison must notice.
+          other="$(mktemp -d)/identity.qyro"
+          different="$($smoke session-open "$other")"
+          test "$different" != "$first"
+          if $smoke session-open "$other" "$first"; then
+            echo "[FAIL] the comparison did not notice a different identity" >&2
+            exit 1
+          fi
+          echo "[PASS] one identity per store, across processes, through qyro_session"
+      # qyro_fs has one opt-in feature for the privileged Windows reparse-point
+      # fixture. This line covers its Unix build; the matrix job below executes
+      # the Windows side on a runner that can create the link.
+      - run: cargo test --workspace --all-features
+      - run: cargo test --doc --workspace
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.2
+      # Mandatory from sprint 2 on. Sprint 4A added the Ed25519 stack, so this
+      # now guards real third-party code on a security-critical path; every
+      # crate and licence is recorded in docs/LICENSE_AUDIT.md.
+      - name: Audit dependencies for security advisories
+        run: cargo audit --deny warnings
+      # rust/fuzz is a separate workspace (libfuzzer-sys needs nightly), so it is
+      # not covered by cargo fmt --all above.
+      - name: Check fuzz target formatting
+        run: rustfmt --check --edition 2024 rust/fuzz/fuzz_targets/*.rs
+
+  rust-windows:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 45
+    name: rust workspace (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: clippy
+      # The workspace has Windows-only production and eight cfg(windows) DPAPI
+      # tests; its ninth guard test runs everywhere. Linux cannot cover that
+      # production surface, which is how QYR-0105 survived until 5C.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
+  fs-final-component:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
+    name: fs final-component guard (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            feature_args: ''
+          - os: macos-latest
+            feature_args: ''
+          - os: windows-latest
+            feature_args: '--features windows-reparse-test'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Refuse a final-component link without touching its target
+        run: >-
+          cargo test -p qyro_fs ${{ matrix.feature_args }}
+          tests::a_symlink_at_the_final_part_component_is_refused_without_touching_its_target
+          -- --exact
+      - name: Reject an opened part outside the destination root
+        run: >-
+          cargo test -p qyro_fs ${{ matrix.feature_args }}
+          tests::an_opened_part_outside_the_root_is_rejected_before_it_can_be_changed
+          -- --exact
+
   flutter:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -29,23 +161,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
-      - name: Build qyro_ffi for the Dart integration test
+      # Release, not debug. The transfer test moves 8 MiB through ChaCha20 and
+      # SHA-256, and a debug build of that stack turns a one-second test into a
+      # multi-minute one. The receiver is built here too: qyro_net_smoke already
+      # speaks the same engine and the same handshake, and it announces its port
+      # before it accepts, so the test never has to guess.
+      - name: Build qyro_ffi and the smoke receiver for the Dart transfer test
         working-directory: .
-        run: cargo build --package qyro_ffi
+        run: cargo build --release --package qyro_ffi --package qyro_net_smoke
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed .
+      - name: Verify generated branding
+        working-directory: .
+        run: dart tools/branding_generator/bin/generate.dart --check
+      - name: Check Dart formatting
+        shell: bash
+        run: |
+          if ! dart format --output=none --set-exit-if-changed .; then
+            dart format .
+            git diff -- .
+            exit 1
+          fi
       - run: flutter analyze
-      - name: Run Flutter and native ABI tests
+      - name: Run Flutter, native ABI and Dart-driven transfer tests
         run: flutter test
         env:
-          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}/target/debug/libqyro_ffi.so
+          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}/target/release/libqyro_ffi.so
+          QYRO_NET_SMOKE_PATH: ${{ github.workspace }}/target/release/qyro_net_smoke
 
   scripts:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,4 +217,44 @@ jobs:
           pwsh -NoProfile -File scripts/tests/bootstrap_contract_test.ps1 || status=1
           bash scripts/tests/test_all_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/test_all_contract_test.ps1 || status=1
+          bash scripts/tests/docs_consistency_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/docs_consistency_contract_test.ps1 || status=1
+          pwsh -NoProfile -File scripts/tests/windows_package_contract_test.ps1 || status=1
+          bash scripts/tests/launch_surface_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/launch_surface_contract_test.ps1 || status=1
+          bash scripts/tests/repo_portability_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/repo_portability_contract_test.ps1 || status=1
+          bash scripts/tests/crypto_platform_evidence_contract_test.sh || status=1
+          pwsh -NoProfile -File scripts/tests/crypto_platform_evidence_contract_test.ps1 || status=1
+          python3 -m unittest tools/logo_ascii_generator/test_logo_ascii_generator.py || status=1
           exit "$status"
+
+  documentation:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: the checker proves STATUS.md's verified commit is reachable
+      # from HEAD, which a shallow clone cannot answer.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: bash scripts/check_docs_consistency.sh
+      - run: pwsh -NoProfile -File scripts/check_docs_consistency.ps1
+      # A Linux runner happily creates paths Windows cannot check out, so this
+      # has to be asserted rather than discovered when a Windows job dies at
+      # `actions/checkout`. See scripts/check_repo_portability.sh.
+      - run: bash scripts/check_repo_portability.sh
+      - run: pwsh -NoProfile -File scripts/check_repo_portability.ps1
+      # Building qyro_ffi for a target is not building qyro_crypto for it. This
+      # refuses that substitution, which is what let four green workflows mean
+      # less than they looked like they meant.
+      - run: bash scripts/check_crypto_platform_evidence.sh
+      - run: pwsh -NoProfile -File scripts/check_crypto_platform_evidence.ps1
+      # The source half of keeping the test harness out of the product. The
+      # artifact half lives in platform-builds.yml, where the APK, the
+      # Runner.app and the Windows ZIP exist.
+      - run: bash scripts/check_harness_isolation.sh
+      - run: pwsh -NoProfile -File scripts/check_harness_isolation.ps1

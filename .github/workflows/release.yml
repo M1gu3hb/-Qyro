@@ -1,0 +1,202 @@
+name: Release
+
+# The v1.0 artifacts, and the only place they can be built.
+#
+# `flutter build` needs symlink support for the plugin registrant, and the
+# development machine has Developer Mode off (QYR-0324) -- it is a system
+# setting belonging to the owner of that machine, not to this project. So the
+# APK and the Windows bundle are built here, on runners that have it, and their
+# SHA-256 is what `docs/release/v1.0.md` publishes.
+#
+# **The APK this workflow produces is signed with the debug key.** The release
+# signing material is `key.properties`, which is not in the repository and never
+# will be, and this project does not put a private signing key into a repository
+# secret. Signing is a separate, local, deliberate step; see
+# `docs/release/v1.0.md` for the exact commands and for both hashes.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build qyro_ffi for Android, release
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android x86_64-linux-android
+          qyro_ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}}"
+          test -n "$qyro_ndk"
+          bin="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$bin/aarch64-linux-android21-clang"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$bin/x86_64-linux-android21-clang"
+          cargo build --locked --release --package qyro_ffi --target aarch64-linux-android
+          cargo build --locked --release --package qyro_ffi --target x86_64-linux-android
+          mkdir -p apps/qyro/android/app/src/main/jniLibs/{arm64-v8a,x86_64}
+          cp target/aarch64-linux-android/release/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/arm64-v8a/
+          cp target/x86_64-linux-android/release/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/x86_64/
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          cache: true
+      - run: flutter pub get
+        working-directory: apps/qyro
+      - run: flutter build apk --release
+        working-directory: apps/qyro
+      # The same assertion the debug job makes, on the artifact people install.
+      # A permission a plugin adds appears in the merged manifest and nowhere
+      # else, and this is the build that ships.
+      - name: The merged manifest declares no storage permission
+        working-directory: apps/qyro
+        run: flutter test test/android_manifest_test.dart
+        env:
+          QYRO_REQUIRE_MERGED_MANIFEST: "1"
+      - name: The APK carries qyro_ffi and not the crypto smoke harness
+        shell: bash
+        working-directory: apps/qyro
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libqyro_ffi.so'
+          unzip -l "$apk" | grep -q 'lib/x86_64/libqyro_ffi.so'
+          if unzip -l "$apk" | grep -qi 'qyro_crypto_smoke'; then
+            echo "[FAIL] the APK contains the crypto smoke harness" >&2
+            exit 1
+          fi
+      - name: Record what this APK is, and what it is not
+        shell: bash
+        working-directory: apps/qyro
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          cp "$apk" "$GITHUB_WORKSPACE/artifacts/app-release-debugkey.apk"
+          cd "$GITHUB_WORKSPACE/artifacts"
+          sha256sum app-release-debugkey.apk > SHA256SUMS.txt
+          {
+            echo "Qyro v1.0 Android APK."
+            echo
+            echo "SIGNED WITH THE DEBUG KEY. This is not the release-signed"
+            echo "artifact: key.properties is not in the repository and this"
+            echo "project does not put a private signing key into a CI secret."
+            echo "The release-signed APK and its own SHA-256 are in"
+            echo "docs/release/v1.0.md."
+            echo
+            echo "NOTHING HERE HAS EVER RUN ON A PHONE. See"
+            echo "docs/testing/hardware-protocol.md -- twenty scenarios, twenty"
+            echo "blank results."
+            echo
+            echo "commit=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF"
+            echo "workflow_run=$GITHUB_RUN_ID"
+            echo "rustc=$(rustc --version)"
+          } > BUILD-INFO.txt
+          cat SHA256SUMS.txt BUILD-INFO.txt
+          {
+            echo "### Android"
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qyro-android-release
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90
+
+  windows:
+    timeout-minutes: 60
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build qyro_ffi for Windows, release
+        run: cargo build --locked --release --package qyro_ffi
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.8
+          cache: true
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+        working-directory: apps/qyro
+      - run: flutter build windows --release
+        working-directory: apps/qyro
+      - name: Package, verify and hash the portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Release'
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'target\release\qyro_ffi.dll') `
+                    -Destination (Join-Path $bundle 'qyro_ffi.dll')
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts\verify_windows_package.ps1') -BundlePath $bundle
+
+          # Checksums of every file, inside the package. A checksum a person
+          # cannot see after downloading verifies the transfer and nothing else.
+          #
+          # Enumerated and hashed **completely** before the output file is
+          # opened. `Get-ChildItem | ForEach-Object | Out-File` streams, so
+          # `Out-File` creates SHA256SUMS.txt inside the very directory being
+          # walked and `Get-ChildItem` then reaches it while it is still held:
+          # "The process cannot access the file ... because it is being used by
+          # another process". `platform-builds.yml` never hit this because it
+          # writes its copy outside the bundle first.
+          $sums = Join-Path $bundle 'SHA256SUMS.txt'
+          $files = @(Get-ChildItem -LiteralPath $bundle -Recurse -File)
+          $lines = @($files | ForEach-Object {
+              $relative = $_.FullName.Substring($bundle.Length + 1)
+              "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $relative"
+          })
+          $lines | Out-File -FilePath $sums -Encoding utf8
+
+          @(
+              'Qyro v1.0 Windows x64 portable.'
+              ''
+              'Release configuration, unsigned: MSIX and Authenticode want a'
+              'code-signing certificate, which costs money (ADR-0010 amended).'
+              'Windows SmartScreen will warn, and it is right to.'
+              ''
+              'NOTHING HERE HAS EVER RUN ON TWO REAL MACHINES ON A REAL'
+              'NETWORK. See docs/testing/hardware-protocol.md.'
+              ''
+              "commit=$env:GITHUB_SHA"
+              "ref=$env:GITHUB_REF"
+              "workflow_run=$env:GITHUB_RUN_ID"
+              "rustc=$(rustc --version)"
+          ) | Out-File -FilePath (Join-Path $bundle 'BUILD-INFO.txt') -Encoding utf8
+
+          $artifacts = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
+          $zip = Join-Path $artifacts 'qyro-windows-x64.zip'
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip -Force
+
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+          "$hash  qyro-windows-x64.zip" | Out-File -FilePath (Join-Path $artifacts 'SHA256SUMS.txt') -Encoding utf8
+          Write-Host "qyro-windows-x64.zip  $hash"
+          # One string per line rather than embedded escapes: `\n` in a
+          # PowerShell double-quoted string is a literal backslash-n, not a
+          # newline, and a summary full of `\n` is a summary nobody can copy a
+          # hash out of.
+          @(
+              '### Windows'
+              ''
+              '```'
+              "$hash  qyro-windows-x64.zip"
+              '```'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qyro-windows-x64-release
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,20 @@
+# Static linking for the portable binary.
+#
+# R8 §6, and the two traps it measured are the reason this file exists at all:
+#
+# 1. **`[target.<triple>] rustflags`, never `[build] rustflags`.** A `RUSTFLAGS`
+#    in the environment silently replaces the `[build]` table, so on a CI runner
+#    that sets it for any reason the static linking disappears without a word.
+#    A per-target table is not overridden that way.
+# 2. **Always pass `--target` explicitly.** Without it the flags also reach build
+#    scripts, which are compiled for the host and break.
+#
+# And the finding that made a check mandatory: on `x86_64-pc-windows-gnu` the
+# flag was **ignored** and produced a byte-identical binary. So `verify_static.ps1`
+# inspects the imports and fails; it does not assume.
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

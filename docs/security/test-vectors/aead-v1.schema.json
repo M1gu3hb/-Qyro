@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Qyro frame AEAD test vectors, version 1",
+  "description": "Strict: every property is required and no others are allowed, so a file that drops a field or invents one fails rather than validating. The validator that enforces this refuses any keyword it does not implement, so a constraint added here cannot be silently ignored. See docs/adr/ADR-0022-qyro1-frame-aead.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "_warning",
+    "aead_algorithm",
+    "chained_from",
+    "derivation",
+    "format",
+    "initiator_to_responder_frames",
+    "note",
+    "responder_to_initiator_frames",
+    "session",
+    "specification",
+    "suite"
+  ],
+  "properties": {
+    "_warning": {
+      "type": "string"
+    },
+    "aead_algorithm": {
+      "type": "string",
+      "const": "ChaCha20-Poly1305, RFC 8439"
+    },
+    "chained_from": {
+      "type": "string",
+      "const": "handshake-v1.json"
+    },
+    "derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initiator_to_responder",
+        "responder_to_initiator"
+      ],
+      "properties": {
+        "initiator_to_responder": {
+          "type": "object",
+          "description": "Everything one direction derives from its traffic secret.",
+          "additionalProperties": false,
+          "required": [
+            "aead_key",
+            "info_key",
+            "info_nonce_prefix",
+            "nonce_prefix"
+          ],
+          "properties": {
+            "aead_key": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "HKDF-Expand of the traffic secret under info_key."
+            },
+            "info_key": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{122}$",
+              "description": "label || 0x00 || auth_transcript || session_id."
+            },
+            "info_nonce_prefix": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{140}$"
+            },
+            "nonce_prefix": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}$",
+              "description": "The first four bytes of every nonce in this direction."
+            }
+          }
+        },
+        "responder_to_initiator": {
+          "type": "object",
+          "description": "Everything one direction derives from its traffic secret.",
+          "additionalProperties": false,
+          "required": [
+            "aead_key",
+            "info_key",
+            "info_nonce_prefix",
+            "nonce_prefix"
+          ],
+          "properties": {
+            "aead_key": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "HKDF-Expand of the traffic secret under info_key."
+            },
+            "info_key": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{122}$",
+              "description": "label || 0x00 || auth_transcript || session_id."
+            },
+            "info_nonce_prefix": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{140}$"
+            },
+            "nonce_prefix": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}$",
+              "description": "The first four bytes of every nonce in this direction."
+            }
+          }
+        }
+      }
+    },
+    "format": {
+      "type": "string",
+      "const": "qyro-aead-v1"
+    },
+    "initiator_to_responder_frames": {
+      "type": "array",
+      "description": "Frames the initiator sealed, in sequence order.",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "description": "One sealed frame, with everything needed to reproduce it.",
+        "additionalProperties": false,
+        "required": [
+          "associated_data",
+          "ciphertext",
+          "flags",
+          "frame",
+          "item_id",
+          "message_type",
+          "name",
+          "nonce",
+          "plaintext",
+          "sequence",
+          "stream_id",
+          "tag",
+          "transfer_id"
+        ],
+        "properties": {
+          "associated_data": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$",
+            "description": "The whole 48-byte QYRO/1 header. Altering any byte invalidates the tag."
+          },
+          "ciphertext": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{0,}$",
+            "description": "Same length as the plaintext: ChaCha20 is a stream cipher."
+          },
+          "flags": {
+            "type": "integer",
+            "description": "Header flags, including ENCRYPTED, which the sealer sets."
+          },
+          "frame": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{128,}$",
+            "description": "header || ciphertext || tag, exactly as it goes on the wire."
+          },
+          "item_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}$"
+          },
+          "message_type": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "description": "nonce_prefix || sequence, big-endian. Derived, never transmitted."
+          },
+          "plaintext": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{0,}$"
+          },
+          "sequence": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$",
+            "description": "Assigned by the sealer, starting at zero in each direction."
+          },
+          "stream_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}$"
+          },
+          "tag": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "transfer_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          }
+        }
+      }
+    },
+    "note": {
+      "type": "string"
+    },
+    "responder_to_initiator_frames": {
+      "type": "array",
+      "description": "Frames the responder sealed, on its own key and counter.",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "description": "One sealed frame, with everything needed to reproduce it.",
+        "additionalProperties": false,
+        "required": [
+          "associated_data",
+          "ciphertext",
+          "flags",
+          "frame",
+          "item_id",
+          "message_type",
+          "name",
+          "nonce",
+          "plaintext",
+          "sequence",
+          "stream_id",
+          "tag",
+          "transfer_id"
+        ],
+        "properties": {
+          "associated_data": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$",
+            "description": "The whole 48-byte QYRO/1 header. Altering any byte invalidates the tag."
+          },
+          "ciphertext": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{0,}$",
+            "description": "Same length as the plaintext: ChaCha20 is a stream cipher."
+          },
+          "flags": {
+            "type": "integer",
+            "description": "Header flags, including ENCRYPTED, which the sealer sets."
+          },
+          "frame": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{128,}$",
+            "description": "header || ciphertext || tag, exactly as it goes on the wire."
+          },
+          "item_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}$"
+          },
+          "message_type": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nonce": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{24}$",
+            "description": "nonce_prefix || sequence, big-endian. Derived, never transmitted."
+          },
+          "plaintext": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{0,}$"
+          },
+          "sequence": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$",
+            "description": "Assigned by the sealer, starting at zero in each direction."
+          },
+          "stream_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}$"
+          },
+          "tag": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "transfer_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          }
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "description": "The handshake output this file chains to; see handshake-v1.json.",
+      "additionalProperties": false,
+      "required": [
+        "auth_transcript_hash",
+        "initiator_to_responder_traffic_secret",
+        "responder_to_initiator_traffic_secret",
+        "session_id"
+      ],
+      "properties": {
+        "auth_transcript_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "initiator_to_responder_traffic_secret": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "responder_to_initiator_traffic_secret": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "Eight bytes, the width the QYRO/1 header carries."
+        }
+      }
+    },
+    "specification": {
+      "type": "string",
+      "const": "docs/adr/ADR-0022-qyro1-frame-aead.md"
+    },
+    "suite": {
+      "type": "object",
+      "description": "Fixed by ADR-0022. A different value is a different protocol.",
+      "additionalProperties": false,
+      "required": [
+        "aead_key_len",
+        "header_len",
+        "nonce_len",
+        "nonce_prefix_len",
+        "replay_window",
+        "tag_len"
+      ],
+      "properties": {
+        "aead_key_len": {
+          "type": "integer",
+          "const": 32
+        },
+        "header_len": {
+          "type": "integer",
+          "const": 48,
+          "description": "The associated data is the whole header."
+        },
+        "nonce_len": {
+          "type": "integer",
+          "const": 12
+        },
+        "nonce_prefix_len": {
+          "type": "integer",
+          "const": 4,
+          "description": "The remaining eight bytes are the sequence."
+        },
+        "replay_window": {
+          "type": "integer",
+          "const": 1024
+        },
+        "tag_len": {
+          "type": "integer",
+          "const": 16
+        }
+      }
+    }
+  }
+}

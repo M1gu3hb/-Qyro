@@ -1,0 +1,24 @@
+[package]
+name = "qyro_fs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Reads and writes real files for the Qyro transfer engine. No network, no picker."
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# A Windows file symlink needs SeCreateSymbolicLinkPrivilege. The normal local
+# workspace remains runnable without it; CI opts in on a runner that can create
+# the fixture and therefore provides the evidence instead of silently skipping.
+windows-reparse-test = []
+
+# Only std and crates already in the audited graph. O_NOFOLLOW comes from
+# std::os::unix and FILE_FLAG_OPEN_REPARSE_POINT from std::os::windows, so the
+# symlink policy of ADR-0027 §1 costs no dependency.
+[dependencies]
+qyro_manifest = { path = "../qyro_manifest" }
+qyro_transfer = { path = "../qyro_transfer" }
+sha2 = { version = "0.11.0", default-features = false }

@@ -1,0 +1,44 @@
+[package]
+name = "qyro_session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The only crate qyro_ffi sees: transfer operations, and no type that carries a key."
+
+[lib]
+path = "src/lib.rs"
+
+# ADR-0032 Â§2. This crate exists to be the machine-verified boundary: because
+# Rust puts only *direct* dependencies in a crate's extern prelude, qyro_ffi
+# naming exactly qyro_core and qyro_session is a resolver-checkable proof that
+# everything it can reach of the cryptographic stack is bounded by this crate's
+# public API. Every dependency below is first-party.
+[dependencies]
+# This crate MAY reach the crypto stack; qyro_ffi may not. That asymmetry is the
+# whole design: the handshake needs a DeviceIdentity, so somebody has to name
+# qyro_crypto, and this crate is where that naming is confined and audited.
+qyro_crypto = { path = "../qyro_crypto" }
+qyro_fs = { path = "../qyro_fs" }
+qyro_identity_store = { path = "../qyro_identity_store" }
+qyro_manifest = { path = "../qyro_manifest" }
+qyro_net = { path = "../qyro_net" }
+qyro_transfer = { path = "../qyro_transfer" }
+# Already in the graph through qyro_crypto and qyro_identity_store; naming it
+# here adds an edge and not a package. ADR-0037 needs `Zeroizing` for the
+# plaintext the bridge hands back.
+zeroize = { version = "1.9.0", default-features = false, features = ["alloc"] }
+
+# ADR-0040. An edge, not a package: `qyro_win_dpapi`'s only dependencies are
+# `qyro_crypto`, `qyro_identity_store` and `zeroize`, all already in the graph,
+# so `Cargo.lock` does not move and nothing external reaches Android.
+[target.'cfg(windows)'.dependencies]
+qyro_win_dpapi = { path = "../qyro_win_dpapi" }
+
+# ADR-0040. `a_known_peer_whose_key_changed_is_refused_by_name` used to
+# manufacture a changed key out of the defect itself: two receivers, therefore
+# two identities. With one identity per process it has to build the second
+# identity on purpose, which means naming the type. No new package -- this crate
+# already depends on `qyro_crypto`.
+[dev-dependencies]
+qyro_crypto = { path = "../qyro_crypto" }

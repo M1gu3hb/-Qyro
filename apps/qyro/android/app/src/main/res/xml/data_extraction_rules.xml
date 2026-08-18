@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- QYR-0349. Nothing of this application is backed up and nothing is
+     transferred to another device.
+
+     `android:allowBackup="false"` stopped governing device-to-device transfer
+     on API 31, so the two paths are excluded here by name. Empty <cloud-backup>
+     and <device-transfer> sections mean "include nothing", which is the whole
+     policy: the identity blob is wrapped by a Keystore key that cannot leave
+     the device it was created on, so a copy of it somewhere else is at best
+     useless and at worst a promise broken by omission (ADR-0007, ADR-0025 §3.4).
+
+     A new identity on a new device is the correct outcome. The other device
+     will say the key changed, in red, and refuse, which is exactly what it
+     should say, because the key did change. -->
+<data-extraction-rules>
+    <cloud-backup />
+    <device-transfer />
+</data-extraction-rules>

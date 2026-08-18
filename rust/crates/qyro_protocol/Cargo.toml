@@ -1,0 +1,14 @@
+[package]
+name = "qyro_protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "QYRO/1 binary wire framing: bounded encoder and incremental decoder."
+
+[lib]
+path = "src/lib.rs"
+
+# Intentionally dependency-free. The decoder is the first surface that touches
+# bytes from an untrusted peer, so every parsing path here stays auditable.
+[dependencies]

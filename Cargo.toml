@@ -1,8 +1,28 @@
 [workspace]
 resolver = "2"
 members = [
+  "rust/crates/qyro_cli",
   "rust/crates/qyro_core",
+  "rust/crates/qyro_crypto",
   "rust/crates/qyro_ffi",
+  "rust/crates/qyro_fountain",
+  "rust/crates/qyro_fs",
+  "rust/crates/qyro_serial",
+  "rust/crates/qyro_identity_store",
+  "rust/crates/qyro_manifest",
+  "rust/crates/qyro_net",
+  "rust/crates/qyro_protocol",
+  "rust/crates/qyro_session",
+  "rust/crates/qyro_transfer",
+  # Windows only. The one crate in the product that relaxes forbid(unsafe_code);
+  # see ADR-0024 §1.
+  "rust/crates/qyro_win_dpapi",
+  # Test harness, never shipped. See docs/adr/ADR-0023-crypto-platform-test-harness.md.
+  "rust/tools/qyro_crypto_smoke",
+  # Two-process persistence harness. Never shipped; see ADR-0023.
+  "rust/tools/qyro_store_smoke",
+  # Two-process transfer harness for sprint 6A. Never shipped; see ADR-0023.
+  "rust/tools/qyro_net_smoke",
 ]
 
 [workspace.package]
@@ -10,3 +30,29 @@ edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.88"
 version = "0.0.1"
+
+# The portable-binary profile, already measured in R8 §6 and not re-derived.
+#
+# Two findings from that measurement, both reproduced and both
+# counter-intuitive: `opt-level = "z"` **on its own makes the binary bigger**,
+# and `"s"` beats `"z"` once the other levers are pulled. Measure, do not
+# assume.
+#
+# **`panic = "abort"` is deliberately NOT here, and R8 §6 recommends it.**
+#
+# The guard `no_cargo_profile_sets_panic_abort` (QYR-0305) rejected it within a
+# minute of it being written, and the guard is right: `catch_unwind` catches
+# nothing under `abort`, so every `guard(...)` at the C boundary becomes
+# decoration and a panic in Rust takes the host application down with it.
+#
+# R8's measurement is not wrong — it was taken on a standalone binary with no
+# foreign frontier. This workspace has one, and **an invariant beats a
+# measurement when they disagree**. Measured cost of keeping unwind, on this
+# machine: `qyro.exe` **590 KB con abort, 653 KB sin él**. Sesenta y tres
+# kilobytes por una frontera de pánico que funciona no es un intercambio que
+# haya que pensar dos veces.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

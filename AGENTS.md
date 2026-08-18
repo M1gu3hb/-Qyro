@@ -1,66 +1,52 @@
 # Instrucciones canónicas para agentes
 
+## Fuente de verdad
+
+Leer [STATUS.md](STATUS.md) antes de trabajar. STATUS.md es la única fuente de verdad para funciones implementadas, plataformas ejecutadas, tests, artefactos y bloqueos. HANDOFF.md enlaza ese estado; NEXT_STEPS.md mantiene el backlog.
+
 ## Objetivo
 
-Construir Qyro: transferencia privada de archivos entre Android, iOS y Windows, con un monorepo Flutter/Rust y capacidades nativas aisladas por plataforma.
+Construir Qyro como transferencia privada entre Android, iOS y Windows con monorepo Flutter/Rust. El alcance actual llega hasta la criptografía en memoria —identidad, handshake autenticado y AEAD de frames— y **no** incluye transferencia, transporte, LAN, base de datos, almacenamiento seguro ni modo óptico. Cifrar un frame en memoria no acerca ninguno de ellos por sí solo: Qyro sigue sin transferir archivos.
 
 ## Reglas no negociables
 
 - Sin cuentas, anuncios, analítica, trackers, nube, backend o relay obligatorio.
-- Ningún archivo, nombre, ruta, clave o diagnóstico sale a internet.
-- Toda recepción de un peer desconocido requiere confirmación.
-- Cifrado, integridad, reanudación y escritura temporal preceden al rename final.
-- No inventar builds, pruebas, rendimiento, compatibilidad, propiedad de marca ni seguridad.
-- No copiar interfaz o identidad de proyectos de referencia.
-- No agregar Firebase, Supabase, AWS, Azure, Sentry, Crashlytics ni equivalentes.
-- No agregar GPL, AGPL, LGPL o licencia desconocida sin autorización explícita.
+- No inventar builds, pruebas, rendimiento, compatibilidad, marca ni seguridad.
+- No copiar interfaces, identidad o assets de proyectos de referencia.
+- No agregar servicios remotos ni criptografía propia.
+- No agregar GPL, AGPL, LGPL o licencia desconocida sin autorización.
+- Una función está terminada solo con implementación, test, plataforma y documentación coherentes.
 
 ## Arquitectura
 
-- Flutter/Dart: presentación, navegación, accesibilidad y coordinación de UI.
-- Rust: protocolo, criptografía, manifiestos, streaming, persistencia y selección de transporte.
-- qyro_ffi: frontera nativa estrecha; ninguna lógica de negocio vive allí.
-- Kotlin, Swift y C++/WinRT: capacidades exclusivas del sistema operativo.
-- Trabajo pesado fuera del hilo de UI.
-- Dependencias apuntan hacia el dominio; el dominio no conoce Flutter ni APIs nativas.
+- Flutter/Dart: presentación, accesibilidad y coordinación.
+- Rust: dominio compartido y protocolo futuro.
+- qyro_ffi: frontera estrecha sin lógica de negocio.
+- Kotlin, Swift y C++: capacidades exclusivas de plataforma.
+- Dependencias hacia el dominio; el dominio no conoce Flutter ni APIs nativas.
+- Cambios de arquitectura requieren ADR.
 
 ## Flujo obligatorio
 
-1. Leer HANDOFF.md y NEXT_STEPS.md.
-2. Revisar este archivo y ADR relevantes.
-3. Ejecutar doctor cuando exista y las pruebas de base.
-4. Para comportamiento nuevo: test rojo, comprobar el fallo correcto, implementación mínima, verde, refactor.
-5. Ejecutar formato, lint, análisis y tests tras cada cambio.
-6. Actualizar CHANGELOG.md, PROJECT_CONTEXT.md, HANDOFF.md, FILE_MAP.md y NEXT_STEPS.md cuando cambie el estado.
-7. Registrar fallos reales en BUGS_PENDING.md; no esconderlos en TODO.
-8. Commit Conventional Commit, pequeño y coherente.
+1. Leer STATUS.md, HANDOFF.md y NEXT_STEPS.md.
+2. Ejecutar doctor y baseline relevante.
+3. Para comportamiento nuevo: test rojo, fallo correcto, implementación mínima, verde y refactor.
+4. Ejecutar formato, análisis y tests tras cada cambio.
+5. Actualizar STATUS.md y documentos afectados sin duplicar estado.
+6. Registrar fallos reales en BUGS_PENDING.md.
+7. Usar commits Conventional Commits pequeños.
 
-## Comandos actuales
+## Comandos
 
-    cargo fmt --all --check
-    cargo clippy --workspace --all-targets -- -D warnings
-    cargo test --workspace
-    cd apps/qyro
-    flutter pub get
-    dart format --output=none --set-exit-if-changed .
-    flutter analyze
-    flutter test
+    bash scripts/doctor.sh
+    bash scripts/bootstrap.sh
+    bash scripts/test_all.sh
 
-Los scripts doctor, bootstrap, test_all y build_all son trabajo P0 pendiente; no documentar resultados de ellos antes de implementarlos.
+PowerShell dispone de doctor.ps1, bootstrap.ps1 y test_all.ps1 equivalentes. La existencia y estado actual de scripts se registra únicamente en STATUS.md.
 
-## Seguridad y dependencias
+## Seguridad
 
-- Usar primitivas revisadas; nunca criptografía propia.
 - Limitar longitudes antes de reservar memoria.
-- Validar rutas, tamaños, versiones, sesiones, expiraciones y nonces.
-- Redactar logs; nunca claves, contenido ni rutas completas.
-- Fijar versiones, actualizar docs/LICENSE_AUDIT.md y THIRD_PARTY_NOTICES.md.
-- Revisar licencia, actividad, arquitectura y issues antes de integrar una referencia.
-
-## Definición de terminado
-
-Una función está terminada solo si el comportamiento real existe, sus tests relevantes pasan, se validó en plataformas declaradas, la seguridad fue revisada y la documentación refleja límites. UI, mock, placeholder o TODO no cuentan.
-
-## Handoff
-
-Registrar fecha UTC, rama, commit, hito, funciones reales, comandos/resultados, builds, bloqueos, archivos modificados y una única próxima tarea verificable. Nunca usar porcentajes inventados.
+- Validar rutas, tamaños, versiones y entradas externas.
+- Redactar diagnósticos; no exponer claves, contenido ni rutas completas.
+- Fijar versiones y actualizar LICENSE_AUDIT/THIRD_PARTY_NOTICES.

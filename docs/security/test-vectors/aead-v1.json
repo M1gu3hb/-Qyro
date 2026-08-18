@@ -1,0 +1,115 @@
+{
+  "_warning": "TEST ONLY - NEVER PRODUCTION. Every key and secret below is derived from published seeds and is therefore compromised by definition.",
+  "aead_algorithm": "ChaCha20-Poly1305, RFC 8439",
+  "chained_from": "handshake-v1.json",
+  "derivation": {
+    "initiator_to_responder": {
+      "aead_key": "72983bddfb9aba63c2e1a08426c07daad5ab114715e7398f1087f824f5cb30df",
+      "info_key": "5159524f2d414541442d56312f6932722f6b657900c545247c44810031ef79d9103cb29f3c8271f4ccc15cc768a7367cdc3acfa08a0a9272ab43e5d2b6",
+      "info_nonce_prefix": "5159524f2d414541442d56312f6932722f6e6f6e63652d70726566697800c545247c44810031ef79d9103cb29f3c8271f4ccc15cc768a7367cdc3acfa08a0a9272ab43e5d2b6",
+      "nonce_prefix": "64cc3534"
+    },
+    "responder_to_initiator": {
+      "aead_key": "b5202b2c3405871ea841bd77a436ccf7929d989fa91449decbf33ece1e5e386a",
+      "info_key": "5159524f2d414541442d56312f7232692f6b657900c545247c44810031ef79d9103cb29f3c8271f4ccc15cc768a7367cdc3acfa08a0a9272ab43e5d2b6",
+      "info_nonce_prefix": "5159524f2d414541442d56312f7232692f6e6f6e63652d70726566697800c545247c44810031ef79d9103cb29f3c8271f4ccc15cc768a7367cdc3acfa08a0a9272ab43e5d2b6",
+      "nonce_prefix": "433d9c22"
+    }
+  },
+  "format": "qyro-aead-v1",
+  "initiator_to_responder_frames": [
+    {
+      "associated_data": "5159524f0100090400301000000000000a9272ab43e5d2b6000000000000000000000000000000000000000000000000",
+      "ciphertext": "",
+      "flags": 4,
+      "frame": "5159524f0100090400301000000000000a9272ab43e5d2b60000000000000000000000000000000000000000000000008e6a2850b3b3a080b46f000f9a529073",
+      "item_id": "00000000",
+      "message_type": 9,
+      "name": "empty payload, no flags, sequence zero",
+      "nonce": "64cc35340000000000000000",
+      "plaintext": "",
+      "sequence": "0000000000000000",
+      "stream_id": "00000000",
+      "tag": "8e6a2850b3b3a080b46f000f9a529073",
+      "transfer_id": "0000000000000000"
+    },
+    {
+      "associated_data": "5159524f0100090400301000000000040a9272ab43e5d2b60102030405060708090a0b0c0d0e0f100000000000000001",
+      "ciphertext": "e8c792c4",
+      "flags": 4,
+      "frame": "5159524f0100090400301000000000040a9272ab43e5d2b60102030405060708090a0b0c0d0e0f100000000000000001e8c792c4e2004e6837923404b49f8a0dbef56b91",
+      "item_id": "0d0e0f10",
+      "message_type": 9,
+      "name": "short payload, identifiers set",
+      "nonce": "64cc35340000000000000001",
+      "plaintext": "7179726f",
+      "sequence": "0000000000000001",
+      "stream_id": "090a0b0c",
+      "tag": "e2004e6837923404b49f8a0dbef56b91",
+      "transfer_id": "0102030405060708"
+    },
+    {
+      "associated_data": "5159524f0100080700301000000001000a9272ab43e5d2b6ffffffffffffffffffffffffffffffff0000000000000002",
+      "ciphertext": "a7db9c1599aa744fd4277727f0b462e5fcc96b29b3b91f38c8473923ae8532faf0a1bf0aa1ac627d30a5ab4fe23f10aef174e01a4dad1d4d40a93784b1e6efc9b49104bc4db54c27d119da9719dde3395bee58acb9636a6c5f47f97a9a917eb71dc0a105c1e8094b8c9d41d5905b058a3a1da7ab254abd6bb0cc7171f010a3742eb801226c5dc205d8d00599060e4ee9da91705f3786cf8d8c0c579e10214603f25ebbbd66cf57cc27a0b02fb12911137ddf484a300a33ff27a1258e068cec19d4c00287caddc0ca889823967bada88e0f13f6939aef54f7ae3ea4e3c11debcbbbcf3afa9f64f5b8dc443cd3f4dcb03fb40fe21e100c9f9a56b799d9493ccc85",
+      "flags": 7,
+      "frame": "5159524f0100080700301000000001000a9272ab43e5d2b6ffffffffffffffffffffffffffffffff0000000000000002a7db9c1599aa744fd4277727f0b462e5fcc96b29b3b91f38c8473923ae8532faf0a1bf0aa1ac627d30a5ab4fe23f10aef174e01a4dad1d4d40a93784b1e6efc9b49104bc4db54c27d119da9719dde3395bee58acb9636a6c5f47f97a9a917eb71dc0a105c1e8094b8c9d41d5905b058a3a1da7ab254abd6bb0cc7171f010a3742eb801226c5dc205d8d00599060e4ee9da91705f3786cf8d8c0c579e10214603f25ebbbd66cf57cc27a0b02fb12911137ddf484a300a33ff27a1258e068cec19d4c00287caddc0ca889823967bada88e0f13f6939aef54f7ae3ea4e3c11debcbbbcf3afa9f64f5b8dc443cd3f4dcb03fb40fe21e100c9f9a56b799d9493ccc854b417e9abe93a5dd934e318c6b2f465e",
+      "item_id": "ffffffff",
+      "message_type": 8,
+      "name": "both transport flags, a different message type",
+      "nonce": "64cc35340000000000000002",
+      "plaintext": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "sequence": "0000000000000002",
+      "stream_id": "ffffffff",
+      "tag": "4b417e9abe93a5dd934e318c6b2f465e",
+      "transfer_id": "ffffffffffffffff"
+    }
+  ],
+  "note": "The session below is the one handshake-v1.json records, run from the same seeds and the same entropy. Its traffic secrets are the input to the derivation here, so an implementation can verify the handshake first and continue straight into the frame layer. Associated data is the whole 48-byte header; altering any byte of it invalidates the tag.",
+  "responder_to_initiator_frames": [
+    {
+      "associated_data": "5159524f01000a0400301000000000040a9272ab43e5d2b60102030405060708090a0b0c0d0e0f100000000000000000",
+      "ciphertext": "2f19726c",
+      "flags": 4,
+      "frame": "5159524f01000a0400301000000000040a9272ab43e5d2b60102030405060708090a0b0c0d0e0f1000000000000000002f19726c15289742572971b72aa06d1775e7cf04",
+      "item_id": "0d0e0f10",
+      "message_type": 10,
+      "name": "acknowledgement, sequence zero of the other direction",
+      "nonce": "433d9c220000000000000000",
+      "plaintext": "00010203",
+      "sequence": "0000000000000000",
+      "stream_id": "090a0b0c",
+      "tag": "15289742572971b72aa06d1775e7cf04",
+      "transfer_id": "0102030405060708"
+    },
+    {
+      "associated_data": "5159524f01000e0600301000000000040a9272ab43e5d2b6010203040506070800000000000000000000000000000001",
+      "ciphertext": "6056ce3b",
+      "flags": 6,
+      "frame": "5159524f01000e0600301000000000040a9272ab43e5d2b60102030405060708000000000000000000000000000000016056ce3b9029e004adf2efc293581f796bb5dff7",
+      "item_id": "00000000",
+      "message_type": 14,
+      "name": "completion, one transport flag",
+      "nonce": "433d9c220000000000000001",
+      "plaintext": "646f6e65",
+      "sequence": "0000000000000001",
+      "stream_id": "00000000",
+      "tag": "9029e004adf2efc293581f796bb5dff7",
+      "transfer_id": "0102030405060708"
+    }
+  ],
+  "session": {
+    "auth_transcript_hash": "c545247c44810031ef79d9103cb29f3c8271f4ccc15cc768a7367cdc3acfa08a",
+    "initiator_to_responder_traffic_secret": "701b77c1dbaa4469c2ee3245bb8db39c6f9e92a90ead105c7ddee047b57a59af",
+    "responder_to_initiator_traffic_secret": "e0380b11880a8e45ad11deaa4301a45a4d9f3379cbdf42b14b1c3202c4f0455b",
+    "session_id": "0a9272ab43e5d2b6"
+  },
+  "specification": "docs/adr/ADR-0022-qyro1-frame-aead.md",
+  "suite": {
+    "aead_key_len": 32,
+    "header_len": 48,
+    "nonce_len": 12,
+    "nonce_prefix_len": 4,
+    "replay_window": 1024,
+    "tag_len": 16
+  }
+}

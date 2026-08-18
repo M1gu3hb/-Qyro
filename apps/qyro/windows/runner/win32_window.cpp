@@ -28,6 +28,7 @@ constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme"
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
+static HBRUSH g_qyro_background_brush = nullptr;
 
 using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
@@ -97,7 +98,10 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    window_class.hbrBackground = 0;
+    if (g_qyro_background_brush == nullptr) {
+      g_qyro_background_brush = CreateSolidBrush(RGB(3, 7, 13));
+    }
+    window_class.hbrBackground = g_qyro_background_brush;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
     RegisterClass(&window_class);
@@ -109,6 +113,10 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
 void WindowClassRegistrar::UnregisterWindowClass() {
   UnregisterClass(kWindowClassName, nullptr);
   class_registered_ = false;
+  if (g_qyro_background_brush != nullptr) {
+    DeleteObject(g_qyro_background_brush);
+    g_qyro_background_brush = nullptr;
+  }
 }
 
 Win32Window::Win32Window() {

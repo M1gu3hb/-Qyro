@@ -1,0 +1,452 @@
+{
+  "@@locale": "en",
+  "appTitle": "Qyro",
+  "@appTitle": {
+    "description": "Application title."
+  },
+  "bootLogoSemantics": "Qyro logo",
+  "@bootLogoSemantics": {
+    "description": "Single accessible label for the ASCII logo."
+  },
+  "bootProvisionalBranding": "PROVISIONAL BRAND DATA",
+  "bootTagline": "PRIVATE TRANSFER SYSTEM",
+  "@bootTagline": {
+    "description": "Secondary line under the Qyro wordmark during boot."
+  },
+  "bootSignatureUnset": "SIGNATURE NOT CONFIGURED",
+  "@bootSignatureUnset": {
+    "description": "Development-only marker shown when branding carries no configured signature. Never a real name."
+  },
+  "@bootProvisionalBranding": {
+    "description": "Banner shown while creator and studio fields are provisional."
+  },
+  "bootSkip": "SKIP",
+  "@bootSkip": {
+    "description": "Action that completes only the visual boot sequence."
+  },
+  "bootRetry": "RETRY",
+  "@bootRetry": {
+    "description": "Retries obligatory startup tasks after a failure."
+  },
+  "bootStatusIdle": "STARTUP WAITING",
+  "@bootStatusIdle": {
+    "description": "Idle boot status."
+  },
+  "bootStatusPreparing": "PREPARING LOCAL STARTUP",
+  "@bootStatusPreparing": {
+    "description": "Initial running boot status."
+  },
+  "bootStatusBranding": "VALIDATING BRAND DATA",
+  "@bootStatusBranding": {
+    "description": "Brand validation boot status."
+  },
+  "bootStatusAssets": "VALIDATING GENERATED ASSETS",
+  "@bootStatusAssets": {
+    "description": "Generated asset validation boot status."
+  },
+  "bootStatusNativeBridge": "VERIFYING NATIVE CORE",
+  "@bootStatusNativeBridge": {
+    "description": "Native bridge validation boot status."
+  },
+  "bootStatusInterface": "INITIALIZING LOCAL INTERFACE",
+  "@bootStatusInterface": {
+    "description": "Flutter interface initialization status."
+  },
+  "bootStatusReady": "LOCAL INTERFACE VERIFIED",
+  "@bootStatusReady": {
+    "description": "Successful startup status."
+  },
+  "bootStatusTimeout": "STARTUP EXCEEDED ITS TIME LIMIT",
+  "@bootStatusTimeout": {
+    "description": "Startup timeout status."
+  },
+  "bootStatusCancelled": "STARTUP CANCELLED",
+  "@bootStatusCancelled": {
+    "description": "Cancelled startup status."
+  },
+  "bootStatusNativeUnavailable": "NATIVE CORE UNAVAILABLE",
+  "@bootStatusNativeUnavailable": {
+    "description": "Native bridge failure status."
+  },
+  "bootStatusAssetInvalid": "GENERATED ASSET IS INVALID",
+  "@bootStatusAssetInvalid": {
+    "description": "Generated asset failure status."
+  },
+  "bootStatusInterfaceUnavailable": "LOCAL INTERFACE UNAVAILABLE",
+  "@bootStatusInterfaceUnavailable": {
+    "description": "Flutter interface failure status."
+  },
+  "bootStatusFailed": "STARTUP COULD NOT BE COMPLETED",
+  "@bootStatusFailed": {
+    "description": "Fallback startup failure status."
+  },
+  "bootDiagnostic": "DIAGNOSTIC: {code}",
+  "@bootDiagnostic": {
+    "description": "Safe diagnostic code shown after startup failure.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "diagnosticLibraryNotFound": "The native Qyro library was not found.",
+  "@diagnosticLibraryNotFound": {
+    "description": "Safe detail for a missing native library."
+  },
+  "diagnosticSymbolNotFound": "The native library does not expose the required Qyro interface.",
+  "@diagnosticSymbolNotFound": {
+    "description": "Safe detail for a missing native symbol."
+  },
+  "diagnosticNullPointer": "The native core returned an empty protocol value.",
+  "@diagnosticNullPointer": {
+    "description": "Safe detail for a null native pointer."
+  },
+  "diagnosticInvalidLength": "The native core returned an invalid protocol length.",
+  "@diagnosticInvalidLength": {
+    "description": "Safe detail for an invalid native length."
+  },
+  "diagnosticInvalidUtf8": "The native core returned an invalid protocol value.",
+  "@diagnosticInvalidUtf8": {
+    "description": "Safe detail for invalid UTF-8."
+  },
+  "diagnosticIncompatibleVersion": "The native core uses an incompatible Qyro protocol version.",
+  "@diagnosticIncompatibleVersion": {
+    "description": "Safe detail for a protocol version mismatch."
+  },
+  "diagnosticStartupTimeout": "An obligatory startup task did not finish in time.",
+  "@diagnosticStartupTimeout": {
+    "description": "Safe timeout detail."
+  },
+  "diagnosticStartupFailed": "An unexpected obligatory startup task failed.",
+  "@diagnosticStartupFailed": {
+    "description": "Safe unexpected startup failure detail."
+  },
+  "diagnosticInterfaceUnavailable": "Flutter did not expose an attached platform interface.",
+  "@diagnosticInterfaceUnavailable": {
+    "description": "Safe interface failure detail."
+  },
+  "diagnosticAssetInvalid": "The generated ASCII logo could not be validated.",
+  "@diagnosticAssetInvalid": {
+    "description": "Safe generated asset failure detail."
+  },
+  "diagnosticUnknown": "Use the diagnostic code when reporting this startup failure.",
+  "@diagnosticUnknown": {
+    "description": "Fallback safe diagnostic detail."
+  },
+  "homeBaseline": "Local interface baseline in preparation.",
+  "@homeBaseline": {
+    "description": "Honest Home status before transfer features exist."
+  },
+  "homeSend": "Send",
+  "@homeSend": {
+    "description": "Disabled send action label."
+  },
+  "homeReceive": "Receive",
+  "@homeReceive": {
+    "description": "Disabled receive action label."
+  },
+  "homeTransferReady": "Send a file to another device on this network.",
+  "@homeTransferReady": {
+    "description": "Transfer interface string: homeTransferReady."
+  },
+  "navPeers": "Peers",
+  "@navPeers": {
+    "description": "Transfer interface string: navPeers."
+  },
+  "navSend": "Send",
+  "@navSend": {
+    "description": "Transfer interface string: navSend."
+  },
+  "navReceive": "Receive",
+  "@navReceive": {
+    "description": "Transfer interface string: navReceive."
+  },
+  "navHistory": "History",
+  "@navHistory": {
+    "description": "Transfer interface string: navHistory."
+  },
+  "peersNone": "No peers remembered yet.",
+  "@peersNone": {
+    "description": "Transfer interface string: peersNone."
+  },
+  "peersManualHint": "Type the pairing code the other device is showing.",
+  "@peersManualHint": {
+    "description": "Transfer interface string: peersManualHint."
+  },
+  "peersManualLabel": "Pairing code",
+  "@peersManualLabel": {
+    "description": "Transfer interface string: peersManualLabel."
+  },
+  "peersManualInvalid": "That is not a Qyro pairing code.",
+  "@peersManualInvalid": {
+    "description": "Transfer interface string: peersManualInvalid."
+  },
+  "peersUseCode": "Use this code",
+  "@peersUseCode": {
+    "description": "Transfer interface string: peersUseCode."
+  },
+  "peersOwnCode": "This device's pairing code",
+  "@peersOwnCode": {
+    "description": "Transfer interface string: peersOwnCode."
+  },
+  "peersOwnCodeUnavailable": "Not connected, so there is no code to show.",
+  "@peersOwnCodeUnavailable": {
+    "description": "Transfer interface string: peersOwnCodeUnavailable."
+  },
+  "peersTrustKnown": "Known",
+  "@peersTrustKnown": {
+    "description": "Transfer interface string: peersTrustKnown."
+  },
+  "peersTrustChanged": "This device's key has changed",
+  "@peersTrustChanged": {
+    "description": "Transfer interface string: peersTrustChanged."
+  },
+  "peersTrustNew": "New",
+  "@peersTrustNew": {
+    "description": "Transfer interface string: peersTrustNew."
+  },
+  "peersChangedExplain": "Qyro will not send to this device. Its key is not the one saved under this name. Forget it only if you know why it changed.",
+  "@peersChangedExplain": {
+    "description": "Transfer interface string: peersChangedExplain."
+  },
+  "peersForget": "Forget",
+  "@peersForget": {
+    "description": "Transfer interface string: peersForget."
+  },
+  "peersForgetConfirm": "Forget {name}?",
+  "@peersForgetConfirm": {
+    "description": "Transfer interface string: peersForgetConfirm.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "peersNameLabel": "Name for this device",
+  "@peersNameLabel": {
+    "description": "Transfer interface string: peersNameLabel."
+  },
+  "peersNameInvalid": "That name cannot be used.",
+  "@peersNameInvalid": {
+    "description": "Transfer interface string: peersNameInvalid."
+  },
+  "peersSave": "Remember this device",
+  "@peersSave": {
+    "description": "Transfer interface string: peersSave."
+  },
+  "sendChoose": "Choose files",
+  "@sendChoose": {
+    "description": "Transfer interface string: sendChoose."
+  },
+  "sendNoFiles": "No files chosen yet.",
+  "@sendNoFiles": {
+    "description": "Transfer interface string: sendNoFiles."
+  },
+  "sendChosen": "{count} file(s), {bytes}",
+  "@sendChosen": {
+    "description": "Transfer interface string: sendChosen.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "bytes": {
+        "type": "String"
+      }
+    }
+  },
+  "sendCancelled": "The picker was cancelled.",
+  "@sendCancelled": {
+    "description": "Transfer interface string: sendCancelled."
+  },
+  "sendTo": "Send to {name}",
+  "@sendTo": {
+    "description": "Transfer interface string: sendTo.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sendUnreachable": "That address answered nothing.",
+  "@sendUnreachable": {
+    "description": "Transfer interface string: sendUnreachable."
+  },
+  "sendRefused": "The other device refused: {reason}",
+  "@sendRefused": {
+    "description": "Transfer interface string: sendRefused.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "sendKeyChanged": "Refused: this device's key is not the one saved under that name.",
+  "@sendKeyChanged": {
+    "description": "Transfer interface string: sendKeyChanged."
+  },
+  "sendIntegrity": "Something arrived that did not verify. Nothing was kept.",
+  "@sendIntegrity": {
+    "description": "Transfer interface string: sendIntegrity."
+  },
+  "sendCancelledByUser": "Stopped.",
+  "@sendCancelledByUser": {
+    "description": "Transfer interface string: sendCancelledByUser."
+  },
+  "sendDelivered": "{count} file(s) delivered.",
+  "@sendDelivered": {
+    "description": "Transfer interface string: sendDelivered.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "reasonDeclined": "they said no",
+  "@reasonDeclined": {
+    "description": "Transfer interface string: reasonDeclined."
+  },
+  "reasonNoRoom": "no room on the device",
+  "@reasonNoRoom": {
+    "description": "Transfer interface string: reasonNoRoom."
+  },
+  "reasonManifest": "the file list was refused",
+  "@reasonManifest": {
+    "description": "Transfer interface string: reasonManifest."
+  },
+  "reasonUnspecified": "no reason given",
+  "@reasonUnspecified": {
+    "description": "Transfer interface string: reasonUnspecified."
+  },
+  "receiveWaiting": "Waiting for a device to connect.",
+  "@receiveWaiting": {
+    "description": "Transfer interface string: receiveWaiting."
+  },
+  "receiveStart": "Wait for a transfer",
+  "@receiveStart": {
+    "description": "Transfer interface string: receiveStart."
+  },
+  "receiveOfferFrom": "A device wants to send you {count} file(s), {bytes}",
+  "@receiveOfferFrom": {
+    "description": "Transfer interface string: receiveOfferFrom.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "bytes": {
+        "type": "String"
+      }
+    }
+  },
+  "receiveOfferUnknown": "You have never accepted this device before.",
+  "@receiveOfferUnknown": {
+    "description": "Transfer interface string: receiveOfferUnknown."
+  },
+  "receiveAccept": "Accept",
+  "@receiveAccept": {
+    "description": "Transfer interface string: receiveAccept."
+  },
+  "receiveRefuse": "Refuse",
+  "@receiveRefuse": {
+    "description": "Transfer interface string: receiveRefuse."
+  },
+  "receiveRefused": "Refused. Nothing was written.",
+  "@receiveRefused": {
+    "description": "Transfer interface string: receiveRefused."
+  },
+  "receiveDelivered": "{count} file(s) saved in {destination}",
+  "@receiveDelivered": {
+    "description": "Transfer interface string: receiveDelivered.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "receiveNoRoom": "There is no room for this.",
+  "@receiveNoRoom": {
+    "description": "Transfer interface string: receiveNoRoom."
+  },
+  "historyEmpty": "Nothing has been transferred yet.",
+  "@historyEmpty": {
+    "description": "Transfer interface string: historyEmpty."
+  },
+  "historyFailed": "Failed",
+  "@historyFailed": {
+    "description": "Transfer interface string: historyFailed."
+  },
+  "historySucceeded": "Delivered",
+  "@historySucceeded": {
+    "description": "Transfer interface string: historySucceeded."
+  },
+  "historySent": "Sent",
+  "@historySent": {
+    "description": "Transfer interface string: historySent."
+  },
+  "historyReceived": "Received",
+  "@historyReceived": {
+    "description": "Transfer interface string: historyReceived."
+  },
+  "progressOf": "{done} of {total}",
+  "@progressOf": {
+    "description": "Transfer interface string: progressOf.",
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Transfer interface string: commonCancel."
+  },
+  "commonClose": "Close",
+  "@commonClose": {
+    "description": "Transfer interface string: commonClose."
+  },
+  "commonRetry": "Try again",
+  "@commonRetry": {
+    "description": "Transfer interface string: commonRetry."
+  },
+  "fingerprintCompare": "Read this out loud and check it matches the other device.",
+  "@fingerprintCompare": {
+    "description": "Transfer interface string: fingerprintCompare."
+  },
+  "receiveYourCode": "This device's pairing code",
+  "@receiveYourCode": {
+    "description": "Receive screen string: receiveYourCode."
+  },
+  "receiveNoAddress": "This device has no network address yet. On a direct cable this can take up to a minute.",
+  "@receiveNoAddress": {
+    "description": "Receive screen string: receiveNoAddress."
+  },
+  "receiveSeveralAddresses": "Several networks. Use the one the other device is on.",
+  "@receiveSeveralAddresses": {
+    "description": "Receive screen string: receiveSeveralAddresses."
+  },
+  "peersNearbyTitle": "Devices on this network",
+  "@peersNearbyTitle": {
+    "description": "Transfer interface string: peersNearbyTitle."
+  },
+  "peersNearbyLooking": "Looking for devices ...",
+  "@peersNearbyLooking": {
+    "description": "Transfer interface string: peersNearbyLooking."
+  },
+  "peersNearbyNone": "Nobody has answered yet. The pairing code above always works.",
+  "@peersNearbyNone": {
+    "description": "Transfer interface string: peersNearbyNone."
+  },
+  "peersNearbyUnavailable": "This device cannot look for others. Use the pairing code.",
+  "@peersNearbyUnavailable": {
+    "description": "Transfer interface string: peersNearbyUnavailable."
+  },
+  "peersNearbyUse": "Use this device",
+  "@peersNearbyUse": {
+    "description": "Transfer interface string: peersNearbyUse."
+  }
+}

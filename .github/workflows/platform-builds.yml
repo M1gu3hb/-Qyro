@@ -5,17 +5,35 @@ on:
   pull_request:
     paths:
       - "apps/qyro/**"
+      # `rust/**` and not `rust/crates/**`: it also covers `rust/guards/`,
+      # `rust/tools/` and `rust/fuzz/`, which sit outside `crates` (QYR-0045).
       - "rust/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "scripts/verify_windows_package.ps1"
       - ".github/workflows/platform-builds.yml"
   push:
-    branches: [main]
+    # Any working branch, by pattern. Naming one is what QYR-0040 was:
+    # sprint 4C.2 wrote the then-current branch into six files, which made "CI
+    # runs on the working branch" true of that branch and false of the next one.
+    # A pattern is a property of the repository; a name is a reminder, and the
+    # reminder was not enough.
+    #
+    # `claude/**` and not `**`: covering every branch in the repository spends
+    # runner minutes on work this project did not start.
+    #
+    # Push rather than a pull request, deliberately. A `pull_request` run
+    # executes against a merge commit that exists only inside the Actions run,
+    # so its run ID cannot be cited as evidence for a commit in this branch. A
+    # push run executes on exactly the commit that was pushed, which is the
+    # thing STATUS.md has to name.
+    branches: [main, 'claude/**']
     paths:
       - "apps/qyro/**"
       - "rust/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "scripts/verify_windows_package.ps1"
       - ".github/workflows/platform-builds.yml"
 
 permissions:
@@ -23,6 +41,9 @@ permissions:
 
 jobs:
   android:
+    # QYR-0078: no job in this repository declared a cap, so a stuck step
+    # ran to GitHub's six-hour default instead of failing with a log.
+    timeout-minutes: 40
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -40,8 +61,8 @@ jobs:
           qyro_toolchain="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$qyro_toolchain/aarch64-linux-android21-clang"
           export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$qyro_toolchain/x86_64-linux-android21-clang"
-          cargo build --package qyro_ffi --target aarch64-linux-android
-          cargo build --package qyro_ffi --target x86_64-linux-android
+          cargo build --locked --package qyro_ffi --target aarch64-linux-android
+          cargo build --locked --package qyro_ffi --target x86_64-linux-android
           mkdir -p apps/qyro/android/app/src/main/jniLibs/arm64-v8a
           mkdir -p apps/qyro/android/app/src/main/jniLibs/x86_64
           cp target/aarch64-linux-android/debug/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/arm64-v8a/
@@ -52,13 +73,76 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build apk --debug
+      # ADR-0034 §4 asks for the assertion on the **merged** manifest, because a
+      # Flutter plugin can add a permission that never appears in the file this
+      # repository writes. `test/android_manifest_test.dart` has made that
+      # assertion since phase 03 step 3 and had never once run it: the merged
+      # manifest only exists after `flutter build apk`, this is the only job that
+      # builds one, and it did not run any test afterwards. The test skipped in
+      # CI, skipped locally, and reported skipped as not-a-failure — a
+      # measurement that could not see the thing it was for.
+      - name: The merged manifest declares no storage permission
+        run: flutter test test/android_manifest_test.dart
+        env:
+          # Here a skip is a failure: the APK was just built, so the manifest
+          # exists or the path moved, and both deserve a red run.
+          QYRO_REQUIRE_MERGED_MANIFEST: "1"
+      # Phase 06, QYR-0064. The Keystore evidence, in the only place Keystore
+      # exists: inside an application process, under `am instrument`. The
+      # finding that stayed open for two phases was that a binary pushed to
+      # /data/local/tmp has no JVM, no Context and no application process, so it
+      # could not reach Keystore however it was written.
+      #
+      # `continue-on-error` is **not** set: a Keystore that refuses is the thing
+      # this job is for.
+      - name: Enable KVM for the emulator
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: The identity survives, checked inside an application process
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          working-directory: apps/qyro/android
+          script: ./gradlew connectedDebugAndroidTest --stacktrace
       - name: Verify qyro_ffi is packaged in the APK
         shell: bash
         run: |
           unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep -q 'lib/arm64-v8a/libqyro_ffi.so'
           unzip -l build/app/outputs/flutter-apk/app-debug.apk | grep -q 'lib/x86_64/libqyro_ffi.so'
+      # The test harness links qyro_crypto and exports a function whose job is to
+      # run a handshake. It is built on every platform and must reach none of
+      # them. Searched in the artifact rather than in the source tree, because a
+      # clean tree with a build script that copies a library in looks identical
+      # until you open the APK.
+      - name: Verify the crypto smoke harness is not in the APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          if unzip -l "$apk" | grep -qi 'qyro_crypto_smoke'; then
+            echo "[FAIL] the APK contains the crypto smoke harness" >&2
+            unzip -l "$apk" | grep -i 'qyro_crypto_smoke' >&2
+            exit 1
+          fi
+          workdir="$(mktemp -d)"
+          unzip -q -o "$apk" 'lib/*' -d "$workdir"
+          if grep -ral 'qyro_crypto_smoke_run' "$workdir" | grep -q .; then
+            echo "[FAIL] a native library in the APK exports the smoke symbol" >&2
+            exit 1
+          fi
+          rm -rf "$workdir"
+          echo '[PASS] the APK carries qyro_ffi and not the crypto smoke harness'
 
   windows:
+    # QYR-0078: no job in this repository declared a cap, so a stuck step
+    # ran to GitHub's six-hour default instead of failing with a log.
+    timeout-minutes: 60
     runs-on: windows-latest
     defaults:
       run:
@@ -68,7 +152,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Build qyro_ffi for Windows
         working-directory: .
-        run: cargo build --package qyro_ffi
+        run: cargo build --locked --package qyro_ffi
+      # Release for the transfer test only. It moves 8 MiB through ChaCha20 and
+      # SHA-256, and a debug build of that stack is minutes where release is
+      # seconds. The debug DLL above is what the packaging steps ship, and is
+      # left exactly as it was.
+      - name: Build the release pair for the Dart-driven transfer test
+        working-directory: .
+        run: cargo build --locked --release --package qyro_ffi --package qyro_net_smoke
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
@@ -79,27 +170,198 @@ jobs:
         run: flutter test test/ffi/qyro_native_api_test.dart
         env:
           QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}\target\debug\qyro_ffi.dll
+      # Phase 02 §5 step 5: the same transfer the Linux job runs, on the other
+      # platform the product ships on. Two real Windows processes, a real
+      # socket, 8 MiB compared byte for byte.
+      - name: Dart drives a transfer between two Windows processes
+        run: flutter test test/ffi/qyro_session_transfer_test.dart
+        env:
+          QYRO_FFI_LIBRARY_PATH: ${{ github.workspace }}\target\release\qyro_ffi.dll
+          QYRO_NET_SMOKE_PATH: ${{ github.workspace }}\target\release\qyro_net_smoke.exe
       - run: flutter build windows --debug
-      - name: Package qyro_ffi beside qyro.exe
+      - name: Package and verify the Windows x64 bundle
+        shell: pwsh
+        working-directory: .
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Debug'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'target\debug\qyro_ffi.dll'
+          Copy-Item -LiteralPath $source -Destination (Join-Path $bundle 'qyro_ffi.dll')
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts\verify_windows_package.ps1') -BundlePath $bundle
+      - name: Smoke-launch qyro.exe
         shell: pwsh
         run: |
-          $source = Join-Path $env:GITHUB_WORKSPACE 'target\debug\qyro_ffi.dll'
-          $destination = Join-Path $PWD 'build\windows\x64\runner\Debug\qyro_ffi.dll'
-          Copy-Item -LiteralPath $source -Destination $destination
-          if (-not (Test-Path -LiteralPath $destination)) {
-            throw 'qyro_ffi.dll was not packaged beside qyro.exe.'
+          $exe = Join-Path $PWD 'build\windows\x64\runner\Debug\qyro.exe'
+          $process = Start-Process -FilePath $exe -PassThru
+          try {
+              Start-Sleep -Seconds 5
+              if ($process.HasExited) {
+                  throw "qyro.exe exited prematurely with code $($process.ExitCode)"
+              }
+              Write-Host '[PASS] qyro.exe remained alive during the launch smoke window'
           }
+          finally {
+              if (-not $process.HasExited) {
+                  Stop-Process -Id $process.Id -Force
+              }
+          }
+      - name: Create portable Windows ZIP
+        shell: pwsh
+        working-directory: .
+        run: |
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Debug'
+          $artifactDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          $zip = Join-Path $artifactDirectory 'qyro-windows-x64-portable-debug.zip'
+          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip -Force
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+              $names = $archive.Entries.FullName
+              foreach ($required in @('qyro.exe', 'qyro_ffi.dll')) {
+                  if ($required -notin $names) {
+                      throw "Portable ZIP is missing $required"
+                  }
+              }
+          }
+          finally {
+              $archive.Dispose()
+          }
+      - name: Verify the crypto smoke harness is not in the portable ZIP
+        shell: pwsh
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'artifacts\qyro-windows-x64-portable-debug.zip'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+              foreach ($entry in $archive.Entries) {
+                  if ($entry.FullName -match 'qyro_crypto_smoke') {
+                      throw "The portable ZIP contains the crypto smoke harness: $($entry.FullName)"
+                  }
+              }
+          }
+          finally {
+              $archive.Dispose()
+          }
+          # And no binary inside it may export the symbol, whatever it is called.
+          $extracted = Join-Path $env:RUNNER_TEMP 'zip-scan'
+          Remove-Item -LiteralPath $extracted -Recurse -Force -ErrorAction SilentlyContinue
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($zip, $extracted)
+          foreach ($file in Get-ChildItem -LiteralPath $extracted -Recurse -File) {
+              $text = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($file.FullName))
+              if ($text.Contains('qyro_crypto_smoke_run')) {
+                  throw "$($file.Name) inside the portable ZIP exports the smoke symbol"
+              }
+          }
+          Write-Host '[PASS] the portable ZIP carries qyro_ffi and not the crypto smoke harness'
+      - name: Record what the portable ZIP is and is not
+        shell: pwsh
+        working-directory: .
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps\qyro\build\windows\x64\runner\Debug'
+          $artifactDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          # SHA256SUMS inside the package, not only the digest GitHub attaches to
+          # the artifact: a checksum a user cannot see after downloading is a
+          # checksum that verifies the transfer and nothing else.
+          $sums = Join-Path $artifactDirectory 'SHA256SUMS.txt'
+          Get-ChildItem -LiteralPath $bundle -Recurse -File | ForEach-Object {
+              $relative = $_.FullName.Substring($bundle.Length + 1)
+              "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLower())  $relative"
+          } | Out-File -FilePath $sums -Encoding utf8
+          $info = Join-Path $artifactDirectory 'BUILD-INFO.txt'
+          @(
+              'Qyro Windows x64 portable — DEVELOPMENT BUILD, NOT FOR PUBLIC RELEASE.'
+              ''
+              # Corrected in phase 10. This text said "Qyro does not transfer
+              # files: Send and Receive are disabled, and there is no transport,
+              # no discovery and no secure storage", which was true when it was
+              # written in phase 02 and false from phase 05 onwards. A false
+              # sentence inside a shipped artifact is worse than one in a
+              # document: it travels with the binary and nobody re-reads it.
+              'Debug configuration, unsigned, built from a branch. It transfers'
+              'files, it discovers peers and it stores an identity — and none of'
+              'that has ever run on physical hardware. For the release build see'
+              'the Release workflow; for what has and has not been proven see'
+              'docs/testing/hardware-protocol.md.'
+              ''
+              "commit=$env:GITHUB_SHA"
+              "workflow_run=$env:GITHUB_RUN_ID"
+              "built_utc=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+              "runner=$env:RUNNER_OS-$env:RUNNER_ARCH"
+              "rustc=$(rustc --version)"
+              "flutter=$(flutter --version --machine | ConvertFrom-Json | Select-Object -ExpandProperty frameworkVersion)"
+              ''
+              'Checksums of every file in this package are in SHA256SUMS.txt.'
+          ) | Out-File -FilePath $info -Encoding utf8
+          Copy-Item -LiteralPath $sums -Destination (Join-Path $bundle 'SHA256SUMS.txt')
+          Copy-Item -LiteralPath $info -Destination (Join-Path $bundle 'BUILD-INFO.txt')
+          $zip = Join-Path $artifactDirectory 'qyro-windows-x64-portable-debug.zip'
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip -Force
+          Get-Content -LiteralPath $info
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: qyro-windows-x64-portable-debug
+          path: artifacts/qyro-windows-x64-portable-debug.zip
+          if-no-files-found: error
+          retention-days: 14
 
   ios:
+    # QYR-0078: no job in this repository declared a cap, so a stuck step
+    # ran to GitHub's six-hour default instead of failing with a log.
+    timeout-minutes: 60
     runs-on: macos-latest
     defaults:
       run:
         working-directory: apps/qyro
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: Build and stage qyro_ffi for iOS
+        working-directory: .
+        shell: bash
+        run: |
+          rustup target add aarch64-apple-ios
+          cargo build --locked --package qyro_ffi --target aarch64-apple-ios
+          mkdir -p apps/qyro/ios/Native/iphoneos
+          cp target/aarch64-apple-ios/debug/libqyro_ffi.a apps/qyro/ios/Native/iphoneos/
+          xcrun nm -gU apps/qyro/ios/Native/iphoneos/libqyro_ffi.a > /tmp/qyro-ios-static-symbols.txt
+          grep ' _qyro_protocol_version_ptr$' /tmp/qyro-ios-static-symbols.txt
+          grep ' _qyro_protocol_version_len$' /tmp/qyro-ios-static-symbols.txt
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
           cache: true
       - run: flutter pub get
       - run: flutter build ios --debug --no-codesign
+      - name: Verify qyro_ffi symbols are linked into the iOS app
+        shell: bash
+        run: |
+          : > /tmp/qyro-ios-app-symbols.txt
+          for binary in build/ios/iphoneos/Runner.app/Runner build/ios/iphoneos/Runner.app/Runner.debug.dylib; do
+            if [[ -f "$binary" ]]; then
+              xcrun nm -gU "$binary" >> /tmp/qyro-ios-app-symbols.txt
+            fi
+          done
+          grep ' _qyro_protocol_version_ptr$' /tmp/qyro-ios-app-symbols.txt
+          grep ' _qyro_protocol_version_len$' /tmp/qyro-ios-app-symbols.txt
+      # The harness is built for iOS in crypto-platform.yml and must not be in
+      # the application. Checked on the bundle rather than the project file: a
+      # project can be clean while a copy phase puts a library in.
+      - name: Verify the crypto smoke harness is not in Runner.app
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=build/ios/iphoneos/Runner.app
+          if grep -rl 'qyro_crypto_smoke_run' "$app" 2>/dev/null | grep -q .; then
+            echo "[FAIL] Runner.app contains the crypto smoke harness" >&2
+            grep -rl 'qyro_crypto_smoke_run' "$app" >&2
+            exit 1
+          fi
+          if find "$app" -iname '*qyro_crypto_smoke*' | grep -q .; then
+            echo "[FAIL] Runner.app carries a harness file" >&2
+            exit 1
+          fi
+          echo '[PASS] Runner.app carries qyro_ffi and not the crypto smoke harness'

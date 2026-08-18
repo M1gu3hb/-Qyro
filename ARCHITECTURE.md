@@ -8,7 +8,7 @@ flowchart LR
   APP --> FFI["qyro_ffi"]
   FFI --> CORE["Núcleo Rust"]
   CORE --> PROTOCOL["Protocolo y manifest"]
-  CORE --> SECURITY["Identidad y cifrado"]
+  CORE --> SECURITY["Identidad, handshake y AEAD de frames (probado en las cuatro plataformas)"]
   CORE --> TRANSFER["Streaming y resume"]
   CORE --> STORAGE["SQLite y archivos temporales"]
   CORE --> TRANSPORT["TransportAdapter"]

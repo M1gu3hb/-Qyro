@@ -1,0 +1,243 @@
+Continúa en la misma sesión y en la misma rama claude/qyro-net-6a. Copia todo lo que sigue.
+
+0. Antes de nada: tenías razón en tres cosas, y el prompt anterior estaba mal
+
+Auditado tu trabajo hasta la Puerta 4. 408 tests, 0 failed, clippy y fmt en verde, reproducido aquí. Nueve commits, ADR-0028 de 562 líneas, qyro_net completo hasta la transferencia entre dos procesos. Es el mejor sprint que ha producido este proyecto y los hallazgos 6A-4, 6A-7, 6A-9 y 6A-11 valen cada uno por sí solo.
+
+Y tres cosas que reportaste son errores míos, no tuyos. Quedan corregidas aquí:
+
+1. El choque de reglas del ledger (6A-1). Confirmado, y era peor de lo que viste. check_docs_consistency tiene además una regla que no mencionaste: STATUS.md no puede nombrar un Verified commit a más de 10 commits de HEAD. Tú vas por diez. Es decir, mi prohibición de tocar STATUS.md no sólo bloqueaba el ledger: garantizaba que ci.yml se pusiera rojo en cuanto pasaras de diez commits, pasara lo que pasara con el código.
+
+Tu solución —archivar el prompt en .txt y numerar 6A-n— fue correcta y limpia dado lo que tenías. Ya no hace falta.
+
+QUEDA AUTORIZADO: puedes editar STATUS.md, HANDOFF.md, NEXT_STEPS.md, CHANGELOG.md, BUGS_PENDING.md, DECISIONS.md y .github/workflows/**. Sin pedir permiso. La única condición es que quede coherente: que check_docs_consistency pase, que STATUS.md diga la verdad sobre lo que existe y lo que no, y que cada identificador que cites tenga su ficha.
+
+Tu rango de identificadores es QYR-0076 a QYR-0099. Codex tiene el QYR-0100 en adelante. No uses fuera de tu rango. Los dos vais a tocar BUGS_PENDING.md a la vez; con rangos disjuntos, el peor caso es un conflicto de fusión trivial que resuelvo yo, y eso es infinitamente más barato que un agente bloqueado.
+
+Convierte los doce hallazgos 6A-n en fichas QYR-00xx de tu rango, con el formato del ledger, en la Fase 5. El prompt verbatim vuelve al informe en .md.
+
+2. El criterio de git diff --name-only origin/main...HEAD (6A-6). Confirmado y retirado. origin/main está en e0041de, anterior al sprint 4A. Ese diff devuelve 319 archivos de cinco sprints. La base correcta es 15934aa, y ése es el criterio a partir de ahora. Tu §13 hizo exactamente lo correcto al dar las dos salidas.
+
+3. Los paquetes son 63, no 62 (6A-10). Confirmado aquí — qyro_net y qyro_net_smoke, los dos de primera parte. Mi criterio decía 62 y estaba mal.
+
+Y un defecto de tu informe que tienes que arreglar: tu §4 dice «son 63» y tu §12 dice «Después: 62». Las dos secciones se contradicen dentro del mismo documento. §12 era cierta en la Puerta 2 y dejó de serlo en la Puerta 4, y nadie la actualizó. Es exactamente la clase de defecto que este proyecto persigue: una afirmación que fue verdad y ya no lo es, en un documento que se lee como si todo él fuera actual. Arréglala, y añade a tu protocolo de puerta la comprobación de §13.
+
+1. La regla que gobierna este prompt
+
+No confíes en tu memoria. Confía en el código.
+
+Llevas nueve commits y vas a hacer muchos más. Lo que creías cierto en la Puerta 2 puede haber dejado de serlo en la Puerta 6 — te acaba de pasar con el conteo de paquetes. Por tanto:
+
+Antes de afirmar algo en el informe, vuelve a mirarlo en el código o ejecútalo. No lo recuerdes.
+Antes de cerrar cada puerta, relee las secciones del informe que la fase pudiera haber invalidado y corrígelas. El informe entero tiene que ser cierto en el momento del último commit, no en el momento en que se escribió cada párrafo.
+Cuando digas un número, di el comando con el que lo obtuviste, y obtenlo de nuevo si han pasado fases.
+2. Cómo se trabaja — seis fases más, mismo protocolo
+
+Este prompt tiene seis fases nuevas (5 a 10) y cada una termina en su puerta. El protocolo de puerta está en §9, ampliado con dos comprobaciones más. No avances con una fase a medias.
+
+Sigues en paralelo con Codex en codex/qyro-gap-closure-5c. Las reglas de no interferencia cambian y están en §3.
+
+3. Reparto de archivos — actualizado
+
+Tuyos, exclusivos:
+
+rust/crates/qyro_net/**, rust/tools/qyro_net_smoke/**
+rust/crates/qyro_ffi/** — es tuyo a partir de la Fase 8
+apps/qyro/** — la parte Dart, tuya a partir de la Fase 9
+Cargo.toml raíz, Cargo.lock
+.github/workflows/** — ahora autorizado, ver Fase 7
+STATUS.md, HANDOFF.md, NEXT_STEPS.md, CHANGELOG.md — ahora autorizados
+docs/adr/ADR-0028-*, ADR-0030-* (nueva, Fase 8), docs/reports/6A-*
+
+Compartidos, con regla:
+
+BUGS_PENDING.md — ambos escriben. Tú sólo añades fichas en el rango QYR-0076–QYR-0099 y no editas ninguna ficha existente. Añade siempre al final del archivo.
+DECISIONS.md — igual: sólo añades, no reescribes.
+rust/crates/qyro_transfer/** — ya lo tocaste con Receiver::manifest() y estuvo bien. Sigue siendo tuyo para cambios aditivos, y cada uno se registra con ficha propia.
+
+De Codex, no los toques:
+
+rust/crates/qyro_fs/**
+rust/crates/qyro_protocol/src/header.rs
+rust/guards/source_guard.rs — haces include! sin modificarlo. Si necesitas una guarda nueva ahí, pídemela en el informe; Codex está añadiendo una guarda anti-tautología a ese archivo ahora mismo.
+
+Nunca: main. Sin commits, merge, PR, rebase ni force-push.
+
+4. Aviso: Codex va a cambiar la API de qyro_protocol::header
+
+Codex tiene el encargo de cerrar QYR-0068 y darle a transfer_id, stream_id e item_id una forma pública de rellenarse, con ADR-0029. Es aditivo: el formato de 48 bytes no cambia, sólo aparece API nueva.
+
+Tú no dependas de que exista. Si tu diseño la necesita, dilo en el informe y sigue con ceros. Cuando las dos ramas se fusionen, la conectamos.
+
+5. Estado real de tu rama, medido aquí el 2026-08-11
+Comprobación	Resultado
+cargo test --workspace	408 passed, 0 failed, 2 ignored
+cargo fmt --all --check	PASS
+cargo clippy --workspace --all-targets -- -D warnings	PASS
+Paquetes en Cargo.lock	63 (qyro_net, qyro_net_smoke)
+Puertas	0, 1, 2, 3, 4 pasadas
+
+Confirmado por mí, no copiado de tu informe.
+
+Y 6A-3 lo verifiqué y es peor de lo que dices: cargo test --workspace corre sólo en ubuntu-latest (ci.yml:33). El trabajo de Windows de platform-builds.yml:103 hace cargo build --package qyro_ffi y Flutter, nada más. qyro_net no se compila siquiera en Windows. Es tu Fase 7 y ya tienes permiso.
+
+6. Las seis fases
+Fase 5 — Los cinco finales, y el ledger al día
+
+Parte A — la robustez. Los cinco finales de la ADR, cada uno provocado de verdad:
+
+El emisor cancela a mitad — el receptor se entera con el error tipado correcto y no deja el archivo final.
+El receptor rechaza el manifest — el emisor para; no sigue mandando chunks a un peer que dijo que no.
+El proceso remoto muere a mitad — mátalo con Child::kill(). El superviviente produce el error tipado, no un pánico y no un cuelgue.
+La conexión se corta a mitad — shutdown desde el otro lado.
+Un peer que abre conexiones y no habla — el listener no se queda sin recursos, con el número de la ADR §3.
+
+Y dos de recursos:
+
+Ningún hilo queda vivo tras terminar, de cualquiera de las cinco formas. Cuéntalos.
+Ningún descriptor queda abierto. En Linux, /proc/self/fd.
+
+Y una que 6A-12 hace obligatoria: tras un rechazo, no queda ningún .qyro-part en el destino, en ninguno de los cinco finales.
+
+Parte B — el ledger. Convierte los doce hallazgos 6A-n en fichas QYR-0076–QYR-0087 en BUGS_PENDING.md, con el formato del archivo: plataforma, severidad, esperado, actual, resolución, estado, fecha. Los que arreglaste van cerrados; 6A-3 va abierto hasta la Fase 7; 6A-1 y 6A-6 van cerrados apuntando a este prompt.
+
+Y devuelve el prompt verbatim a docs/reports/6A-claude-code.md §1. Ya no hay motivo para el .txt.
+
+Puerta 5.
+
+Fase 6 — Guardas y el barrido que cubre todo el crate
+guards.rs en qyro_net con include! del análisis compartido —sin modificarlo— y las cuatro guardas: no_production_path_can_panic, every_production_file_is_listed, every_net_error_has_a_construction_site, y la de forbid(unsafe_code). Recuerda QYR-0071: ese análisis leía menos de la mitad de un archivo hasta hace tres días. Comprueba que assert_analysis_reached_the_end pasa sobre cada uno de tus archivos y di el número de bytes analizados de cada uno en el informe.
+Lo mismo para qyro_net_smoke, o registra por qué no aplica.
+Barrido de mutación completo sobre todo qyro_net. Por cada control de producción: bórralo, corre la suite, anota qué test falló. Ya has encontrado dos supervivientes por este método (6A-4 y 6A-7); espera encontrar más en el código de las Fases 4 y 5, que aún no ha tenido barrido completo.
+Cero supervivientes sin registrar, con ficha en tu rango.
+
+Puerta 6.
+
+Fase 7 — Windows de verdad (cierra 6A-3)
+
+Ahora tienes permiso para tocar .github/workflows/**.
+
+Haz que qyro_net se pruebe en Windows. Decide dónde: un trabajo nuevo en platform-builds.yml, o ampliar el de Windows que ya existe. Como mínimo tiene que correr cargo test -p qyro_net -p qyro_net_smoke en windows-latest.
+Espera que falle, y eso es el valor de la fase. qyro_net es donde el comportamiento diverge: WouldBlock frente a TimedOut, shutdown, ConnectionReset frente a ConnectionAborted, y el bind de un puerto. 6A-4 ya te dijo que la mitad de Windows de is_read_timeout no la defendía nadie.
+Arregla lo que salga y registra cada divergencia con ficha propia.
+Y decide si ci.yml debe correr cargo test --workspace también en Windows. Argumenta el coste contra el beneficio. Si dices que no, di qué queda sin cubrir. Si dices que sí, hazlo — y avisa en el informe de que eso afecta a la rama de Codex también, porque Codex ya midió que el baseline de Windows no está limpio: cargo clippy falla allí por qyro_store_smoke::UNSUPPORTED_PLATFORM sin usar, y cargo test da 394 tests en Windows y 388 en Linux por selección cfg. Eso lo arregla Codex; tú sólo tienes que no sorprenderte.
+Y cuando termines, ninguna afirmación de tu informe sobre Windows puede quedarse en «compilado». Sube su clase de evidencia o di que no la subiste.
+
+Puerta 7. Con una comprobación extra: el trabajo de Windows tiene que haberse ejecutado y estar en verde en un run real, con su ID. No vale «debería funcionar».
+
+Fase 8 — El FFI del motor: que Dart pueda, por primera vez, pedir una transferencia
+
+Ésta es la fase más importante del sprint y la que mueve el producto. Hoy qyro_ffi sólo expone la versión del protocolo. Todo lo demás —el motor, el disco, la red— es inalcanzable desde Dart.
+
+docs/adr/ADR-0030-engine-ffi.md, congelada antes del código. Decide:
+
+El modelo de objetos que cruza. Rust no puede devolver structs con vida propia a Dart. Lo estándar es handles opacos: un entero o puntero que identifica una sesión viva en una tabla del lado Rust. Decide cuál, cómo se crea, cómo se destruye, y qué pasa si Dart pierde el handle sin cerrarlo.
+La invariante que NO se toca. qyro_ffi no puede alcanzar qyro_crypto, y hay una prueba de cierre transitivo que lo garantiza. Pero qyro_net sí depende de qyro_crypto para el handshake. Eso rompe el cierre transitivo si qyro_ffi depende de qyro_net. Esto es la decisión central de la ADR y no la resuelvas por inercia. Las opciones que veo, y tienes que evaluarlas y elegir con razonamiento escrito:
+(a) Relajar la guarda a «qyro_ffi no puede alcanzar los tipos de material de clave», en vez de «no puede alcanzar el crate». Más preciso y más frágil.
+(b) Un crate intermedio qyro_session que sea lo único que qyro_ffi ve, y que exponga sólo operaciones, nunca claves.
+(c) Mantener la guarda tal cual y aceptar que la red no cruza el FFI en este sprint — sólo el motor y el disco.
+Ninguna es obviamente correcta. La (c) es la más conservadora y deja el producto a medias. La (a) debilita una garantía que este proyecto trata como sagrada. La (b) cuesta un crate. Elige, argumenta, y di qué pierdes. Y si eliges (a), la guarda nueva tiene que verse fallar con un intento real de exponer material de clave.
+Errores a través del FFI. Rust tiene Result; C no. Códigos de error, out params, o un last_error por hilo. Decide y di qué pasa con un error que ocurre en un hilo que Dart no creó.
+Vida de las cadenas y los búferes. Quién asigna, quién libera, y qué pasa si Dart libera dos veces.
+Hilos. El motor corre en un hilo de Rust. Dart llama desde su isolate. Decide qué llamadas son seguras desde cualquier hilo y cuáles no, y dilo en la firma o en el nombre.
+Lo que esta decisión no promete. Sección obligatoria.
+
+Después, el código:
+
+La superficie FFI mínima que permita: abrir una sesión emisora contra una dirección, con una lista de rutas; abrir una sesión receptora en un puerto, con un directorio destino; consultar el progreso; cancelar; cerrar.
+Pruebas en Rust de la superficie FFI, incluida la de doble cierre y la de handle inválido, que tienen que devolver error y no reventar.
+La guarda de cierre transitivo actualizada según la opción que elijas, y vista fallar.
+
+Puerta 8.
+
+Fase 9 — El progreso hasta Dart, y una transferencia real conducida desde Dart
+NativeCallable.listener de dart:ffi. Cero paquetes, cero crates. Es la primitiva exacta: invocable desde cualquier hilo, sólo funciones que devuelven void, diferida al event loop del isolate. Cuatro reglas que van en la ADR y en el código:
+Sólo void. Para cancelación, una bandera atómica compartida, nunca el retorno del callback.
+close() obligatorio o el isolate no muere nunca.
+La llamada es diferida: no pases punteros a búferes de la pila de Rust. Sólo escalares. Progreso = dos enteros.
+Llamar al nativeFunction después de close() es UB. El apagado lo ordena Rust —última llamada, «completado»— y Dart cierra al recibirla.
+Y la prueba que cierra el sprint: un test de integración en Dart que conduce una transferencia real por un socket, entre dos procesos, y comprueba que el archivo llega byte a byte idéntico. Es la primera vez en la vida de este proyecto que Dart hace algo real. Ponla en apps/qyro/test/ o donde encaje con los tests de FFI que ya existen, y que corra en ci.yml.
+Los botones siguen deshabilitados. No los toques. La UI de transferencia es otro sprint y la decisión de habilitarlos es del supervisor. Pero di en el informe si, a tu juicio, ya se cumple la condición que los mantiene apagados —«que exista una transferencia real, cifrada y comprobada de extremo a extremo»— y qué falta para poder afirmarlo sin trampa.
+
+Puerta 9.
+
+Fase 10 — Dejar la documentación diciendo la verdad
+
+Ahora tienes permiso. Y es trabajo real, no burocracia: STATUS.md es el documento del que este proyecto dice que es la fuente de verdad ejecutable.
+
+STATUS.md: Verified commit, milestone, números de tests, paquetes, los runs de CI de esta rama sin filtrar —incluidos fallos y cancelaciones—, una sección del sprint 6A/6B con lo que existe y una sección de lo que no debe leerse como progreso.
+HANDOFF.md, NEXT_STEPS.md, CHANGELOG.md al día.
+BUGS_PENDING.md: tus fichas del rango, ninguna ajena tocada.
+DECISIONS.md: ADR-0028 y ADR-0030 registradas.
+check_docs_consistency en Bash y en PowerShell: PASS. Es el criterio.
+Relee tu informe entero y corrige toda afirmación que las fases 5 a 9 hayan invalidado. Empezando por §12, que ya está mal.
+
+Puerta 10 + los seis workflows en verde sobre el commit final.
+
+7. No objetivos — estrictos
+Descubrimiento, mDNS, Bonjour, NsdManager. La dirección se la sigue pasando el llamante. Es otro sprint.
+UI de transferencia. Los botones siguen deshabilitados. Sin pantallas nuevas, sin lista de peers, sin barra de progreso visible.
+Selector de archivos. La lista de rutas se la pasa el llamante.
+Los archivos de Codex (§3).
+Emparejamiento, confianza, TOFU, historial.
+Android Keystore, iOS Keychain.
+Reconexión automática, NAT, internet, TLS.
+Dependencias externas. Cero. Si crees que necesitas una, para y explica antes.
+8. Criterios de aceptación
+Las seis puertas nuevas pasadas y escritas en el informe con su resultado.
+Los cinco finales de la ADR con error tipado propio y prueba que lo produce.
+Ningún hilo ni descriptor ni .qyro-part sobrevive a ninguno de los cinco finales.
+Barrido de mutación completo sobre qyro_net, con tabla y cero supervivientes sin ficha.
+assert_analysis_reached_the_end pasa sobre cada archivo nuevo, con el número de bytes de cada uno.
+qyro_net se prueba en Windows en un run real, con ID, y las divergencias encontradas están arregladas o registradas.
+ADR-0030 congelada antes del código de la Fase 8, comprobable en el historial.
+La decisión sobre el cierre transitivo qyro_ffi → qyro_crypto está tomada, argumentada, implementada, y la guarda resultante se ha visto fallar.
+Un handle cerrado dos veces y un handle inválido devuelven error, no un pánico.
+Un test en Dart conduce una transferencia real entre dos procesos por un socket y comprueba el archivo byte a byte, y corre en CI.
+Los botones siguen deshabilitados, y el informe dice si ya podrían no estarlo.
+Cero dependencias externas nuevas. Di el conteo final de Cargo.lock, obtenido con un comando, no de memoria.
+cargo fmt --all --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, cargo test --doc, cargo audit --deny warnings: PASS. Los tests suben desde 408; di cuánto y qué prueba cada uno nuevo.
+Los cuatro check_* pasan en Bash y en PowerShell, incluido check_docs_consistency.
+Los seis workflows en success sobre el commit final, con todos los runs de la rama listados, incluidos los fallidos y los cancelados.
+git diff --name-only 15934aa..HEAD no contiene ni un archivo de Codex (§3). Pega la salida literal. La base es 15934aa, no origin/main.
+El informe entero es cierto en el momento del último commit. Ninguna sección contradice a otra.
+git status --short limpio. Sin commits en main, sin merge, sin PR, sin force-push.
+9. El protocolo de puerta — ampliado con dos comprobaciones
+
+No pasas de fase hasta que las once pasan.
+
+cargo fmt --all --check — PASS. Comprueba el código de salida del proceso, no la salida de texto. Es la lección de 6A-2 y 6A-8.
+cargo clippy --workspace --all-targets -- -D warnings — PASS, por código de salida.
+cargo test --workspace — PASS, sin ignorados nuevos.
+Barrido de mutación de la fase. Por cada propiedad nueva: aplica la mutación que debería romperla, confirma que falla un test con nombre, restaura. Si sobrevive, no has terminado la fase.
+Lectura de aserciones: los dos lados de cada assert! nuevo pueden diferir.
+Lectura de contadores: registran un valor derivado de la operación, no una constante. Y —lección de 6A-11— la prueba tiene que distinguir un contador medido de uno constante: si una constante satisface tus aserciones, la forma de la prueba está mal, no el contador.
+Lectura de nombres: cada test ejerce lo que su nombre dice.
+git diff --name-only 15934aa..HEAD — ni un archivo de Codex.
+NUEVO — coherencia del informe. Relee las secciones del informe que esta fase pudiera haber invalidado —conteos, tablas, listas de archivos, clases de evidencia— y corrígelas contra el código actual, no contra tu memoria. Un informe donde §4 dice 63 y §12 dice 62 es un informe en el que no se puede confiar.
+NUEVO — check_docs_consistency en Bash. Ahora que tocas documentos raíz, es parte de la puerta y no algo que se descubre al final.
+Escribe el resultado de la puerta en el informe antes de empezar la fase siguiente.
+
+Si una comprobación falla: arréglalo y repite la puerta entera.
+
+Si no puedes: para, escribe por qué, y reporta. Es lo que hiciste con 6A-3 y fue correcto.
+
+10. El informe — sigue siendo docs/reports/6A-claude-code.md
+
+Las mismas dieciséis secciones. Y ahora:
+
+§1 vuelve a llevar el prompt verbatim en el .md. Los dos prompts, el primero y éste.
+§4 y §5 llevan los 6A-n con su ficha QYR-00xx asignada al lado.
+§12 corregida: 63 paquetes, con el comando.
+§13 con base 15934aa.
+§8 con la clase de evidencia por plataforma: lo que corre en Linux, lo que corre en Windows tras la Fase 7, y lo que sigue sin correr en ningún sitio.
+§15 ampliada: qué sigue sin existir tras la Fase 9. Y en particular, si el test de Dart de la Fase 9 pasa, di explícitamente que eso no es un producto: no hay descubrimiento, no hay selector, no hay UI, y sigue sin haber una sola prueba en hardware físico ni entre dos máquinas distintas.
+11. Si te quedas sin contexto
+
+Para después de una puerta, nunca a mitad de una fase. Escribe en el informe en qué puerta estás y qué falta. Deja la rama en verde y STATUS.md coherente, ahora que puedes tocarlo. Mueve Verified commit antes de parar — acuérdate del límite de diez commits.
+
+Prohibido: tocar los archivos de Codex, usar identificadores fuera del rango QYR-0076–QYR-0099, editar una ficha ajena del ledger, añadir una dependencia sin pararte a explicar, meter async, usar unsafe fuera de lo que la ADR-0030 autorice explícitamente, habilitar los botones, dejar la rama en rojo, omitir un run fallido, declarar una fase cerrada sin su puerta, o commitear en main.
+
+12. Lo que viene después (no lo empieces)
+
+El descubrimiento LAN —NsdManager en Android, NWBrowser en iOS, mdns-sd sólo bajo cfg(windows), todo detrás de un trait, con IP manual o QR como fallback desde el primer día—, el selector de archivos por Storage Access Framework, y entonces sí, la UI de transferencia y los botones.

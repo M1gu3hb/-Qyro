@@ -2,7 +2,18 @@
 //!
 //! This crate deliberately contains no UI or platform-specific code.
 
+// Added in sprint 4D.1, and the reason is worth a line because the attribute
+// looks like boilerplate and is not. `qyro_win_dpapi` is now allowed `unsafe`,
+// so "which crates may relax this" became a list rather than a habit, and
+// `only_the_listed_crates_may_relax_forbid_unsafe` in `qyro_identity_store`
+// enforces it. Writing that guard is what found this crate: it could carry the
+// attribute and did not, while STATUS.md and ADR-0024 both said every crate
+// did (QYR-0054). Removing this line turns the guard red.
+#![forbid(unsafe_code)]
 use std::collections::BTreeMap;
+
+#[cfg(test)]
+mod guards;
 
 /// Wire protocol implemented by this milestone.
 pub const fn protocol_version() -> &'static str {

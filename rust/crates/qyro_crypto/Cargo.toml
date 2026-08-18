@@ -1,0 +1,74 @@
+[package]
+name = "qyro_crypto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Qyro cryptographic core: Ed25519 device identity with domain-separated signatures, the four-message authenticated handshake, the HKDF-SHA256 key schedule, ChaCha20-Poly1305 frame AEAD and the fixed replay window."
+
+[lib]
+path = "src/lib.rs"
+
+# No features. The deterministic seed constructor used to sit behind a
+# `test-vectors` feature, but features are additive: any crate in a dependency
+# graph could switch it on for every other crate, and no release build could
+# prove it was off. It is now `cfg(test)` and crate-private, so it does not
+# exist outside the test build at all.
+
+[dependencies]
+# Ed25519 (RFC 8032) from dalek-cryptography. BSD-3-Clause. See ADR-0020 and
+# docs/LICENSE_AUDIT.md for the full evaluation.
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["rand_core", "zeroize"] }
+# SHA-256 for the fingerprint and the transcripts. RustCrypto, MIT/Apache-2.0.
+# `zeroize` wipes the compression state on drop. It is off by default, which
+# means the SHA-256 block state behind every transcript and every HKDF expansion
+# was left in freed memory until sprint 4C.1 looked. See
+# docs/security/secret-lifecycle-audit.md.
+sha2 = { version = "0.11.0", default-features = false, features = ["zeroize"] }
+# Wipes secret material on drop. MIT/Apache-2.0.
+# `alloc` is on for `Zeroizing<Vec<u8>>`, which is where verified plaintext and
+# the sealer's temporary live. zeroize's own documentation states the limit:
+# `Vec::zeroize` wipes the initialized elements and the spare capacity, and
+# "cannot ensure that previous reallocations did not leave values on the heap".
+# See docs/security/secret-lifecycle-audit.md.
+zeroize = { version = "1.9.0", default-features = false, features = ["alloc", "zeroize_derive"] }
+# System CSPRNG. MIT/Apache-2.0. Production entropy comes from here and nowhere
+# else; there is deliberately no weaker fallback.
+getrandom = "0.4.3"
+# Shared eight-byte session identifier; no dependency in the other direction.
+qyro_protocol = { path = "../qyro_protocol" }
+# X25519 (RFC 7748) from the same dalek family, sharing curve25519-dalek 5.0
+# with ed25519-dalek so no duplicate copy of the curve enters the build.
+# BSD-3-Clause. See ADR-0021.
+# `static_secrets` is the only constructor that takes bytes directly.
+# `getrandom` is deliberately OFF: its `random()` panics when the CSPRNG fails,
+# and this crate reports that as EntropyUnavailable instead.
+x25519-dalek = { version = "3.0.0", default-features = false, features = ["precomputed-tables", "static_secrets", "zeroize"] }
+# HKDF-SHA256 (RFC 5869) and HMAC-SHA256 (RFC 2104). RustCrypto, MIT/Apache-2.0,
+# both on digest 0.11 like sha2.
+# HKDF-SHA256 for the key schedule. RustCrypto, MIT/Apache-2.0.
+#
+# `hkdf` has no zeroize feature of its own. It does not need one: `Hkdf<Sha256>`
+# stores an `Hmac<Sha256>`, so the pseudorandom key — a traffic secret — is wiped
+# by that value's own drop once `hmac/zeroize` is on. Verified by reading
+# hkdf 0.13's `GenericHkdf`, not assumed from the name.
+hkdf = { version = "0.13.0", default-features = false }
+# HMAC-SHA256 for the confirmation MACs. RustCrypto, MIT/Apache-2.0.
+# `zeroize` wipes the keyed state, which is where a finished key and an HKDF
+# PRK live while they are in use.
+hmac = { version = "0.13.0", default-features = false, features = ["zeroize"] }
+# Constant-time comparison for the confirmation MACs. Already in the tree via
+# ed25519-dalek; named directly because this crate compares secrets itself.
+subtle = { version = "2.6.1", default-features = false }
+# ChaCha20-Poly1305 (RFC 8439) from RustCrypto, for the frame AEAD. Apache-2.0
+# OR MIT. See ADR-0022 and docs/LICENSE_AUDIT.md.
+# `default-features = false` drops `alloc` and `getrandom`: the sealing path uses
+# the detached in-out API, which allocates nothing, and this crate never lets a
+# dependency draw its own entropy — see the `getrandom` note on x25519-dalek.
+# `zeroize` is on so the cipher wipes its key on drop.
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["zeroize"] }
+
+[dev-dependencies]
+# The committed vector files are parsed as JSON rather than scraped with string
+# searches. MIT/Apache-2.0, dev-only: it is not linked into the library.
+serde_json = "1.0.145"

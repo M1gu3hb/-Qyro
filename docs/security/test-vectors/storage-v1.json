@@ -1,0 +1,32 @@
+{
+  "_warning": "TEST ONLY - NEVER PRODUCTION. These vectors fix the framing of the identity blob. They contain no key material because none of it is secret.",
+  "_what_is_and_is_not_here": "The header and the additional-entropy construction are frozen here byte for byte. A complete sealed blob is NOT, and cannot be: the wrapped body is DPAPI output, which is bound to a user account and a machine by design, so it is not reproducible anywhere else. A vector file containing one would be a vector nobody but its author could verify.",
+  "format": "qyro-identity-store-v1",
+  "specification": "docs/adr/ADR-0024-secure-identity-storage.md",
+  "magic": "5159524f2d494453",
+  "header_len": 16,
+  "entropy_header_len": 12,
+  "entropy_constant": "7179726f2e6964656e746974792e73746f72652e7631",
+  "headers": [
+    {
+      "name": "version 1, dpapi user scope, empty body",
+      "version": 1,
+      "wrap": 1,
+      "wrapped_len": 0,
+      "header": "5159524f2d4944530101000000000000",
+      "entropy": "7179726f2e6964656e746974792e73746f72652e76315159524f2d49445301010000"
+    },
+    {
+      "name": "version 1, dpapi user scope, 256-byte body",
+      "version": 1,
+      "wrap": 1,
+      "wrapped_len": 256,
+      "header": "5159524f2d4944530101000000000100",
+      "entropy": "7179726f2e6964656e746974792e73746f72652e76315159524f2d49445301010000"
+    }
+  ],
+  "notes": [
+    "The two entries share an entropy string and differ in header: that is QYR-0048. wrapped_len is in the header and deliberately not in the entropy, because it is not known until after the wrapper has run.",
+    "reserved is bytes 10..12 and must be zero. A non-zero value is rejected, not ignored."
+  ]
+}

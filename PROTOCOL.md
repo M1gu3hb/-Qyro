@@ -1,10 +1,22 @@
 # QYRO/1
 
-Estado: contrato de versión implementado; framing no implementado.
+Estado: framing binario implementado y probado; handshake autenticado y cifrado
+autenticado de frames implementados en memoria en `qyro_crypto`. Transporte y
+modo óptico no implementados: el tag ya se calcula, pero nada pone todavía un
+frame en un socket.
+
+El encoder y el decoder incremental viven en `rust/crates/qyro_protocol`, el
+manifest en `rust/crates/qyro_manifest` y el sellado en
+`rust/crates/qyro_crypto/src/aead`. La especificación completa está en
+`docs/protocols/qyro1-wire-format.md` y `docs/protocols/manifest-format.md`;
+las decisiones, en ADR-0016, ADR-0017, ADR-0018 (política de errores y estados
+imposibles), ADR-0019 (nombre visible derivado) y ADR-0022 (AEAD de frames).
 
 ## Objetivos
 
-Binario, versionado, streaming, límites explícitos, compatibilidad futura y rechazo limpio. CBOR canónico se evaluará; no está elegido definitivamente.
+Binario, versionado, streaming, límites explícitos, compatibilidad futura y
+rechazo limpio. CBOR canónico se evaluó y se descartó frente a un formato propio
+canónico y acotado; el razonamiento está en ADR-0017.
 
 ## Mensajes
 
@@ -12,7 +24,15 @@ Discovery, Pairing, Capabilities, Offer, Accept, Reject, Manifest, DataChunk, Ch
 
 ## Cabecera conceptual
 
-Magic, versión, tipo, flags, session ID, transfer ID, stream ID, item ID, secuencia/chunk, longitud y autenticación. Todo entero debe fijar endianess y tamaño antes de congelar vectores.
+Cabecera fija de 48 bytes, big-endian, con magic, versión mayor/menor, tipo,
+flags, longitud de cabecera, longitud de trailer, longitud de payload, session,
+transfer, stream e item ID y secuencia. Endianness y tamaños están congelados
+con tests de bytes; ver la especificación.
+
+`session_id` son ocho bytes y su tipo es `qyro_protocol::SessionId`, el mismo que
+deriva el handshake de `qyro_crypto` bajo la etiqueta `session-id`. Un único
+tipo, un único ancho: nada trunca ni convierte entre establecer una sesión y
+nombrarla en el cable.
 
 ## Manifest
 
@@ -28,4 +48,6 @@ Frames separados con session/transfer/epoch/symbol, parámetros FEC, payload, ch
 
 ## Límites pendientes
 
-Antes del primer decoder deben definirse tamaño máximo de frame, manifest, item count, ruta, ventanas, tiempo y memoria; cada límite requiere tests y corpus de fuzzing.
+Los límites de frame, manifest, item count y ruta están definidos y probados.
+Quedan pendientes los de ventana, tiempo y memoria de transferencia, que
+dependen del transporte todavía no implementado.

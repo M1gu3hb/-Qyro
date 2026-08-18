@@ -1,0 +1,51 @@
+[package]
+name = "qyro_cli"
+version = "1.1.0"
+edition = "2024"
+publish = false
+
+# `qyro`, not `qyro-cli`: the owner's requirement is «en su terminal pongo el
+# comando», and the shortest command is the one that gets typed right.
+[[bin]]
+name = "qyro"
+path = "src/main.rs"
+
+[dependencies]
+# Directly on the engine, never through the C boundary. That boundary exists so
+# Dart can cross a language limit; Rust talking to Rust pays its toll for
+# nothing (ADR-0042 §2).
+qyro_session = { path = "../qyro_session" }
+qyro_fountain = { path = "../qyro_fountain" }
+qyro_serial = { path = "../qyro_serial" }
+
+# ADR-0044 §2, pre-autorizada. Encoding a QR is Reed-Solomon over GF(256) plus a
+# mask-penalty search, and getting the penalty rules subtly wrong produces codes
+# that scan on the phone in the room and fail on the next one. That is a
+# specification to implement correctly, not a puzzle to enjoy -- unlike the
+# fountain code, where the alternative was a patent.
+#
+# `default-features = false` drops the `image` feature and with it a PNG
+# encoder, a colour-space conversion and their dependencies. This crate draws
+# into a terminal and never writes a file. MIT OR Apache-2.0.
+qrcode = { version = "0.14", default-features = false }
+
+# ADR-0045 §3. `default-features = false` is the whole decision: with them it
+# pulls `libudev`, a **C library**, into a project whose argument is depending on
+# no C at all. Without them the tree on Windows is cfg-if + scopeguard +
+# windows-sys, all three already in the graph, so the serial channel costs one
+# package. What is lost is USB vendor/product metadata, and nothing needs it: a
+# person picks COM3 by the name they can see. MPL-2.0 -- copyleft per file, so
+# using it unmodified imposes nothing on Qyro's own source.
+serialport = { version = "4.9", default-features = false }
+
+# **Only for tests, and that is the point.** ADR-0044 §6: the CLI draws and the
+# phone reads, so a decoder has no business in the shipped binary -- it would be
+# 400-700 lines of camera plumbing for a machine with no camera. What it IS good
+# for is proving the renderer produces something a real decoder accepts, which
+# is otherwise a drawing nobody has ever read back.
+#
+# `rqrr` is pure Rust and reads a grayscale buffer, so the round trip needs no
+# image files on disk: fixtures rot, and a fixture that rots fails as "the
+# renderer broke".
+[dev-dependencies]
+rqrr = "0.9"

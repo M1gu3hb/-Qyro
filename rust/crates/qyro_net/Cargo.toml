@@ -1,0 +1,44 @@
+[package]
+name = "qyro_net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Qyro network transport: QYRO/1 frames over a blocking TCP socket."
+
+[lib]
+path = "src/lib.rs"
+
+# Zero new external dependencies, which is the whole point of ADR-0028 §6: the
+# transport is `std::net` and `std::thread`, and the framing it carries already
+# exists. `qyro_protocol` is first-party and already in the audited graph, so
+# this crate adds one package to Cargo.lock and that package is itself.
+[dependencies]
+# A new edge into the audited graph, not a new package: qyro_crypto is already
+# there. The handshake and the AEAD are its business, and this crate only moves
+# their bytes.
+qyro_crypto = { path = "../qyro_crypto" }
+qyro_protocol = { path = "../qyro_protocol" }
+
+# ADR-0043 §5, pre-authorised in R8 §7. The one thing std cannot do: name the
+# interface a multicast socket speaks on. `join_multicast_v6` with index 0 lets
+# the operating system choose, and it chooses badly on the machine that needs
+# this -- Wi-Fi plus Ethernet plus VPN plus Hyper-V. MIT OR Apache-2.0.
+socket2 = "0.5"
+
+# The other half of "per interface": knowing which interfaces exist. `std` has
+# no enumeration at all, and the routing-table trick the CLI uses answers with
+# **one** address -- the default route's -- which is precisely the one the
+# operating system already prefers and precisely the wrong answer for a direct
+# cable that is not the default route.
+#
+# Not a new package in the audited graph: `mdns-sd` already pulls it on Windows,
+# so this promotes a transitive dependency to a declared one and adds it on the
+# other targets. MIT.
+if-addrs = "0.15"
+
+# ADR-0035 §7 and amendment 1. Windows only: on Android and iOS the discovery
+# is not Rust's and cannot be, because the local-network gate sits below the
+# socket API. Pure Rust, no async runtime -- its own thread and channels, which
+# fits the synchronous engine -- Apache-2.0 OR MIT.
+[target.'cfg(windows)'.dependencies]
+mdns-sd = "0.20.3"

@@ -1,0 +1,13 @@
+// Makes the harness's single C export importable from Swift.
+//
+// `xcodebuild -create-xcframework -headers <dir>` copies this directory
+// verbatim, and SwiftPM's `binaryTarget` exposes whatever module it finds. A
+// header alone is not a module: without this file the XCTest target fails with
+// "no such module 'CQyroCryptoSmoke'", which says nothing about the header
+// having been found and copied correctly, because it was.
+//
+// Test harness only. Never shipped.
+module CQyroCryptoSmoke {
+    header "qyro_crypto_smoke.h"
+    export *
+}
