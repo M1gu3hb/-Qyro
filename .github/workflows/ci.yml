@@ -4,6 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
   push:
+    # **Con `paths` desde 2026-08-18 (QYR-0367).** No tenía ninguno, así que un
+    # commit de sólo documentación compilaba el árbol entero en dos sistemas
+    # operativos. Lo que este flujo comprueba es código; el trabajo de
+    # documentación se fue a `documentation.yml` con su propio disparador, para
+    # que separarlos no apagara la comprobación que un cambio de documentación
+    # sí necesita.
+    #
     # Any working branch, by pattern. Naming one is what QYR-0040 was:
     # sprint 4C.2 wrote the then-current branch into six files, which made "CI
     # runs on the working branch" true of that branch and false of the next one.
@@ -18,7 +25,16 @@ on:
     # so its run ID cannot be cited as evidence for a commit in this branch. A
     # push run executes on exactly the commit that was pushed, which is the
     # thing STATUS.md has to name.
-    branches: [main, 'claude/**']
+    branches: [main]
+    paths:
+      - "rust/**"
+      - "apps/qyro/**"
+      - "tools/**"
+      - "scripts/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - ".github/workflows/ci.yml"
 
 # No `paths:` filter, deliberately. This job is the one that has to run on every
 # push whatever changed — it is what says the workspace still builds, still
@@ -228,33 +244,3 @@ jobs:
           pwsh -NoProfile -File scripts/tests/crypto_platform_evidence_contract_test.ps1 || status=1
           python3 -m unittest tools/logo_ascii_generator/test_logo_ascii_generator.py || status=1
           exit "$status"
-
-  documentation:
-    # QYR-0078: seven consecutive runs hung for hours because no job
-    # declared a cap, so a stuck step ran to GitHub's six-hour default
-    # instead of failing with a log somebody could read.
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-    steps:
-      # Full history: the checker proves STATUS.md's verified commit is reachable
-      # from HEAD, which a shallow clone cannot answer.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - run: bash scripts/check_docs_consistency.sh
-      - run: pwsh -NoProfile -File scripts/check_docs_consistency.ps1
-      # A Linux runner happily creates paths Windows cannot check out, so this
-      # has to be asserted rather than discovered when a Windows job dies at
-      # `actions/checkout`. See scripts/check_repo_portability.sh.
-      - run: bash scripts/check_repo_portability.sh
-      - run: pwsh -NoProfile -File scripts/check_repo_portability.ps1
-      # Building qyro_ffi for a target is not building qyro_crypto for it. This
-      # refuses that substitution, which is what let four green workflows mean
-      # less than they looked like they meant.
-      - run: bash scripts/check_crypto_platform_evidence.sh
-      - run: pwsh -NoProfile -File scripts/check_crypto_platform_evidence.ps1
-      # The source half of keeping the test harness out of the product. The
-      # artifact half lives in platform-builds.yml, where the APK, the
-      # Runner.app and the Windows ZIP exist.
-      - run: bash scripts/check_harness_isolation.sh
-      - run: pwsh -NoProfile -File scripts/check_harness_isolation.ps1

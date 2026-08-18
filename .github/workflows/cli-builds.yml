@@ -11,7 +11,10 @@ name: CLI builds
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'claude/**']
+    # `claude/**` quitado el 2026-08-18: las 19 ramas de trabajo se
+    # fusionaron en `main` y se borraron. Un patrón que no puede coincidir con
+    # nada es una promesa de cobertura que ya no cubre.
+    branches: [main]
     paths:
       - "rust/**"
       - "Cargo.toml"

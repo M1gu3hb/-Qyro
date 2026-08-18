@@ -1,5 +1,63 @@
 # Bugs y pendientes verificados
 
+## QYR-0367 — Un commit de una línea de documentación compilaba el árbol dos veces
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA** (ruido, no corrección — pero ruido que tapa lo que importa)
+- Fecha: 2026-08-18
+
+**El defecto.** `ci.yml` no tenía **ningún** filtro de rutas, así que cualquier
+`push` lo disparaba entero: Rust en Linux, Rust en Windows, Flutter, las guardas
+de sistema de ficheros y los scripts. La sesión anterior hizo **28 commits de una
+sola línea** en `ESTADO-ACTUAL.md` —el 36 % de sus 78— y cada uno arrancó tres
+flujos.
+
+**Y la culpa de los 28 no era del CI.** Era de una regla: actualizar el ancla en
+un commit aparte. Se corrige en el sitio — **`ESTADO-ACTUAL.md` se actualiza
+dentro del commit de contenido**, y la comprobación 16 se cumple corriendo la
+puerta antes de empujar, no con un commit extra.
+
+**El arreglo, y por qué no fue un `paths-ignore`.** El trabajo `documentation`
+vivía dentro de `ci.yml` y **tiene que correr precisamente cuando cambia la
+documentación**: comprueba `STATUS.md`, la portabilidad del repositorio y la
+evidencia de plataforma. Un `paths-ignore` en `ci.yml` lo habría apagado justo
+para los commits que lo necesitan.
+
+Así que se parte en dos: `documentation.yml` con las rutas que comprueba de
+verdad, y `ci.yml` con `paths` para lo que se compila. **Cada mitad con su
+disparador.**
+
+De paso, `branches: [main, 'claude/**']` pasa a `[main]` en los seis flujos que
+lo tenían: las 19 ramas se fusionaron y se borraron, y un patrón que no puede
+coincidir con nada es una promesa de cobertura que ya no cubre.
+
+**La pregunta que cierra esta ficha:** ¿compila un cambio de sólo documentación
+el árbol entero? **No.**
+
+## QYR-0366 — iOS corría en cada push sobre un runner de macOS
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA**
+- Fecha: 2026-08-18
+
+**El defecto.** Tres trabajos de iOS se ejecutaban en cada `push`:
+`ios-runtime.yml` entero (`macos-15`), el trabajo `ios-crypto` de
+`crypto-platform.yml` (`macos-15`) y el trabajo `ios` de `platform-builds.yml`
+(`macos-latest`). **ADR-0039 sacó iOS de la v1.0**, así que cada ejecución era
+una notificación por un trabajo que nadie iba a leer.
+
+**No se borran, y ésa es la parte con argumento.** ADR-0039 dice **aplazado, no
+cancelado**: *«cuando exista un Mac, es una v1.1»*, y *«no revoca ADR-0025 ni
+ningún trabajo de iOS existente»*. Borrar la comprobación de ABI sería tirar lo
+que la v1.1 necesita para no empezar de cero.
+
+**Los tres pasan a `workflow_dispatch`** — el flujo entero en un caso, un
+`if: github.event_name == 'workflow_dispatch'` en los otros dos. El trabajo se
+conserva íntegro y se dispara a mano el día que haya un Mac.
+
+**La pregunta que cierra esta ficha:** ¿arranca un runner de macOS al empujar?
+**No, y el trabajo de iOS sigue entero.**
+
 ## QYR-0365 — Cada archivo pequeño cuesta ~1,2 s, y a los 60 s se corta la sesión
 
 - Estado: **ABIERTO**, causa localizada

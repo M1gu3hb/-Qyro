@@ -1,46 +1,16 @@
 name: iOS runtime ABI
 
+# **Sólo a mano, desde 2026-08-18.** ADR-0039 aparcó iOS de la v1.0 —aplazado, no
+# cancelado: «cuando exista un Mac, es una v1.1»— y este flujo seguía
+# ejecutándose en cada `push` sobre un runner `macos-15`. Con la plataforma fuera
+# del alcance, cada ejecución era una notificación por un trabajo que nadie iba a
+# leer (QYR-0366).
+#
+# **No se borra**, porque la ADR no cancela iOS y borrar la comprobación de ABI
+# sería tirar el trabajo que la v1.1 va a necesitar. Se queda entero y se
+# dispara a mano.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/ios-runtime.yml"
-      - "apps/qyro/ios/**"
-      - "apps/qyro/pubspec.*"
-      - "rust/crates/qyro_ffi/**"
-      # `qyro_ffi` depends on `qyro_core`, so a change there changes the
-      # library this workflow loads. It was not listed, which meant the ABI
-      # check would not run for the one crate that can actually alter what
-      # Dart links (QYR-0045).
-      - "rust/crates/qyro_core/**"
-      - "Cargo.*"
-  push:
-    # Any working branch, by pattern. Naming one is what QYR-0040 was:
-    # sprint 4C.2 wrote the then-current branch into six files, which made "CI
-    # runs on the working branch" true of that branch and false of the next one.
-    # A pattern is a property of the repository; a name is a reminder, and the
-    # reminder was not enough.
-    #
-    # `claude/**` and not `**`: covering every branch in the repository spends
-    # runner minutes on work this project did not start.
-    #
-    # Push rather than a pull request, deliberately. A `pull_request` run
-    # executes against a merge commit that exists only inside the Actions run,
-    # so its run ID cannot be cited as evidence for a commit in this branch. A
-    # push run executes on exactly the commit that was pushed, which is the
-    # thing STATUS.md has to name.
-    branches: [main, 'claude/**']
-    paths:
-      - ".github/workflows/ios-runtime.yml"
-      - "apps/qyro/ios/**"
-      - "apps/qyro/pubspec.*"
-      - "rust/crates/qyro_ffi/**"
-      # `qyro_ffi` depends on `qyro_core`, so a change there changes the
-      # library this workflow loads. It was not listed, which meant the ABI
-      # check would not run for the one crate that can actually alter what
-      # Dart links (QYR-0045).
-      - "rust/crates/qyro_core/**"
-      - "Cargo.*"
 
 permissions:
   contents: read

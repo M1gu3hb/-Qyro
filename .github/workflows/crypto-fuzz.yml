@@ -39,7 +39,10 @@ on:
     # so its run ID cannot be cited as evidence for a commit in this branch. A
     # push run executes on exactly the commit that was pushed, which is the
     # thing STATUS.md has to name.
-    branches: [main, 'claude/**']
+    # `claude/**` quitado el 2026-08-18: las 19 ramas de trabajo se
+    # fusionaron en `main` y se borraron. Un patrón que no puede coincidir con
+    # nada es una promesa de cobertura que ya no cubre.
+    branches: [main]
     paths:
       - "rust/fuzz/**"
       - "rust/crates/qyro_crypto/**"

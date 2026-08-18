@@ -1,0 +1,62 @@
+name: Documentation
+
+# **Separado de CI el 2026-08-18 (QYR-0367).** Estaba dentro de `ci.yml`, que no
+# tenía filtro de rutas, así que un commit de sólo documentación disparaba el
+# flujo entero: Rust en Linux, Rust en Windows, Flutter, guardas de sistema de
+# ficheros y scripts. La sesión anterior hizo 28 commits de una línea en
+# `ESTADO-ACTUAL.md` y cada uno arrancó tres flujos.
+#
+# Partirlo es lo que permite que **cada mitad tenga su disparador**: aquí las
+# rutas que este flujo comprueba de verdad, y en `ci.yml` las que compilan algo.
+# Un `paths-ignore` en `ci.yml` habría apagado también esta comprobación, que es
+# justo la que un cambio de documentación necesita.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.md"
+      - "STATUS.md"
+      - "BUGS_PENDING.md"
+      - "scripts/check_docs_consistency.*"
+      - "scripts/check_repo_portability.*"
+      - "scripts/check_crypto_platform_evidence.*"
+      - "scripts/check_harness_isolation.*"
+      - ".github/workflows/documentation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+
+  documentation:
+    # QYR-0078: seven consecutive runs hung for hours because no job
+    # declared a cap, so a stuck step ran to GitHub's six-hour default
+    # instead of failing with a log somebody could read.
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: the checker proves STATUS.md's verified commit is reachable
+      # from HEAD, which a shallow clone cannot answer.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: bash scripts/check_docs_consistency.sh
+      - run: pwsh -NoProfile -File scripts/check_docs_consistency.ps1
+      # A Linux runner happily creates paths Windows cannot check out, so this
+      # has to be asserted rather than discovered when a Windows job dies at
+      # `actions/checkout`. See scripts/check_repo_portability.sh.
+      - run: bash scripts/check_repo_portability.sh
+      - run: pwsh -NoProfile -File scripts/check_repo_portability.ps1
+      # Building qyro_ffi for a target is not building qyro_crypto for it. This
+      # refuses that substitution, which is what let four green workflows mean
+      # less than they looked like they meant.
+      - run: bash scripts/check_crypto_platform_evidence.sh
+      - run: pwsh -NoProfile -File scripts/check_crypto_platform_evidence.ps1
+      # The source half of keeping the test harness out of the product. The
+      # artifact half lives in platform-builds.yml, where the APK, the
+      # Runner.app and the Windows ZIP exist.
+      - run: bash scripts/check_harness_isolation.sh
+      - run: pwsh -NoProfile -File scripts/check_harness_isolation.ps1

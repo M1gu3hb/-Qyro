@@ -52,7 +52,10 @@ on:
     # so its run ID cannot be cited as evidence for a commit in this branch. A
     # push run executes on exactly the commit that was pushed, which is the
     # thing STATUS.md has to name.
-    branches: [main, 'claude/**']
+    # `claude/**` quitado el 2026-08-18: las 19 ramas de trabajo se
+    # fusionaron en `main` y se borraron. Un patrón que no puede coincidir con
+    # nada es una promesa de cobertura que ya no cubre.
+    branches: [main]
     paths:
       - "rust/crates/qyro_crypto/**"
       # The identity store links qyro_crypto and will carry the Windows backend
@@ -243,6 +246,9 @@ jobs:
           retention-days: 14
 
   ios-crypto:
+    # ADR-0039: iOS está aparcado, así que este trabajo sólo corre a mano
+    # (QYR-0366). Se conserva porque la ADR aplaza y no cancela.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     timeout-minutes: 40
     steps:
