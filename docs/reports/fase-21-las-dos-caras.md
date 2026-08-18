@@ -26,9 +26,13 @@ pruebas con argumentos correctos; las del CLI nunca llegaban a un socket; las
 pantallas se prueban contra un servicio falso; y la prueba de dos procesos
 ejercita **recibir**. Cada pieza, verde. La cadena, rota.
 
-**Y hay una Release publicada con los dos P0.** Se retracta y se republica, como
-con `2c01de0`. Es lo primero de la siguiente sesión y está en `ESTADO-ACTUAL.md`:
-tocar una Release publicada no se hace con el contexto justo.
+**Había una Release publicada con los dos P0, y ya está retractada en público**
+—título, notas encabezadas por la retractación, y el binario de terminal
+arreglado subido con su SHA-256 y verificado antes de subirlo. Lo que sigue roto
+es el APK, y **con un bloqueo con nombre**: el SDK de Android está en esta máquina
+pero sus licencias no están aceptadas, y aceptar un acuerdo legal en nombre del
+dueño no lo hace el implementador. Está dicho en las notas públicas, no sólo
+aquí.
 
 ---
 
@@ -148,8 +152,9 @@ Tres pararon el trabajo y **las tres tenían razón**:
   intento se colgaba y se retiró en vez de dejarla en rojo; lo que la colgaba era
   el puerto compartido, no ella. Con el `tearDown` esperando a que el socket se
   suelte, la prueba pasa con la normalización y **no pasa sin ella**.
-- **Que la Release publicada esté arreglada.** Los dos P0 están corregidos en la
-  rama; la Release sigue rota y su retractación es lo primero de la siguiente
-  sesión.
+- **Que la Release esté rehecha entera.** Está *retractada* y lleva el binario de
+  terminal arreglado; el APK sigue siendo el de antes y **la aplicación sigue sin
+  poder enviar**. Bloqueado por las licencias del SDK de Android, que las acepta
+  una persona o el CI.
 - **Cancelar a mitad en el CLI, ni óptico ni serie en la GUI.** Cinco celdas de
   la tabla dicen `NO` con su argumento, y eso es una respuesta completa.
