@@ -15,66 +15,28 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
-## 0. LO PRIMERO DE LA SIGUIENTE SESIÓN — **las dos caras tenían el envío roto**
+## 0. LA RELEASE — retractada en público, y a medio rehacer
 
-**Ninguna de las dos había enviado nunca un archivo.** Las dos se encontraron el
-mismo día, por la misma razón: la fase 21 pone una cara contra la otra.
+**Hecho hoy, y está vivo en
+<https://github.com/M1gu3hb/-Qyro/releases/tag/v1.0.0>:**
 
-- **QYR-0361 (P0, arreglado y verificado, `9274393`).** `qyro send` pasaba a
-  `open_sender` el nombre pelado con `root` = el directorio padre, y
-  `strip_prefix` falla siempre. Todo envío devolvía `BadArgument`. **Verificado
-  ejecutando**: dos copias del binario, huellas distintas, 5 000 bytes que
-  aterrizan.
-- **QYR-0362 (P0, arreglado, evidencia parcial).** `NativeTransferService.send`
-  escribía `port.sendPort` **dentro** del closure de `Isolate.run`, lo que hace
-  capturar el `ReceivePort` — no enviable. Todo envío moría con «object is
-  unsendable» antes de mover un byte. Arreglado sacando `sendPort` fuera.
-  **Falta ver el archivo aterrizar**: la casilla GUI→CLI falla ahora en «nothing
-  was materialised», que es **otra capa y está sin diagnosticar**.
+- **Retractación pública** encabezando las notas, con los dos P0 explicados por su
+  nombre, qué los causó, y **por qué no los detectó nada** — cada pieza verde y la
+  cadena rota. El título dice `RETRACTADO: estos binarios no pueden enviar`.
+- **`qyro-cli-windows-x64-QYR-0361-arreglado.zip` subido**, con su `LEEME.txt`,
+  `SHA-256 b78199c147d93255…`. Verificado **antes** de subirlo: dos copias con
+  huellas distintas, 20 000 bytes que cruzan, hash idéntico en destino.
 
-**Y hay una Release publicada con las dos.** Se retracta y se republica, como con
-`2c01de0`. No se hizo aquí porque tocar una Release publicada necesita contexto de
-sobra y la evidencia de la matriz completa.
+**Lo que falta, y está dicho también en las notas públicas:**
 
-**«nothing was materialised» YA ESTÁ DIAGNOSTICADO** — falta confirmarlo y
-arreglarlo, que es lo primero.
+1. **El APK.** `app-release.apk` sigue siendo el de antes y **no lleva el arreglo
+   de QYR-0362**: la aplicación sigue sin poder enviar. Rehacerlo necesita la
+   tubería de empaquetado de Flutter entera. **Es lo primero.**
+2. **`qyro-windows-x64.zip`**, el paquete completo con la GUI de escritorio,
+   tampoco está rehecho.
 
-`NativeTransferService._commonRoot` parte la ruta por `Platform.pathSeparator`
-(`\` en Windows) y quita el último trozo. La prueba construye la ruta con
-`'${source.path}/payload.bin'` — **barra normal** — así que el último trozo es
-`out/payload.bin` entero, la raíz sale siendo el *abuelo*, y el nombre relativo
-que viaja es `out/payload.bin`. El archivo aterriza en
-`destination/out/payload.bin` y la prueba mira `destination/payload.bin`.
-
-**Dos cosas que hacer, y son distintas:**
-
-1. **La prueba mezcla separadores.** Usar `Platform.pathSeparator` o
-   `path.join`. Eso sólo arregla la prueba.
-2. **`_commonRoot` es frágil ante separadores mezclados**, y en Windows una ruta
-   con barras normales es perfectamente válida — la acepta todo el API de
-   Win32. Un archivo elegido por el selector del sistema no las traerá, pero
-   uno que llegue por argumento, por arrastrar-y-soltar o por una prueba, sí.
-   **Decidir si eso es defecto o límite documentado**, y si es defecto, normalizar
-   antes de partir. No se decidió aquí por falta de contexto, y adivinarlo sin
-   comprobarlo sería inventar.
-
----
-
-## 0.bis — la Release rota (contexto de arriba)
-
-**QYR-0361, P0, arreglado en `9274393`.** `qyro send` **no ha movido nunca un
-byte**: pasaba a `open_sender` el nombre pelado del archivo con `root` = el
-directorio padre, y `strip_prefix` falla siempre, así que toda invocación
-devolvía `BadArgument` impreso como *«could not connect»*. Desde la fase 13, el
-día que se escribió, **y hay una Release publicada con él**.
-
-**Se retracta y se republica**, como se hizo con `2c01de0`. No se hizo aquí
-porque tocar una Release publicada no se hace con el contexto justo, y porque el
-arreglo tiene que ir con la evidencia de la matriz completa.
-
-Lo encontró **la fase 21 haciendo su trabajo**: no lo vio leer código, lo vio
-poner una cara contra la otra por primera vez. Es la **sexta** costura que este
-proyecto envía sin que ninguna prueba la cruzara.
+No se borró nada ni se despublicó: la nota se queda aunque el fallo esté
+corregido, porque quien descargó aquello merece saber qué tenía en las manos.
 
 ---
 
