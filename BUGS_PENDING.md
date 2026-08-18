@@ -243,6 +243,30 @@ qué? **1,24 s, y el porqué está medido de punta a punta**: el **emisor** gast
 nada. Falta el **arreglo** —que el emisor no espere teniendo trabajo— y por eso
 la ficha sigue abierta. **El diagnóstico ya no tiene huecos.**
 
+### Lo que descarta leer el bucle entero (2026-08-19)
+
+Confirmado leyendo `qyro_transfer::SendItem`: **`is_drained()` es
+`next_to_send >= chunks_total`**, así que un archivo de un solo trozo se drena
+**en el mismo envío** y el bucle de `pump` pasa al siguiente elemento sin salir.
+Veinte archivos de 200 bytes salen en **una** llamada a `pump`, y
+`WINDOW_CHUNKS` es 16, no 1.
+
+**Queda descartado del todo que el emisor haga un viaje de ida y vuelta por
+archivo.** No es `pump`.
+
+El sospechoso que queda, y es el único que encaja con `emisor=75 receptor=1`:
+`Session::advance` maneja **un frame por llamada** —`read_frame()` devuelve uno—
+y su lectura cuesta un `READ_TIMEOUT` entero **sólo cuando el socket está
+vacío**, porque `read_frame` vacía primero el decodificador. Así que la pregunta
+exacta que falta es **cuándo se vacía ese socket**: con decenas de frames en
+vuelo por lado, la mayoría de las lecturas deberían encontrar bytes ya
+almacenados.
+
+**La medida que lo cierra, y es una:** por lado, cuántas veces entra `advance`,
+cuántas de esas lecturas vencen, y **qué frame estaba en vuelo cuando venció**.
+Sin ese tercer dato los otros dos no distinguen «el par no ha contestado
+todavía» de «el par contestó y nadie leyó».
+
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 
 - Estado: **CERRADO**

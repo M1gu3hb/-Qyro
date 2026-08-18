@@ -1,29 +1,28 @@
-# Estado actual — la fase 24, con el hueco que no se puede llenar
+# Estado actual — aqui se corta
 
-**2026-08-19** · **rama única: `main`** · ADR-0048 congelada en `349a63f`.
+**2026-08-19** · **rama unica: `main`** · **se acaba el contexto.**
 
-## Lo que hay del ojo, y lo que no
+## Lo siguiente, y por donde
 
-**`qyro_eye`**: píxeles de luma entran, un archivo sale. **No sabe qué es una
-cámara** — ni CameraX, ni JNI, ni Android. Eso es ADR-0048 §5 y tiene una
-consecuencia concreta: **la cadena entera se ejercita sin cámara**, porque
-rasterizar lo que dibuja `qyro beam` produce exactamente la clase de píxeles que
-CameraX entregará.
+**22 → 17 → 18 → 19 → 20 → 23.** En la 22, **QYR-0365 va primero** y esta sesion
+la dejo mas acotada:
 
-- **15 pruebas**, incluida la vuelta completa con **uno de cada cuatro frames
-  tirado**, y sus controles: el mismo código seis veces seguidas es `Repeat` y no
-  progreso —a 30 fps de cámara contra 5 de pantalla eso es lo normal—, y un QR
-  que no es de Qyro no entra pero **sí se cuenta como leído**, porque «no veo
-  nada» y «veo códigos ajenos» piden acciones distintas.
-- **Llamante de producción, y no es una prueba disfrazada:** `qyro beam`
-  comprueba, antes del primer frame, que **lo que esta terminal imprime se puede
-  volver a leer**. Una fuente sin `U+2584`, o que separe las celdas, dibuja un
-  código perfecto a la vista e ilegible para cualquier lector; sin esto, la forma
-  de enterarse es sostener un teléfono diez minutos delante de una pantalla que
-  nunca iba a funcionar. Probado **con su control**: una fuente que separa celdas
-  no pasa.
-- **Coste medido:** el binario pasa de 1 373 696 a **1 647 104 bytes**. `rqrr` en
-  el producto son **267 KB**.
+- **Descartado que `pump` serialice por elemento.** `is_drained()` es
+  `next_to_send >= chunks_total`, asi que un archivo de un trozo se drena en el
+  mismo envio y el bucle pasa al siguiente sin salir. Veinte archivos salen en
+  **una** llamada, y `WINDOW_CHUNKS` es 16.
+- **Queda un sospechoso:** `Session::advance` maneja un frame por llamada, y su
+  lectura cuesta un `READ_TIMEOUT` **solo cuando el socket esta vacio** — porque
+  `read_frame` vacia primero el decodificador.
+- **La medida que lo cierra, y es una:** por lado, cuantas veces entra `advance`,
+  cuantas lecturas vencen, y **que frame estaba en vuelo cuando vencio**. Sin ese
+  tercer dato los otros dos no distinguen «el par no ha contestado» de «contesto
+  y nadie leyo».
+
+**La fase 24 quedo cerrada** con su informe; lo que le falta —el cruce JNI— esta
+cerrado con argumento a la fase 19 en ADR-0048 enmienda 1.
+
+---
 
 ## El cruce JNI, cerrado con argumento a la fase 19
 
