@@ -2,6 +2,28 @@
 
 **2026-08-19** · **rama unica: `main`**
 
+## La fase 19 esta lista, y es del propietario
+
+`docs/testing/hardware-protocol.md` tenia veinte escenarios y **ninguno de los
+tres canales nuevos**. Ahora tiene la seccion F: cable directo, canal optico,
+canal serie, y la maquina que no puede instalar nada. **36 huecos, todos en
+blanco.**
+
+Cada uno trae el comando exacto. Y tres piden el numero que falta:
+
+- **F1:** cuantos segundos tarda APIPA de verdad. Es la primera vez que se
+  mediria fuera de `R8`.
+- **F2:** **los fps que sostiene el telefono.** Es la medida que ADR-0048 §4 dejo
+  en blanco: si son >=5, el puente esta hecho para siempre; si no, el JNI de
+  copia cero tiene su argumento medido.
+- **F4:** si arranca en un Windows 7 de verdad. ADR-0049 dice que **no esta
+  confirmado en `msvc`**.
+
+**No se ejecuto ninguno**, y eso es lo correcto: hace falta hardware, y un
+escenario sin marcar no es un aprobado.
+
+---
+
 ## Fase 20 — el arranque resuelto, y la decision de firma SIN tomar
 
 - **`qyro send --self`** manda el propio binario. Es la respuesta al arranque:

@@ -60,7 +60,7 @@ Compara ese hash con el que quede anotado en `docs/release/v1.0.md`.
 
 ---
 
-## 2. Los veinte escenarios
+## 2. Los escenarios
 
 Cada uno: **comando literal**, qué tiene que pasar, y un hueco.
 `[ ]` sin marcar es «no ejecutado». **No marques nada que no hayas visto.**
@@ -220,6 +220,130 @@ Resultado: `[ ]` ______________________
 
 ---
 
+### F — Los otros tres canales
+
+**Los veinte escenarios de arriba prueban un canal: la red.** `R7` promete
+cuatro, y los otros tres no tienen ni una casilla. Éstas son.
+
+**Nada de esto está ejecutado.** Todos los huecos están en blanco a propósito:
+**un escenario sin marcar no es un aprobado**, y escribir un resultado que nadie
+vio es la única cosa que arruinaría este proyecto.
+
+#### F1 — El cable directo, sin router (fase 14)
+
+Un cable de red entre las dos máquinas. **Nada más**: sin switch, sin router, sin
+Wi-Fi encendido.
+
+```
+qyro find
+```
+
+- **Esperado, lo primero:** una cuenta atrás que habla — *«waiting for a network
+  address ... 12s -- this is normal on a direct cable»*. `R8` §8 midió que APIPA
+  tarda decenas de segundos porque el cliente DHCP tiene que fracasar antes.
+- **Esperado a los 60 s sin dirección:** un consejo, **no un error** — probar un
+  cable cruzado, y que el código tecleado funciona igual.
+- **Lo que hay que anotar aunque salga bien:** ¿cuántos segundos tardó de verdad?
+  Es la primera vez que ese número se mide fuera de `R8`.
+
+Resultado: `[ ]` ______________________
+Segundos hasta la dirección: `[ ]` ______  · ¿Se vieron el uno al otro? `[ ]` ___
+
+**F1b. Con una NIC de sólo 10/100.** Auto-MDI-X está en la cláusula 40.4.4 de
+IEEE 802.3, que es la de **1000BASE-T**: una tarjeta de 10/100 puede no tenerlo y
+hacer falta un cable cruzado. **Es justo la máquina para la que se hizo esto.**
+
+Resultado: `[ ]` ______________________  · ¿Hizo falta cruzado? `[ ]` ______
+
+#### F2 — El canal óptico: la pantalla y el teléfono (fases 15 y 24B)
+
+En la máquina que envía:
+
+```
+qyro beam clave.pem
+```
+
+En el teléfono: **Aparatos → Leer códigos con la cámara**.
+
+- **Antes de nada, la medida que falta y que ADR-0048 §4 dejó en blanco:**
+  **¿cuántos frames por segundo sostiene el aparato?** La pantalla del escáner
+  enseña «N mirados · M leídos». 921 600 bytes por frame a 720p cruzan un
+  MethodChannel y una copia por FFI. **Si sostiene 5 o más, el puente está hecho
+  para siempre. Si no, el cruce de copia cero por JNI tiene su argumento medido.**
+
+  fps sostenidos: `[ ]` ______   · mirados/leídos al terminar: `[ ]` ____ / ____
+
+- **Esperado:** el archivo llega **byte a byte**. Compruébalo con
+  `Get-FileHash`, no de vista.
+- **Lo que hay que probar aunque funcione:** tapa la cámara medio segundo a
+  mitad. **El fountain existe para que perder frames cueste frames y no la
+  transferencia.**
+
+Resultado: `[ ]` ______________________
+¿Llegó con frames perdidos? `[ ]` ______
+
+**F2b. Sin visor.** La pantalla **no tiene vista previa** — `camera-view` es una
+vista de Android y esta aplicación dibuja con Flutter. Quien sostiene el teléfono
+se guía por las cifras. **¿Es suficiente, o hace falta un visor?** Es una
+pregunta de producto y la respuesta sale de sostener el teléfono, no de discutir.
+
+Respuesta: `[ ]` ______________________
+
+**F2c. El brillo.** `R10` §8 T4: la pantalla es una fuente de luz y el
+autoexposímetro la sobreexpone. Prueba al 100 % y al 60 %.
+
+¿Cambió algo? `[ ]` ______________________
+
+#### F3 — El canal serie (fase 16)
+
+Dos máquinas y un cable serie, o un adaptador USB-serie en cada una.
+
+```
+qyro serial
+```
+
+- **Esperado, lo primero:** que **pregunte si esa máquina tiene CD, disquetera,
+  PCMCIA o red**, porque cualquiera es entre 10 y 10 000 veces más rápida. Un
+  producto que ofrece el canal lento sin preguntar le cuesta horas a alguien.
+- Después imprime el receptor de PowerShell para pegar en la máquina vieja.
+
+```
+qyro send informe.pdf --serial COM1
+```
+
+Resultado: `[ ]` ______________________
+Velocidad real observada: `[ ]` ______ · ¿Llegó el hash igual? `[ ]` ______
+
+**F3b. El modo degradado no autentica nada**, y eso está en el modelo de
+amenazas. **Comprueba que la pantalla lo dice** antes de que alguien lo use para
+algo que le importe.
+
+¿Lo dice? `[ ]` ______________________
+
+#### F4 — La máquina que no puede instalar nada (`R7` §2)
+
+**El escenario que da sentido a todo el producto**, y el único que no se puede
+simular: una máquina real, sin permisos de administrador, quizá sin Windows 10.
+
+1. Copia `qyro.exe` a un USB con **FAT32 o exFAT**.
+2. Ejecútalo desde el USB en esa máquina.
+
+- **Esperado:** que arranque **sin advertencia de SmartScreen** — copiar a FAT32
+  borra el Mark of the Web, porque ese flujo vive en NTFS.
+- **Y si la máquina es Windows 7:** que arranque, punto. Ése es el bloqueo que
+  `verify_static.ps1` lleva señalando desde la fase 13 y que ADR-0049 dice que
+  **no está confirmado en `msvc`**.
+
+¿Arrancó? `[ ]` ______ · ¿Salió SmartScreen? `[ ]` ______
+Versión de Windows: `[ ]` ______________________
+
+**F4b. `qyro send --self`.** Desde una máquina que ya tenga Qyro, mándalo a la
+siguiente. Son unos 800 KB.
+
+Resultado: `[ ]` ______________________ · ¿Cuánto tardó? `[ ]` ______
+
+---
+
 ## 3. Cómo se registra
 
 Cuando termines, pega la tabla rellena en un archivo nuevo:
@@ -227,7 +351,8 @@ Cuando termines, pega la tabla rellena en un archivo nuevo:
 
 - **el modelo del teléfono y su versión de Android**, y la versión de Windows;
 - **el hash del APK y del `.exe`** que instalaste;
-- **los veinte huecos**, incluidos los que fallaron y los que no ejecutaste;
+- **todos los huecos** —los veinte de A–E y los de F, los cuatro canales—,
+  incluidos los que fallaron y **los que no ejecutaste**;
 - y para cada fallo: qué esperabas, qué pasó, y el `adb logcat` si lo hay.
 
 **Un escenario sin marcar no es un aprobado.** La única cosa que arruinaría este
