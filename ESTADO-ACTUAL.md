@@ -39,21 +39,11 @@ salieron de mirar en vez de suponer:
 2. **Los cinco escenarios** de `FASE-22 §4`, cada uno con su control. **El quinto
    deja de aplicar** si la reanudación se retira: se sustituye por comprobar que
    **cancelar deja el destino limpio**, sin `.qyro-part`.
-3. **El saneado de nombres para terminal** (ADR-0047 §6) — **bloqueado por
-   QYR-0364, y el bloqueo es la parte interesante.** Se escribió entero, con sus
-   cinco pruebas incluida la del retorno de carro que reescribe la línea, y **se
-   revirtió sin commitear**: no tenía ningún llamante de producción posible.
-   El único sitio donde se dibujaría un nombre ajeno en una terminal es el
-   receptor del CLI, y **el receptor del CLI no enseña los nombres**: pregunta
-   `accept from this device? [y/N]` con la huella y nada más.
+3. ~~El saneado de nombres para terminal~~ **HECHO**, y con él **QYR-0364**: el
+   receptor del CLI preguntaba «¿aceptas?» con una huella y nada más, mientras
+   la GUI enseñaba los archivos desde siempre. `Session::offered_files` existe,
+   el receptor los dibuja, y cada nombre pasa por `safe_terminal_name`.
 
-   Así que antes va **QYR-0364**: `qyro_session::Session` tiene que exponer los
-   nombres del manifiesto antes de aceptar —y la GUI necesitará un símbolo más—
-   para que una pregunta tenga objeto. ADR-0036 §1 dice que nada se acepta solo,
-   y una pregunta sin objeto no es una decisión, es un trámite.
-
-   Enviar el saneado sin llamante habría sido la décima capacidad viva e
-   inalcanzable de este proyecto, el mismo día que se retiró la novena.
 4. **El techo de 256 archivos**, negado por nombre antes de abrir nada.
 
 ---
