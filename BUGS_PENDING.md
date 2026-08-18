@@ -1,5 +1,38 @@
 # Bugs y pendientes verificados
 
+## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
+
+- Estado: **ABIERTO**
+- Severidad: **ALTA**
+- Fase: 22
+- Encontrado: 2026-08-18, buscándole un llamante al saneado de nombres
+
+**El defecto.** El receptor del CLI enseña la huella de quien conecta y pregunta
+`accept from this device? [y/N]`. **No dice qué archivos.** Ni cuántos, ni cómo se
+llaman, ni cuánto pesan.
+
+ADR-0036 §1 dice que *nada se acepta solo*. Una pregunta sin objeto **no es una
+decisión**: es un trámite. La GUI sí lo enseña; la terminal no, y eso es una
+celda de paridad que la tabla no tenía porque nadie había mirado.
+
+**Por qué no se arregló en el sitio.** `qyro_session::Session` **no expone los
+nombres del manifiesto antes de aceptar**. Hace falta superficie nueva del motor
+—y, para la GUI, un símbolo más en la frontera C— y eso es trabajo con su propio
+tamaño, no una línea.
+
+**Lo que esto bloqueó, y es la parte útil.** ADR-0047 §6 decide el saneado de
+nombres para terminal (controles C0 y C1 a `U+FFFD`, sustituyendo y no
+eliminando). Se escribió con sus cinco pruebas —incluida la del retorno de carro
+que reescribe la línea— y **se revirtió sin commitear**, porque no tenía ningún
+llamante de producción posible: el único sitio donde se dibujaría un nombre
+ajeno en una terminal es justo el que no existe.
+
+Enviarlo habría sido la décima capacidad viva e inalcanzable de este proyecto, y
+esta vez con la ironía de haberla escrito el mismo día que se retiró la novena.
+
+**La pregunta que cierra esta ficha:** ¿ve la persona qué archivos le están
+ofreciendo, antes de decir que sí, en las dos caras? **Hoy sólo en una.**
+
 ## QYR-0363 — Una ruta con barras normales mandaba el archivo a otro sitio
 
 - Estado: **CERRADO**
