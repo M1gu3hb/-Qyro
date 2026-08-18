@@ -234,3 +234,33 @@ transporte no hay nada que medir.
   dentro de una sesión viva.
 - **No está medida.** El tamaño de chunk y la ventana son cotas argumentadas, no
   óptimos observados, y no habrá con qué medirlos hasta que exista transporte.
+
+---
+
+## Enmienda (2026-08-18, fase 22) — `Resume` se retira de la v1.x
+
+**ADR-0047 §5.** El mensaje `Resume` (12) sigue definido y **su número queda
+reservado**: no se reutiliza, para que una v2 pueda añadirlo sin romper nada. Lo
+que se retira es la capacidad, no el hueco en el protocolo.
+
+`Session::request_resume` pasa a `#[cfg(test)]`. Existía, emitía su mensaje, y
+**su único llamante era una prueba** — sin símbolo en la frontera C y sin bandera
+en el CLI, así que ninguna de las dos caras podía invocarla. Habría sido el
+noveno caso de una capacidad viva e inalcanzable en este proyecto.
+
+**Por qué retirar y no conectar**, que es la parte que importa: sobre una red
+(`R8` §4, ~10 MB/s) reanudar un giga ahorra **segundos**, y a cambio hay que
+contestar qué pasa si el archivo de origen cambió entre el corte y la
+reanudación. Contestarlo mal no produce un error — produce **un archivo corrupto
+que verifica su propio hash, porque el hash se recalcula sobre lo que hay**. Un
+mecanismo cuyo modo de fallo es entregar en silencio algo que nunca existió no
+entra en una v1.x para ahorrar segundos.
+
+**El receptor sigue aceptando un `Resume` de un par que lo implemente.** Eso es
+compatibilidad y no se retira; las pruebas del protocolo lo siguen ejercitando, y
+por eso el código se conserva bajo `cfg(test)` en vez de borrarse.
+
+**La reanudación que sí importa es la del canal óptico** (D11, ADR-0044 §5) y es
+otro mecanismo: allí no se retransmite nada porque el fountain no tiene piezas
+numeradas — lo que hace falta es un punto de control de los bloques ya
+decodificados.

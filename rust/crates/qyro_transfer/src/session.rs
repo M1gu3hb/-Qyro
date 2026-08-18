@@ -411,9 +411,32 @@ impl Sender {
 
     /// Asks the peer to resume.
     ///
+    /// **Retirada de la v1.x por ADR-0047 §5, y por eso es `cfg(test)`.**
+    ///
+    /// Existía, emitía su mensaje, y su único llamante era una prueba: ni
+    /// símbolo en la frontera C ni bandera en el CLI, así que **ninguna de las
+    /// dos caras podía invocarla**. Habría sido el noveno caso de este proyecto.
+    ///
+    /// El argumento para retirarla en vez de conectarla es aritmético: sobre una
+    /// red (`R8` §4, ~10 MB/s) reanudar un giga ahorra **segundos**, y cuesta la
+    /// pregunta más difícil que hay aquí — qué pasa si el archivo de origen
+    /// cambió entre el corte y la reanudación. Contestarla mal no da un error:
+    /// da un archivo corrupto **que verifica su propio hash porque el hash se
+    /// recalculó**.
+    ///
+    /// `MessageType::Resume` **se queda reservado** — el número no se reutiliza —
+    /// para que una v2 pueda añadirlo sin romper nada. Y la reanudación que sí
+    /// importa, la del canal óptico (D11, ADR-0044 §5), es **otro mecanismo**:
+    /// allí no se retransmite nada porque el fountain no tiene piezas numeradas.
+    ///
+    /// El código se conserva bajo `cfg(test)` en vez de borrarse porque las
+    /// pruebas del protocolo comprueban que el receptor **acepta** un `Resume`
+    /// de un par que sí lo implemente, y esa compatibilidad no se retira.
+    ///
     /// # Errors
     ///
     /// Framing failures, or a terminal session.
+    #[cfg(test)]
     pub fn request_resume(&mut self) -> Result<Vec<u8>, TransferError> {
         if self.phase.is_terminal() {
             return Err(TransferError::SessionPoisoned);

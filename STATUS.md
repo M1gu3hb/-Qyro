@@ -557,8 +557,15 @@ cuatro quedan abiertos y registrados, no omitidos.
   `NsdManager` con `FLAG_SHOW_PICKER` en Android, `mdns-sd` bajo `cfg(windows)`,
   y el código `QYRO1|<socket-addr>|<32 hex>` tecleado, que es el camino que
   funciona con aislamiento de cliente. **No ejecutado en una red real.**
-- Reanudación por red/UI: NOT_IMPLEMENTED. Los metadatos locales de
-  `.qyro-resume` sí sobreviven entre procesos y `qyro_fs` los aplica.
+- Reanudación por red/UI: **RETIRADA de la v1.x** (ADR-0047 §5). No era
+  NOT_IMPLEMENTED: `request_resume` existía y emitía su mensaje, y **su único
+  llamante era una prueba** — ni símbolo C ni bandera de CLI, inalcanzable desde
+  las dos caras. Se retira en vez de conectarse porque sobre una red ahorra
+  segundos y cuesta la pregunta de qué pasa si el origen cambió entre el corte y
+  la reanudación, cuyo fallo es un archivo corrupto que verifica su propio hash.
+  El número de mensaje queda reservado. Los metadatos locales de `.qyro-resume`
+  siguen sobreviviendo entre procesos y `qyro_fs` los aplica: eso es otra cosa y
+  se queda.
 - UI y política interactiva de emparejamiento: IMPLEMENTED (fase 05, ADR-0036;
   enmienda de ADR-0031 con la tabla de dónde aterrizó cada línea). **Corregido en
   la fase 10.**
