@@ -63,6 +63,14 @@ se suelte— así que cada uno es una casilla más:
    64 bytes**, lineal. **No subas `IDLE_TIMEOUT`** — escondería esto y
    convertiría el fallo en veinte minutos de espera.
 
+   **La causa está localizada:** `qyro_fs/src/io.rs:430` hace `sync_all()` por
+   archivo, más el del directorio y tres `sync_data()` de historial. En Windows
+   eso es `FlushFileBuffers`, un vaciado de caché del dispositivo por elemento.
+   **Y es ADR-0027 §4 a propósito**, así que cambiarlo es una **enmienda de ADR
+   sobre durabilidad —por archivo o por transferencia—, no un `sync_all`
+   borrado.** Lo que falta medir: cuál de los cuatro puntos domina, quitándolos
+   de uno en uno.
+
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
    ya se comprobó (`done`/`total` son `u64`, ADR-0047 §2.1); **falta la

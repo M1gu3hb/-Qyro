@@ -34,17 +34,49 @@ un fallo honesto**: la persona borra y reenvía algo que ya estaba entregado.
 es absurdo: son archivos de decenas de bytes sobre loopback. El `IDLE_TIMEOUT` no
 es el defecto — **es lo que hace visible al defecto**. Subirlo escondería esto.
 
-**La hipótesis a comprobar primero, y no está comprobada:** un `flush`, un
-`fsync` o un cierre de archivo por elemento en el camino del receptor, o una
-espera de ida y vuelta por elemento en el protocolo. Un segundo por archivo es la
-firma de «una operación síncrona de disco por elemento», no de un problema de red.
+### La causa, localizada con archivo y línea
+
+**`qyro_fs/src/io.rs:430` hace `sync_all()` por cada archivo recibido**, y no
+está solo:
+
+| Dónde | Qué | Por elemento |
+|---|---|---|
+| `qyro_fs/src/io.rs:430` | `part.handle.sync_all()` antes de renombrar | **sí** |
+| `qyro_fs/src/io.rs:447` | `sync_all` del directorio (Unix) | **sí** |
+| `qyro_fs/src/history.rs:131`, `:188`, `:233` | `sync_data()` del registro | **sí** |
+
+En Windows `sync_all` es `FlushFileBuffers`, que es un vaciado de caché de
+escritura del dispositivo. **Un segundo por archivo es exactamente lo que cuesta
+eso**, y explica la curva lineal completa: el tamaño del archivo no interviene
+porque el coste no es escribir, es esperar al disco.
+
+**Y no es un descuido: es ADR-0027 §4**, que fijó el orden *verificar,
+`sync_all`, renombrar, `sync_all` del directorio*. La razón escrita es que un
+archivo renombrado sin vaciar puede sobrevivir al renombrado y no a su contenido
+tras un corte de corriente.
+
+**Por eso esto no se arregla con un parche.** Es una decisión de durabilidad
+—por archivo o por transferencia— y cambiarla necesita **enmienda a ADR-0027**,
+no un `sync_all` borrado. Las dos opciones tienen argumento:
+
+- *Por transferencia*: un `sync_all` al final. Doscientos archivos pasan de ~4
+  minutos a segundos. El riesgo se concentra: un corte de corriente a mitad puede
+  dejar varios archivos con nombre definitivo y contenido incompleto.
+- *Por archivo, pero sin el historial*: los tres `sync_data` de `history.rs` son
+  registro, no contenido. Vaciar el diario por entrada es la parte más fácil de
+  discutir.
+
+**Lo que sigue sin comprobarse:** cuál de los cuatro puntos domina. Se miden
+quitándolos de uno en uno, y **eso no se ha hecho**.
 
 **Lo que NO hay que hacer y está dicho aquí para que no se haga:** subir
 `IDLE_TIMEOUT`. Convierte un fallo ruidoso en una transferencia de veinte minutos
 para doscientos archivos, y eso es peor producto.
 
 **La pregunta que cierra esta ficha:** ¿cuánto tarda un archivo pequeño, y por
-qué? Hoy 1,2 s, y no se sabe por qué.
+qué? Hoy 1,2 s, **y ya se sabe por qué**: cuatro vaciados de disco síncronos por
+elemento, puestos ahí por ADR-0027 §4. Lo que falta es decidir la durabilidad,
+que es una enmienda de ADR y no un arreglo.
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 
