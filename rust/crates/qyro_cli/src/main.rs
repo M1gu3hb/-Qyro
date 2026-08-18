@@ -125,10 +125,38 @@ fn parse(args: &[String]) -> Command {
             Command::Beam { file }
         }
         "send" => {
-            let Some(file) = args.get(1).cloned() else {
-                return Command::Refused(
-                    "send needs a file: qyro send <file> --to <code>".to_owned(),
-                );
+            // **`--self` manda el propio binario** (fase 20 §2). Es la respuesta
+            // al arranque: una vez hay un Qyro corriendo en una maquina, Qyro
+            // puede llevarse a si mismo a la siguiente -- 800 KB, que por serie
+            // son ochenta segundos y por QR un minuto y medio.
+            //
+            // Se resuelve aqui, en el analisis de argumentos, para que el flujo
+            // de envio siga recibiendo una ruta y no tenga dos caminos.
+            let file = if args.iter().any(|arg| arg == "--self") {
+                match std::env::current_exe() {
+                    Ok(path) => match path.to_str() {
+                        Some(text) => text.to_owned(),
+                        None => {
+                            return Command::Refused(
+                                "la ruta de este binario no es texto que se pueda poner en el cable"
+                                    .to_owned(),
+                            );
+                        }
+                    },
+                    Err(error) => {
+                        return Command::Refused(format!(
+                            "no se pudo averiguar donde esta este binario: {error}"
+                        ));
+                    }
+                }
+            } else {
+                let Some(file) = args.get(1).cloned() else {
+                    return Command::Refused(
+                        "send needs a file: qyro send <file> --to <code>, o qyro send --self"
+                            .to_owned(),
+                    );
+                };
+                file
             };
             let to = flag(args, "--to");
             if let Some(port) = flag(args, "--serial") {
@@ -244,6 +272,7 @@ fn help_text() -> String {
          USAGE\n\
          \x20 qyro                                  open the menu\n\
          \x20 qyro send <file> --to <code>          send without asking\n\
+         \x20 qyro send --self --to <code>          send THIS binary (bootstrap)\n\
          \x20 qyro recv [--out <directory>]         receive without asking\n\
          \x20 qyro whoami                           this device's code\n\
          \x20 qyro find                             who else is on this network\n\
@@ -273,6 +302,54 @@ mod tests {
     )]
 
     use super::{Command, flag, help_text, parse};
+
+    #[test]
+    fn send_self_manda_este_binario_y_no_pide_una_ruta() {
+        // Fase 20 §2: la respuesta al arranque. Una vez hay un Qyro corriendo,
+        // se lleva a si mismo a la siguiente maquina.
+        let args = vec![
+            "send".to_owned(),
+            "--self".to_owned(),
+            "--to".to_owned(),
+            "QYRO1|1.2.3.4:49517|ab".to_owned(),
+        ];
+        let Command::Send { file, to, .. } = parse(&args) else {
+            panic!("--self no produjo un envio");
+        };
+        assert_eq!(to, "QYRO1|1.2.3.4:49517|ab");
+        let expected = std::env::current_exe().expect("un binario en marcha sabe donde esta");
+        assert_eq!(
+            std::path::Path::new(&file),
+            expected,
+            "--self mando otra cosa que no es este binario"
+        );
+    }
+
+    #[test]
+    fn y_sin_self_sigue_haciendo_falta_una_ruta() {
+        // El control. Un `--self` que se aplicara siempre convertiria
+        // `qyro send informe.pdf` en `qyro send qyro.exe`, en silencio.
+        let args = vec![
+            "send".to_owned(),
+            "informe.pdf".to_owned(),
+            "--to".to_owned(),
+            "QYRO1|1.2.3.4:49517|ab".to_owned(),
+        ];
+        let Command::Send { file, .. } = parse(&args) else {
+            panic!("un envio normal dejo de serlo");
+        };
+        assert_eq!(file, "informe.pdf");
+
+        // Y sin ruta ni --self, se refusa con una frase que nombra las dos
+        // salidas en vez de repetir la pregunta.
+        let Command::Refused(why) = parse(&["send".to_owned()]) else {
+            panic!("un send sin nada fue aceptado");
+        };
+        assert!(
+            why.contains("--self"),
+            "la negativa no menciona --self: {why}"
+        );
+    }
 
     fn args(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_owned()).collect()

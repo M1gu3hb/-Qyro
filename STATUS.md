@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-20T06:00:00Z
+- Updated UTC: 2026-08-20T12:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 8c0fa44f5c1c4432f4874de5366c3547ee1c0e8c
+- Verified commit: 95fc3ffb2bfd6e113ae1cd01e596a8bb5e7c57bd
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se

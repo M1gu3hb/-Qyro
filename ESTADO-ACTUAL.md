@@ -2,6 +2,27 @@
 
 **2026-08-19** · **rama unica: `main`**
 
+## Fase 20 — el arranque resuelto, y la decision de firma SIN tomar
+
+- **`qyro send --self`** manda el propio binario. Es la respuesta al arranque:
+  una vez hay un Qyro corriendo, se lleva a si mismo a la siguiente maquina --
+  800 KB, ochenta segundos por serie. Con su control: sin `--self`, una ruta
+  sigue haciendo falta, porque un `--self` que se aplicara siempre convertiria
+  `qyro send informe.pdf` en `qyro send qyro.exe` en silencio.
+- **`docs/release/DECISION-DE-FIRMA.md`**: los numeros y las consecuencias
+  ordenados para decidir en cinco minutos. **NO decidida** — cuesta dinero.
+
+**Lo que el implementador si dice**, y esta escrito ahi: el caso de uso empuja
+hacia no firmar, porque la maquina que Qyro existe para servir recibe el archivo
+por USB o por el propio Qyro, y en las dos rutas **el certificado no cambia
+nada**. Firmar compra sobre todo la primera impresion de quien descarga en una
+maquina normal, que es otro publico.
+
+**Queda de la 20:** el `BUILD-INFO.txt` por artefacto y el README de instalacion
+de cinco lineas.
+
+---
+
 ## Fase 18 — la verdad, y dos frases que eran falsas
 
 - **La Release prometia cifrado sin decir por que canal.** Es cierto por la red;
