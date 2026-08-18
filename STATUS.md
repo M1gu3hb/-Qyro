@@ -119,9 +119,9 @@ contra el código que existe: `THREAT_MODEL.md`.
 - **Identidad persistente en las dos plataformas** que la v1.0 tiene.
 - **Confianza explícita con interfaz**: una clave cambiada se rechaza por nombre
   y el botón de enviar **no existe** en ese estado.
-- **Veinticuatro símbolos C**, ninguno cruza un tipo. (Decía «diecinueve»: la
-  cifra se quedó en una fase anterior y la contó la fase 14 con
-  `grep -c no_mangle`.)
+- **Veinticinco símbolos C**, ninguno cruza un tipo. Eran 24 hasta que la fase
+  21 añadió `qyro_advice`, con su enmienda en ADR-0032. (Y decía «diecinueve»
+  hasta la fase 14: la cifra se había quedado en una fase anterior.)
 - **Canal óptico** (fase 15): `qyro beam <archivo>` saca un archivo por la
   pantalla como un flujo interminable de QR, y `qyro qr` dibuja el código de este
   aparato. Código de fuente **Luby Transform propio, cero dependencias**

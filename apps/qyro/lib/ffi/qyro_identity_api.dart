@@ -46,6 +46,12 @@ typedef _TextOutNative = Int32 Function(
     Pointer<Uint8>, IntPtr, Pointer<UintPtr>);
 typedef _TextOutDart = int Function(Pointer<Uint8>, int, Pointer<UintPtr>);
 
+/// `qyro_advice`: four facts in, one sentence out.
+typedef _AdviceNative = Int32 Function(
+    Int32, Int32, Int32, Int32, Uint64, Pointer<Uint8>, Size, Pointer<UintPtr>);
+typedef _AdviceDart = int Function(
+    int, int, int, int, int, Pointer<Uint8>, int, Pointer<UintPtr>);
+
 /// The three identity calls.
 final class QyroIdentityBindings {
   QyroIdentityBindings(this._session, DynamicLibrary library)
@@ -54,6 +60,9 @@ final class QyroIdentityBindings {
         ),
         _fingerprint = library.lookupFunction<_TextOutNative, _TextOutDart>(
           'qyro_identity_fingerprint',
+        ),
+        _advice = library.lookupFunction<_AdviceNative, _AdviceDart>(
+          'qyro_advice',
         );
 
   /// Opens the same library the session half already opened.
@@ -63,6 +72,7 @@ final class QyroIdentityBindings {
   final QyroSessionBindings _session;
   final _OpenDart _open;
   final _TextOutDart _fingerprint;
+  final _AdviceDart _advice;
 
   /// Loads the identity at [path], creating one if the store is empty.
   ///
@@ -106,6 +116,67 @@ final class QyroIdentityBindings {
             out.pointer, needed, lengthCell.pointer.cast<UintPtr>());
         if (code != QyroCode.ok) {
           throw QyroSessionFailure(code, 'reading this device\'s fingerprint');
+        }
+        final wrote = lengthCell.pointer.cast<UintPtr>().value;
+        return utf8.decode(out.pointer.asTypedList(wrote));
+      } finally {
+        out.release();
+      }
+    } finally {
+      lengthCell.release();
+    }
+  }
+
+  /// Which way to send it, in the engine's words.
+  ///
+  /// **ADR-0046 §4: one module decides and both faces call it.** Nothing here
+  /// chooses anything — the four flags are facts this side can see and the
+  /// engine cannot, and the ordering, the estimates and the sentence are all
+  /// the engine's.
+  ///
+  /// It returns a formed sentence rather than an enum for the reason
+  /// [fingerprint] returns grouped text rather than bytes: advice that arrived
+  /// as a number would become «channel 3» here and a paragraph in the terminal,
+  /// and those are two products (ADR-0032, enmienda de la fase 21).
+  String advice({
+    required bool hasNetwork,
+    required bool peerDiscovered,
+    required bool hasSerialPort,
+    required bool otherHasCamera,
+    required int payloadLength,
+  }) {
+    int flag(bool value) => value ? 1 : 0;
+
+    final lengthCell = QyroBorrowed.ofBytes(_session, List<int>.filled(8, 0));
+    try {
+      _advice(
+        flag(hasNetwork),
+        flag(peerDiscovered),
+        flag(hasSerialPort),
+        flag(otherHasCamera),
+        payloadLength,
+        nullptr,
+        0,
+        lengthCell.pointer.cast<UintPtr>(),
+      );
+      final needed = lengthCell.pointer.cast<UintPtr>().value;
+      if (needed == 0) {
+        return '';
+      }
+      final out = QyroBorrowed.ofBytes(_session, List<int>.filled(needed, 0));
+      try {
+        final code = _advice(
+          flag(hasNetwork),
+          flag(peerDiscovered),
+          flag(hasSerialPort),
+          flag(otherHasCamera),
+          payloadLength,
+          out.pointer,
+          needed,
+          lengthCell.pointer.cast<UintPtr>(),
+        );
+        if (code != QyroCode.ok) {
+          throw QyroSessionFailure(code, 'asking which way to send this');
         }
         final wrote = lengthCell.pointer.cast<UintPtr>().value;
         return utf8.decode(out.pointer.asTypedList(wrote));

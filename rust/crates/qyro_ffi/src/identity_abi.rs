@@ -148,3 +148,53 @@ pub unsafe extern "C" fn qyro_identity_fingerprint(
         }
     })
 }
+
+/// The channel advice, as the sentence both faces show.
+///
+/// ADR-0046 §4 and §5. The engine decides **and formats**: advice that crossed
+/// as an enum would become «channel 3» in one face and a paragraph in the other,
+/// and those are two products. The same reasoning that put
+/// `qyro_identity_fingerprint` here rather than letting each side format a
+/// fingerprint its own way.
+///
+/// The four flags are facts the caller can see and the engine cannot — whether
+/// an address exists, whether anybody answered, whether this machine has a
+/// serial port, whether the other one has a camera. **Nothing here is a
+/// preference**; the ordering and the estimates are the engine's.
+///
+/// Ask with `capacity == 0` and `out == NULL` to learn the length, exactly as
+/// every other text symbol on this surface. **Nothing is written when it does
+/// not fit.**
+///
+/// # Safety
+///
+/// `out` must address `capacity` writable bytes, or be null when `capacity` is
+/// 0. `out_len` must point to one writable `usize`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qyro_advice(
+    has_network: i32,
+    peer_discovered: i32,
+    has_serial_port: i32,
+    other_has_camera: i32,
+    payload_len: u64,
+    out: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> i32 {
+    guard(|| {
+        if out_len.is_null() {
+            return QYRO_ERR_NULL_OUT;
+        }
+        let situation = qyro_session::Situation {
+            has_network: has_network != 0,
+            peer_discovered: peer_discovered != 0,
+            has_serial_port: has_serial_port != 0,
+            other_has_camera: other_has_camera != 0,
+            payload_len,
+        };
+        let (text, _channels) = qyro_session::advise(situation);
+        // SAFETY: `out_len` checked non-null above; `out`/`capacity` are the
+        // caller's promise, and `emit_text` writes nothing when it does not fit.
+        unsafe { emit_text(&text, out, capacity, out_len) }
+    })
+}

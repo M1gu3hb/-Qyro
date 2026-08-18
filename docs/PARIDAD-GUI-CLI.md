@@ -34,17 +34,21 @@ primera semana y sigue leyéndose como verdad; eso ya pasó aquí, en la fase 11
 | Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/transfer_screens.dart:116` | `rust/crates/qyro_cli/src/flows.rs:419` |
 | Canal optico (fase 15) | `NO -- ADR-0044 §6: el CLI dibuja y el telefono lee. La GUI de escritorio no dibuja QR porque la maquina que los necesita es la que no tiene GUI, y el lado Android que acumula frames todavia no existe -- esta anotado en STATUS.md como hueco en blanco, no como capacidad` | `rust/crates/qyro_cli/src/flows.rs:530` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
-| Consejero de canal (fase 21) | `NO -- TODAVIA no cruza la frontera C. El motor lo tiene y el CLI lo llama; darselo a la GUI es un simbolo nuevo que escribe la frase en un buffer prestado, y esta abierto en ESTADO-ACTUAL.md con esa descripcion. Se anota como incompleto en vez de como decision, porque la GUI SI deberia tenerlo` | `rust/crates/qyro_cli/src/flows.rs:552` |
+| Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:552` |
 
 <!-- PARIDAD-FIN -->
 
-## La única fila que dice «todavía»
+## Ya no hay ninguna fila que diga «todavía»
 
-**El consejero de canal**, y está escrito así a propósito. Las otras cinco
-negativas son decisiones: hay un argumento de producto por el que esa cara no lo
-tiene y no lo va a tener. Ésta no — la GUI **debería** tenerlo, y no lo tiene
-todavía.
+Hubo una durante unas horas: **el consejero de canal**, que el CLI alcanzaba y la
+GUI no. Estaba escrita como «TODAVÍA» y no como «NO», a propósito — las otras
+cinco negativas son decisiones de producto, con un argumento por el que esa cara
+no lo tiene y no lo va a tener; aquélla era trabajo pendiente, y llamarla
+decisión habría sido convertir un pendiente en una frase que se lee como cerrada.
 
-Llamarlo decisión sería exactamente lo que ADR-0046 §2 prohíbe: convertir un
-trabajo pendiente en una frase que se lee como cerrada. Queda como incumplimiento
-con nombre, y `ESTADO-ACTUAL.md` dice dónde se corta.
+**Se cerró llenándola**, que es la otra salida: `qyro_advice` cruza la frontera C
+—la superficie pasa de 24 a 25 símbolos, con su enmienda en ADR-0032— y
+`qyro_advice_test.dart` la ejerce contra la biblioteca de verdad.
+
+Las cinco que quedan en `NO` son decisiones, cada una con su argumento en la
+celda.

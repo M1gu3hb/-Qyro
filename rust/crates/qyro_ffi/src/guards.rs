@@ -114,7 +114,8 @@ fn the_analysis_reaches_the_end_of_every_production_file() {
 /// one of these -- so a symbol that appears without anybody writing it down is a
 /// symbol nobody reviewed. Adding one should cost an ADR amendment and a line
 /// here, in that order.
-const EXPORTED_SYMBOLS: [&str; 24] = [
+const EXPORTED_SYMBOLS: [&str; 25] = [
+    "qyro_advice",
     "qyro_buffer_alloc",
     "qyro_buffer_free",
     "qyro_identity_fingerprint",
