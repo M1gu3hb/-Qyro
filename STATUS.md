@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-19T09:00:00Z
+- Updated UTC: 2026-08-19T15:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: afaa1521ac9c7a7720af8dcc109b4386a69ce763
+- Verified commit: 61853afacda84908082fe86bc872ccdc76152fa0
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -151,7 +151,7 @@ contra el código que existe: `THREAT_MODEL.md`.
 
   | Plataforma | Pruebas | De dónde sale |
   |---|---|---|
-  | **Windows** | **753 pasadas, 0 fallos** | medido en esta máquina el 2026-08-19 |
+  | **Windows** | **769 pasadas, 0 fallos** | medido en esta máquina el 2026-08-19, tras la fase 24 |
   | **Linux** | lo que diga el trabajo `rust` de `ci.yml` | **de CI, no de aquí**: esta máquina no ejecuta binarios de Linux, sólo los compila y los lintea con `--target` |
 
   El último recuento de Linux publicado fue **750**, y es **anterior** a los

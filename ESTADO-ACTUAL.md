@@ -25,6 +25,18 @@ CameraX entregará.
 - **Coste medido:** el binario pasa de 1 373 696 a **1 647 104 bytes**. `rqrr` en
   el producto son **267 KB**.
 
+## El cruce JNI, cerrado con argumento a la fase 19
+
+**No se escribe sin aparato.** Serian la **segunda** excepcion a
+`forbid(unsafe_code)` de este taller —la primera costo una ADR entera— y un slot
+equivocado en la vtable de JNI no da error de compilacion: da un salto a una
+funcion arbitraria, y el sintoma es un proceso muerto sin traza en el aparato de
+otra persona. Ninguna prueba de aqui puede tocar una `JNIEnv`.
+
+Lo que falta es **exactamente un transporte de pixeles**, y su forma ya esta
+fijada por `Eye::look(&[u8], usize, usize)`. Informe en
+`docs/reports/fase-24-el-ojo.md`; decision en ADR-0048 enmienda 1.
+
 ## El hueco, en blanco
 
 > **`R10` §8 T1 manda medir píxeles por módulo en el aparato real antes de

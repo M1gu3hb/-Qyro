@@ -547,6 +547,9 @@ pub fn qr(vt: Vt) -> i32 {
             println!(
                 "  If it does not scan, widen the terminal: it needs {columns} columns and {rows} rows."
             );
+            if let Some(advice) = camera_advice(&drawing) {
+                println!("{advice}");
+            }
             0
         }
         Err(error) => {
@@ -554,6 +557,46 @@ pub fn qr(vt: Vt) -> i32 {
             1
         }
     }
+}
+
+/// Qué cámara hace falta para leer el código que se acaba de dibujar.
+///
+/// **El llamante de producción de la aritmética de `R10` §8 T1**, y la razón de
+/// que esa aritmética viva en código y no en prosa: quien apunta el teléfono no
+/// sabe que la resolución de captura decide si esto funciona, y nadie se lo iba
+/// a decir.
+///
+/// La versión se deriva del dibujo —anchura menos la zona de silencio, y de ahí
+/// los módulos— en vez de pasarse aparte: dos sitios que sepan qué versión se
+/// dibujó son dos sitios que pueden discrepar.
+fn camera_advice(drawing: &str) -> Option<String> {
+    let columns = drawing.lines().map(|line| line.chars().count()).max()?;
+    let modules = u32::try_from(columns.checked_sub(8)?).ok()?;
+    if modules < 21 || (modules - 21) % 4 != 0 {
+        return None;
+    }
+    let version = u8::try_from((modules - 21) / 4 + 1).ok()?;
+    let at_720 = qyro_eye::pixels_per_module(version, 720)?;
+    let at_480 = qyro_eye::pixels_per_module(version, 480)?;
+
+    // Tres tramos, no dos. El primer intento decía «justo en el suelo» para
+    // cualquier valor por encima de él, así que un código pequeño con 10
+    // px/módulo salía descrito como al borde del precipicio. Un consejo que
+    // asusta cuando no toca se deja de leer, y entonces no sirve el día que sí.
+    let floor = qyro_eye::PIXELS_PER_MODULE_FLOOR;
+    let verdict = if at_480 >= floor * 1.3 {
+        format!("A 640x480 da {at_480:.1}, que tambien vale.")
+    } else if at_480 >= floor {
+        format!(
+            "A 640x480 da {at_480:.1}: justo en el suelo del decodificador, puede leer y puede no leer."
+        )
+    } else {
+        format!("A 640x480 da {at_480:.1}, por debajo del suelo: ahi no lee.")
+    };
+
+    Some(format!(
+        "  Camara: a 1280x720 este codigo da {at_720:.1} px/modulo. {verdict}"
+    ))
 }
 
 /// Comprueba que lo que esta terminal dibuja se puede volver a leer.
