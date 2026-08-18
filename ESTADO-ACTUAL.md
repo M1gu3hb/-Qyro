@@ -15,6 +15,36 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
+## 0.ter — FASE 22, ABIERTA. Aquí se corta.
+
+**ADR-0047 congelada** (`b5f5e97`), con los cinco números que la fase pedía. Dos
+salieron de mirar en vez de suponer:
+
+- **El desbordamiento de 4 GiB no existe.** `done` y `total` son `u64` en el
+  motor y en la frontera C; el único `u32` es `item`, que vale siempre cero. La
+  aritmética está bien; **la evidencia con archivos grandes sigue faltando**, y
+  son dos cosas distintas.
+- **`request_resume` tiene cero llamantes de producción** — sólo un test, sin
+  símbolo C ni bandera de CLI. Habría sido el noveno caso. **ADR-0047 §5 la
+  retira de la v1.x**, con argumento aritmético y dejando el número de mensaje
+  reservado.
+
+**Lo siguiente, en orden:**
+
+1. **Ejecutar la retirada de §5.** Marcar `#[cfg(test)]` o borrar
+   `request_resume` y el manejo de `MessageType::Resume` en
+   `qyro_transfer/src/session.rs`, **y quitarla de todos los documentos que la
+   mencionan** — una capacidad retirada que sigue anunciada es la misma mentira
+   que una muerta.
+2. **Los cinco escenarios** de `FASE-22 §4`, cada uno con su control. **El quinto
+   deja de aplicar** si la reanudación se retira: se sustituye por comprobar que
+   **cancelar deja el destino limpio**, sin `.qyro-part`.
+3. **El saneado de nombres para terminal** (ADR-0047 §6): controles C0 y C1 a
+   `U+FFFD`, sustituyendo y no eliminando, y sólo para dibujar.
+4. **El techo de 256 archivos**, negado por nombre antes de abrir nada.
+
+---
+
 ## 0. LA RELEASE — retractada en público, y a medio rehacer
 
 **Hecho hoy, y está vivo en
