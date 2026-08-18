@@ -36,11 +36,27 @@ mismo día, por la misma razón: la fase 21 pone una cara contra la otra.
 `2c01de0`. No se hizo aquí porque tocar una Release publicada necesita contexto de
 sobra y la evidencia de la matriz completa.
 
-**Empieza por diagnosticar «nothing was materialised»** en
-`apps/qyro/test/transfer/gui_cli_matrix_test.dart`, casilla «GUI sends, CLI
-receives». La hipótesis a descartar primero: que el `qyro recv` lanzado con
-`--expect` esté rechazando por huella —la GUI manda su huella de identidad y el
-receptor compara contra la del *par*— o que salga antes de materializar.
+**«nothing was materialised» YA ESTÁ DIAGNOSTICADO** — falta confirmarlo y
+arreglarlo, que es lo primero.
+
+`NativeTransferService._commonRoot` parte la ruta por `Platform.pathSeparator`
+(`\` en Windows) y quita el último trozo. La prueba construye la ruta con
+`'${source.path}/payload.bin'` — **barra normal** — así que el último trozo es
+`out/payload.bin` entero, la raíz sale siendo el *abuelo*, y el nombre relativo
+que viaja es `out/payload.bin`. El archivo aterriza en
+`destination/out/payload.bin` y la prueba mira `destination/payload.bin`.
+
+**Dos cosas que hacer, y son distintas:**
+
+1. **La prueba mezcla separadores.** Usar `Platform.pathSeparator` o
+   `path.join`. Eso sólo arregla la prueba.
+2. **`_commonRoot` es frágil ante separadores mezclados**, y en Windows una ruta
+   con barras normales es perfectamente válida — la acepta todo el API de
+   Win32. Un archivo elegido por el selector del sistema no las traerá, pero
+   uno que llegue por argumento, por arrastrar-y-soltar o por una prueba, sí.
+   **Decidir si eso es defecto o límite documentado**, y si es defecto, normalizar
+   antes de partir. No se decidió aquí por falta de contexto, y adivinarlo sin
+   comprobarlo sería inventar.
 
 ---
 
