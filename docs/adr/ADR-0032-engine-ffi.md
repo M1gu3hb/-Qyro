@@ -468,3 +468,69 @@ Sigue sin cruzar un tipo. Sigue sin haber asignación que el otro lado deba
 liberar. `qyro_ffi` sigue pudiendo nombrar exactamente `qyro_core` y
 `qyro_session`, que es lo que la guarda 1 acota — y el consejero está en
 `qyro_session`, así que no abre ninguna arista nueva en el grafo.
+
+---
+
+## Enmienda 5 (2026-08-19, fase 24B) — seis símbolos para el ojo, y ninguno cruza un tipo
+
+La superficie pasa de **veinticinco a treinta y uno**. Es el crecimiento más
+grande desde la enmienda 1, así que el argumento va entero.
+
+### Qué se añade
+
+| Símbolo | Qué cruza |
+|---|---|
+| `qyro_scanner_open(out_handle) -> i32` | un `u64` por parámetro de salida |
+| `qyro_scanner_look(handle, luma, w, h) -> i32` | bytes prestados y dos enteros |
+| `qyro_scanner_tally(handle, out_seen, out_read) -> i32` | dos `u64` de salida |
+| `qyro_scanner_result_len(handle, out_len) -> i32` | un `usize` de salida |
+| `qyro_scanner_result(handle, out, cap) -> i32` | bytes a un búfer prestado |
+| `qyro_scanner_close(handle)` | nada |
+
+**Ninguno cruza un tipo**, que es la invariante que esta ADR existe para
+mantener. Un escaneo vive detrás de un `u64` en la misma clase de tabla que las
+sesiones, y lo único que se mueve son enteros y bytes en búferes que el otro lado
+ya sabe reservar (`qyro_buffer_alloc`, ADR-0038).
+
+### Por qué seis y no uno
+
+La tentación era un símbolo que hiciera todo. Cada uno de los seis existe porque
+**responde a una pregunta que se hace en un momento distinto**:
+
+- `look` llega a 30 por segundo; `tally` se dibuja en cada repintado, que son
+  más; `result_len` se pregunta una vez, y `result` una sola vez después.
+  Meterlos juntos obligaría a copiar novecientos mil bytes para dibujar una barra
+  de progreso.
+- `result_len` va **separado de** `result` para que quien llama reserve el tamaño
+  exacto. Es la misma forma que el resto de esta superficie ya usa.
+
+### `tally` devuelve dos números por la misma llamada, a propósito
+
+«300 mirados, 2 leídos» y «300 mirados, 280 leídos» son **la misma barra de
+progreso y dos situaciones opuestas**: la primera dice que hay que acercar el
+teléfono, la segunda que va bien. Dos símbolos distintos dejarían dibujar una sin
+la otra, y una pantalla que sólo enseñara la mitad estaría escondiendo justo el
+dato que sirve para actuar.
+
+### Un código de error nuevo: `QYRO_ERR_NOT_READY` (−15)
+
+«Todavía faltan bloques» es el estado normal de un escaneo durante casi todo su
+tiempo de vida. Devolverlo como `BAD_ARGUMENT` haría que una pantalla enseñara un
+error mientras todo va bien, que es la clase de mentira que esta ADR §5 ya
+prohibió una vez.
+
+### Lo que no cambia
+
+`qyro_ffi` sigue nombrando exactamente `qyro_core` y `qyro_session`. El ojo vive
+en `qyro_eye` y **se alcanza envuelto por `qyro_session::Scanner`**, que es la
+misma forma que `browse` usa con `qyro_net` — no una reexportación, que la guarda
+2 rechazaría con razón.
+
+Sigue sin haber asignación que el otro lado deba liberar: `result` escribe en un
+búfer que quien llama reservó y libera.
+
+### Lo que esto **no** promete
+
+**Que ningún teléfono haya leído un QR de Qyro.** Estos seis símbolos son el
+camino; que por él pasen píxeles de una cámara real es la fase 19, y el hueco
+sigue en blanco.
