@@ -51,7 +51,7 @@ for ($i = $start; $i -lt ($end - 1); $i++) {
 # La consecuencia es que añadir una capacidad obliga a tocar este numero, y eso
 # es correcto: añadir una capacidad es un acto deliberado y esta linea es donde
 # se declara.
-$expected = 12
+$expected = 13
 if ($rows.Count -ne $expected) {
     Write-Error "[BLOCKER] la tabla tiene $($rows.Count) filas y se esperaban exactamente $expected. Si se añadio una capacidad, sube este numero a proposito; si desaparecio una, esa es la razon por la que esta comprobacion existe."
     exit 1
