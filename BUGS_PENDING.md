@@ -66,11 +66,36 @@ se bloquea en una lectura vencida unas cinco veces por elemento da exactamente
 esta curva, y da la respuesta a por qué el tamaño no importa: no se está
 esperando a datos, se está esperando a que venza un reloj.
 
-**No está comprobado.** Lo comprueba instrumentar el `pump` del receptor y contar
-cuántas lecturas vencen por elemento, o bajar `READ_TIMEOUT` a 25 ms en una
-compilación de prueba y ver si el tiempo por archivo cae con él. **Si cae, es
-eso; si no cae, este párrafo también está mal** y se borra como se ha borrado el
-del disco.
+**Comprobado, y es eso.** Se bajó `READ_TIMEOUT` de 250 ms a 25 ms en una
+compilación de prueba —y se revirtió después, porque es una constante de
+ADR-0028 §4.1 y no un botón:
+
+| | 10 archivos | 50 archivos | por archivo |
+|---|---|---|---|
+| `READ_TIMEOUT` = 250 ms | 12 441 ms | 49 369 ms | **~1,24 s** |
+| `READ_TIMEOUT` = 25 ms | 2 357 ms | **6 537 ms** | **~0,13 s** |
+
+**7,5× más rápido con el mismo código y una constante distinta.** El tiempo por
+elemento escala con el reloj de lectura, no con el disco, no con la red y no con
+el tamaño. La hipótesis del disco se cayó con 4,9 ms y ésta se sostiene con 43
+segundos de diferencia.
+
+### Y el arreglo NO es bajar `READ_TIMEOUT`
+
+Es el latido que permite a un lector bloqueado notar una cancelación
+(ADR-0028 §4.1). Bajarlo a 25 ms multiplica por diez los despertares de un hilo
+que no tiene nada que hacer — cambia una espera visible por consumo de CPU en un
+producto cuyo objetivo son máquinas viejas.
+
+**El defecto es que el bucle del receptor necesite varias lecturas vencidas por
+elemento.** Una lectura sólo debería vencer cuando de verdad no hay nada que
+leer; aquí vence entre elementos que ya están en camino. Lo que hay que mirar,
+por orden: dónde espera el receptor entre el final de un elemento y el principio
+del siguiente, y si hay una ida y vuelta por elemento que podría no existir.
+
+**Lo que esto ya explica sin más trabajo:** por qué 100 archivos «fallan»
+llegando todos. No hay ningún límite de cantidad — el reloj de 60 s se agota
+porque cada elemento cuesta 1,2 s de esperas que no hacían falta.
 
 **Y no es un descuido: es ADR-0027 §4**, que fijó el orden *verificar,
 `sync_all`, renombrar, `sync_all` del directorio*. La razón escrita es que un
@@ -97,8 +122,10 @@ que la explicación bonita era falsa.
 para doscientos archivos, y eso es peor producto.
 
 **La pregunta que cierra esta ficha:** ¿cuánto tarda un archivo pequeño, y por
-qué? Hoy 1,2 s. **El disco está descartado con números** (4,9 ms). El sospechoso
-es `READ_TIMEOUT` × ~5, y está sin comprobar.
+qué? **1,24 s, y el porqué está medido**: el bucle del receptor espera varias
+lecturas vencidas por elemento, y el tiempo escala con `READ_TIMEOUT` (7,5× al
+bajarlo). Falta el **arreglo**, que no es tocar la constante — por eso la ficha
+sigue abierta.
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 

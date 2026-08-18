@@ -67,13 +67,15 @@ se suelte— así que cada uno es una casilla más:
    por archivo** en esta máquina (6,5 frente a 1,6): el 0,4 % de los 1 200 ms.
    Descartado con números.
 
-   **El sospechoso que queda es aritmética sobre constantes medidas:**
-   `READ_TIMEOUT` son 250 ms y 1 200 / 250 ≈ 5. Un bucle que se bloquea en cinco
-   lecturas vencidas por elemento da esta curva y explica que el tamaño no
-   importe — no se espera a datos, se espera a que venza un reloj.
-   **Sin comprobar.** Se comprueba bajando `READ_TIMEOUT` a 25 ms en una
-   compilación de prueba: si el tiempo por archivo cae con él, es eso; si no
-   cae, ese párrafo también se borra.
+   **Comprobado: es el reloj de lectura.** Con `READ_TIMEOUT` a 25 ms en vez de
+   250, los mismos 50 archivos pasan de **49,4 s a 6,5 s** — 7,5× con el mismo
+   código. La constante se revirtió: es el latido de ADR-0028 §4.1, no un botón.
+
+   **El arreglo no es bajarla** —multiplicaría por diez los despertares de un
+   hilo ocioso en máquinas viejas— sino que el bucle del receptor **deje de
+   necesitar varias lecturas vencidas por elemento**. Mirar, por orden: dónde
+   espera entre el final de un elemento y el principio del siguiente, y si hay
+   una ida y vuelta por elemento que podría no existir.
 
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
