@@ -45,19 +45,42 @@ está solo:
 | `qyro_fs/src/io.rs:447` | `sync_all` del directorio (Unix) | **sí** |
 | `qyro_fs/src/history.rs:131`, `:188`, `:233` | `sync_data()` del registro | **sí** |
 
-En Windows `sync_all` es `FlushFileBuffers`, que es un vaciado de caché de
-escritura del dispositivo. **Un segundo por archivo es exactamente lo que cuesta
-eso**, y explica la curva lineal completa: el tamaño del archivo no interviene
-porque el coste no es escribir, es esperar al disco.
+**Y esa explicación era mía y estaba mal.** Escribí que un segundo por archivo
+«es exactamente lo que cuesta eso». **Medido en esta máquina**, 50 archivos de
+200 bytes, crear + escribir + renombrar:
+
+| | total | por archivo |
+|---|---|---|
+| sin `sync_all` | 80 ms | **1,6 ms** |
+| con `sync_all` | 325 ms | **6,5 ms** |
+
+**`sync_all` cuesta 4,9 ms extra por archivo. Explica el 0,4 % de los 1 200 ms.**
+La hipótesis del disco queda **descartada por medida**, no por opinión — y estuvo
+escrita como si fuera una conclusión durante un commit entero, que es exactamente
+el error que este taller lleva toda la sesión corrigiendo en otros sitios.
+
+### El sospechoso que queda, y es aritmética sobre constantes medidas
+
+`qyro_net::limits::READ_TIMEOUT` es **250 ms**. **1 200 / 250 ≈ 5.** Un bucle que
+se bloquea en una lectura vencida unas cinco veces por elemento da exactamente
+esta curva, y da la respuesta a por qué el tamaño no importa: no se está
+esperando a datos, se está esperando a que venza un reloj.
+
+**No está comprobado.** Lo comprueba instrumentar el `pump` del receptor y contar
+cuántas lecturas vencen por elemento, o bajar `READ_TIMEOUT` a 25 ms en una
+compilación de prueba y ver si el tiempo por archivo cae con él. **Si cae, es
+eso; si no cae, este párrafo también está mal** y se borra como se ha borrado el
+del disco.
 
 **Y no es un descuido: es ADR-0027 §4**, que fijó el orden *verificar,
 `sync_all`, renombrar, `sync_all` del directorio*. La razón escrita es que un
 archivo renombrado sin vaciar puede sobrevivir al renombrado y no a su contenido
 tras un corte de corriente.
 
-**Por eso esto no se arregla con un parche.** Es una decisión de durabilidad
-—por archivo o por transferencia— y cambiarla necesita **enmienda a ADR-0027**,
-no un `sync_all` borrado. Las dos opciones tienen argumento:
+**Los `sync_all` siguen siendo una decisión de durabilidad que merece revisarse**
+—por archivo o por transferencia, con enmienda a ADR-0027— pero **ya no son el
+defecto de esta ficha**: 4,9 ms de 1 200 no arreglan nada. Las dos opciones
+quedan escritas porque el análisis vale, no porque cierre esto:
 
 - *Por transferencia*: un `sync_all` al final. Doscientos archivos pasan de ~4
   minutos a segundos. El riesgo se concentra: un corte de corriente a mitad puede
@@ -66,17 +89,16 @@ no un `sync_all` borrado. Las dos opciones tienen argumento:
   registro, no contenido. Vaciar el diario por entrada es la parte más fácil de
   discutir.
 
-**Lo que sigue sin comprobarse:** cuál de los cuatro puntos domina. Se miden
-quitándolos de uno en uno, y **eso no se ha hecho**.
+**Lo que se hizo:** medirlo, en vez de seguir escribiéndolo. Y el resultado fue
+que la explicación bonita era falsa.
 
 **Lo que NO hay que hacer y está dicho aquí para que no se haga:** subir
 `IDLE_TIMEOUT`. Convierte un fallo ruidoso en una transferencia de veinte minutos
 para doscientos archivos, y eso es peor producto.
 
 **La pregunta que cierra esta ficha:** ¿cuánto tarda un archivo pequeño, y por
-qué? Hoy 1,2 s, **y ya se sabe por qué**: cuatro vaciados de disco síncronos por
-elemento, puestos ahí por ADR-0027 §4. Lo que falta es decidir la durabilidad,
-que es una enmienda de ADR y no un arreglo.
+qué? Hoy 1,2 s. **El disco está descartado con números** (4,9 ms). El sospechoso
+es `READ_TIMEOUT` × ~5, y está sin comprobar.
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 
