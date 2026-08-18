@@ -1,10 +1,24 @@
-# Estado actual — dónde se corta
+# Estado actual — el árbol limpio, en `main`
 
-**2026-08-18** · rama `claude/qyro-cerrar-cadena-12` · último commit de esta
-sesión abajo.
+**2026-08-18** · **rama única: `main`** · informe en
+`docs/reports/limpieza-main.md`.
 
-> Este archivo dice **dónde se corta y qué es lo siguiente**, para que quien siga
-> no tenga que reconstruirlo leyendo commits. Se actualiza al cerrar cada paso.
+**Esta sesión no abrió ninguna fase.** Dejó lo que había limpio: el P0 que
+impedía compilar en Linux, los 461 commits fusionados en `main`, las 19 ramas
+borradas tras comprobar que estaban contenidas, y las tres causas del diluvio de
+correos cerradas.
+
+**Reglas nuevas que mandan sobre las anteriores:**
+
+1. **Se acabaron las ramas.** Todo va a `main` directo. Sigue prohibido el
+   force-push y reescribir historia.
+2. **`ESTADO-ACTUAL.md` se actualiza DENTRO del commit de contenido**, nunca en
+   uno aparte. La comprobación 16 se cumple corriendo la puerta antes de empujar.
+3. **Comprobación 17:** ninguna afirmación de «puerta en verde» sin
+   `cargo check --workspace --all-targets` contra **Linux**, por código de
+   salida.
+
+**Lo que sigue roto está en §6 del informe**, y lo primero es QYR-0365.
 
 ---
 
