@@ -78,42 +78,17 @@ proyecto envía sin que ninguna prueba la cruzara.
 
 ---
 
-**Fase 21 — A MEDIAS, y aquí es donde se corta.**
+**Fase 21 — HECHA.** Informe en `docs/reports/fase-21-las-dos-caras.md`, puerta
+corrida en `52fa4d5`.
 
-| Commit | Qué |
-|---|---|
-| `8876334` | **ADR-0046 congelada**, en commit propio antes del código |
-| `88ecbe2` | El consejero de canal en `qyro_session`, y `qyro how` que lo llama |
-| `107685e` | La tabla de paridad y `scripts/check_parity.ps1` |
+**Las cuatro casillas de la matriz pasan**, con el binario `qyro` de verdad al
+otro lado y comparación byte a byte, más los dos controles. Tabla de paridad con
+su script —vista fallar tres veces— y el consejero de canal en las dos caras
+(`qyro_advice`, 24 → 25 símbolos con enmienda en ADR-0032).
 
-**Hecho:** ADR-0046 (qué significa que una capacidad existe, dónde vive la tabla,
-dónde vive el consejero, y que el motor devuelve la frase y no un código). El
-consejero con las cifras de `R8`, ejecutado. La tabla de doce capacidades con su
-script, **vista fallar tres veces** — celda vacía, referencia rota, y fila
-borrada. La tercera no fallaba: el piso era 10 sobre una tabla de 12, así que
-borrar una fila pasaba en verde. Ahora es el número exacto.
-
-**Lo que falta, con nombre:**
-
-1. **La matriz de cuatro casillas**, en
-   `apps/qyro/test/transfer/gui_cli_matrix_test.dart`. **Escrita y a medio
-   pasar.** Se corre con `QYRO_FFI_LIBRARY_PATH` y `QYRO_CLI_PATH` puestos.
-   - **CLI→CLI: verificado a mano y funciona** tras el arreglo del P0 — dos
-     copias del binario, huellas distintas, 5 000 bytes que llegan.
-   - **CLI→GUI: PASA.** Era el P0 QYR-0361 quien lo bloqueaba, no el
-     cortafuegos.
-   - **CLI→CLI: PASA**, con dos copias del binario y huellas distintas.
-   - **GUI→CLI y GUI→GUI: escritas y fallando** en «nothing was materialised»,
-     ya pasado el arreglo de QYR-0362. Es lo primero de la siguiente sesión.
-   - Los dos controles escritos —«nadie escuchando» y «huella que no coincide»—
-     **pasan los dos**.
-2. ~~El consejero en la GUI~~ — **HECHO** en `3758be3`: `qyro_advice` cruza la
-   frontera (24 → 25 símbolos, con enmienda en ADR-0032) y cinco pruebas Dart lo
-   ejercen contra la biblioteca de verdad. La tabla de paridad ya no tiene
-   ninguna fila que diga «todavía».
-
-**No hay informe de fase 21 y es a propósito:** no está cerrada, y un informe que
-dijera «falta esto» es exactamente lo que este taller no escribe.
+**Lo que encontró vale más que lo que construyó:** tres defectos, los tres de la
+misma forma —dos mitades probadas y el medio jamás recorrido— y ninguno lo vio
+leer código.
 
 ---
 
@@ -198,12 +173,11 @@ corrida en `07278ff`, el commit que el informe nombra.
 ## 2. Lo siguiente, en orden
 
 ```
-21 (a medias) → 22 → 17 → 18 → 19 → 20 → 23
+(retractar la Release) → 22 → 17 → 18 → 19 → 20 → 23
 ```
 
-- **21 — las dos caras se hablan.** ADR, consejero y tabla hechos; **falta la
-  matriz de cuatro casillas y el consejero en la GUI**. Detalle arriba.
 - **22 — lo que la gente hace de verdad.** Carpetas, tamaño, interrupción.
+  **Es lo siguiente**, después de la Release.
 
 ---
 
