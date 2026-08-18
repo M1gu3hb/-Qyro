@@ -576,11 +576,27 @@ final class NativeTransferService implements QyroTransferService {
   /// The engine names each item relative to a root (ADR-0026), so two files from
   /// different folders must not both become their last component — that would
   /// make the receiver arbitrate a collision the sender created.
+  /// Every separator spelled the way this platform spells it.
+  ///
+  /// Only rewrites `/` to `\` on Windows; elsewhere `\` is a legal character in
+  /// a filename and rewriting it would corrupt names rather than fix paths.
+  static String _withPlatformSeparators(String path) =>
+      Platform.isWindows ? path.replaceAll('/', Platform.pathSeparator) : path;
+
   static String _commonRoot(List<String> paths) {
     if (paths.isEmpty) return '.';
     final separator = Platform.pathSeparator;
-    var prefix = paths.first.split(separator)..removeLast();
-    for (final path in paths.skip(1)) {
+    // **Normalised before splitting, and it is not tidiness.** Windows accepts
+    // forward slashes everywhere -- every Win32 path API does -- so `C:/b.bin`
+    // is a perfectly valid path that this function used to split on `\` alone.
+    // The last segment came out as `a/b.bin`, the root as the *grandparent*, and
+    // the name that travelled was `a/b.bin`: the receiver then wrote the file
+    // one directory deeper than anybody had named, silently. A file that lands
+    // somewhere else is not a smaller failure than a file that does not land.
+    final normalised =
+        paths.map((path) => _withPlatformSeparators(path)).toList();
+    var prefix = normalised.first.split(separator)..removeLast();
+    for (final path in normalised.skip(1)) {
       final parts = path.split(separator)..removeLast();
       var shared = 0;
       while (shared < prefix.length &&

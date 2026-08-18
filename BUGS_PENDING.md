@@ -1,5 +1,40 @@
 # Bugs y pendientes verificados
 
+## QYR-0363 — Una ruta con barras normales mandaba el archivo a otro sitio
+
+- Estado: **ARREGLADO**, control pendiente
+- Severidad: **ALTA** (no P0: el selector del sistema no produce estas rutas)
+- Fase: 21
+
+**El defecto.** `NativeTransferService._commonRoot` parte por
+`Platform.pathSeparator` y quita el último trozo. En Windows **las barras
+normales son válidas en cualquier API de rutas**, así que `C:\salida/p.bin` es
+una ruta correcta cuyo último trozo, partiendo sólo por `\`, es `salida/p.bin`
+entero. La raíz salía siendo el **abuelo** y el nombre que viajaba era
+`salida/p.bin`: **el receptor escribía el archivo un directorio más abajo del que
+nadie nombró, y decía que había ido bien.**
+
+Un archivo que aterriza en otro sitio no es un fallo más pequeño que uno que no
+aterriza: es peor, porque nadie lo busca.
+
+**El arreglo.** Normalizar los separadores antes de partir, sólo en Windows —
+fuera de Windows `\` es un carácter legal en un nombre y reescribirlo
+corrompería nombres en vez de arreglar rutas.
+
+**Cómo se encontró.** La casilla GUI→CLI de la matriz de la fase 21 decía
+«nothing was materialised». Los bytes **sí** habían llegado; estaban en
+`destino/salida/`.
+
+**Lo que falta, y por eso el estado no es CERRADO:** el control. Se escribió una
+prueba que manda una ruta con barras a propósito y **se queda colgada**, sin
+diagnosticar. Se retiró del árbol en vez de dejarla en rojo. **Un arreglo cuya
+prueba nunca ha fallado es una conjetura**, y ésta es una conjetura bien
+argumentada y verificada de refilón — no una comprobación.
+
+**La pregunta que cierra esta ficha:** ¿aterriza en `destino/` un archivo cuya
+ruta se escribió con barras normales? Se ha visto a mano, **no hay prueba que lo
+guarde**.
+
 ## QYR-0362 — La GUI tampoco había enviado nunca un archivo
 
 - Estado: **ARREGLADO, evidencia parcial**

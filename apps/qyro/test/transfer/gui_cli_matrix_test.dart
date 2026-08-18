@@ -37,6 +37,20 @@ String? _env(String name) {
   return (value == null || value.isEmpty) ? null : value;
 }
 
+/// Paths built with the platform's own separator.
+///
+/// **Not cosmetic.** `NativeTransferService._commonRoot` splits on
+/// `Platform.pathSeparator` and drops the last segment, so a path written with a
+/// forward slash on Windows has `out/payload.bin` as its *last* segment: the
+/// root comes out as the grandparent and the name that travels is
+/// `out/payload.bin`. The file then lands one directory deeper than anybody
+/// looked, which is how this test spent an afternoon reading «nothing was
+/// materialised» when the bytes had arrived.
+String _join(String directory, String name) =>
+    '$directory${Platform.pathSeparator}$name';
+
+String _under(Directory parent, String name) => _join(parent.path, name);
+
 Uint8List _pattern(int length) {
   final bytes = Uint8List(length);
   for (var i = 0; i < length; i++) {
@@ -89,7 +103,17 @@ void main() {
       );
     });
 
-    tearDown(() {
+    tearDown(() async {
+      // **Every cell binds the same port**, because ADR-0041 fixed one: the
+      // Windows firewall grants inbound once per program and port, and a port
+      // that moved per run would ask for a dialog every time. The consequence
+      // here is that two cells cannot overlap, and a listener that has just
+      // been killed does not release the socket instantly.
+      //
+      // This file passes on its own without the wait and failed inside the full
+      // suite with it missing, which is the shape of a test that is green until
+      // somebody runs it next to another one.
+      await Future<void>.delayed(const Duration(seconds: 1));
       try {
         scratch.deleteSync(recursive: true);
       } on FileSystemException {
@@ -99,12 +123,12 @@ void main() {
 
     test('CLI sends, GUI receives -- the direction the phone case needs',
         () async {
-      final destination = Directory('${scratch.path}/in')..createSync();
-      final source = Directory('${scratch.path}/out')..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
+      final source = Directory(_under(scratch, 'out'))..createSync();
       final payload = _pattern(128 * 1024);
-      File('${source.path}/payload.bin').writeAsBytesSync(payload);
+      File(_join(source.path, 'payload.bin')).writeAsBytesSync(payload);
 
-      final home = Directory('${scratch.path}/cli')..createSync();
+      final home = Directory(_under(scratch, 'cli'))..createSync();
       final sender = _privateCli(cli!, home);
 
       final seen = <QyroTransferState>[];
@@ -128,7 +152,7 @@ void main() {
 
         final run = await Process.run(
           sender.path,
-          <String>['send', '${source.path}/payload.bin', '--to', code!],
+          <String>['send', _join(source.path, 'payload.bin'), '--to', code!],
         );
         expect(
           run.exitCode,
@@ -145,7 +169,7 @@ void main() {
       }
 
       expect(failures, isEmpty, reason: 'the GUI receiver errored: $failures');
-      final landed = File('${destination.path}/payload.bin');
+      final landed = File(_join(destination.path, 'payload.bin'));
       expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
       // Byte for byte. A file of the right length is not the same file, and
       // this project has QYR-0359 written down about exactly that distinction.
@@ -153,15 +177,15 @@ void main() {
     }, timeout: const Timeout(Duration(minutes: 2)));
 
     test('CLI sends to CLI -- and they are two devices, not one', () async {
-      final source = Directory('${scratch.path}/out')..createSync();
-      final destination = Directory('${scratch.path}/in')..createSync();
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
       final payload = _pattern(64 * 1024);
-      File('${source.path}/payload.bin').writeAsBytesSync(payload);
+      File(_join(source.path, 'payload.bin')).writeAsBytesSync(payload);
 
       // Two copies, because the identity lives beside the executable: one copy
       // run twice would be a device sending to itself.
-      final senderHome = Directory('${scratch.path}/a')..createSync();
-      final receiverHome = Directory('${scratch.path}/b')..createSync();
+      final senderHome = Directory(_under(scratch, 'a'))..createSync();
+      final receiverHome = Directory(_under(scratch, 'b'))..createSync();
       final sender = _privateCli(cli!, senderHome);
       final receiver = _privateCli(cli, receiverHome);
 
@@ -189,7 +213,7 @@ void main() {
           sender.path,
           <String>[
             'send',
-            '${source.path}/payload.bin',
+            _join(source.path, 'payload.bin'),
             '--to',
             '127.0.0.1:$port',
             '--expect',
@@ -209,7 +233,7 @@ void main() {
         listening.kill();
       }
 
-      final landed = File('${destination.path}/payload.bin');
+      final landed = File(_join(destination.path, 'payload.bin'));
       expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
       expect(landed.readAsBytesSync(), equals(payload));
     }, timeout: const Timeout(Duration(minutes: 2)));
@@ -217,13 +241,13 @@ void main() {
     test('GUI sends, CLI receives -- the scene of R7 §2, entire', () async {
       // **The cell the whole product is named after**: the phone sends and the
       // old PC receives in a terminal. Until phase 21 nobody had run it.
-      final source = Directory('${scratch.path}/out')..createSync();
-      final destination = Directory('${scratch.path}/in')..createSync();
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
       final payload = _pattern(96 * 1024);
-      final original = File('${source.path}/payload.bin')
+      final original = File(_join(source.path, 'payload.bin'))
         ..writeAsBytesSync(payload);
 
-      final home = Directory('${scratch.path}/cli')..createSync();
+      final home = Directory(_under(scratch, 'cli'))..createSync();
       final receiver = _privateCli(cli!, home);
       final who = await Process.run(receiver.path, <String>['whoami']);
       final receiverPrint = _fingerprintOf(who.stdout.toString());
@@ -271,7 +295,7 @@ void main() {
         listening.kill();
       }
 
-      final landed = File('${destination.path}/payload.bin');
+      final landed = File(_join(destination.path, 'payload.bin'));
       expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
       expect(landed.readAsBytesSync(), equals(payload));
     }, timeout: const Timeout(Duration(minutes: 2)));
@@ -280,10 +304,10 @@ void main() {
         () async {
       // Same process, two independent sessions over loopback. Not a shortcut:
       // both ends are the production class, and the bytes cross a socket.
-      final source = Directory('${scratch.path}/out')..createSync();
-      final destination = Directory('${scratch.path}/in')..createSync();
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
       final payload = _pattern(48 * 1024);
-      final original = File('${source.path}/payload.bin')
+      final original = File(_join(source.path, 'payload.bin'))
         ..writeAsBytesSync(payload);
 
       final receiver = NativeTransferService(
@@ -326,7 +350,7 @@ void main() {
       }
 
       expect(failures, isEmpty, reason: 'the receiver errored: $failures');
-      final landed = File('${destination.path}/payload.bin');
+      final landed = File(_join(destination.path, 'payload.bin'));
       expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
       expect(landed.readAsBytesSync(), equals(payload));
     }, timeout: const Timeout(Duration(minutes: 2)));
@@ -335,16 +359,16 @@ void main() {
         () async {
       // Control 1 of the phase document. A refusal that hangs is the failure
       // nobody can diagnose, and one that exits 0 is worse.
-      final source = Directory('${scratch.path}/out')..createSync();
-      File('${source.path}/payload.bin').writeAsBytesSync(_pattern(1024));
-      final home = Directory('${scratch.path}/cli')..createSync();
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      File(_join(source.path, 'payload.bin')).writeAsBytesSync(_pattern(1024));
+      final home = Directory(_under(scratch, 'cli'))..createSync();
       final sender = _privateCli(cli!, home);
 
       final run = await Process.run(
         sender.path,
         <String>[
           'send',
-          '${source.path}/payload.bin',
+          _join(source.path, 'payload.bin'),
           '--to',
           // A port nothing is bound to.
           '127.0.0.1:49519',
@@ -364,10 +388,10 @@ void main() {
         () async {
       // Control 2. This is the product's security guarantee and it cannot hold
       // on one face only.
-      final source = Directory('${scratch.path}/out')..createSync();
-      final destination = Directory('${scratch.path}/in')..createSync();
-      File('${source.path}/payload.bin').writeAsBytesSync(_pattern(4096));
-      final home = Directory('${scratch.path}/cli')..createSync();
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
+      File(_join(source.path, 'payload.bin')).writeAsBytesSync(_pattern(4096));
+      final home = Directory(_under(scratch, 'cli'))..createSync();
       final sender = _privateCli(cli!, home);
 
       final seen = <QyroTransferState>[];
@@ -390,7 +414,7 @@ void main() {
           sender.path,
           <String>[
             'send',
-            '${source.path}/payload.bin',
+            _join(source.path, 'payload.bin'),
             '--to',
             code!,
             // Thirty-two hex characters that are not this peer's.
@@ -407,7 +431,7 @@ void main() {
           reason: 'the refusal did not say it was a refusal',
         );
         expect(
-          File('${destination.path}/payload.bin').existsSync(),
+          File(_join(destination.path, 'payload.bin')).existsSync(),
           isFalse,
           reason: 'bytes landed despite the refusal',
         );
