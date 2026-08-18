@@ -15,6 +15,43 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
+**Fase 21 — A MEDIAS, y aquí es donde se corta.**
+
+| Commit | Qué |
+|---|---|
+| `8876334` | **ADR-0046 congelada**, en commit propio antes del código |
+| `88ecbe2` | El consejero de canal en `qyro_session`, y `qyro how` que lo llama |
+| `107685e` | La tabla de paridad y `scripts/check_parity.ps1` |
+
+**Hecho:** ADR-0046 (qué significa que una capacidad existe, dónde vive la tabla,
+dónde vive el consejero, y que el motor devuelve la frase y no un código). El
+consejero con las cifras de `R8`, ejecutado. La tabla de doce capacidades con su
+script, **vista fallar tres veces** — celda vacía, referencia rota, y fila
+borrada. La tercera no fallaba: el piso era 10 sobre una tabla de 12, así que
+borrar una fila pasaba en verde. Ahora es el número exacto.
+
+**Lo que falta, con nombre:**
+
+1. **La matriz de cuatro casillas** (§4 del documento de fase), que es la prueba
+   que cierra la fase: GUI↔GUI, GUI↔CLI, CLI↔GUI, CLI↔CLI, un archivo por
+   casilla verificado byte a byte. **Las dos caras están construidas y listas
+   para ello**: `target/release/qyro_ffi.dll` (820 KB) y `target/release/qyro.exe`
+   (1 410 KB), y el arnés que ya existe es
+   `apps/qyro/test/transfer/two_process_pairing_test.dart`, que sólo necesita
+   `QYRO_FFI_LIBRARY_PATH`. Para la fase 21 el otro proceso tiene que ser el
+   binario `qyro` de verdad, **no el arnés de humo** — el arnés es lo que escondió
+   el defecto de la identidad cinco fases seguidas. Con sus tres controles:
+   receptor apagado falla por nombre, clave cambiada rechazada en las cuatro, y
+   la tabla ya tiene el suyo.
+2. **El consejero en la GUI.** Un símbolo nuevo en la frontera C que escriba la
+   frase en un buffer prestado, como los que ya hay. Es la única fila de la tabla
+   que dice «todavía» en vez de «no».
+
+**No hay informe de fase 21 y es a propósito:** no está cerrada, y un informe que
+dijera «falta esto» es exactamente lo que este taller no escribe.
+
+---
+
 **Fase 16 — HECHA.** Informe en `docs/reports/fase-16-canal-serie.md`, puerta
 corrida en `5699fcd`.
 
@@ -96,11 +133,11 @@ corrida en `07278ff`, el commit que el informe nombra.
 ## 2. Lo siguiente, en orden
 
 ```
-21 → 22 → 17 → 18 → 19 → 20 → 23
+21 (a medias) → 22 → 17 → 18 → 19 → 20 → 23
 ```
 
-- **21 — las dos caras se hablan.** GUI ↔ CLI. Hoy nadie las ha puesto una
-  contra la otra ni una vez. **Es lo siguiente.**
+- **21 — las dos caras se hablan.** ADR, consejero y tabla hechos; **falta la
+  matriz de cuatro casillas y el consejero en la GUI**. Detalle arriba.
 - **22 — lo que la gente hace de verdad.** Carpetas, tamaño, interrupción.
 
 ---
@@ -116,6 +153,7 @@ corrida en `07278ff`, el commit que el informe nombra.
   brillo y pantalla en ángulo son fase 19.
 - **El teléfono no acumula frames todavía.** El motor los produce y son legibles;
   el lado Android que los junta no existe.
+- **La GUI y el CLI no se han hablado nunca.** Es la fase 21 y está a medias.
 - **Ningún cable serie ha llevado un byte de Qyro.** El protocolo se probó
   sobre una cola en proceso y `certutil` sobre bytes reales; los dos puertos de
   esta máquina son endpoints Bluetooth, no un par enlazado. Fase 19.
