@@ -15,6 +15,24 @@ sesión abajo.
 el ancla de `STATUS.md` **y volviendo a correr la puerta sobre el commit
 resultante**, que es la comprobación 16 aplicada a sí misma.
 
+## 0. LO PRIMERO DE LA SIGUIENTE SESIÓN — una Release rota, publicada
+
+**QYR-0360, P0, arreglado en `9274393`.** `qyro send` **no ha movido nunca un
+byte**: pasaba a `open_sender` el nombre pelado del archivo con `root` = el
+directorio padre, y `strip_prefix` falla siempre, así que toda invocación
+devolvía `BadArgument` impreso como *«could not connect»*. Desde la fase 13, el
+día que se escribió, **y hay una Release publicada con él**.
+
+**Se retracta y se republica**, como se hizo con `2c01de0`. No se hizo aquí
+porque tocar una Release publicada no se hace con el contexto justo, y porque el
+arreglo tiene que ir con la evidencia de la matriz completa.
+
+Lo encontró **la fase 21 haciendo su trabajo**: no lo vio leer código, lo vio
+poner una cara contra la otra por primera vez. Es la **sexta** costura que este
+proyecto envía sin que ninguna prueba la cruzara.
+
+---
+
 **Fase 21 — A MEDIAS, y aquí es donde se corta.**
 
 | Commit | Qué |
@@ -32,20 +50,22 @@ borrar una fila pasaba en verde. Ahora es el número exacto.
 
 **Lo que falta, con nombre:**
 
-1. **La matriz de cuatro casillas** (§4 del documento de fase), que es la prueba
-   que cierra la fase: GUI↔GUI, GUI↔CLI, CLI↔GUI, CLI↔CLI, un archivo por
-   casilla verificado byte a byte. **Las dos caras están construidas y listas
-   para ello**: `target/release/qyro_ffi.dll` (820 KB) y `target/release/qyro.exe`
-   (1 410 KB), y el arnés que ya existe es
-   `apps/qyro/test/transfer/two_process_pairing_test.dart`, que sólo necesita
-   `QYRO_FFI_LIBRARY_PATH`. Para la fase 21 el otro proceso tiene que ser el
-   binario `qyro` de verdad, **no el arnés de humo** — el arnés es lo que escondió
-   el defecto de la identidad cinco fases seguidas. Con sus tres controles:
-   receptor apagado falla por nombre, clave cambiada rechazada en las cuatro, y
-   la tabla ya tiene el suyo.
-2. **El consejero en la GUI.** Un símbolo nuevo en la frontera C que escriba la
-   frase en un buffer prestado, como los que ya hay. Es la única fila de la tabla
-   que dice «todavía» en vez de «no».
+1. **La matriz de cuatro casillas**, en
+   `apps/qyro/test/transfer/gui_cli_matrix_test.dart`. **Escrita y a medio
+   pasar.** Se corre con `QYRO_FFI_LIBRARY_PATH` y `QYRO_CLI_PATH` puestos.
+   - **CLI→CLI: verificado a mano y funciona** tras el arreglo del P0 — dos
+     copias del binario, huellas distintas, 5 000 bytes que llegan.
+   - **CLI→GUI**: falla todavía. El emisor va a la dirección LAN que publica
+     `ownPairingString()` y no conecta; **hay que averiguar si es el cortafuegos
+     de Windows contra el proceso `flutter_tester` o algo del receptor**, y la
+     respuesta cambia la prueba: si es el cortafuegos, se documenta y se usa
+     loopback **diciéndolo**; si no, es otro defecto como el de arriba.
+   - **GUI→CLI y GUI→GUI**: sin escribir aún.
+   - Sus controles: el de «nadie escuchando» **ya pasa**.
+2. ~~El consejero en la GUI~~ — **HECHO** en `3758be3`: `qyro_advice` cruza la
+   frontera (24 → 25 símbolos, con enmienda en ADR-0032) y cinco pruebas Dart lo
+   ejercen contra la biblioteca de verdad. La tabla de paridad ya no tiene
+   ninguna fila que diga «todavía».
 
 **No hay informe de fase 21 y es a propósito:** no está cerrada, y un informe que
 dijera «falta esto» es exactamente lo que este taller no escribe.
