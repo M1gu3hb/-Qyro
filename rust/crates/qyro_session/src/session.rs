@@ -187,6 +187,19 @@ pub struct Session {
     progress: Progress,
     outbound: Vec<Vec<u8>>,
     observer: Option<Emitter>,
+    /// Cuántas veces `advance` entró, y cuántas de sus lecturas vencieron.
+    ///
+    /// **Diagnóstico, y existe porque QYR-0365 lo pidió por su nombre.** Es una
+    /// ficha abierta de severidad alta —cada archivo pequeño cuesta ~1,2 s— y su
+    /// propia entrada dice cuál es la medida que la cierra: por lado, cuántas
+    /// veces entra `advance` y cuántas de esas lecturas vencen. Sin contarlo no
+    /// hay forma de distinguir «el par no ha contestado todavía» de «contestó y
+    /// nadie leyó», y las dos piden arreglos opuestos.
+    ///
+    /// Dos `u64` por sesión. No se emite a ningún sitio, no cruza la frontera C
+    /// y no cambia una sola decisión: sólo se puede preguntar.
+    steps: u64,
+    expired_reads: u64,
 }
 
 impl core::fmt::Debug for Session {
@@ -410,6 +423,8 @@ impl Session {
             progress,
             outbound: opening,
             observer,
+            steps: 0,
+            expired_reads: 0,
         })
     }
 
@@ -492,6 +507,8 @@ impl Session {
             progress,
             outbound: opening,
             observer,
+            steps: 0,
+            expired_reads: 0,
         })
     }
 
@@ -527,6 +544,8 @@ impl Session {
             progress: Progress::default(),
             outbound: Vec::new(),
             observer: observer.map(Emitter::new),
+            steps: 0,
+            expired_reads: 0,
         })
     }
 
@@ -680,6 +699,19 @@ impl Session {
         }
     }
 
+    /// Cuántos pasos ha dado esta sesión, y cuántas lecturas vencieron.
+    ///
+    /// **La medida que QYR-0365 pidió por su nombre.** Una lectura vencida es un
+    /// `READ_TIMEOUT` entero —250 ms— gastado esperando a un par que no dijo
+    /// nada. Si vencen muchas de un lado y ninguna del otro, el que espera es
+    /// ese, y ahí está el defecto.
+    ///
+    /// No cruza la frontera C: es para una prueba y para quien lea el código.
+    #[must_use]
+    pub const fn step_tally(&self) -> (u64, u64) {
+        (self.steps, self.expired_reads)
+    }
+
     /// Offers the current progress to the observer, if there is one.
     fn emit(&mut self, terminal: bool) {
         let progress = self.progress;
@@ -712,6 +744,7 @@ impl Session {
     }
 
     fn advance(&mut self) -> Result<SessionState, SessionError> {
+        self.steps = self.steps.saturating_add(1);
         self.write_outbound()?;
 
         let inbound = match self.stream.read_frame() {
@@ -720,7 +753,12 @@ impl Session {
                     .try_encode()
                     .map_err(|_| SessionError::TransferRefused)?,
             ),
-            Ok(None) => None,
+            Ok(None) => {
+                // Venció el reloj de lectura sin un frame. **Es el suceso que
+                // QYR-0365 mide.**
+                self.expired_reads = self.expired_reads.saturating_add(1);
+                None
+            }
             Err(error) => {
                 if self.finished() {
                     return Ok(self.verdict());

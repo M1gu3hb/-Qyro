@@ -293,7 +293,43 @@ mejora obvia: **cualquier arreglo de esta ficha tiene que no escribir a un par
 que pueda haber terminado la conversación**, y hoy el emisor no tiene forma de
 saberlo antes de leer.
 
-**La medida que lo cierra, y es una:** por lado, cuántas veces entra `advance`,
+### LA MEDIDA, y desmiente el diagnóstico de esta ficha (2026-08-19)
+
+`rust/crates/qyro_session/tests/qyr_0365_measurement.rs`, con los contadores
+`Session::step_tally` que esta ficha pedía por su nombre. Veinte archivos de 64
+bytes, dos sesiones de verdad sobre loopback:
+
+```
+  emisor:   22 pasos, 0 lecturas vencidas
+  receptor: 43 pasos, 0 lecturas vencidas
+  tiempo:   0.06 s
+  por archivo: 0.003 s
+```
+
+**Tres milisegundos por archivo, y cero lecturas vencidas en los dos lados.**
+
+Esta ficha decía —y yo lo repetí— que «el emisor gasta 75 lecturas vencidas
+contra 1 del receptor, así que el bucle de sesión lo serializa». **El bucle de
+sesión no serializa nada.** Medido, hace 20 archivos en 60 ms sin esperar al
+reloj ni una vez, y `set_nodelay(true)` ya estaba puesto desde ADR-0028, así que
+Nagle tampoco era.
+
+### Dónde queda el defecto, entonces
+
+Los 75/1 salieron de `gui_cli_matrix_test.dart`, que es **la GUI contra el CLI**:
+Dart conduciendo el motor por la frontera C. La medida de arriba es Rust contra
+Rust. La diferencia entre 3 ms y 1 200 ms por archivo **está en el lado Dart o en
+el cruce**, no en el motor.
+
+**La siguiente medida, y es una:** cronometrar el bucle de
+`native_transfer_service.dart` —`stepBlocking`, `progress`, `peerFingerprint` y
+el `yield`— por iteración, con los mismos 20 archivos. Si el motor hace 22 pasos
+en 60 ms y Dart tarda 24 s, el coste está entre esas cuatro llamadas.
+
+**Lo que esto cambia para quien siga:** no busques en `qyro_transfer` ni en
+`Session::advance`. Ya está medido y está limpio.
+
+**La medida ANTERIOR que se pedía, ya hecha, arriba:** por lado, cuántas veces entra `advance`,
 cuántas de esas lecturas vencen, y **qué frame estaba en vuelo cuando venció**.
 Sin ese tercer dato los otros dos no distinguen «el par no ha contestado
 todavía» de «el par contestó y nadie leyó».

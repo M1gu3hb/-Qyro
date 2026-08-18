@@ -2,6 +2,39 @@
 
 **2026-08-19** · **rama unica: `main`**
 
+## QYR-0365: la medida desmiente el diagnostico
+
+`rust/crates/qyro_session/tests/qyr_0365_measurement.rs`, con los contadores
+`Session::step_tally` que la ficha pedia por su nombre. Veinte archivos de 64
+bytes, dos sesiones de verdad sobre loopback:
+
+```
+  emisor:   22 pasos, 0 lecturas vencidas
+  receptor: 43 pasos, 0 lecturas vencidas
+  tiempo:   0.06 s   ->  0,003 s por archivo
+```
+
+**Tres milisegundos, no 1,2 segundos. Y cero esperas en los dos lados.**
+
+La ficha decia —y yo lo repeti— que el bucle de sesion serializaba. **No
+serializa.** Y `set_nodelay(true)` ya estaba desde ADR-0028, asi que Nagle
+tampoco era.
+
+**Donde queda:** los 75/1 salieron de `gui_cli_matrix_test.dart`, que es la GUI
+contra el CLI — Dart conduciendo el motor por la frontera C. Esta medida es Rust
+contra Rust. La diferencia entre 3 ms y 1 200 ms **esta en el lado Dart o en el
+cruce**, no en el motor.
+
+**La siguiente medida, y es una:** cronometrar por iteracion el bucle de
+`native_transfer_service.dart` — `stepBlocking`, `progress`, `peerFingerprint` y
+el `yield`. Si el motor hace 22 pasos en 60 ms, el coste esta entre esas cuatro
+llamadas.
+
+**No busques en `qyro_transfer` ni en `Session::advance`.** Ya esta medido y esta
+limpio.
+
+---
+
 ## El telefono ya puede mirar
 
 `R7` prometia cuatro canales y habia tres y medio: `qyro beam` dibujaba QR y
