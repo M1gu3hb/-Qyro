@@ -162,16 +162,27 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
     };
 
     let root = path.parent().unwrap_or(Path::new("."));
-    let name = match path.file_name().and_then(|name| name.to_str()) {
-        Some(name) => name.to_owned(),
-        None => {
-            eprintln!("qyro: that file's name is not text this can put on the wire");
-            return 2;
-        }
-    };
+    // The name still has to be text, and the check stays even though the value
+    // is no longer passed separately: a file whose name is not UTF-8 cannot be
+    // put on this wire, and finding that out here gives a sentence instead of a
+    // manifest error three layers down.
+    if path.file_name().and_then(|name| name.to_str()).is_none() {
+        eprintln!("qyro: that file's name is not text this can put on the wire");
+        return 2;
+    }
 
     println!("\n  connecting to {address} ...");
-    let mut session = match Session::open_sender(address, root, &[PathBuf::from(&name)], None) {
+    // **The full path, not the bare name.** `open_sender` derives each file's
+    // name on the wire by `strip_prefix(root)`, so a bare `p.bin` against a root
+    // of `C:\folder` cannot strip and every send returned `BadArgument`.
+    //
+    // `qyro send` had this from the day it was written in phase 13 and it was
+    // released: the command has **never** moved a byte. Nothing caught it
+    // because both halves were tested apart -- `open_sender` has its own tests
+    // with correct arguments, and the CLI's tests never reached a socket. It
+    // took putting the two faces against each other, which is what phase 21 is
+    // for. QYR-0360.
+    let mut session = match Session::open_sender(address, root, &[path.to_path_buf()], None) {
         Ok(session) => session,
         Err(error) => {
             eprintln!("\nqyro: could not connect: {error}");

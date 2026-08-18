@@ -1,5 +1,48 @@
 # Bugs y pendientes verificados
 
+## QYR-0360 — `qyro send` no ha movido nunca un byte
+
+- Estado: **CERRADO**
+- Severidad: **P0**
+- Fase: 21
+- Encontrado: 2026-08-18, poniendo la GUI contra el CLI por primera vez
+
+**El defecto.** `flows::send` llamaba a
+`Session::open_sender(address, root, &[PathBuf::from(&name)], None)` con
+`root` = el directorio padre y `name` = **el nombre pelado del archivo**.
+`open_sender` deriva el nombre en el cable con `source.strip_prefix(root)`, y
+`"p.bin".strip_prefix("C:\carpeta")` **falla siempre**. Toda invocación de
+`qyro send` devolvía `BadArgument`, que el CLI imprime como
+*«could not connect: the address, port or path was not usable»* — un mensaje que
+apunta a la red cuando el problema estaba en los argumentos.
+
+**Desde cuándo.** Desde la fase 13, el día que se escribió. **Y se publicó una
+Release con él.**
+
+**Por qué no lo vio nadie.** Las dos mitades estaban probadas por separado:
+`open_sender` tiene sus propias pruebas, con argumentos correctos; y las pruebas
+del CLI nunca llegaban a un socket. Es el mismo hueco que produjo
+`KeystoreWrapper`, `qyro_session_local_address`, `Session::finish`, `history()`
+y el descubrimiento — **la sexta vez que este proyecto envía una costura que
+ninguna prueba cruzaba.**
+
+**El arreglo.** Pasar la ruta completa. Una línea.
+
+**La evidencia, ejecutada.** Dos copias del binario en directorios distintos —
+para que sean dos aparatos y no uno, porque la identidad vive junto al
+ejecutable— con huellas distintas (`b154290bfc…` y `506e5a2763…`), `--expect`
+mutuo, y un archivo de 5 000 bytes que **aparece en el directorio del receptor**.
+Antes del arreglo: `BadArgument`. Después: `sent.`
+
+**La pregunta que cierra esta ficha:** ¿mueve `qyro send` un archivo entre dos
+procesos con identidades distintas? **Sí, y no lo hacía.**
+
+**Lo que esto obliga a hacer:** la Release publicada contiene un `qyro.exe` cuyo
+`send` no funciona. Se retracta y se republica, como se hizo con `2c01de0` — ese
+es el estándar de esta casa y esta ficha no lo cambia. Queda en
+`ESTADO-ACTUAL.md` como lo primero de la siguiente sesión, porque tocar una
+Release publicada no es algo que se haga con el contexto justo.
+
 ## QYR-0001 — Falta referencia visual de scramble
 
 - Plataforma: todas
