@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-18T22:00:00Z
 - Branch: claude/qyro-cerrar-cadena-12
-- Verified commit: 57e93eadd54e13fb8386cd371fb74dcd3fa8b891
+- Verified commit: 51d2efb0b3232c649d79e5cca83b601afed3b8c8
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
