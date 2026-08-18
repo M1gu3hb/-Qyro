@@ -18,11 +18,26 @@ pequeños** entre dos `NativeTransferService` sobre loopback termina en
 - **No son los límites del manifiesto.** `qyro_manifest::MAX_ITEMS` es **100 000**
   y `MAX_ENCODED_LEN` **8 MiB**. Doscientas entradas no se acercan a ninguno.
 
-**Lo que falta y es el siguiente paso concreto:** el `kind` del `QyroFailed`. La
-prueba lo tenía a mano y no lo imprimía — ese es el primer arreglo, antes de
-tocar nada del motor. Con el `kind` en la mano, los dos sospechosos por orden son
-los descriptores abiertos (que es la razón por la que existe el techo) y algún
-tiempo de espera que 200 elementos superan y dos no.
+**El `kind`, medido:** `QyroFailureKind.unreachable`. Es decir
+`SessionError::PeerUnreachable` — **el emisor no falló: el receptor dejó de
+estar ahí**. No es un rechazo, no es un error de argumentos, no es
+almacenamiento: la conexión terminó.
+
+Eso reordena a los sospechosos y **descarta uno**: si fueran los descriptores del
+*emisor*, el fallo llegaría como un error de E/S local, no como un par que
+desaparece. Lo que queda apunta al lado receptor — o a algo entre los dos que
+cierra la conexión.
+
+**Los tres siguientes, en orden y baratos:**
+
+1. **¿Con cuántos empieza a fallar?** 2 cruzan y 200 no. Una bisección (10, 50,
+   100) dice si hay un umbral limpio o si es proporcional al tiempo — y esas dos
+   respuestas señalan a sitios distintos.
+2. **Qué dice el receptor.** El proceso receptor no se está inspeccionando; su
+   error propio es la mitad de la historia que falta.
+3. **`IDLE_TIMEOUT` y `READ_TIMEOUT` de `qyro_net::limits`** contra el tiempo que
+   tarda el receptor en crear y cerrar 200 archivos en Windows. Es la hipótesis
+   con forma de «dos no y doscientos sí».
 
 **La prueba se retiró del árbol en vez de dejarla en rojo**, y esto es una ficha
 en vez de un comentario en un commit. Escribirla y dejarla fallando habría dejado
@@ -30,7 +45,8 @@ la puerta cerrada para el siguiente trabajo; borrarla sin ficha habría perdido 
 hallazgo, que es lo que le pasó a la fase 11.
 
 **La pregunta que cierra esta ficha:** ¿cruzan 200 archivos, con su contenido
-correcto cada uno? **Hoy no, y no se sabe por qué.**
+correcto cada uno? **Hoy no.** Y ya no es «no se sabe por qué» sino «el receptor
+deja de estar ahí», que es una frase mucho más pequeña.
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 

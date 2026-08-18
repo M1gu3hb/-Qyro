@@ -62,11 +62,13 @@ se suelte— así que cada uno es una casilla más:
    `TooManyFiles`), y no son los límites del manifiesto (`MAX_ITEMS` 100 000,
    `MAX_ENCODED_LEN` 8 MiB).
 
-   **El siguiente paso es exactamente uno:** imprimir el `kind` del
-   `QyroFailed`, que la prueba tenía a mano y no mostraba. Sin eso, cualquier
-   cosa que se toque del motor es adivinar. Después, los dos sospechosos por
-   orden: descriptores abiertos —que es la razón por la que existe el techo— y
-   algún tiempo de espera que 200 elementos superan y dos no.
+   **El `kind` ya está medido: `unreachable`** — `PeerUnreachable`. El emisor no
+   falló: **el receptor dejó de estar ahí**. Eso descarta los descriptores del
+   emisor (llegarían como error de E/S local, no como un par que desaparece).
+   Los tres siguientes, baratos y en orden, están en la ficha: bisecar el número
+   que empieza a fallar, mirar el error del proceso receptor, y comparar
+   `IDLE_TIMEOUT`/`READ_TIMEOUT` con lo que tarda el receptor en crear y cerrar
+   200 archivos en Windows.
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
    ya se comprobó (`done`/`total` son `u64`, ADR-0047 §2.1); **falta la
