@@ -1,0 +1,88 @@
+name: Windows 7 and 32-bit
+
+# **Un job aparte, y ADR-0049 §2 dice por que.** Los targets de Windows 7 son
+# Tier 3 y necesitan `-Z build-std`, que es nightly. Subir `rust-toolchain.toml`
+# entero por eso seria cambiar el compilador de TODO el arbol -- la criptografia
+# incluida-- para arreglar una plataforma. Aqui el nightly esta aislado y
+# declarado, y el resto del repositorio sigue en su stable fijo y auditado.
+#
+# **Y corre aqui y no en la maquina del implementador** porque `-Z build-std`
+# necesita `rust-src`: alrededor de 1,5 GB en el disco de sistema, que en esa
+# maquina va justo. Un runner lo tira al terminar.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "rust/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - "scripts/check_win7_imports.ps1"
+      - ".github/workflows/win7-builds.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  win7:
+    # QYR-0078: sin tope, un paso atascado corre hasta las seis horas por
+    # defecto de GitHub en vez de fallar con un log que alguien pueda leer.
+    timeout-minutes: 60
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - win7: x86_64-win7-windows-msvc
+            normal: x86_64-pc-windows-msvc
+          - win7: i686-win7-windows-msvc
+            normal: i686-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      # `rust-src` es lo que hace posible `-Z build-std`: un target Tier 3 no
+      # trae `std` compilado, hay que compilarlo aqui.
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: ${{ matrix.normal }}
+
+      - name: El binario de Windows 7
+        run: >
+          cargo +nightly build --release -p qyro_cli
+          -Z build-std=std,panic_abort
+          --target ${{ matrix.win7 }}
+
+      # El control de ADR-0049 §4 necesita las dos mitades, asi que el binario
+      # del target normal tambien se compila: sin el, la comprobacion de abajo
+      # no puede demostrar que sabe encontrar lo que busca.
+      - name: El binario del target normal, que es el control
+        run: cargo +nightly build --release -p qyro_cli --target ${{ matrix.normal }}
+
+      # **El paso de puerta, por codigo de salida.** No importa nada de
+      # Windows 8 en el binario de win7, Y el binario normal SI lo importa.
+      - name: Los imports, con su control
+        run: >
+          pwsh -NoProfile -File scripts/check_win7_imports.ps1
+          -Win7Binary  target/${{ matrix.win7 }}/release/qyro.exe
+          -NormalBinary target/${{ matrix.normal }}/release/qyro.exe
+
+      # `dumpbin /imports` completo, guardado. ADR-0049 §3 deja escrito que la
+      # confirmacion sobre `msvc` estaba PENDIENTE porque `R8` §10 midio sobre
+      # `-gnu`; esta salida es lo que la convierte en una medida.
+      - name: La tabla de imports, para el informe
+        run: >
+          pwsh -NoProfile -Command
+          "$d = (Get-ChildItem '${env:ProgramFiles}\Microsoft Visual Studio' -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+           & $d /imports target/${{ matrix.win7 }}/release/qyro.exe | Out-File -Encoding utf8 imports-${{ matrix.win7 }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qyro-${{ matrix.win7 }}
+          path: |
+            target/${{ matrix.win7 }}/release/qyro.exe
+            imports-${{ matrix.win7 }}.txt
+          if-no-files-found: error
+          retention-days: 14

@@ -2,6 +2,24 @@
 
 **2026-08-19** · **rama unica: `main`**
 
+## Fase 17 — cerrada, con el binario en CI y no aqui
+
+ADR-0049 congelada. Job `win7-builds.yml` con `-Z build-std` y los cuatro
+targets, y `check_win7_imports.ps1` **con su control**: el binario normal DEBE
+fallar la comprobacion, o el `[PASS]` del otro no vale nada. Visto fallar con las
+tres entradas que tiene que rechazar.
+
+**No se compilo un binario de win7 aqui**: `-Z build-std` necesita nightly y
+`rust-src`, ~1,5 GB en el disco de sistema de esta maquina, que va justo. Lo
+compila el runner y sube el binario y su tabla de imports.
+
+**Y por eso ADR-0049 §3 deja la confirmacion sobre `msvc` como PENDIENTE.** `R8`
+§10 midio sobre `-gnu`; el codigo de `std` es el mismo y eso es un argumento, no
+una medida. Hasta que ese `dumpbin` corra, **este proyecto no afirma que
+Windows 7 funcione.**
+
+---
+
 ## QYR-0365: la medida desmiente el diagnostico
 
 `rust/crates/qyro_session/tests/qyr_0365_measurement.rs`, con los contadores

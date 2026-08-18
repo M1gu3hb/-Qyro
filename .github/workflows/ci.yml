@@ -243,6 +243,8 @@ jobs:
           pwsh -NoProfile -File scripts/tests/test_all_contract_test.ps1 || status=1
           bash scripts/tests/docs_consistency_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/docs_consistency_contract_test.ps1 || status=1
+          # ADR-0049 §4: que la comprobacion de imports de win7 sepa fallar.
+          pwsh -NoProfile -File scripts/tests/win7_imports_contract_test.ps1 || status=1
           pwsh -NoProfile -File scripts/tests/windows_package_contract_test.ps1 || status=1
           bash scripts/tests/launch_surface_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/launch_surface_contract_test.ps1 || status=1
