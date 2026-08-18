@@ -415,3 +415,56 @@ desenvolver— **las dos mitades necesitan su prueba de extremo a extremo, y con
 el producto en cada rol.** Las tres veces que este proyecto ha enviado una
 capacidad inalcanzable han sido costuras que ninguna prueba cruzaba, y las tres
 se habrían visto preguntando quién llama.
+
+---
+
+## Enmienda (2026-08-18, fase 21) — un símbolo más: `qyro_advice`
+
+**La superficie C pasa de 24 a 25 símbolos.** No se añade uno a esta frontera sin
+escribir por qué, y ésta es la razón.
+
+### Qué es
+
+```c
+int32_t qyro_advice(int32_t has_network, int32_t peer_discovered,
+                    int32_t has_serial_port, int32_t other_has_camera,
+                    uint64_t payload_len,
+                    uint8_t *out, size_t capacity, size_t *out_len);
+```
+
+Cuatro hechos entran, una frase sale. Como todo lo demás en esta superficie, el
+texto se escribe **en un buffer prestado por quien llama** y no se escribe nada
+si no cabe. **No cruza ningún tipo.**
+
+### Por qué tiene que cruzar la frontera
+
+ADR-0046 §4 decide que un solo módulo elige el canal —red, cable directo, serie,
+óptico— porque las fases 14, 15 y 16 tenían cada una algo que decir y tres
+interfaces inventando su propio orden es como un producto acaba
+contradiciéndose. Ese módulo vive en `qyro_session`.
+
+**Y el CLI lo alcanzaba y la GUI no.** Eso es literalmente la celda vacía que
+ADR-0046 §2 prohíbe: una capacidad que existe en una cara, no existe en la otra,
+y nadie lo ha escrito. Las opciones eran tres y dos son malas:
+
+| | |
+|---|---|
+| Que la GUI no lo tenga | Es la decisión que la tabla de paridad marcaba «TODAVÍA», y era pendiente, no decisión: **la GUI sí debería tenerlo** |
+| Que Dart lo reimplemente | **Dos implementaciones del mismo orden** es exactamente el problema que ADR-0046 §4 existe para evitar |
+| **Un símbolo** | Un `int32` de retorno y texto a un buffer prestado, la forma que esta superficie ya usa nueve veces |
+
+### Por qué la frase y no un código
+
+ADR-0046 §5, y el precedente está en esta misma superficie:
+`qyro_identity_fingerprint` devuelve el texto ya agrupado en vez de bytes,
+**porque dos aparatos que dibujaran la misma huella distinta harían que leerla en
+voz alta no significara nada.** Un consejo que cruzara como un entero se
+convertiría en «canal 3» en una cara y un párrafo en la otra, y eso son dos
+productos.
+
+### Lo que no cambia
+
+Sigue sin cruzar un tipo. Sigue sin haber asignación que el otro lado deba
+liberar. `qyro_ffi` sigue pudiendo nombrar exactamente `qyro_core` y
+`qyro_session`, que es lo que la guarda 1 acota — y el consejero está en
+`qyro_session`, así que no abre ninguna arista nueva en el grafo.
