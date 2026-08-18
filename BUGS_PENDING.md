@@ -1,52 +1,50 @@
 # Bugs y pendientes verificados
 
-## QYR-0365 — Doscientos archivos de una vez fallan, y no se sabe por qué
+## QYR-0365 — Cada archivo pequeño cuesta ~1,2 s, y a los 60 s se corta la sesión
 
-- Estado: **ABIERTO**
+- Estado: **ABIERTO**, causa localizada
 - Severidad: **ALTA**
 - Fase: 22, escenario 2
 
-**Lo observado, y es todo lo que se sabe.** Una transferencia de **200 archivos
-pequeños** entre dos `NativeTransferService` sobre loopback termina en
-`QyroFailed`. Un archivo, dos y una carpeta con subcarpetas cruzan sin problema
-(escenario 1, `a932ec2`); doscientos no.
+**Lo medido, bisecando** (200 archivos de 64–264 bytes, dos procesos en loopback):
 
-**Lo descartado, medido y no supuesto:**
+| archivos | resultado | llegaron | tiempo |
+|---|---|---|---|
+| 10 | ENTREGADO | 10 | **12,4 s** |
+| 50 | ENTREGADO | 50 | **49,4 s** |
+| 100 | FALLO `unreachable` | **100** | **80,3 s** |
+| 150 | FALLO `unreachable` | **150** | **127,3 s** |
 
-- **No es el techo de ADR-0047 §3.** Son 200 y el techo es 256; además el techo
-  se rechaza con `TooManyFiles`, que es un error distinto y con su propio código.
-- **No son los límites del manifiesto.** `qyro_manifest::MAX_ITEMS` es **100 000**
-  y `MAX_ENCODED_LEN` **8 MiB**. Doscientas entradas no se acercan a ninguno.
+**Dos hallazgos, y el segundo es el de verdad.**
 
-**El `kind`, medido:** `QyroFailureKind.unreachable`. Es decir
-`SessionError::PeerUnreachable` — **el emisor no falló: el receptor dejó de
-estar ahí**. No es un rechazo, no es un error de argumentos, no es
-almacenamiento: la conexión terminó.
+### 1. No es un límite de cantidad, es un reloj — y los archivos SÍ llegan
 
-Eso reordena a los sospechosos y **descarta uno**: si fueran los descriptores del
-*emisor*, el fallo llegaría como un error de E/S local, no como un par que
-desaparece. Lo que queda apunta al lado receptor — o a algo entre los dos que
-cierra la conexión.
+`qyro_net::limits::IDLE_TIMEOUT` es **exactamente 60 s**. El corte cae entre
+49,4 s (pasa) y 80,3 s (falla). **La correlación es con el tiempo, no con el
+número.**
 
-**Los tres siguientes, en orden y baratos:**
+Y lo que más importa: en los dos casos que «fallan», **`llegaron` es el total**.
+Los cien archivos están en disco, con su contenido. El emisor informa de un fallo
+sobre una transferencia que se completó. **Un falso negativo al final es peor que
+un fallo honesto**: la persona borra y reenvía algo que ya estaba entregado.
 
-1. **¿Con cuántos empieza a fallar?** 2 cruzan y 200 no. Una bisección (10, 50,
-   100) dice si hay un umbral limpio o si es proporcional al tiempo — y esas dos
-   respuestas señalan a sitios distintos.
-2. **Qué dice el receptor.** El proceso receptor no se está inspeccionando; su
-   error propio es la mitad de la historia que falta.
-3. **`IDLE_TIMEOUT` y `READ_TIMEOUT` de `qyro_net::limits`** contra el tiempo que
-   tarda el receptor en crear y cerrar 200 archivos en Windows. Es la hipótesis
-   con forma de «dos no y doscientos sí».
+### 2. **~1,2 segundos por archivo de 64 bytes**
 
-**La prueba se retiró del árbol en vez de dejarla en rojo**, y esto es una ficha
-en vez de un comentario en un commit. Escribirla y dejarla fallando habría dejado
-la puerta cerrada para el siguiente trabajo; borrarla sin ficha habría perdido el
-hallazgo, que es lo que le pasó a la fase 11.
+12,4 s para diez. 49,4 s para cincuenta. 127 s para ciento cincuenta. Es lineal y
+es absurdo: son archivos de decenas de bytes sobre loopback. El `IDLE_TIMEOUT` no
+es el defecto — **es lo que hace visible al defecto**. Subirlo escondería esto.
 
-**La pregunta que cierra esta ficha:** ¿cruzan 200 archivos, con su contenido
-correcto cada uno? **Hoy no.** Y ya no es «no se sabe por qué» sino «el receptor
-deja de estar ahí», que es una frase mucho más pequeña.
+**La hipótesis a comprobar primero, y no está comprobada:** un `flush`, un
+`fsync` o un cierre de archivo por elemento en el camino del receptor, o una
+espera de ida y vuelta por elemento en el protocolo. Un segundo por archivo es la
+firma de «una operación síncrona de disco por elemento», no de un problema de red.
+
+**Lo que NO hay que hacer y está dicho aquí para que no se haga:** subir
+`IDLE_TIMEOUT`. Convierte un fallo ruidoso en una transferencia de veinte minutos
+para doscientos archivos, y eso es peor producto.
+
+**La pregunta que cierra esta ficha:** ¿cuánto tarda un archivo pequeño, y por
+qué? Hoy 1,2 s, y no se sabe por qué.
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 

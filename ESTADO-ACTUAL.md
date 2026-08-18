@@ -56,19 +56,13 @@ se suelte— así que cada uno es una casilla más:
 
 1. ~~Carpeta con subcarpetas y una vacía~~ **HECHO** (`a932ec2`). Árbol comparado
    entrada por entrada; la carpeta vacía no viaja y está afirmado.
-2. **200 archivos — INTENTADO, y falla: QYR-0365.** La prueba se escribió, se
-   ejecutó, terminó en `QyroFailed`, y **se retiró del árbol en vez de dejarla en
-   rojo**. Descartado y medido: no es el techo de 256 (son 200, y ese rechazo es
-   `TooManyFiles`), y no son los límites del manifiesto (`MAX_ITEMS` 100 000,
-   `MAX_ENCODED_LEN` 8 MiB).
+2. **200 archivos — QYR-0365, causa localizada y es peor de lo que parecía.**
+   Bisecado: 10 y 50 entregan; 100 y 150 «fallan» — **pero los archivos llegan
+   todos**. `IDLE_TIMEOUT` es 60 s y el corte cae entre 49,4 s y 80,3 s: es un
+   reloj, no un recuento. Y debajo está el defecto real: **~1,2 s por archivo de
+   64 bytes**, lineal. **No subas `IDLE_TIMEOUT`** — escondería esto y
+   convertiría el fallo en veinte minutos de espera.
 
-   **El `kind` ya está medido: `unreachable`** — `PeerUnreachable`. El emisor no
-   falló: **el receptor dejó de estar ahí**. Eso descarta los descriptores del
-   emisor (llegarían como error de E/S local, no como un par que desaparece).
-   Los tres siguientes, baratos y en orden, están en la ficha: bisecar el número
-   que empieza a fallar, mirar el error del proceso receptor, y comparar
-   `IDLE_TIMEOUT`/`READ_TIMEOUT` con lo que tarda el receptor en crear y cerrar
-   200 archivos en Windows.
 3. **Un archivo > 4 GiB**, esparcido para no gastar disco. El control: el
    progreso del último frame **no es menor** que el del anterior. La aritmética
    ya se comprobó (`done`/`total` son `u64`, ADR-0047 §2.1); **falta la
