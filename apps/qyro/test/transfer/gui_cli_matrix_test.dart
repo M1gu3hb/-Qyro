@@ -422,6 +422,103 @@ void main() {
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
 
+    test('a folder keeps its shape, and an empty subfolder does not travel',
+        () async {
+      // **Escenario 1 de la fase 22.** Todo lo que este proyecto había probado
+      // era un archivo suelto. Una carpeta con subcarpetas es lo primero que
+      // hace cualquiera, y la estructura se preserva o no se preserva — no hay
+      // término medio, y nadie lo había mirado.
+      //
+      // El árbol se compara **entrada por entrada**: sobrar un archivo falla
+      // igual que faltar. Un destino que contiene lo que se mandó *y algo más*
+      // no es un destino correcto.
+      final source = Directory(_under(scratch, 'out'))..createSync();
+      final destination = Directory(_under(scratch, 'in'))..createSync();
+
+      final deep = Directory(_join(source.path, 'a'))..createSync();
+      final deeper = Directory(_join(deep.path, 'b'))..createSync();
+      // Una carpeta vacía: ADR-0047 §4 dice que **no viaja**, porque el
+      // manifiesto lista archivos y una carpeta vacía no es un archivo. Se
+      // afirma aquí para que la limitación esté escrita en una prueba y no sólo
+      // en un documento.
+      Directory(_join(source.path, 'vacia')).createSync();
+
+      final top = File(_join(source.path, 'arriba.bin'))
+        ..writeAsBytesSync(_pattern(4096));
+      final nested = File(_join(deeper.path, 'hondo.bin'))
+        ..writeAsBytesSync(_pattern(8192));
+
+      final receiver = NativeTransferService(
+        bindings: QyroSessionBindings.open(library!),
+      );
+      final failures = <Object>[];
+      final session = receiver
+          .receive(
+            bind: '0.0.0.0:$port',
+            destination: destination.path,
+            decide: (_) async => true,
+          )
+          .listen((_) {}, onError: failures.add);
+
+      try {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final sent = <QyroTransferState>[];
+        await for (final state in service.send(
+          address: '127.0.0.1:$port',
+          files: <QyroPicked>[
+            QyroPickedPath(
+              path: top.path,
+              name: 'arriba.bin',
+              size: top.lengthSync(),
+            ),
+            QyroPickedPath(
+              path: nested.path,
+              name: 'hondo.bin',
+              size: nested.lengthSync(),
+            ),
+          ],
+        )) {
+          sent.add(state);
+          if (state is QyroDelivered || state is QyroFailed) break;
+        }
+        expect(sent.last, isA<QyroDelivered>(), reason: '${sent.last}');
+        await Future<void>.delayed(const Duration(seconds: 1));
+      } finally {
+        await session.cancel();
+      }
+
+      expect(failures, isEmpty, reason: 'el receptor dio error: $failures');
+
+      // Entrada por entrada, y ordenado para que la comparación no dependa del
+      // orden en que el sistema de archivos devuelva las cosas.
+      final landed = destination
+          .listSync(recursive: true)
+          .whereType<File>()
+          .map((file) => file.path.substring(destination.path.length + 1))
+          .toList()
+        ..sort();
+
+      expect(
+        landed,
+        equals(<String>[
+          'a${Platform.pathSeparator}b${Platform.pathSeparator}hondo.bin',
+          'arriba.bin',
+        ]),
+        reason: 'el árbol de destino no es el de origen',
+      );
+      expect(
+        File(_join(destination.path, 'arriba.bin')).readAsBytesSync(),
+        equals(_pattern(4096)),
+      );
+      expect(
+        Directory(_join(destination.path, 'vacia')).existsSync(),
+        isFalse,
+        reason: 'una carpeta vacía viajó, y ADR-0047 §4 dice que no lo hace. '
+            'Si esto empieza a fallar, la decisión cambió y hay que cambiar el '
+            'documento, no la prueba',
+      );
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
     test('with nobody listening, the CLI fails by name and does not hang',
         () async {
       // Control 1 of the phase document. A refusal that hangs is the failure
