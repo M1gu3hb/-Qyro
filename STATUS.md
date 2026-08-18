@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-18T18:00:00Z
+- Updated UTC: 2026-08-18T22:00:00Z
 - Branch: claude/qyro-cerrar-cadena-12
-- Verified commit: e2f4250094b21dac273789e02bf9b899f258184c
+- Verified commit: 0b533f42342f436e763a359e6fe4365c8799a50a
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -131,12 +131,23 @@ contra el código que existe: `THREAT_MODEL.md`.
   brillo y ángulo son fase 19. El receptor es el teléfono (ADR-0044 §6) y **el
   lado Android que acumula frames no existe todavía**; el binario de escritorio
   no lleva decodificador, a propósito.
-- `cargo test --workspace`: **711 pasadas, 0 fallos** (eran 639; la 13 sumó el
-  CLI, la 14 el beacon y la 15 la fuente y el canal óptico). `flutter test`:
+- **Canal serie** (fase 16): `qyro serial` enumera los puertos y **primero
+  pregunta si esa máquina tiene CD, disquetera, PCMCIA o red**, porque cualquiera
+  es entre 10 y 10 000 veces más rápida. Después imprime el receptor —PowerShell
+  2.0, HyperTerminal de XP, o `stty` de Linux— con los valores reales puestos, y
+  **la advertencia va delante**: el modo degradado NO está cifrado ni
+  autenticado. ARQ con CRC32 y reintentos contados, no el fountain, porque el
+  serie tiene canal de retorno. **Verificado**: `certutil -decode` real acepta lo
+  que Qyro escribe, y recuperación con 5 % de líneas dañadas con los reintentos
+  aseverados. **No verificado: ningún cable** — los dos puertos de esta máquina
+  son endpoints Bluetooth, no un par enlazado. Fase 19. **No llega a la GUI** y
+  ninguna pantalla lo menciona.
+- `cargo test --workspace`: **739 pasadas, 0 fallos** (eran 639; la 13 sumó el
+  CLI, la 14 el beacon, la 15 la fuente y el canal óptico, la 16 el serie). `flutter test`:
   **105 pasadas** (eran 92; la 14 sumó el cliente de descubrimiento y su
   pantalla). Las saltadas de Dart siguen saltando sin la biblioteca nativa
   compilada o sin el manifiesto fusionado, y **saltada no es pasada**.
-- `Cargo.lock`: **110 paquetes**, de los que 16 entran sólo por
+- `Cargo.lock`: **122 paquetes**, de los que 16 entran sólo por
   `dev-dependencies` (`rqrr` y su árbol) y no viajan en el binario.
   `pubspec.lock`: **45**.
 - `BUGS_PENDING.md`: **155 fichas, 0 abiertas.**
