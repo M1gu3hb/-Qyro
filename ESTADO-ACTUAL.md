@@ -637,3 +637,25 @@ puestas a mano contra el listado de declaraciones.
 
 El guardian pide ahora que la cita caiga en algo **nombrable**. Que corresponda a
 la capacidad no es mecanizable, y esta escrito en el script que no lo es.
+
+
+## El APK, construido — y la comprobacion 20 medida donde toca
+
+Tres sesiones sin construirse. Construido hoy sobre NDK 28.2.13676358, perfil
+release, `android-arm64`:
+
+| | |
+|---|---|
+| `libqyro_ffi.so` (cargo) | 1 069 952 bytes |
+| `libqyro_ffi.so` (**extraido del APK**) | 1 069 944 bytes |
+| APK | 18.0 MB |
+| Gradle | 353.3 s |
+
+**Comprobacion 20 — PASA.** Los cuatro `PT_LOAD` del `.so` **sacado del APK**
+tienen `p_align = 0x4000`. Se mide ahi y no en la salida de `cargo` porque lo que
+carga Android 15 con paginas de 16 KB es lo que va dentro del paquete, y entre
+una cosa y otra hay un empaquetador.
+
+**Lo que esto NO dice:** no se ha ejecutado en un telefono. Que cargue es una
+propiedad del binario y esta medida; que funcione no, y no hay aqui ninguna
+evidencia de hardware.

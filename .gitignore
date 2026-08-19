@@ -41,3 +41,9 @@ release/windows/*
 !release/android/.gitkeep
 !release/ios/.gitkeep
 !release/windows/.gitkeep
+
+# El .so de Android se construye, no se guarda: lo produce
+# `cargo build --target aarch64-linux-android` y CI lo rehace en cada APK.
+# Un binario de 1 MB en el arbol se desincroniza del codigo en el primer commit
+# que no lo regenere, y entonces el APK lleva un motor que no es el que se lee.
+apps/qyro/android/app/src/main/jniLibs/
