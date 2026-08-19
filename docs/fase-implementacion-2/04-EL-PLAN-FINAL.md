@@ -4,6 +4,12 @@
 > todos a nombre del propietario**, ledger **167 fichas / 1 abierta (QYR-0365)**,
 > Linux **766 pruebas / 0 fallos**, `v1.0.0` → `98200e13` intacto.
 > Sustituye a `03-EL-CAMINO-AL-99.md` §1.
+>
+> **Esa cabecera es procedencia, no un ancla.** Dice sobre que commit se escribio
+> este plan, y por eso no se actualiza: reescribirla falsearia cuando se escribio.
+> Lo que si envejece son sus cifras — **QYR-0365 esta cerrada**, asi que el ledger
+> va por **167 fichas / 0 abiertas**. El estado vivo esta en `ESTADO-ACTUAL.md`, y
+> el commit al dia en `STATUS.md`.
 
 ---
 

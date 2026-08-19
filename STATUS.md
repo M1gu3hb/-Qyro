@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-20T18:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 231a2539d63112b6281ef16ead4722ca55cf70c6
+- Verified commit: 2871488b274f7771ebbc6ead1146c0526f465765
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -348,12 +348,15 @@ dice sobre qué commit corrió**. Los runs de cierre del sprint 4C.2 se ejecutan
 sobre el commit que lleva los disparadores de CI y se registran en el commit
 siguiente, que es la misma secuencia que usó el sprint 4C.1.
 
-La rama continúa `claude/qyro-resource-bounds-4c3`, que continúa
-`claude/qyro-crypto-platform-hardening`, que continúa `claude/qyro-aead-replay`,
-que continúa `claude/qyro-handshake-closure`, que a su vez reconcilió
-`audit/baseline-hardening` con los commits del propietario en `main`. Ninguna
-rama fue reescrita ni fusionada a `main`. Auditoría de este sprint:
-`docs/audits/SPRINT4D1_SECURE_STORAGE.md`.
+**Ese linaje de ramas ya no existe.** Este párrafo describía una cadena
+—`claude/qyro-resource-bounds-4c3` sobre `claude/qyro-crypto-platform-hardening`
+sobre `claude/qyro-aead-replay`…— que se fusionó a `main` y cuyas ramas se
+borraron. Se deja dicho en vez de borrado porque un lector que busque esos
+nombres en el historial los va a encontrar, y merece saber por qué no están.
+
+**Hoy hay una rama y sólo una: `main`.** Nada se reescribió nunca; la historia es
+lineal y todos los commits llevan la autoría del propietario. Auditoría del
+sprint que cerró aquella cadena: `docs/audits/SPRINT4D1_SECURE_STORAGE.md`.
 
 **El sprint 4D.1 sí añadió función**, y es el primero desde 4A que lo hace: una
 identidad sobrevive al cierre del proceso, en una plataforma de tres. No añadió
