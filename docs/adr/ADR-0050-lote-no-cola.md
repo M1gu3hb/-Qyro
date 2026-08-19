@@ -116,3 +116,68 @@ contenido sin archivo. El primero se descarta, el segundo se nombra.
   mantiene siendo un lote. Si algún día tiene que sobrevivir, **es una cola** y
   hay que reabrir `R7` §5, no esta ADR.
 - **El número de archivos.** Lo fija ADR-0047 en 256, y no se toca aquí.
+
+---
+
+## 8. Enmienda 1 (2026-08-20) — la §5 se escribió sobre un hecho falso
+
+**Diez minutos después de congelar esta ADR, el código la desmintió.**
+
+La §5 dice que para que una carpeta vacía viajara «haría falta una entrada de
+tipo directorio en el manifiesto», y presenta eso como **una versión de protocolo
+en los cuatro canales, para siempre**. Con ese coste, la decisión de no hacerlo se
+sostenía sola.
+
+**Ese tipo ya existe.** `qyro_manifest/src/model.rs:14`:
+
+```rust
+/// A directory, carried so empty directories survive the transfer.
+Directory = 2,
+```
+
+Está en el formato de cable con su valor estable, tiene **validación propia**
+—`model.rs:507` rechaza un directorio con tamaño o con hash— y **contratos de
+prueba** en `manifest_contract.rs:337`, `:350`, `:365` y `:808`.
+
+Y **nada fuera de `qyro_manifest` lo construye jamás.** Es la décima capacidad de
+este proyecto escrita, validada, probada e inalcanzable desde el producto.
+
+### Lo que eso le hace al argumento de ADR-0047 §4
+
+ADR-0047 §4 justificó lo mismo diciendo: *«El manifiesto lista archivos, y una
+carpeta vacía no es un archivo.»* **El manifiesto lista entradas, y una de sus dos
+clases es exactamente un directorio.** La frase era falsa cuando se escribió.
+
+### El coste real, medido en vez de supuesto
+
+| Lo que la §5 decía | Lo que hay |
+|---|---|
+| Un tipo nuevo en el protocolo | **Ya está**, con su validación y sus contratos |
+| Una versión de protocolo | **Ninguna**: el valor 2 ya es estable |
+| Los cuatro canales lo tendrían que entender | **Cierto sólo para el serie degradado**, que escribe bytes a un archivo y para el que una entrada de directorio no significa nada |
+
+Lo que falta de verdad: que el emisor las emita y que el receptor las cree.
+
+### La decisión, sobre los hechos correctos
+
+> **Las carpetas vacías viajan**, usando el `ItemKind::Directory` que ya existe.
+
+Tres razones, y ninguna es «porque es barato»:
+
+1. **`FASE-25` §3.1 pedía incluirlas o argumentar que no**, y el argumento que se
+   dio no era cierto.
+2. **Cierra una capacidad muerta.** La comprobación 14 existe para esto, y una
+   entrada de protocolo especificada que nadie emite es exactamente lo que
+   encuentra.
+3. **Quien manda una carpeta espera su forma.** ADR-0047 §4 ya lo llamó *«una
+   pérdida de información aunque no sea una pérdida de bytes»* — y lo aceptó
+   creyendo que arreglarlo costaba una versión de protocolo. No cuesta eso.
+
+### El orden, y lo dijo una prueba
+
+La prueba `a folder keeps its shape, and an empty subfolder does not travel`
+afirma hoy lo contrario, y su mensaje de fallo dice: *«si esto empieza a fallar,
+la decisión cambió y hay que cambiar el documento, no la prueba»*.
+
+**Así que primero el documento —esta enmienda— y después la prueba.** No al
+revés.
