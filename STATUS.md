@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-20T12:00:00Z
+- Updated UTC: 2026-08-20T18:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 3371bc35af4ce0f6f976f63f57cd18764f25e127
+- Verified commit: 2f117b694ff201232c4510bd366baf23e72a468e
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -171,7 +171,8 @@ contra el código que existe: `THREAT_MODEL.md`.
 - `Cargo.lock`: **122 paquetes**, de los que 16 entran sólo por
   `dev-dependencies` (`rqrr` y su árbol) y no viajan en el binario.
   `pubspec.lock`: **45**.
-- `BUGS_PENDING.md`: **167 fichas, 1 abierta** (QYR-0365).
+- `BUGS_PENDING.md`: **167 fichas, 0 abiertas.** QYR-0365 se cerró el
+  2026-08-20 **desmintiéndola**: el defecto estaba en el arnés, no en el motor.
 
   Decía «155 fichas, 0 abiertas» y las dos mitades estaban mal. El registro tenía
   tres defectos, y **el tercero lo encontró una guarda cuando yo creía haber

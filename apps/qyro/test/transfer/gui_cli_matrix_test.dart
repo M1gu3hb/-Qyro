@@ -71,6 +71,25 @@ File _privateCli(String binary, Directory home) {
   return copy;
 }
 
+/// Vacia la salida de un proceso hijo, y **no es higiene: es correccion**.
+///
+/// Un hijo que escribe a una tuberia que nadie lee **se bloquea** cuando el
+/// bufer del sistema se llena — unos pocos KB. Deja de dar pasos, el otro lado
+/// se queda esperando, y el sintoma es un reloj de sesion que vence.
+///
+/// **QYR-0365 fue exactamente eso**, y costo tres sesiones: con 200 archivos el
+/// receptor del CLI escribia 23 KB, se bloqueaba, y el emisor moria a los 60 s.
+/// Se diagnostico como un defecto del motor y el motor mueve esos 200 archivos
+/// en **0,33 s**. El defecto estaba en el arnes que lo media.
+///
+/// Las celdas de esta matriz mandan un archivo, asi que hoy no les pasa. Se
+/// vacia igual: la diferencia entre «no pasa» y «no puede pasar» es la que hace
+/// que alguien pierda tres sesiones.
+void _drainChild(Process child) {
+  child.stdout.drain<void>();
+  child.stderr.drain<void>();
+}
+
 void main() {
   final library = _env('QYRO_FFI_LIBRARY_PATH');
   final cli = _env('QYRO_CLI_PATH');
@@ -207,6 +226,7 @@ void main() {
         receiver.path,
         <String>['recv', '--out', destination.path, '--expect', senderPrint],
       );
+      _drainChild(listening);
       try {
         await Future<void>.delayed(const Duration(seconds: 1));
         final run = await Process.run(
@@ -265,6 +285,7 @@ void main() {
         receiver.path,
         <String>['recv', '--out', destination.path, '--expect', minePrint],
       );
+      _drainChild(listening);
       try {
         await Future<void>.delayed(const Duration(seconds: 1));
 
@@ -354,6 +375,108 @@ void main() {
       expect(landed.existsSync(), isTrue, reason: 'nothing was materialised');
       expect(landed.readAsBytesSync(), equals(payload));
     }, timeout: const Timeout(Duration(minutes: 2)));
+
+    test('doscientos archivos, y QYR-0365 no era del motor', () async {
+      // **La celda que cierra QYR-0365, y lo cierra desmintiendola.**
+      //
+      // La ficha decia: cada archivo pequeño cuesta ~1,2 s, a los 60 s se corta
+      // la sesion, y el bucle del emisor lo serializa. Tres sesiones lo
+      // persiguieron dentro del motor.
+      //
+      // El motor mueve estos mismos 200 archivos en **0,33 s** —medido en
+      // `qyro_session/tests/qyr_0365_measurement.rs`, 202 pasos y **cero**
+      // lecturas vencidas— y esta celda los mueve en menos de un segundo.
+      //
+      // Lo que fallaba era el arnes: un hijo que escribe a una tuberia que nadie
+      // lee **se bloquea** cuando el bufer del sistema se llena. Con 200
+      // archivos el receptor escribe ~23 KB, se bloquea, deja de dar pasos, y el
+      // emisor muere en el reloj de 60 s. `_drainChild` es la linea que lo
+      // arregla, y esta prueba **fallaba antes de ella**: 60 295 ms y ni un
+      // archivo entregado.
+      const files = 200;
+      const bytesEach = 64;
+
+      final source = Directory(_under(scratch, 'many-out'))..createSync();
+      final destination = Directory(_under(scratch, 'many-in'))..createSync();
+
+      final picked = <QyroPicked>[];
+      for (var i = 0; i < files; i++) {
+        final name = 'f${i.toString().padLeft(3, '0')}.bin';
+        final file = File(_join(source.path, name))
+          ..writeAsBytesSync(
+              Uint8List(bytesEach)..fillRange(0, bytesEach, 0x71));
+        picked.add(QyroPickedPath(
+          path: file.path,
+          name: name,
+          size: bytesEach,
+        ));
+      }
+
+      final home = Directory(_under(scratch, 'many-cli'))..createSync();
+      final receiver = _privateCli(cli!, home);
+      final who = await Process.run(receiver.path, <String>['whoami']);
+      final receiverPrint = _fingerprintOf(who.stdout.toString());
+      final minePrint = identity.fingerprint().replaceAll('-', '');
+
+      final listening = await Process.start(
+        receiver.path,
+        <String>['recv', '--out', destination.path, '--expect', minePrint],
+      );
+      _drainChild(listening);
+
+      final started = DateTime.now();
+      try {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        final afterHandshake = DateTime.now();
+
+        final seen = <QyroTransferState>[];
+        await for (final state in service.send(
+          address: '127.0.0.1:$port',
+          files: picked,
+          expectedFingerprint: receiverPrint,
+        )) {
+          seen.add(state);
+          if (state is QyroDelivered || state is QyroFailed) break;
+        }
+
+        final moving = DateTime.now().difference(afterHandshake);
+        // ignore: avoid_print
+        print('\n--- QYR-0365: $files archivos de $bytesEach bytes ---');
+        // ignore: avoid_print
+        print('  tiempo:      ${moving.inMilliseconds} ms');
+        // ignore: avoid_print
+        print('  por archivo: '
+            '${(moving.inMicroseconds / files / 1000).toStringAsFixed(1)} ms');
+        // ignore: avoid_print
+        print('  (el motor solo, en Rust: 2 ms por archivo)');
+
+        expect(
+          seen.last,
+          isA<QyroDelivered>(),
+          reason: 'con $files archivos la GUI no entrego: ${seen.last}',
+        );
+
+        // **Lo unico que se afirma sobre el tiempo**, porque es lo unico que no
+        // depende de esta maquina: que no llego al reloj de sesion. Un umbral
+        // fino aqui fallaria en un runner cargado y diria «regresion» donde solo
+        // hubo un dia lento.
+        expect(
+          moving.inSeconds,
+          lessThan(30),
+          reason: 'tardo ${moving.inSeconds} s, que se acerca al reloj de 60 s '
+              'que QYR-0365 describia. **No subas el reloj**: escondería esto',
+        );
+      } finally {
+        listening.kill();
+      }
+
+      // Y llegaron los doscientos, no «casi».
+      final landed = destination.listSync().whereType<File>().length;
+      expect(landed, files, reason: 'llegaron $landed de $files');
+      // ignore: avoid_print
+      print('  entregados:  $landed/$files en '
+          '${DateTime.now().difference(started).inMilliseconds} ms totales');
+    });
 
     test('a path written with forward slashes lands where it was named',
         () async {

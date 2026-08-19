@@ -1,6 +1,35 @@
-# Estado actual — la fase 24B, y lo que le falta medir
+# Estado actual — QYR-0365 cerrada, y no era del motor
 
-**2026-08-19** · **rama unica: `main`**
+**2026-08-20** · rama unica `main`
+
+## Lo que costo tres sesiones
+
+`Process.start` deja la salida del hijo en una tuberia. **Un hijo que escribe a
+una tuberia que nadie lee se BLOQUEA** cuando el bufer se llena — unos pocos KB.
+Con 200 archivos el receptor del CLI escribe **23 349 bytes**, se bloquea, deja
+de dar pasos, y el emisor espera hasta el reloj de 60 s.
+
+| | Sin vaciar | Vaciando |
+|---|---|---|
+| 200 archivos | **60 295 ms** y falla | **292 ms** |
+| Por archivo | — | **1,5 ms** |
+| Entregados | 0 | **200/200** |
+
+El motor, medido aparte con los mismos 200: **0,33 s, cero lecturas vencidas.**
+
+**Las 75 esperas del emisor eran reales.** Esperaba a un receptor bloqueado
+escribiendo. El sintoma apuntaba al sitio correcto y la causa estaba un proceso
+mas alla.
+
+**No se subio `IDLE_TIMEOUT`** — habria escondido esto. **No se toco el motor.**
+
+Arreglado: `_drainChild` en los tres sitios, una celda de 200 archivos que
+**fallaba antes**, y `dart_test.yaml` con `concurrency: 1`, porque ADR-0041 fija
+el puerto y `flutter test` corre los archivos en paralelo.
+
+**167 fichas, 0 abiertas.**
+
+---
 
 ## La fase 19 esta lista, y es del propietario
 

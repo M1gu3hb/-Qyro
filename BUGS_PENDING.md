@@ -72,7 +72,7 @@ conserva íntegro y se dispara a mano el día que haya un Mac.
 
 ## QYR-0365 — Cada archivo pequeño cuesta ~1,2 s, y a los 60 s se corta la sesión
 
-- Estado: **abierto**
+- Estado: **cerrado**
 - Severidad: **ALTA**
 - Fase: 22, escenario 2
 
@@ -333,6 +333,64 @@ en 60 ms y Dart tarda 24 s, el coste está entre esas cuatro llamadas.
 cuántas de esas lecturas vencen, y **qué frame estaba en vuelo cuando venció**.
 Sin ese tercer dato los otros dos no distinguen «el par no ha contestado
 todavía» de «el par contestó y nadie leyó».
+
+---
+
+## CERRADA EL 2026-08-20, Y NO ERA DEL MOTOR
+
+**El defecto estaba en el arnés que la midió.**
+
+`Process.start` deja la salida del hijo en una tubería. **Un hijo que escribe a
+una tubería que nadie lee se bloquea** cuando el búfer del sistema se llena —
+unos pocos KB. Con 200 archivos, el receptor del CLI escribe **23 349 bytes**, se
+bloquea escribiendo, **deja de dar pasos**, y el emisor espera hasta el reloj de
+sesión de 60 s.
+
+Con un archivo el CLI imprime poco y no pasa nunca. Por eso las cuatro celdas de
+la matriz llevaban meses en verde.
+
+### Las dos medidas, una al lado de la otra
+
+| | Sin vaciar la tubería | Vaciándola |
+|---|---|---|
+| Tiempo, 200 archivos | **60 295 ms** y falla | **292 ms** |
+| Por archivo | — | **1,5 ms** |
+| Entregados | 0 | **200 / 200** |
+
+Y el motor, medido aparte en `qyro_session/tests/qyr_0365_measurement.rs` con los
+mismos 200 archivos: **0,33 s, 202 pasos del emisor, cero lecturas vencidas.**
+
+### Lo que se creía, y por qué era falso
+
+La ficha decía —y tres sesiones lo repitieron— que «el emisor gasta 75 lecturas
+vencidas contra 1 del receptor, así que el bucle de sesión lo serializa». Esas 75
+esperas eran **reales**, y el emisor esperaba de verdad: esperaba a un receptor
+que estaba bloqueado escribiendo en una tubería.
+
+**El síntoma apuntaba al sitio correcto y la causa estaba un proceso más allá.**
+
+### Lo que se arregló
+
+1. `_drainChild` en `gui_cli_matrix_test.dart`, en los **tres** sitios que
+   arrancan un proceso.
+2. Una celda nueva de 200 archivos que **fallaba antes del arreglo** —60 295 ms
+   y cero entregados— y ahora pasa en 300 ms. Afirma que no se acerca al reloj,
+   no un umbral fino que fallaría en un runner cargado.
+3. `dart_test.yaml` con `concurrency: 1`. ADR-0041 fija el puerto, así que dos
+   archivos de prueba que levanten un receptor **no pueden solaparse**, y
+   `flutter test` los corre en paralelo por defecto. El síntoma de eso también
+   parece del producto.
+
+### Lo que NO se hizo, y es deliberado
+
+**No se subió `IDLE_TIMEOUT`.** Habría escondido esto en vez de encontrarlo, que
+es lo que la propia ficha advertía.
+
+**No se cambió nada del motor.** No hacía falta: mueve 200 archivos en 0,33 s.
+
+### La pregunta que cierra esta ficha
+
+¿Cuesta un archivo pequeño ~1,2 s? **No. Cuesta 1,5 ms**, y los 200 llegan.
 
 ## QYR-0364 — `qyro recv` pregunta si aceptas sin decir qué
 

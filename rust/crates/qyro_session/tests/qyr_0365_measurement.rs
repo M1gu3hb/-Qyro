@@ -43,7 +43,7 @@ fn ensure_identity(tag: &str) {
 ///
 /// Veinte, que es donde la sesión anterior midió `emisor=75 receptor=1`. Menos
 /// no separa la señal del arranque; más alarga la prueba sin decir nada nuevo.
-const FILES: usize = 20;
+const FILES: usize = 200;
 
 #[test]
 fn quien_espera_es_el_emisor_y_estos_son_los_numeros() {

@@ -1,0 +1,25 @@
+# Cómo se corren estas pruebas, y por qué no todas a la vez.
+#
+# **`concurrency: 1`, y no es pereza: es correccion.**
+#
+# ADR-0041 fija el puerto en 49517 — el cortafuegos de Windows concede la
+# entrada **una vez por programa y puerto**, y un puerto que cambiara pediría un
+# diálogo cada vez. La consecuencia es que **dos pruebas que levanten un receptor
+# no pueden solaparse**, y el `flutter test` por defecto corre los archivos en
+# paralelo.
+#
+# Cuando chocan, el síntoma es un fallo que **parece del producto**: una
+# transferencia que no llega, un puerto ocupado, un reloj que vence. Eso es
+# exactamente lo que costó tres sesiones en QYR-0365, donde el defecto estaba en
+# el arnés y se persiguió dentro del motor.
+#
+# El coste es de segundos. El coste de la alternativa ya se pagó.
+
+concurrency: 1
+
+tags:
+  # Las que cargan la biblioteca nativa y hablan por un socket de verdad.
+  # Declarado aquí porque el corredor avisa de un tag que no conoce, y un aviso
+  # que sale en cada ejecución es un aviso que nadie lee.
+  ffi:
+    timeout: 5m
