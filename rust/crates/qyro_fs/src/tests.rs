@@ -25,6 +25,7 @@ use crate::io::{FileSink, FileSource, HASH_BUFFER_LEN, digest_of, open_part};
 use crate::manifest_builder::{PlannedFile, manifest_from_disk};
 use crate::resume::ResumeState;
 use crate::safe_path;
+use crate::safe_path::resolve_under;
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
@@ -532,6 +533,89 @@ fn a_junction_at_the_final_component_is_classified_as_a_reparse_point() {
     // Remove the link itself while both target directories still exist. On
     // Windows RemoveDirectory removes a junction without traversing its target.
     fs::remove_dir(&junction).unwrap();
+}
+
+/// Un junction en un directorio **intermedio** no deja escribir fuera.
+///
+/// **Es la clase de CVE del sector, y vale 7.5**: un manifiesto pide `a/b.bin`,
+/// y `a` resulta ser un enlace a `C:\Windows`. Quien sólo mira el último
+/// componente escribe donde le digan.
+///
+/// **Esta prueba se escribió sobre una premisa falsa y la medida la corrigió.**
+/// Se esperaba que `FileType::is_symlink()` fuera falso para un junction —es
+/// `IO_REPARSE_TAG_MOUNT_POINT`, no `..._SYMLINK`— y que la defensa real fuera
+/// la segunda: canonicalizar el padre y exigir que siga bajo la raíz.
+///
+/// **No es así en este Rust: `is_symlink()` sí ve los junctions**, y
+/// `assert_not_a_symlink` los rechaza en el primer componente, antes de crear
+/// nada y antes de canonicalizar. El código estaba mejor de lo que se suponía.
+///
+/// Se afirma el comportamiento **observado**, no el esperado, y se deja la
+/// aserción sobre `is_symlink` con su mensaje: si algún día cambia, esta prueba
+/// tiene que decirlo en vez de seguir pasando por la otra defensa sin avisar.
+///
+/// Un junction no necesita privilegios, así que el ataque se monta de verdad.
+#[test]
+#[cfg(windows)]
+fn un_junction_intermedio_no_deja_escribir_fuera_de_la_raiz() {
+    let root = Scratch::new("mid-junction-root");
+    let outside = Scratch::new("mid-junction-target");
+
+    // `a` es un junction que apunta fuera de la raíz.
+    let link = root.path("a");
+    let status = std::process::Command::new("cmd.exe")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&link)
+        .arg(&outside.dir)
+        .status()
+        .expect("cmd.exe crea el junction");
+    assert!(status.success(), "no se creo el junction");
+
+    // La trampa, afirmada para que nadie la olvide: para Rust esto NO es un
+    // enlace simbólico. Si esta línea empieza a fallar, `is_symlink` cambió y
+    // la primera defensa pasa a valer sola.
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "is_symlink dejo de ver los junctions. Entonces la primera defensa ya          no los caza y la unica que queda es canonicalizar el padre: comprueba          que sigue en pie antes de tocar esta asercion"
+    );
+
+    // **Rechazado en el primer componente**, antes de crear nada y antes de
+    // canonicalizar. Las dos defensas existen; ésta es la que llega primero.
+    let outcome = resolve_under(&root.dir, "a/robado.bin");
+    assert!(
+        matches!(outcome, Err(FsError::SymlinkInPath { .. })),
+        "un junction intermedio dejo resolver fuera de la raiz: {outcome:?}"
+    );
+
+    // Y nada se creo al otro lado.
+    assert!(
+        !outside.dir.join("robado.bin").exists(),
+        "se escribio fuera de la raiz"
+    );
+
+    let _ = fs::remove_dir(&link);
+}
+
+/// El control: un directorio intermedio **de verdad** sí resuelve.
+///
+/// Sin esto, un `resolve_under` que rechazara toda ruta con carpeta pasaría la
+/// prueba de arriba y rompería cada carpeta que alguien mande.
+#[test]
+fn y_una_carpeta_de_verdad_si_resuelve() {
+    let root = Scratch::new("mid-real");
+    let resolved =
+        resolve_under(&root.dir, "a/b/dentro.bin").expect("una carpeta normal tiene que resolver");
+    assert!(
+        resolved
+            .final_path
+            .starts_with(fs::canonicalize(&root.dir).unwrap()),
+        "resolvio fuera de la raiz: {:?}",
+        resolved.final_path
+    );
+    assert!(root.dir.join("a").join("b").is_dir(), "no creo los padres");
 }
 
 #[test]
