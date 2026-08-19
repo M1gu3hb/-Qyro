@@ -621,3 +621,19 @@ exactamente su motivo.
 **Lo que falta y no se hace de rebote:** la **M** de «archivo N de M» es un
 parametro mas en `QyroProgressFn`, o sea la frontera C. Calibre alto, con su
 enmienda a ADR-0032, no colado en un arreglo de progreso.
+
+
+## El documento de paridad avalaba lo que no comprobaba
+
+Quince citas de `PARIDAD-GUI-CLI.md` apuntaban a `};`, a `}`, a `setState(() {`,
+a un comentario: **trece de catorce filas**. Y el documento decia «la comprueba
+`check_parity.ps1`», cierto a medias: el guardian verificaba que el archivo
+tuviera esa linea, **no que la linea dijera algo**.
+
+**El arreglo mecanico se probo y se tiro.** Resolver cada numero al simbolo mas
+cercano hacia arriba daba «Rechazar con motivo → `_drainReceive`». Precision
+falsa: peor que el numero viejo, porque ya no se nota. Las citas de ahora estan
+puestas a mano contra el listado de declaraciones.
+
+El guardian pide ahora que la cita caiga en algo **nombrable**. Que corresponda a
+la capacidad no es mecanizable, y esta escrito en el script que no lo es.

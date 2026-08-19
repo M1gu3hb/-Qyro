@@ -91,9 +91,27 @@ foreach ($row in $rows) {
                 $problems += "[$capability / $face] apunta a $($matches[1]), que no existe. Una referencia rota es una celda que miente, y miente diciendo que si."
                 continue
             }
-            $count = (Get-Content -LiteralPath $path -Encoding UTF8 | Measure-Object -Line).Lines
+            $content = Get-Content -LiteralPath $path -Encoding UTF8
+            $count = ($content | Measure-Object -Line).Lines
             if ($wanted -lt 1 -or $wanted -gt $count) {
                 $problems += "[$capability / $face] apunta a $($matches[1]):$wanted y ese archivo tiene $count lineas."
+                continue
+            }
+
+            # Y que la linea DIGA algo, que es lo que faltaba.
+            #
+            # Comprobar solo que el archivo tenga esa linea deja pasar una cita a
+            # '}', a '};' o a '@override' -- y eso es exactamente lo que habia:
+            # cinco filas de esta tabla apuntaban a nada. Un guardian que verifica
+            # la existencia y no el contenido no protege el documento, lo AVALA.
+            #
+            # No se comprueba que la linea corresponda a la capacidad: eso no es
+            # mecanizable y fingir que si lo es seria el mismo error otra vez. Se
+            # comprueba lo unico que si lo es: que hay un nombre donde se apunta.
+            $target = $content[$wanted - 1]
+            $nameable = '(fn|def|class|struct|enum|impl|Future<|Stream<|void|String|bool|int|Widget|const|let|pub|static|Widget build)'
+            if ($target -notmatch "\b$nameable\b" -or $target -match '^\s*[});\]]+\s*$') {
+                $problems += "[$capability / $face] apunta a $($matches[1]):$wanted, y esa linea es '$($target.Trim())'. Una cita a un cierre de bloque o a un decorador no senala a un llamante: senala a donde estaba uno cuando alguien conto las lineas."
             }
             continue
         }
