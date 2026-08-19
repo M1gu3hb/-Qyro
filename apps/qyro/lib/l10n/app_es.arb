@@ -98,5 +98,6 @@
   "peersNearbyNone": "Todavía no ha contestado nadie. El código de arriba funciona siempre.",
   "peersNearbyUnavailable": "Este aparato no puede buscar otros. Usa el código de emparejamiento.",
   "peersNearbyUse": "Usar este aparato",
-  "peersScanCodes": "Leer códigos con la cámara"
+  "peersScanCodes": "Leer códigos con la cámara",
+  "sendTooManyFiles": "Son más archivos de los que lleva una transferencia. Manda 256 como mucho."
 }

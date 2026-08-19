@@ -545,8 +545,7 @@ void main() {
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('a folder keeps its shape, empty subfolders included',
-        () async {
+    test('a folder keeps its shape, empty subfolders included', () async {
       // **Escenario 1 de la fase 22.** Todo lo que este proyecto había probado
       // era un archivo suelto. Una carpeta con subcarpetas es lo primero que
       // hace cualquiera, y la estructura se preserva o no se preserva — no hay
@@ -644,7 +643,8 @@ void main() {
       expect(
         Directory(_join(destination.path, 'vacia')).existsSync(),
         isTrue,
-        reason: 'una carpeta vacía NO viajó. **La decisión cambió** en ADR-0050 '
+        reason:
+            'una carpeta vacía NO viajó. **La decisión cambió** en ADR-0050 '
             'enmienda 1: viajan, con el ItemKind::Directory que el manifiesto '
             'ya tenía especificado, validado, probado y sin que nadie lo '
             'emitiera nunca. El documento se cambió primero, que es lo que el '

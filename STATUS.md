@@ -5,7 +5,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 
 - Updated UTC: 2026-08-20T18:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 712cf2cfc46e9fd8edc99bcd506f4cff0dc8014d
+- Verified commit: dd3b42a2c3b1a84212532995cf165f6de3fd30cb
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se

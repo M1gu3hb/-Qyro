@@ -147,6 +147,13 @@ enum QyroFailureKind {
 
   /// Nowhere to put it.
   noRoom,
+
+  /// Se eligieron mas archivos de los que caben en una transferencia.
+  ///
+  /// ADR-0047 §3 lo fija en 256 y la razon son los descriptores. Es un limite
+  /// que una persona puede corregir —mandar menos— asi que merece decirlo en vez
+  /// de salir como «algo no verifico».
+  tooManyFiles,
 }
 
 /// Everything a screen may ask of the engine.

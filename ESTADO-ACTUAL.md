@@ -50,9 +50,11 @@ nueva pone la carpeta **primero**.
    asigna** —la unica asignacion es el brazo `Role::Sending`— y ademas `_drain`
    se traga las muestras del emisor. La barra del receptor esta congelada en
    cero por los dos lados. Hay que reabrirla, no citarla.
-2. **`-14` no esta en el espejo de codigos de Dart**, asi que `TooManyFiles` sale
-   como «integrity». Falta la prueba que lea `abi.rs` y exija que Dart los cubra
-   todos.
+2. ~~`-14` no esta en el espejo de codigos~~ **HECHO.** `TooManyFiles` salia como
+   «integrity» por el comodin de `_kindOf`. Ahora hay una prueba que **lee
+   `abi.rs`** y exige que Dart cubra todos los codigos, con su control al reves.
+   El `switch` exhaustivo de la pantalla obligo a darle su frase, en los dos
+   idiomas.
 3. **`finished()` no reconoce `Phase::Cancelled`.**
 4. **`PARIDAD-GUI-CLI.md` cita lineas que no dicen lo que dice.** Cinco celdas
    verificadas, cinco mienten.

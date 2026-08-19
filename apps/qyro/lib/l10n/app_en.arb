@@ -452,5 +452,9 @@
   "peersScanCodes": "Read codes with the camera",
   "@peersScanCodes": {
     "description": "Transfer interface string: peersScanCodes."
+  },
+  "sendTooManyFiles": "That is more files than one transfer carries. Send at most 256 at a time.",
+  "@sendTooManyFiles": {
+    "description": "Transfer interface string: sendTooManyFiles."
   }
 }

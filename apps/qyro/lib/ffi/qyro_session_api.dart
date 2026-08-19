@@ -42,6 +42,14 @@ abstract final class QyroCode {
   /// the problem is at home.
   static const identityUnreadable = -13;
 
+  /// Se eligieron mas archivos de los que un proceso puede abrir.
+  ///
+  /// ADR-0047 §3: el limite existe por los descriptores, y en Android el
+  /// selector devuelve descriptores. **Faltaba en este espejo desde la fase 22**,
+  /// asi que llegaba a la pantalla por el comodin de `_kindOf` y una persona
+  /// leia «error de integridad» donde el motor decia «has elegido demasiados».
+  static const tooManyFiles = -14;
+
   static const names = <int, String>{
     ok: 'ok',
     invalidHandle: 'invalid_handle',
@@ -54,6 +62,7 @@ abstract final class QyroCode {
     notAuthenticated: 'not_authenticated',
     transferRefused: 'transfer_refused',
     identityUnreadable: 'identity_unreadable',
+    tooManyFiles: 'too_many_files',
     storageRefused: 'storage_refused',
     cancelled: 'cancelled',
     unknown: 'unknown',
