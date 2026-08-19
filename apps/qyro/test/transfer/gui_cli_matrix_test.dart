@@ -545,7 +545,7 @@ void main() {
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
 
-    test('a folder keeps its shape, and an empty subfolder does not travel',
+    test('a folder keeps its shape, empty subfolders included',
         () async {
       // **Escenario 1 de la fase 22.** Todo lo que este proyecto había probado
       // era un archivo suelto. Una carpeta con subcarpetas es lo primero que
@@ -599,6 +599,14 @@ void main() {
               name: 'hondo.bin',
               size: nested.lengthSync(),
             ),
+            // **La carpeta vacía, mandada como entrada** (ADR-0050 enmienda 1).
+            // Antes no estaba en esta lista, así que el motor nunca se enteraba
+            // de ella: no es que la descartara, es que nadie se la decía.
+            QyroPickedPath(
+              path: _join(source.path, 'vacia'),
+              name: 'vacia',
+              size: 0,
+            ),
           ],
         )) {
           sent.add(state);
@@ -635,10 +643,12 @@ void main() {
       );
       expect(
         Directory(_join(destination.path, 'vacia')).existsSync(),
-        isFalse,
-        reason: 'una carpeta vacía viajó, y ADR-0047 §4 dice que no lo hace. '
-            'Si esto empieza a fallar, la decisión cambió y hay que cambiar el '
-            'documento, no la prueba',
+        isTrue,
+        reason: 'una carpeta vacía NO viajó. **La decisión cambió** en ADR-0050 '
+            'enmienda 1: viajan, con el ItemKind::Directory que el manifiesto '
+            'ya tenía especificado, validado, probado y sin que nadie lo '
+            'emitiera nunca. El documento se cambió primero, que es lo que el '
+            'mensaje anterior de esta misma prueba exigía',
       );
     }, timeout: const Timeout(Duration(minutes: 2)));
 

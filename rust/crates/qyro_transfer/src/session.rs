@@ -567,6 +567,8 @@ struct RecvItem {
     hasher: Sha256,
     received: u64,
     expected_digest: Vec<u8>,
+    /// Si la entrada es una carpeta, y por tanto no lleva contenido ni hash.
+    is_directory: bool,
     verdict: Option<ItemVerdict>,
 }
 
@@ -767,6 +769,13 @@ impl Receiver {
                         hasher: Sha256::new(),
                         received: 0,
                         expected_digest: item.hash().digest().to_vec(),
+                        // **Una carpeta no tiene contenido que verificar**
+                        // (ADR-0050 enmienda 1). Sin esto, `finish_items` le
+                        // calcularía el SHA-256 de cero bytes y lo compararía
+                        // con un hash ausente: nunca cuadran, y la
+                        // transferencia entera se queda esperando un elemento
+                        // que no puede completarse jamás.
+                        is_directory: item.kind() == qyro_manifest::ItemKind::Directory,
                         verdict: None,
                     })
                     .collect();
@@ -901,6 +910,13 @@ impl Receiver {
     fn finish_items(&mut self) {
         for item in &mut self.items {
             if item.verdict.is_some() {
+                continue;
+            }
+            if item.is_directory {
+                // Ya la creó `FileSink::new` al preparar el destino, antes de
+                // que llegara un byte. No hay tamaño que comparar ni digest que
+                // calcular: la entrada está completa por lo que es.
+                item.verdict = Some(ItemVerdict::Ok);
                 continue;
             }
             if item.received != item.size {

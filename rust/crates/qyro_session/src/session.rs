@@ -338,9 +338,19 @@ impl Session {
         if files.is_empty() {
             return Err(SessionError::BadArgument);
         }
-        if files.len() > MAX_FILES_PER_TRANSFER {
+        // **Se cuentan los archivos, no las entradas** (ADR-0050 enmienda 1).
+        //
+        // El límite existe por los descriptores —ADR-0047 §3 lo dice con esas
+        // palabras— y **una carpeta no abre ninguno**: se crea en el destino y
+        // ya. Desde que las carpetas viajan, contarlas aquí rechazaría un árbol
+        // de 200 archivos con 60 carpetas por un motivo que no le aplica.
+        //
+        // `is_dir()` es un `stat`, no un `open`, así que la negativa sigue
+        // llegando **antes de abrir nada**, que es donde ADR-0047 §3 la quiere.
+        let opening = files.iter().filter(|source| !source.is_dir()).count();
+        if opening > MAX_FILES_PER_TRANSFER {
             return Err(SessionError::TooManyFiles {
-                given: files.len(),
+                given: opening,
                 limit: MAX_FILES_PER_TRANSFER,
             });
         }

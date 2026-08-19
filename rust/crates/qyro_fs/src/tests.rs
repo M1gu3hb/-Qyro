@@ -618,6 +618,145 @@ fn y_una_carpeta_de_verdad_si_resuelve() {
     assert!(root.dir.join("a").join("b").is_dir(), "no creo los padres");
 }
 
+/// Una carpeta vacía viaja, y llega vacía.
+///
+/// **ADR-0050 enmienda 1.** El manifiesto tiene `ItemKind::Directory` desde
+/// siempre —especificado, validado y con cuatro contratos— y **nadie lo emitía
+/// nunca**: la décima capacidad muerta de este proyecto. Dos ADR justificaban no
+/// mandar carpetas vacías diciendo que haría falta una versión de protocolo, y
+/// el tipo ya estaba en el cable.
+///
+/// Esta prueba se escribió **antes** del arreglo y fallaba.
+#[test]
+fn una_carpeta_vacia_viaja_y_llega_vacia() {
+    let from = Scratch::new("dirsend");
+    let to = Scratch::new("dirrecv");
+
+    // Una carpeta vacía y un archivo, para que el manifiesto tenga los dos tipos
+    // y la prueba no pase por tener un solo elemento.
+    fs::create_dir_all(from.path("sub/vacia")).unwrap();
+    fs::write(from.path("hay.bin"), b"contenido").unwrap();
+
+    let planned = vec![
+        PlannedFile {
+            source: from.path("hay.bin"),
+            relative: "hay.bin".to_owned(),
+        },
+        PlannedFile {
+            source: from.path("sub/vacia"),
+            relative: "sub/vacia".to_owned(),
+        },
+    ];
+
+    let manifest = manifest_from_disk(7, 0, &planned).expect("el manifiesto se construye");
+    assert_eq!(manifest.items().len(), 2);
+
+    let kinds: Vec<_> = manifest.items().iter().map(|i| i.kind()).collect();
+    assert!(
+        kinds.contains(&qyro_manifest::ItemKind::Directory),
+        "ningun elemento salio como directorio: {kinds:?}"
+    );
+
+    // Y el receptor la crea al preparar el destino, antes de que llegue un byte.
+    let _sink = FileSink::new(&to.dir, &manifest).expect("el destino se prepara");
+    assert!(
+        to.dir.join("sub").join("vacia").is_dir(),
+        "la carpeta vacia no se creo en el destino"
+    );
+}
+
+/// Una carpeta **primero** en el manifiesto no impide materializar lo que sigue.
+///
+/// **El defecto que esta prueba caza lo introduje yo**, y mi otra prueba pasó
+/// por suerte del orden: allí la carpeta iba la última, así que los archivos ya
+/// estaban materializados cuando `finish()` reventaba.
+///
+/// `Session::finish` recorre los veredictos y llama a `finish_item` por cada
+/// uno. Un directorio nunca entró en `open`, así que devolvía
+/// `Err(DigestMismatch)`; y como su veredicto **sí** es `Ok`, el brazo de error
+/// hacía `return Err(StorageRefused)` — **saliéndose del bucle** y dejando sin
+/// materializar todo lo que viniera después.
+///
+/// Lo encontró un barrido en paralelo leyendo el árbol, no una prueba mía.
+#[test]
+fn una_carpeta_primero_no_impide_materializar_lo_que_sigue() {
+    let from = Scratch::new("dirfirst");
+    let to = Scratch::new("dirfirst-to");
+
+    fs::create_dir_all(from.path("primera")).unwrap();
+    fs::write(from.path("despues.bin"), b"llego").unwrap();
+
+    // **La carpeta va primero, a propósito.**
+    let planned = vec![
+        PlannedFile {
+            source: from.path("primera"),
+            relative: "primera".to_owned(),
+        },
+        PlannedFile {
+            source: from.path("despues.bin"),
+            relative: "despues.bin".to_owned(),
+        },
+    ];
+    let manifest = manifest_from_disk(9, 0, &planned).expect("se construye");
+
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("el destino se prepara");
+    // **Por tipo, no por posición.** El primer intento cogió `items()[0]` y
+    // `items()[1]`: el manifiesto ordena sus entradas, así que el índice 0 era
+    // el archivo y la prueba fallaba por su propia culpa mientras acusaba al
+    // código.
+    let dir_id = manifest
+        .items()
+        .iter()
+        .find(|i| i.kind() == qyro_manifest::ItemKind::Directory)
+        .expect("hay una carpeta en el manifiesto")
+        .item_id();
+    let file_id = manifest
+        .items()
+        .iter()
+        .find(|i| i.kind() == qyro_manifest::ItemKind::File)
+        .expect("hay un archivo en el manifiesto")
+        .item_id();
+
+    // Un directorio ya está materializado: `FileSink::new` lo creó. Pedirle que
+    // se «termine» tiene que decir que sí, no que falta un digest.
+    assert!(
+        sink.finish_item(dir_id).is_ok(),
+        "finish_item sobre una carpeta devolvio error, y Session::finish sale          del bucle en ese caso: todo lo que venga despues se queda sin          materializar"
+    );
+
+    // Y el archivo que viene después sí se puede terminar.
+    sink.write_at(file_id, 0, b"llego");
+    assert!(
+        sink.finish_item(file_id).is_ok(),
+        "el archivo no se materializo"
+    );
+    assert!(to.dir.join("despues.bin").is_file());
+    assert!(to.dir.join("primera").is_dir());
+}
+
+/// El control: un archivo **no** se convierte en carpeta por el camino.
+///
+/// Sin esto, un constructor que marcara todo como directorio pasaría la prueba
+/// de arriba y no movería un solo byte nunca más.
+#[test]
+fn y_un_archivo_sigue_siendo_un_archivo() {
+    let from = Scratch::new("dirctl");
+    fs::write(from.path("solo.bin"), b"bytes").unwrap();
+
+    let planned = vec![PlannedFile {
+        source: from.path("solo.bin"),
+        relative: "solo.bin".to_owned(),
+    }];
+    let manifest = manifest_from_disk(8, 0, &planned).expect("se construye");
+
+    assert_eq!(manifest.items()[0].kind(), qyro_manifest::ItemKind::File);
+    assert_eq!(manifest.items()[0].size(), 5);
+    assert!(
+        manifest.items()[0].hash().is_present(),
+        "un archivo perdio su hash"
+    );
+}
+
 #[test]
 fn a_path_that_escapes_the_root_is_refused_at_materialisation() {
     let to = Scratch::new("escape");

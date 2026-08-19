@@ -60,17 +60,35 @@ pub fn manifest_from_disk(
 ) -> Result<TransferManifest, FsError> {
     let mut items = Vec::with_capacity(files.len());
     for (index, file) in files.iter().enumerate() {
-        let size = file_size(&file.source)?;
-        let digest = digest_of(&file.source)?;
-
         let path = RelativePath::parse(&file.relative).map_err(|_| FsError::EscapesRoot {
             resolved: file.relative.clone(),
         })?;
+        let item_id = u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX);
+
+        // **Una carpeta se manda como carpeta** (ADR-0050 enmienda 1). El disco
+        // ya sabe cuál es cuál, así que no hace falta un tipo nuevo en la API:
+        // se pregunta.
+        //
+        // `ItemKind::Directory` lleva en el formato de cable desde siempre —con
+        // su validación y sus contratos— y **nadie lo emitía**. Dos ADR
+        // justificaron no mandar carpetas vacías diciendo que haría falta una
+        // versión de protocolo, y el tipo ya estaba ahí.
+        if file.source.is_dir() {
+            let item =
+                ManifestItem::directory(item_id, path).map_err(|_| FsError::EscapesRoot {
+                    resolved: file.relative.clone(),
+                })?;
+            items.push(item);
+            continue;
+        }
+
+        let size = file_size(&file.source)?;
+        let digest = digest_of(&file.source)?;
+
         let hash =
             HashMetadata::new(HashAlgorithm::Sha256, digest).map_err(|_| FsError::EscapesRoot {
                 resolved: file.relative.clone(),
             })?;
-        let item_id = u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX);
         let item =
             ManifestItem::file(item_id, path, size, hash).map_err(|_| FsError::EscapesRoot {
                 resolved: file.relative.clone(),

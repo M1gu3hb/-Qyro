@@ -40,7 +40,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use qyro_session::{Progress, Session, SessionError, SessionState};
+use qyro_session::{MAX_FILES_PER_TRANSFER, Progress, Session, SessionError, SessionState};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
@@ -241,6 +241,52 @@ fn move_files(root: &Path, files: &[PathBuf], destination: &Path) -> Moved {
 const CROSSES_THE_WINDOW: u64 = 2 * 1024 * 1024 + 7;
 
 // ------------------------------------------------------- arguments, before the wire
+
+#[test]
+fn las_carpetas_no_gastan_el_presupuesto_de_descriptores() {
+    // **ADR-0047 §3 dice que el límite es por descriptores**, no por gusto: en
+    // Android el selector devuelve descriptores y una selección de miles no es
+    // una transferencia lenta, es un proceso agotado.
+    //
+    // Una carpeta **no abre ningún descriptor**: se crea en el destino y ya. Con
+    // ADR-0050 enmienda 1 las carpetas viajan, así que contarlas contra ese
+    // presupuesto es contar lo que no cuesta — y un árbol de 200 archivos con 60
+    // carpetas se rechazaría por un motivo que no le aplica.
+    ensure_identity();
+    let root = Scratch::new("presupuesto");
+
+    let mut entries: Vec<PathBuf> = Vec::new();
+    for index in 0..MAX_FILES_PER_TRANSFER {
+        let name = format!("f{index:04}.bin");
+        std::fs::write(root.path(&name), b"x").expect("se escribe");
+        entries.push(root.path(&name));
+    }
+    // Justo en el techo de archivos, y además sesenta carpetas.
+    for index in 0..60 {
+        let name = format!("d{index:03}");
+        std::fs::create_dir_all(root.path(&name)).expect("se crea");
+        entries.push(root.path(&name));
+    }
+
+    // Nada escucha en esta dirección, así que un `TooManyFiles` demuestra que la
+    // negativa ocurrió **antes** de marcar — que es donde ADR-0047 §3 la quiere.
+    let outcome = Session::open_sender(loopback(a_free_port()), &root.dir, &entries, None);
+    assert!(
+        !matches!(outcome, Err(SessionError::TooManyFiles { .. })),
+        "sesenta carpetas gastaron un presupuesto que existe por los          descriptores, y una carpeta no abre ninguno"
+    );
+
+    // El control: un archivo de más **sí** se rechaza, y por su nombre. Sin
+    // esto, quitar el límite entero pasaría la afirmación de arriba.
+    let mut demasiados = entries.clone();
+    std::fs::write(root.path("uno_mas.bin"), b"x").expect("se escribe");
+    demasiados.push(root.path("uno_mas.bin"));
+    let outcome = Session::open_sender(loopback(a_free_port()), &root.dir, &demasiados, None);
+    assert!(
+        matches!(outcome, Err(SessionError::TooManyFiles { .. })),
+        "el archivo 257 no se rechazo: {outcome:?}"
+    );
+}
 
 #[test]
 fn an_empty_file_list_is_refused_before_anything_is_dialled() {

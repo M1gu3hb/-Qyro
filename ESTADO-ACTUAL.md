@@ -31,6 +31,38 @@ el puerto y `flutter test` corre los archivos en paralelo.
 
 ---
 
+## Fase 25 en marcha — carpetas hechas, y un defecto mio que encontro un barrido
+
+**Las carpetas vacias viajan.** `ItemKind::Directory = 2` llevaba años en el
+cable —validado y con cuatro contratos— y **nadie lo emitia**: la decima
+capacidad muerta. Dos ADR justificaban no mandarlas diciendo que haria falta una
+version de protocolo, y el tipo ya estaba.
+
+**Y un defecto que introduje yo:** `finish_item` sobre un directorio devolvia
+error, y `Session::finish` hace `return` en ese caso — **todo lo que viniera
+despues en el manifiesto se quedaba sin materializar**. Mi prueba paso por suerte
+del orden. Lo encontro un barrido de nueve lectores en paralelo, y la prueba
+nueva pone la carpeta **primero**.
+
+**Lo que el barrido dejo pendiente**, verificado con archivo y linea:
+
+1. **QYR-0317 esta mal descartada.** El progreso del receptor **nunca se
+   asigna** —la unica asignacion es el brazo `Role::Sending`— y ademas `_drain`
+   se traga las muestras del emisor. La barra del receptor esta congelada en
+   cero por los dos lados. Hay que reabrirla, no citarla.
+2. **`-14` no esta en el espejo de codigos de Dart**, asi que `TooManyFiles` sale
+   como «integrity». Falta la prueba que lea `abi.rs` y exija que Dart los cubra
+   todos.
+3. **`finished()` no reconoce `Phase::Cancelled`.**
+4. **`PARIDAD-GUI-CLI.md` cita lineas que no dicen lo que dice.** Cinco celdas
+   verificadas, cinco mienten.
+5. **Dos ADR contra la fase 25:** ADR-0033 descarta el freno de tiempo que la
+   fase §1.3 prescribe, y ADR-0041 prohibe el respaldo de puerto que la §5 pide.
+   Hay que enmendar o rebajar **antes** de tocar el codigo.
+
+---
+
+
 ## La fase 19 esta lista, y es del propietario
 
 `docs/testing/hardware-protocol.md` tenia veinte escenarios y **ninguno de los

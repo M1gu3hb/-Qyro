@@ -244,6 +244,12 @@ pub struct FileSink {
     root: PathBuf,
     /// `item_id -> (relative path, declared size, expected digest)`.
     plan: BTreeMap<u32, (String, u64, Vec<u8>)>,
+    /// `item_id -> ruta` de las entradas que son carpetas.
+    ///
+    /// Se crean al preparar el destino, asi que `finish_item` tiene que poder
+    /// decir que si sobre ellas: devolver un error hace que `Session::finish`
+    /// salga del bucle y deje sin materializar lo que venga despues.
+    directories: BTreeMap<u32, PathBuf>,
     open: BTreeMap<u32, PartFile>,
     transfer_id: u64,
     /// Largest single write this sink accepted, counted under test.
@@ -261,7 +267,30 @@ impl FileSink {
         fs::create_dir_all(root)?;
         let root = fs::canonicalize(root)?;
         let mut plan = BTreeMap::new();
+        let mut directories = BTreeMap::new();
         for item in manifest.items() {
+            // **Una carpeta se crea aquí y no entra en el plan** (ADR-0050
+            // enmienda 1). Nadie va a escribir en ella, así que dejarla en el
+            // plan sería un elemento que nunca se completa.
+            //
+            // Se crea con el mismo `resolve_under` que todo lo demás: un
+            // manifiesto llega por el cable, y una entrada de directorio es tan
+            // capaz de intentar salirse de la raíz como una de archivo.
+            if item.kind() == qyro_manifest::ItemKind::Directory {
+                let resolved = crate::safe_path::resolve_under(&root, &item.path().to_string())?;
+                match fs::create_dir(&resolved.final_path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(error) => return Err(error.into()),
+                }
+                // **Se recuerda cuál era**, y no por contabilidad: `finish_item`
+                // tiene que poder decir que sí sobre ella. Sin esto devolvía
+                // `DigestMismatch` —nunca entró en `open`— y `Session::finish`
+                // hace `return` en ese caso, dejando **sin materializar todo lo
+                // que viniera después en el manifiesto**.
+                directories.insert(item.item_id(), resolved.final_path);
+                continue;
+            }
             plan.insert(
                 item.item_id(),
                 (
@@ -274,6 +303,7 @@ impl FileSink {
         Ok(Self {
             root,
             plan,
+            directories,
             open: BTreeMap::new(),
             transfer_id: manifest.transfer_id(),
             #[cfg(test)]
@@ -418,6 +448,11 @@ impl FileSink {
     ///
     /// [`FsError::DigestMismatch`] or [`FsError::Io`].
     pub fn finish_item(&mut self, item_id: u32) -> Result<PathBuf, FsError> {
+        // Una carpeta ya está terminada: se creó al preparar el destino, antes
+        // de que llegara un byte. Decir que sí es la verdad, no una excepción.
+        if let Some(path) = self.directories.get(&item_id) {
+            return Ok(path.clone());
+        }
         let Some(part) = self.open.remove(&item_id) else {
             return Err(FsError::DigestMismatch { item_id });
         };
