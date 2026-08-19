@@ -604,11 +604,10 @@ fn progress_reaches_the_total_and_never_goes_backwards() {
          tell learning it from being handed it"
     );
 
-    // Deliberately no assertion on the receiver's `done`: it is never assigned,
-    // and `Progress::item` is never assigned by either role (QYR-0317,
-    // QYR-0318). Asserting the current zero would freeze a defect into a
-    // contract; asserting the intended behaviour would fail today. The findings
-    // carry it instead.
+    // El hueco que esta prueba dejo escrito -«deliberately no assertion on the
+    // receiver's done»- lo cierra ahora `el_receptor_cuenta_lo_que_lleva_recibido`.
+    // Se deja dicho aqui para que nadie lo vuelva a abrir creyendo que sigue sin
+    // poder afirmarse.
 }
 
 // --------------------------------------------------- the descriptor-backed sender
@@ -1477,4 +1476,110 @@ fn finishing_a_sender_materialises_nothing_and_says_so() {
     );
 
     let _ = receiving.join();
+}
+
+/// La barra del receptor, que **estaba congelada en cero hasta el final**.
+///
+/// `Role::Receiving` asignaba `total` al llegar el manifiesto y **nunca tocaba
+/// `done`**. Quien recibe veia 0 % durante toda la transferencia y un salto a
+/// 100 % al acabar, que para un archivo grande es indistinguible de «esto se ha
+/// colgado». Y no era invisible: la prueba de arriba lo dejo escrito y siguio
+/// ahi.
+///
+/// Mira las **emisiones**, que es lo que la barra dibuja, y no un total final
+/// que un contador roto tambien acertaria.
+#[test]
+fn el_receptor_cuenta_lo_que_lleva_recibido() {
+    ensure_identity();
+    let source = Scratch::new("recv-progress-src");
+    let destination = Scratch::new("recv-progress-dst");
+    let original = source.path("payload.bin");
+    write_pattern(&original, CROSSES_THE_WINDOW);
+
+    let moved = move_files(&source.dir, &[original], &destination.dir);
+    assert_eq!(
+        moved.sent,
+        Ok(SessionState::Completed),
+        "el emisor no completo"
+    );
+
+    let seen = moved.receiver_progress;
+
+    // El control, antes de creer nada: sin muestras suficientes esto no mediria
+    // el progreso sino su ausencia.
+    assert!(
+        seen.len() > 2,
+        "solo {} muestras en el receptor para {CROSSES_THE_WINDOW} bytes, asi que          esta prueba no esta midiendo lo que cree",
+        seen.len()
+    );
+
+    let avanzando = seen
+        .iter()
+        .any(|sample| sample.done > 0 && sample.total > 0 && sample.done < sample.total);
+    assert!(
+        avanzando,
+        "ninguna muestra del receptor tenia progreso intermedio: la barra se queda          en cero hasta el final, y quien recibe no distingue eso de un cuelgue.          Muestras: {seen:?}"
+    );
+
+    for pair in seen.windows(2) {
+        assert!(
+            pair[1].done >= pair[0].done,
+            "el progreso del receptor retrocedio: {} y luego {}",
+            pair[0].done,
+            pair[1].done
+        );
+    }
+
+    let last = seen.last().expect("al menos una muestra");
+    assert_eq!(
+        last.done, last.total,
+        "el receptor termino sin que su cuenta llegara al total declarado"
+    );
+}
+
+/// **Que archivo se esta moviendo**, que iba siempre a cero.
+///
+/// ADR-0050 §4.1 pide «archivo N de M». El campo `item` existe en la frontera C
+/// desde la fase 02 y ninguno de los dos extremos lo asignaba jamas: QYR-0318 lo
+/// documento como «siempre cero» en vez de arreglarlo, que es describir un
+/// defecto con precision y dejarlo donde estaba.
+#[test]
+fn el_progreso_dice_por_que_archivo_va() {
+    ensure_identity();
+    let source = Scratch::new("item-src");
+    let destination = Scratch::new("item-dst");
+    let uno = source.path("uno.bin");
+    let dos = source.path("dos.bin");
+    write_pattern(&uno, CROSSES_THE_WINDOW);
+    write_pattern(&dos, CROSSES_THE_WINDOW);
+
+    let moved = move_files(&source.dir, &[uno, dos], &destination.dir);
+    assert_eq!(
+        moved.sent,
+        Ok(SessionState::Completed),
+        "el emisor no completo"
+    );
+
+    for (quien, seen) in [
+        ("emisor", moved.sender_progress),
+        ("receptor", moved.receiver_progress),
+    ] {
+        let mayor = seen.iter().map(|sample| sample.item).max().unwrap_or(0);
+        assert_eq!(
+            mayor, 2,
+            "el {quien} nunca dijo ir por el segundo de dos archivos: el mayor              `item` que emitio fue {mayor}"
+        );
+        assert!(
+            seen.iter().any(|sample| sample.item == 1),
+            "el {quien} nunca dijo ir por el primero, asi que salta al ultimo y              no cuenta: {seen:?}"
+        );
+        for pair in seen.windows(2) {
+            assert!(
+                pair[1].item >= pair[0].item,
+                "el {quien} retrocedio de archivo: {} y luego {}",
+                pair[0].item,
+                pair[1].item
+            );
+        }
+    }
 }

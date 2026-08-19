@@ -601,3 +601,23 @@ una es cómo llega la primera peligrosa.
 Y una cuarta cosa lo dijo sin ser una guarda: **el enlazador**. Con `beacon.rs`
 escrito y sin llamante el binario no cambió ni un byte. Una capacidad sin
 llamante no se envía, se compila.
+
+
+## El progreso, y lo que aparecio debajo
+
+**Arreglado:** el receptor no asignaba `done` nunca —su barra era un cero fijo
+hasta el salto final, indistinguible de un cuelgue— y `Progress::item` iba
+siempre a cero en los dos extremos. QYR-0318 lo habia **documentado** como
+«siempre cero, porque el motor no lo asigna»: describir un defecto con precision
+no es arreglarlo. Y la propia prueba de progreso llevaba escrito el hueco
+—*«deliberately no assertion on the receiver's done»*— y ahi seguia.
+
+**Lo que aparecio al ir a comprobar que la pantalla lo enseñara:** `QyroProgress`
+solo existe dentro de `apps/qyro/lib/ffi/`. **Ninguna pantalla lo lee.** El camino
+entero —Rust emite, la frontera despacha, Dart lo envuelve— acaba en nadie: la
+**duodecima** capacidad escrita, probada e inalcanzable. Eso es fase 26 y es
+exactamente su motivo.
+
+**Lo que falta y no se hace de rebote:** la **M** de «archivo N de M» es un
+parametro mas en `QyroProgressFn`, o sea la frontera C. Calibre alto, con su
+enmienda a ADR-0032, no colado en un arreglo de progreso.

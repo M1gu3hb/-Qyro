@@ -54,15 +54,17 @@ pub struct Progress {
     pub done: u64,
     /// Bytes the manifest declares in total.
     pub total: u64,
-    /// Which manifest item is moving, one-based -- **and always zero, because
-    /// the engine never assigns it**.
+    /// Por que entrada del manifiesto va, **en base uno**. Cero solo antes de
+    /// que empiece a moverse nada.
     ///
-    /// QYR-0318. This said "one-based, zero before the first", which read as
-    /// "the transfer has not started" for the whole of every transfer. It
-    /// crosses to Dart and no screen reads it: the bar is drawn from `done` and
-    /// `total`. The field stays in the ABI because removing it changes
-    /// `qyro_session_progress` and the progress callback, and the honest fix
-    /// for a wrong sentence is the sentence.
+    /// QYR-0318 lo documento como «siempre cero, porque el motor no lo asigna» y
+    /// lo dejo ahi. Describir un defecto con precision no es arreglarlo: el
+    /// campo llevaba desde la fase 02 cruzando a Dart con un cero, y ADR-0050
+    /// §4.1 pide «archivo N de M» sobre el.
+    ///
+    /// **La M no esta aqui.** Anadirla es un parametro mas en
+    /// `QyroProgressFn`, y eso es la frontera C con su enmienda a ADR-0032.
+    /// Va con su ceremonia, no de rebote en este arreglo.
     pub item: u32,
 }
 
@@ -814,6 +816,7 @@ impl Session {
                     .map_err(|_| SessionError::TransferRefused)?;
                 self.outbound = produced;
                 self.progress.done = engine.bytes_sent();
+                self.progress.item = engine.item_in_flight();
                 finished = engine.phase() == Phase::Done;
             }
             Role::Receiving {
@@ -846,6 +849,12 @@ impl Session {
                     }
                     self.outbound = answers;
                 }
+                // Lo que faltaba para que la barra del receptor no fuera un cero
+                // fijo. Va fuera del `if let Some(bytes)` a proposito: un paso
+                // sin nada que entregar sigue siendo un paso, y su emision debe
+                // decir la verdad de ese momento.
+                self.progress.done = engine.bytes_received();
+                self.progress.item = engine.item_in_flight();
                 finished = engine.phase() == Phase::Done;
             }
         }

@@ -337,6 +337,24 @@ impl Sender {
         Ok(out)
     }
 
+    /// Por que entrada del manifiesto va, **en base uno**.
+    ///
+    /// Cuenta las que ya estan enteras en el cable y suma una: la que se esta
+    /// moviendo es la primera que aun no lo esta. Al terminar todas lo estan, y
+    /// el tope la deja en la ultima en vez de en una que no existe -- «archivo
+    /// 3 de 2» seria peor que el cero que habia.
+    ///
+    /// Cero solo antes de abrir, cuando de verdad no hay ninguna moviendose.
+    #[must_use]
+    pub fn item_in_flight(&self) -> u32 {
+        let done = self
+            .items
+            .iter()
+            .filter(|item| item.next_to_send >= item.chunks_total)
+            .count();
+        u32::try_from(done.saturating_add(1).min(self.items.len())).unwrap_or(u32::MAX)
+    }
+
     /// Total content bytes this sender has put on the wire.
     #[must_use]
     pub const fn bytes_sent(&self) -> u64 {
@@ -595,6 +613,31 @@ pub struct Receiver {
 }
 
 impl Receiver {
+    /// Bytes de contenido que han llegado y se han aceptado.
+    ///
+    /// **La barra del receptor no tenia de donde salir**: `qyro_session` sabia
+    /// el total en cuanto llegaba el manifiesto y no sabia nunca cuanto llevaba,
+    /// asi que dibujaba cero hasta el final. El dato existia por entrada desde
+    /// siempre; lo que faltaba era sumarlo.
+    ///
+    /// Se suma sobre `received`, que solo avanza con lo contiguo confirmado: un
+    /// trozo fuera de orden no adelanta la barra y luego no la hace retroceder.
+    #[must_use]
+    pub fn bytes_received(&self) -> u64 {
+        self.items.iter().map(|item| item.received).sum()
+    }
+
+    /// Por que entrada va, en base uno. El espejo de `Sender::item_in_flight`.
+    #[must_use]
+    pub fn item_in_flight(&self) -> u32 {
+        let done = self
+            .items
+            .iter()
+            .filter(|item| item.next_expected >= item.expected_chunks)
+            .count();
+        u32::try_from(done.saturating_add(1).min(self.items.len())).unwrap_or(u32::MAX)
+    }
+
     /// Builds a receiver over an established session's sealer and opener.
     #[must_use]
     pub fn new(sealer: FrameSealer, opener: FrameOpener) -> Self {
