@@ -243,6 +243,84 @@ const CROSSES_THE_WINDOW: u64 = 2 * 1024 * 1024 + 7;
 // ------------------------------------------------------- arguments, before the wire
 
 #[test]
+fn cancelar_se_lo_dice_al_otro_lado() {
+    // **«Alguien lo paró» y «se cayó la conexión» son dos frases distintas**, y
+    // la fase 25 §5 existe porque confundirlas es el 80 % de los «no funciona».
+    //
+    // `Session::cancel()` sólo ponía una bandera local: el paso siguiente
+    // fallaba aquí y **el par nunca se enteraba**. `request_cancel()` —que emite
+    // el frame— existía desde la fase 04 y no la llamaba nada de producción: la
+    // undécima capacidad muerta de este proyecto.
+    //
+    // **El primer intento de esta prueba pasó por el motivo equivocado**: medía
+    // tiempos, y al morir el hilo receptor se cerraba el socket, así que el
+    // emisor terminaba rápido por un error de conexión y la prueba lo aplaudía.
+    // Por eso aquí el receptor **cancela y se queda quieto con el socket
+    // abierto**: sin eso no se distingue lo que se quiere distinguir.
+    ensure_identity();
+    let root = Scratch::new("cancelsrc");
+    let destination = Scratch::new("canceldst");
+    let file = root.path("algo.bin");
+    std::fs::write(&file, vec![b'z'; 4 * 1024 * 1024]).expect("se escribe");
+
+    let address = loopback(a_free_port());
+    let target = destination.dir.clone();
+
+    let receiving = thread::spawn(move || {
+        let Ok(mut session) = Session::open_receiver(address, &target, None) else {
+            return;
+        };
+        // Handshake, manifiesto, y algo de contenido en marcha.
+        let _ = session.step();
+        let _ = session.step();
+        session.cancel();
+        // El paso que lleva la cancelación al cable.
+        let _ = session.step();
+        // **Quieto, con el socket vivo.** Si el hilo terminara aquí, el emisor
+        // vería un socket cerrado y esta prueba no mediría nada.
+        thread::sleep(std::time::Duration::from_secs(5));
+        drop(session);
+    });
+
+    let mut sender = open_sender_when_ready(address, &root.dir, &[file]);
+    let mut outcome = Ok(SessionState::InProgress);
+    let started = std::time::Instant::now();
+    if let Ok(session) = sender.as_mut() {
+        while matches!(outcome, Ok(SessionState::InProgress))
+            && started.elapsed() < std::time::Duration::from_secs(4)
+        {
+            outcome = session.step();
+        }
+    }
+    let _ = receiving.join();
+
+    // **Lo que se afirma:** el emisor se entera de que lo cancelaron, y se
+    // entera **mientras el socket sigue abierto** — o sea, por el protocolo y no
+    // porque el otro proceso se muriera.
+    assert!(
+        !matches!(outcome, Ok(SessionState::InProgress)),
+        "el emisor seguia en marcha cuatro segundos despues de que el receptor          cancelara: la cancelacion no llego al cable"
+    );
+    assert!(
+        !matches!(outcome, Err(SessionError::PeerUnreachable)),
+        "el emisor leyo la cancelacion como «el otro aparato no responde», que          es el nombre equivocado: {outcome:?}"
+    );
+
+    // **Y con qué nombre se entera**, que es de lo que trata la §5. Se afirma el
+    // que sale de verdad para que un cambio de nombre no pase inadvertido: si
+    // esto falla, alguien movió el vocabulario y hay que mirar qué lee la
+    // persona, no cambiar el número.
+    println!("el emisor termino con: {outcome:?}");
+    assert!(
+        matches!(
+            outcome,
+            Err(SessionError::Cancelled) | Err(SessionError::TransferRefused)
+        ),
+        "la cancelacion llego con un nombre inesperado: {outcome:?}"
+    );
+}
+
+#[test]
 fn las_carpetas_no_gastan_el_presupuesto_de_descriptores() {
     // **ADR-0047 §3 dice que el límite es por descriptores**, no por gusto: en
     // Android el selector devuelve descriptores y una selección de miles no es

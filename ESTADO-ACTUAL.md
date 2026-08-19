@@ -55,7 +55,17 @@ nueva pone la carpeta **primero**.
    `abi.rs`** y exige que Dart cubra todos los codigos, con su control al reves.
    El `switch` exhaustivo de la pantalla obligo a darle su frase, en los dos
    idiomas.
-3. **`finished()` no reconoce `Phase::Cancelled`.**
+3. ~~`finished()` no reconoce `Phase::Cancelled`~~ **El defecto era mas hondo y
+   esta arreglado.** `Session::cancel()` solo ponia una bandera **local**: el par
+   nunca se enteraba y esperaba a su reloj de 60 s para leer «el otro aparato no
+   responde». `request_cancel()` —que emite el frame— existia desde la fase 04 y
+   **no lo llamaba nada de produccion**: la undecima capacidad muerta. Ahora
+   cancelar cruza el cable.
+
+   **Y queda una cosa dicha, no arreglada:** el emisor se entera como
+   `TransferRefused`, que la GUI lee como «el otro lado rechazo». La §5 pide
+   separar «rechazo» de «cancelo a mitad», y separarlos es un codigo nuevo en la
+   frontera C — calibre alto, con su enmienda a ADR-0032.
 4. **`PARIDAD-GUI-CLI.md` cita lineas que no dicen lo que dice.** Cinco celdas
    verificadas, cinco mienten.
 5. **Dos ADR contra la fase 25:** ADR-0033 descarta el freno de tiempo que la

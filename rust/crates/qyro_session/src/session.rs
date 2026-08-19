@@ -694,6 +694,27 @@ impl Session {
             return Err(failure);
         }
         if self.cancel.load(Ordering::Acquire) {
+            // **Y se lo decimos al otro lado antes de irnos.**
+            //
+            // Hasta aquí `cancel()` sólo ponía una bandera local: este paso
+            // fallaba y el par se quedaba esperando hasta que vencía su reloj de
+            // inactividad — sesenta segundos para leer «el otro aparato no
+            // responde», que es el nombre equivocado de «alguien lo paró».
+            //
+            // `request_cancel()` existe desde la fase 04 y **no lo llamaba nada
+            // de producción**. ADR-0050 §4.2 pide un cancelar que pare el lote
+            // entero, y un lote tiene dos extremos.
+            //
+            // Si el frame no sale, no cambia nada: se falla igual. Un adiós que
+            // no se pudo dar no es motivo para no irse.
+            let farewell = match &mut self.role {
+                Role::Sending { engine, .. } => engine.request_cancel().ok(),
+                Role::Receiving { engine, .. } => engine.request_cancel().ok(),
+            };
+            if let Some(bytes) = farewell {
+                self.outbound = vec![bytes];
+                let _ = self.write_outbound();
+            }
             return Err(self.fail(SessionError::Cancelled));
         }
         match self.advance() {
