@@ -12,6 +12,56 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0369 — El `|` del código de emparejamiento es una tubería en PowerShell y en `cmd`
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (el primer intento de todo el mundo en Windows, y el error no nombra a Qyro)
+- Fecha: 2026-08-31
+
+**El defecto.** El código de emparejamiento es
+`QYRO1|192.168.1.5:49517|<huella>`, y `qyro whoami`, `qyro recv` y `qyro find` lo
+imprimían **tal cual**. En PowerShell y en `cmd` el `|` es el operador de
+tubería, así que
+
+    qyro send informe.pdf --to QYRO1|192.168.1.5:49517|ab12cd34
+
+**no llega nunca a Qyro**: la consola parte la línea en el primer `|` y trata de
+ejecutar `192.168.1.5:49517` como si fuera un programa.
+
+**Y el error no menciona a Qyro.** `cmd` dice «'192.168.1.5:49517' no se reconoce
+como un comando interno o externo»; PowerShell dice «Expected expression after
+'|'». Ninguno da por dónde empezar, y este binario existe **para Windows**: era
+el primer intento de todo el mundo.
+
+**El arreglo, en dos mitades, porque una sola habría creado un defecto nuevo.**
+
+1. **Se imprime ya entrecomillado.** `typeable()` en `qyro_cli/src/flows.rs`
+   envuelve el código en comillas **dobles**, que son las únicas que funcionan en
+   las tres consolas: `cmd`, PowerShell y un shell de tipo Unix. Las tres
+   funciones que lo enseñan pasan por ahí. El **payload del QR no**: lo lee una
+   cámara, no una consola.
+2. **Y se sigue aceptando entrecomillado.** Un shell quita las comillas antes de
+   que Qyro vea el argumento; **un campo de texto no**. El menú del propio CLI,
+   la casilla «teclea el código» del teléfono y un decodificador de QR al que le
+   den una cadena entrecomillada las reciben literales. Así que
+   `qyro_net::PairingEndpoint::parse` —el único analizador por el que pasan los
+   dos consumidores— quita **un par que abre y cierra**, y sólo uno.
+
+**Por qué un par y no «las comillas donde estén».** Un código copiado un carácter
+corto termina en una comilla suelta. Quitarla convertiría un código roto en uno
+que **parsea**: marcaría la dirección correcta esperando una huella a la que le
+falta el último byte. `but_a_lone_quote_is_still_a_broken_code` es el control, y
+cubre también `"`, `""` y la cadena vacía, que es donde un troceo ingenuo entra
+en pánico.
+
+**Y la ayuda lo dice.** `qyro help` tiene una sección propia con el ejemplo
+entrecomillado y el motivo, porque el día que alguien copie el código de otro
+sitio vuelve a romperse y tiene que haber dónde leerlo. El mensaje de rechazo de
+`--to` también lo explica, en vez de repetir la forma del código.
+
+**La pregunta que cierra esta ficha:** ¿puede alguien pegar en PowerShell lo que
+Qyro le enseña, sin tocarlo? **Sí.**
+
 ## QYR-0368 — El APK de release no podía abrir un socket
 
 - Estado: **CERRADO**

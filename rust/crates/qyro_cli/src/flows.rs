@@ -132,7 +132,10 @@ pub fn whoami(vt: Vt) -> i32 {
         let compact = fingerprint.replace('-', "");
         for (name, ip) in &addresses {
             println!("    [{name}]");
-            println!("    QYRO1|{ip}:{DEFAULT_PORT}|{compact}");
+            println!(
+                "    {}",
+                typeable(&format!("QYRO1|{ip}:{DEFAULT_PORT}|{compact}"))
+            );
         }
     }
     println!();
@@ -156,6 +159,11 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
         eprintln!(
             "qyro: '{to}' is not a pairing code and not an ip:port.\n\
              A code looks like QYRO1|192.168.1.5:{DEFAULT_PORT}|<fingerprint>.\n\
+             \n\
+             If half of it is missing, the console ate it: `|` is a pipe in\n\
+             PowerShell and in cmd. Put the code in double quotes:\n\
+             \x20 qyro send <file> --to \"QYRO1|192.168.1.5:{DEFAULT_PORT}|<fingerprint>\"\n\
+             \n\
              Names are never resolved -- use the address the other device shows."
         );
         return 2;
@@ -350,12 +358,63 @@ fn drive(session: &mut Session) -> Option<SessionState> {
     Some(state)
 }
 
+/// A pairing code as it should be **typed into a shell**, quotes included.
+///
+/// **The `|` in `QYRO1|ip:port|fingerprint` is a pipe in PowerShell and in
+/// `cmd`.** Typed bare, `qyro send x --to QYRO1|192.168.1.5:49517|abc` never
+/// reaches Qyro at all: the console splits the line at the first `|` and tries
+/// to run `192.168.1.5:49517` as a program. What the person sees is
+/// «'192.168.1.5:49517' is not recognized as an internal or external command»
+/// in `cmd`, or «Expected expression after '|'» in PowerShell — **neither names
+/// Qyro**, so there is nowhere to start looking. On Windows, which is the
+/// platform this binary is for, that is every first attempt.
+///
+/// So the code is printed with the quotes already on it, and the person copies
+/// the whole line.
+///
+/// **Double quotes, and it matters which.** They are the only kind that work in
+/// all three consoles this binary meets: `cmd` and PowerShell treat single
+/// quotes differently from each other, and `cmd` keeps them inside the
+/// argument. A Unix shell strips double quotes too, so one printed form serves
+/// everywhere.
+///
+/// The other half of this is in [`address_of`], which un-quotes: a shell strips
+/// the quotes before Qyro sees the argument, but **the menu is not a shell**,
+/// and what gets pasted into «pairing code from the other device:» arrives
+/// literally.
+fn typeable(code: &str) -> String {
+    format!("\"{code}\"")
+}
+
+/// Removes one matching pair of surrounding quotes, and only one.
+///
+/// Needed because [`typeable`] now prints them: a code pasted into the menu, or
+/// into a shell that does not strip them, arrives wrapped.
+///
+/// **One pair that opens *and* closes, never «quotes wherever they are».**
+/// Stripping loosely would turn `QYRO1|...|abc"` — a code copied badly, one
+/// character short — into one that parses, and a truncated fingerprint that
+/// parses is worse than one that does not.
+fn unquoted(text: &str) -> &str {
+    // `first`/`last` rather than an index: this crate denies indexing, and a
+    // length check is not something the compiler carries into a range.
+    let bytes = text.as_bytes();
+    let (Some(&first), Some(&last)) = (bytes.first(), bytes.last()) else {
+        return text;
+    };
+    if bytes.len() >= 2 && (first == b'"' || first == b'\'') && first == last {
+        return text.get(1..text.len() - 1).unwrap_or(text);
+    }
+    text
+}
+
 /// The address inside a pairing code, or a literal `ip:port`.
 ///
 /// Both go through the same parser the other device uses. **No name is ever
 /// resolved** — `"pc-de-juan.local".parse::<SocketAddr>()` fails, and that is
 /// the intended answer, not a gap (ADR-0042 §9).
 fn address_of(text: &str) -> Option<SocketAddr> {
+    let text = unquoted(text.trim());
     if let Ok(address) = parse_pairing(text) {
         return address.parse::<SocketAddr>().ok();
     }
@@ -468,11 +527,17 @@ pub fn find(vt: Vt) -> i32 {
         Ok(peers) => {
             println!();
             for peer in &peers {
-                println!("    {}{}{}", vt.green(), peer.pairing_string(), vt.reset());
+                println!(
+                    "    {}{}{}",
+                    vt.green(),
+                    typeable(&peer.pairing_string()),
+                    vt.reset()
+                );
             }
             println!(
                 "
-  copy one of those into: qyro send <file> --to <code>"
+  copy one of those, quotes and all, into:
+    qyro send <file> --to <code>"
             );
             0
         }
@@ -525,7 +590,7 @@ pub fn qr(vt: Vt) -> i32 {
 
     println!();
     println!("  Point the other device's camera at this.");
-    println!("  {}{code}{}", vt.green(), vt.reset());
+    println!("  {}{}{}", vt.green(), typeable(&code), vt.reset());
     println!();
 
     match crate::optical::draw(code.as_bytes()) {
@@ -817,7 +882,58 @@ mod tests {
         reason = "a test that cannot fail loudly is not a test"
     )]
 
-    use super::{DEFAULT_PORT, address_of, fingerprint_matches};
+    use super::{DEFAULT_PORT, address_of, fingerprint_matches, typeable};
+
+    #[test]
+    fn un_codigo_para_teclear_sale_ya_entrecomillado() {
+        // El `|` del codigo de emparejamiento es una tuberia en PowerShell y en
+        // `cmd`. `qyro send x --to QYRO1|192.168.1.5:49517|abc` sin comillas no
+        // llega nunca a Qyro: la consola parte la linea en el primer `|` y
+        // ejecuta `192.168.1.5:49517` como si fuera un programa. El error que
+        // sale -- «no se reconoce como un comando interno o externo», o
+        // «Expected expression after '|'» en PowerShell -- **no menciona a
+        // Qyro**, asi que la persona no tiene por donde empezar.
+        //
+        // Se imprime ya entrecomillado, y con comillas dobles porque son las
+        // unicas que funcionan en las tres consolas: `cmd`, PowerShell y un
+        // shell de tipo Unix. Las simples las conservan `cmd` y PowerShell tal
+        // cual, dentro del argumento.
+        let code = "QYRO1|192.168.1.5:49517|ab12cd34";
+        assert_eq!(typeable(code), "\"QYRO1|192.168.1.5:49517|ab12cd34\"");
+    }
+
+    #[test]
+    fn y_un_codigo_pegado_con_sus_comillas_se_sigue_aceptando() {
+        // La otra mitad, y sin ella el arreglo crea un defecto nuevo. Un shell
+        // quita las comillas antes de que Qyro vea el argumento, pero **el menu
+        // no es un shell**: lo que se teclea en «pairing code from the other
+        // device:» llega literal. Si se imprime entrecomillado y luego se pega
+        // en el menu, Qyro recibe las comillas y tiene que entenderlas.
+        let quoted = "\"QYRO1|192.168.1.5:49517|ab12cd34ab12cd34ab12cd34ab12cd34\"";
+        let address = address_of(quoted).expect("un codigo con sus comillas");
+        assert_eq!(address.port(), DEFAULT_PORT);
+        assert_eq!(address.ip().to_string(), "192.168.1.5");
+
+        // Y las simples, que es lo que copia quien viene de un shell de Unix.
+        let single = "'QYRO1|192.168.1.5:49517|ab12cd34ab12cd34ab12cd34ab12cd34'";
+        assert!(address_of(single).is_some());
+
+        // Y una direccion pelada entrecomillada, que es lo que pasa cuando
+        // alguien entrecomilla por costumbre.
+        assert!(address_of("\"192.168.1.5:49517\"").is_some());
+    }
+
+    #[test]
+    fn pero_una_comilla_suelta_no_se_borra_en_silencio() {
+        // El control. Quitar comillas «donde las haya» convierte
+        // `QYRO1|...|abc"` en algo valido, y con ello un codigo mal copiado en
+        // uno que parece bueno. Solo se quita un par que abre y cierra.
+        assert!(address_of("\"192.168.1.5:49517").is_none());
+        assert!(address_of("192.168.1.5:49517\"").is_none());
+        assert!(address_of("'192.168.1.5:49517\"").is_none());
+        // Y una cadena de una sola comilla no debe indexar fuera de rango.
+        assert!(address_of("\"").is_none());
+    }
 
     #[test]
     fn a_pairing_code_and_a_bare_address_reach_the_same_place() {

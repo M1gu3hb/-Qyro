@@ -278,6 +278,16 @@ fn help_text() -> String {
          \x20 qyro find                             who else is on this network\n\
          \x20 qyro qr                               draw this device's code as a QR\n\
          \n\
+         PUT THE CODE IN DOUBLE QUOTES\n\
+         \x20 qyro send informe.pdf --to \"QYRO1|192.168.1.5:49517|ab12cd34\"\n\
+         \n\
+         \x20 The `|` in a pairing code is a pipe in PowerShell and in cmd, so\n\
+         \x20 an unquoted code never reaches Qyro: the console splits the line\n\
+         \x20 and complains about something that is not a command. The error\n\
+         \x20 does not mention Qyro, which is why this is written here.\n\
+         \x20 whoami, recv and find already print the code with its quotes --\n\
+         \x20 copy the whole thing, quotes and all.\n\
+         \n\
          OPTIONS\n\
          \x20 --expect <fingerprint>   refuse unless the other device's\n\
          \x20                          fingerprint matches. There is no --yes:\n\
@@ -302,6 +312,25 @@ mod tests {
     )]
 
     use super::{Command, flag, help_text, parse};
+
+    #[test]
+    fn el_help_dice_que_el_codigo_va_entre_comillas() {
+        // El `|` del codigo de emparejamiento es una tuberia en PowerShell y en
+        // `cmd`, asi que un codigo sin comillas no llega nunca a Qyro y el error
+        // que sale no menciona a Qyro. `qyro whoami`, `qyro recv` y `qyro find`
+        // ya lo imprimen entrecomillado; la ayuda tiene que decir por que, o el
+        // dia que alguien copie el codigo de otro sitio vuelve a romperse sin
+        // saber por que.
+        let help = help_text();
+        assert!(
+            help.contains("--to \"QYRO1|"),
+            "el ejemplo de la ayuda no lleva el codigo entre comillas:\n{help}"
+        );
+        assert!(
+            help.contains("PowerShell") && help.contains("cmd"),
+            "la ayuda no dice en que consolas hace falta, asi que parece capricho:\n{help}"
+        );
+    }
 
     #[test]
     fn send_self_manda_este_binario_y_no_pide_una_ruta() {

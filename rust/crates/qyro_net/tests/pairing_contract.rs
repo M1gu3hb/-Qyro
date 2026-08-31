@@ -230,3 +230,70 @@ fn surrounding_whitespace_does_not_change_what_a_string_means() {
         "spaces inside the fields were accepted, so the parser is guessing"
     );
 }
+
+#[test]
+fn a_code_still_wrapped_in_the_quotes_it_was_printed_with_is_read() {
+    // **QYR-0369.** The `|` in a pairing string is a pipe in PowerShell and in
+    // `cmd`, so `qyro send x --to QYRO1|192.168.1.5:49517|abc` never reaches
+    // Qyro: the console splits the line and complains about something that is
+    // not a command, in a message that does not mention Qyro. The CLI therefore
+    // prints the code **with double quotes already on it**, and tells the person
+    // to copy the whole thing.
+    //
+    // Which puts the quotes into every other place that code gets pasted. A
+    // shell strips them; a text field does not. The phone's «type the code»
+    // field, the CLI's own menu prompt and a QR decoder that was handed a
+    // quoted string all receive them literally — and this is the one parser all
+    // three go through, so this is where they are understood.
+    //
+    // Same argument as `surrounding_whitespace_does_not_change_what_a_string_means`
+    // directly above: refusing would be technically correct and would make a
+    // person retype something that was already right.
+    let endpoint = PairingEndpoint::new(v4(47_001), a_fingerprint()).unwrap();
+    let payload = endpoint.to_string();
+
+    assert_eq!(
+        PairingEndpoint::parse(&format!("\"{payload}\"")),
+        Ok(endpoint),
+        "a code copied with the double quotes it was printed with was refused"
+    );
+    assert_eq!(
+        PairingEndpoint::parse(&format!("'{payload}'")),
+        Ok(endpoint),
+        "a code copied with single quotes was refused"
+    );
+    // Quotes outside the whitespace and inside it, both: what a person copies
+    // from a terminal carries either.
+    assert_eq!(
+        PairingEndpoint::parse(&format!("  \"{payload}\"  \n")),
+        Ok(endpoint)
+    );
+}
+
+#[test]
+fn but_a_lone_quote_is_still_a_broken_code() {
+    // The control, and it is the whole reason the stripping is a matched pair
+    // rather than «remove quotes wherever they are». A code copied one character
+    // short ends in a stray quote, and a truncated fingerprint that *parses* is
+    // worse than one that does not: it would dial the right address expecting
+    // the wrong key.
+    let endpoint = PairingEndpoint::new(v4(47_001), a_fingerprint()).unwrap();
+    let payload = endpoint.to_string();
+
+    assert!(
+        PairingEndpoint::parse(&format!("\"{payload}")).is_err(),
+        "an opening quote with no closing one was accepted"
+    );
+    assert!(
+        PairingEndpoint::parse(&format!("{payload}\"")).is_err(),
+        "a closing quote with no opening one was accepted"
+    );
+    assert!(
+        PairingEndpoint::parse(&format!("'{payload}\"")).is_err(),
+        "mismatched quotes were accepted"
+    );
+    // And the degenerate inputs, which are where a naive slice panics.
+    assert!(PairingEndpoint::parse("\"").is_err());
+    assert!(PairingEndpoint::parse("\"\"").is_err());
+    assert!(PairingEndpoint::parse("").is_err());
+}

@@ -23,6 +23,16 @@ en Dart, y la afirmacion sobre el manifiesto **fusionado de release**, con
 `QYRO_REQUIRE_RELEASE_MANIFEST=1` en `release.yml` para que leer el de debug alli
 sea rojo.
 
+**QYR-0369, arreglado.** El `|` del codigo de emparejamiento es una **tuberia**
+en PowerShell y en `cmd`, asi que `--to QYRO1|ip:puerto|huella` sin comillas no
+llegaba nunca a Qyro y el error no nombraba a Qyro. Ahora `whoami`, `recv`, `qr`
+y `find` lo imprimen **ya entrecomillado**, `qyro help` lo explica, y
+`PairingEndpoint::parse` acepta el codigo con sus comillas -- porque un campo de
+texto no las quita y el menu del CLI y la casilla del telefono son campos de
+texto. Un par que abre y cierra, nunca «comillas donde las haya»: una comilla
+suelta es un codigo copiado corto, y uno truncado que **parsea** es peor que uno
+que no.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

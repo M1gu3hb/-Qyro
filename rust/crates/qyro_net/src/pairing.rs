@@ -137,7 +137,7 @@ impl PairingEndpoint {
     ///
     /// One [`PairingError`] per way the string can be wrong.
     pub fn parse(text: &str) -> Result<Self, PairingError> {
-        let fields: Vec<&str> = text.trim().split(PAIRING_SEPARATOR).collect();
+        let fields: Vec<&str> = unquote(text.trim()).split(PAIRING_SEPARATOR).collect();
         if fields.len() != 3 {
             return Err(PairingError::WrongFieldCount {
                 found: fields.len(),
@@ -178,6 +178,41 @@ impl fmt::Display for PairingEndpoint {
         }
         Ok(())
     }
+}
+
+/// Removes one matching pair of surrounding quotes, and only one.
+///
+/// **QYR-0369, and it is the other half of a fix that lives in the CLI.** The
+/// `|` in a pairing string is a pipe in PowerShell and in `cmd`, so a code typed
+/// bare never reaches Qyro at all — the console splits the line and complains
+/// about something that is not a command, in a message that names neither Qyro
+/// nor the reason. So the code is now **printed with its quotes**, and the
+/// person is told to copy the whole thing.
+///
+/// A shell then strips them. A text field does not: the phone's «type the code»
+/// box, the CLI's own menu prompt and a QR payload that was built from a quoted
+/// string all deliver them literally. This is the one parser all of those go
+/// through, which is why the understanding belongs here and not in each of them.
+///
+/// **A matched pair that opens *and* closes, never «quotes wherever they are».**
+/// A code copied one character short ends in a stray quote, and stripping
+/// loosely would turn it into one that parses — dialling the right address while
+/// expecting a fingerprint that is missing its last byte. `but_a_lone_quote_is_still_a_broken_code`
+/// is the control.
+fn unquote(text: &str) -> &str {
+    let bytes = text.as_bytes();
+    // Three, not two: `""` is a matched pair around nothing, and returning the
+    // empty string from it is right — it fails as `WrongFieldCount` a line
+    // later, which is what it is.
+    let (Some(&first), Some(&last)) = (bytes.first(), bytes.last()) else {
+        return text;
+    };
+    if bytes.len() >= 2 && (first == b'"' || first == b'\'') && first == last {
+        // `get` rather than a slice: this crate denies indexing, and the length
+        // check above is not something the compiler can carry into a range.
+        return text.get(1..text.len() - 1).unwrap_or(text);
+    }
+    text
 }
 
 /// One lowercase hex digit, or nothing.
