@@ -1073,21 +1073,43 @@ impl Session {
         };
         let verdicts = engine.verdicts();
         let mut materialised = 0_u32;
+        // **QYR-0383: esto tenía dos `return` dentro del bucle.**
+        //
+        // Un solo ítem que fallara abandonaba **todos los que venían detrás en
+        // el manifiesto**, con sus `.qyro-part` ya escritos enteros y
+        // verificados, sin renombrar y sin que nadie los volviera a mirar.
+        // Medido: tres archivos, el primero vacío, y llegan cero — los dos
+        // llenos se quedan como `b-lleno.bin.qyro-part` y `c-lleno.bin.qyro-part`.
+        //
+        // Se recorre entero. Lo que se pudo materializar se materializa, y el
+        // fallo se cuenta y se devuelve **al final**: la negativa sigue siendo
+        // una negativa, y deja de llevarse por delante archivos que cruzaron
+        // perfectamente.
+        let mut refused = 0_u32;
         for (item_id, verdict) in &verdicts {
             match target.finish_item(*item_id) {
-                Ok(_) => {
-                    if *verdict == ItemVerdict::Ok {
-                        materialised = materialised.saturating_add(1);
-                    } else {
-                        return Err(SessionError::StorageRefused);
-                    }
+                Ok(_) if *verdict == ItemVerdict::Ok => {
+                    materialised = materialised.saturating_add(1);
                 }
-                Err(_) => {
-                    if *verdict == ItemVerdict::Ok {
-                        return Err(SessionError::StorageRefused);
-                    }
+                // Se pudo escribir y el veredicto del motor dice que no. El
+                // archivo no vale, y el que viene detrás puede que sí.
+                Ok(_) => refused = refused.saturating_add(1),
+                // El veredicto dice que sí y el disco dice que no: nombre
+                // tomado, digest que no cuadra, sitio que se acabó.
+                Err(_) if *verdict == ItemVerdict::Ok => {
+                    refused = refused.saturating_add(1);
                 }
+                // Los dos dicen que no. Nada que contar y nada que salvar.
+                Err(_) => {}
             }
+        }
+        if refused > 0 {
+            // **Sin número, y es una limitación conocida.** Esta firma devuelve
+            // un contador o un error, no las dos cosas, y cambiarla es cambiar
+            // `qyro_session_finish` en la frontera C. Lo que importa —que lo
+            // salvable quede salvado— ya está hecho arriba; el llamante dice
+            // «alguno no se pudo guardar» y la persona ve en la carpeta cuáles.
+            return Err(SessionError::StorageRefused);
         }
         Ok(materialised)
     }

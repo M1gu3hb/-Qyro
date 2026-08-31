@@ -533,8 +533,14 @@ pub fn receive(out: Option<&str>, expect: Option<&str>, port: Option<u16>, vt: V
             // because «0 files saved» after a full progress bar reads as a
             // broken program rather than as a rule doing its job.
             Err(error) => {
+                // **«Alguno» y no «ninguno»** (QYR-0383). Desde que `finish`
+                // recorre el manifiesto entero en vez de abandonarlo al primer
+                // fallo, puede haber archivos guardados y uno no. La firma
+                // devuelve un contador **o** un error, nunca las dos cosas, así
+                // que aquí no hay número que dar -- y prometer «ninguno» cuando
+                // hay tres en la carpeta es peor que no decir cuántos.
                 eprintln!(
-                    "\n{}  the files arrived and none was kept.{}",
+                    "\n{}  alguno de los archivos no se pudo guardar.{}",
                     vt.red(),
                     vt.reset()
                 );
@@ -545,6 +551,9 @@ pub fn receive(out: Option<&str>, expect: Option<&str>, port: Option<u16>, vt: V
                 );
                 eprintln!("  the same name, move it or receive into another folder:");
                 eprintln!("    qyro recv --out <otra-carpeta>");
+                eprintln!();
+                eprintln!("  Lo que sí se guardó está en esa carpeta: míralo antes");
+                eprintln!("  de volver a mandar nada.");
                 1
             }
         },

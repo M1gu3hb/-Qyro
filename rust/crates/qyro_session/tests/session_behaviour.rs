@@ -1881,3 +1881,72 @@ fn a_pairing_string_hands_back_the_fingerprint_it_carries() {
         )
     );
 }
+
+/// A zero-byte file does not take the rest of the transfer down with it.
+///
+/// **Reported by the wire audit as `empty-item-never-materialises`, and worth a
+/// test either way: an empty file is not exotic.** A `.gitkeep`, a lock file, a
+/// log that has not been written to yet — people send folders, and folders have
+/// them.
+///
+/// The claim under test is the sharp half: not «the empty one is missing», which
+/// would be a small loss, but «`finish` gives up at it and **everything after it
+/// in the manifest is abandoned too**», which loses files that crossed perfectly.
+#[test]
+fn an_empty_file_does_not_abandon_the_files_that_follow_it() {
+    ensure_identity();
+    let scratch = Scratch::new("empty-item");
+    let root = scratch.path("origen");
+    let destination = scratch.path("destino");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&destination).unwrap();
+
+    // The empty one **first**, so that anything that gives up at it gives up
+    // with the others still to come. Ordering the test around the failure is
+    // the whole point: with the empty one last, a broken `finish` would look
+    // fine.
+    let empty = root.join("a-vacio.txt");
+    fs::write(&empty, b"").unwrap();
+    let after = root.join("b-lleno.bin");
+    write_pattern(&after, 4096);
+    let also = root.join("c-lleno.bin");
+    write_pattern(&also, 8192);
+
+    let moved = move_files(
+        &root,
+        &[empty.clone(), after.clone(), also.clone()],
+        &destination,
+    );
+
+    assert_eq!(
+        moved.received,
+        Ok(SessionState::Completed),
+        "the transfer did not complete: {:?}",
+        moved.received
+    );
+
+    let landed = |name: &str| destination.join(name).exists();
+    assert!(
+        landed("b-lleno.bin") && landed("c-lleno.bin"),
+        "the two files that follow an empty one did not arrive, so one empty \
+         file took the rest of the transfer down with it. Destination holds: \
+         {:?}. materialised={:?}",
+        fs::read_dir(&destination)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name())
+            .collect::<Vec<_>>(),
+        moved.materialised
+    );
+    assert_eq!(read_all(&destination.join("b-lleno.bin")).len(), 4096);
+    assert_eq!(read_all(&destination.join("c-lleno.bin")).len(), 8192);
+
+    // And the empty one itself. Reported separately so a failure says which of
+    // the two problems it is.
+    assert!(
+        landed("a-vacio.txt"),
+        "the empty file did not arrive. On its own that is a small loss; the \
+         assertion above is the one that matters"
+    );
+    assert_eq!(read_all(&destination.join("a-vacio.txt")).len(), 0);
+}

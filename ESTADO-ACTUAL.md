@@ -168,6 +168,15 @@ no puede ocurrir, porque ningun aparato llega a ser conocido. El escenario C4 no
 es ejecutable. Escrito en el README y en la guia; conectarlo pide una pantalla
 donde una persona nombre un aparato, que es una funcion y no un cableado.
 
+**QYR-0383, y es de los que mas duelen.** Un archivo VACIO se llevaba por delante
+toda la transferencia. Medido con tres archivos y el vacio el primero: llegan
+cero, y los dos llenos se quedan como `.qyro-part` -- escritos enteros,
+verificados, sin renombrar. Dos defectos encadenados: la parte no se abre hasta el
+primer trozo, asi que un archivo vacio salia como `DigestMismatch` -- marcado de
+corrupto --, y `Session::finish` tenia **dos `return` dentro del bucle**, asi que
+un solo item que fallara abandonaba todos los que venian detras. Ese es el grande;
+el archivo vacio solo es la forma mas facil de alcanzarlo.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

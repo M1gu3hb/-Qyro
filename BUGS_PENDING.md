@@ -12,6 +12,66 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0383 — Un archivo vacío se llevaba por delante toda la transferencia
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (archivos que cruzaron perfectamente, no entregados)
+- Fecha: 2026-08-31
+
+**Medido, con tres archivos y el vacío el primero:** llegan **cero**. Los dos
+llenos se quedan en el destino como `b-lleno.bin.qyro-part` y
+`c-lleno.bin.qyro-part` — escritos enteros, verificados, y sin renombrar.
+
+```
+materialised = Err(StorageRefused)
+destino: ["b-lleno.bin.qyro-part", "c-lleno.bin.qyro-part"]
+```
+
+**Y un archivo vacío no es exótico.** Un `.gitkeep`, un archivo de bloqueo, un
+registro todavía sin escribir. La gente manda carpetas, y las carpetas los
+tienen.
+
+### Dos defectos, uno detrás del otro
+
+**1. La parte no se abre hasta el primer trozo, y un archivo vacío no tiene
+ninguno.** Así que `finish_item` llegaba a `self.open.remove(&item_id)` sin nada
+que quitar y salía como `DigestMismatch`: **un archivo vacío marcado de
+corrupto**.
+
+**2. `Session::finish` tenía dos `return` dentro del bucle.** Un solo ítem que
+fallara abandonaba **todos los que venían detrás en el manifiesto**. Ése es el
+defecto grande, y el archivo vacío sólo es la forma más fácil de alcanzarlo:
+cualquier fallo de un ítem —un nombre ya tomado, un digest que no cuadra— hacía
+lo mismo.
+
+### El arreglo, en las dos capas
+
+- `qyro_fs`: un ítem sin parte abierta se materializa como archivo vacío **si el
+  manifiesto dice cero y el digest es el del vacío**. Las dos condiciones: la
+  primera evita inventar un archivo para un ítem que sí tenía contenido y no
+  llegó, y la segunda es la misma verificación que pasa cualquier otro archivo.
+  Un ítem que dice cero con otro digest es un manifiesto que se contradice, y ésa
+  sí es una discrepancia. Y con `create_new`, que es la misma negativa a
+  sobrescribir que todos los demás (ADR-0027 §2), en una sola llamada al sistema
+  en vez de dos con una carrera en medio.
+- `qyro_session::finish`: se recorre el manifiesto **entero**. Lo que se puede
+  materializar se materializa; el fallo se cuenta y se devuelve al final. La
+  negativa sigue siendo una negativa y deja de llevarse por delante archivos que
+  cruzaron.
+
+**Y una limitación que se declara en vez de esconderse:** la firma devuelve un
+contador **o** un error, nunca las dos cosas, así que en un fallo parcial no hay
+número que dar. Cambiar eso es cambiar `qyro_session_finish` en la frontera C. Lo
+que importa —que lo salvable quede salvado— está hecho; el CLI dice ahora
+«alguno de los archivos no se pudo guardar» en vez de «ninguno», porque prometer
+«ninguno» con tres en la carpeta es peor que no decir cuántos.
+
+**La prueba pone el vacío el PRIMERO**, a propósito: con el vacío al final, un
+`finish` roto se ve perfecto.
+
+**La pregunta que cierra esta ficha:** ¿puede un archivo hundir a los que vienen
+detrás? **No.**
+
 ## QYR-0381 — La huella del código de emparejamiento se validaba y se tiraba
 
 - Estado: **CERRADO en el CLI. Abierto en la GUI, y aquí está el argumento.**

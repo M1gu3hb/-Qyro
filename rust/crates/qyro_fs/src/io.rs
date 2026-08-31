@@ -447,6 +447,39 @@ impl FileSink {
     /// # Errors
     ///
     /// [`FsError::DigestMismatch`] or [`FsError::Io`].
+    /// Materialises an item the manifest declares empty, with nothing on disk.
+    ///
+    /// Separated out so `finish_item` keeps reading as one path: this is the
+    /// case where **no bytes ever arrived because none were owed**, which is not
+    /// the same shape as any other ending and should not be spelled inside a
+    /// chain of `?` about a part file that does not exist.
+    fn finish_empty_item(&mut self, item_id: u32) -> Result<PathBuf, FsError> {
+        let Some((path, size, digest)) = self.plan.get(&item_id).cloned() else {
+            return Err(FsError::DigestMismatch { item_id });
+        };
+        if size != 0 || digest != empty_digest() {
+            // Nothing arrived and something was owed. That is the mismatch this
+            // branch used to report for every empty file, and here it is right.
+            return Err(FsError::DigestMismatch { item_id });
+        }
+        let resolved = safe_path::resolve_under(&self.root, &path)?;
+        // The same refusal to overwrite every other item gets (ADR-0027 §2). An
+        // empty file is not a licence to clobber one, and `create_new` is the
+        // check and the create in one syscall rather than two with a race in
+        // between.
+        let handle = fs::File::create_new(&resolved.final_path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                FsError::DestinationExists {
+                    path: resolved.final_path.to_string_lossy().into_owned(),
+                }
+            } else {
+                error.into()
+            }
+        })?;
+        handle.sync_all()?;
+        Ok(resolved.final_path)
+    }
+
     pub fn finish_item(&mut self, item_id: u32) -> Result<PathBuf, FsError> {
         // Una carpeta ya está terminada: se creó al preparar el destino, antes
         // de que llegara un byte. Decir que sí es la verdad, no una excepción.
@@ -454,7 +487,24 @@ impl FileSink {
             return Ok(path.clone());
         }
         let Some(part) = self.open.remove(&item_id) else {
-            return Err(FsError::DigestMismatch { item_id });
+            // **Un archivo de cero bytes nunca abre una parte** (QYR-0383).
+            //
+            // La parte se abre al escribir el primer trozo, y un archivo vacío
+            // no tiene ninguno. Así que llegaba aquí sin nada abierto y salía
+            // como `DigestMismatch`: un archivo vacío marcado de corrupto, y
+            // —peor— `Session::finish` abandonaba con él **todo lo que venía
+            // detrás en el manifiesto**.
+            //
+            // Un `.gitkeep`, un archivo de bloqueo, un registro todavía sin
+            // escribir. La gente manda carpetas, y las carpetas los tienen.
+            //
+            // Se materializa aquí, y **sólo si el manifiesto dice cero y el
+            // digest es el del vacío**. Las dos condiciones: la primera evita
+            // inventar un archivo para un ítem que sí tenía contenido y no
+            // llegó, y la segunda es la misma verificación que cualquier otro
+            // archivo pasa. Un ítem que dice cero con otro digest es un
+            // manifiesto que se contradice, y ésa sí es una discrepancia.
+            return self.finish_empty_item(item_id);
         };
         let expected = self
             .plan
@@ -554,6 +604,15 @@ pub fn digest_of(path: &Path) -> Result<Vec<u8>, FsError> {
 ///
 /// # Errors
 ///
+/// SHA-256 of nothing, computed rather than pasted.
+///
+/// A well-known constant would be shorter and would be a second place that has
+/// to agree with `sha2`. This is the same hasher every other item goes through,
+/// asked what it says about no bytes at all.
+fn empty_digest() -> Vec<u8> {
+    Sha256::new().finalize().to_vec()
+}
+
 /// [`FsError::Io`] when a read fails.
 pub fn digest_of_reader<R: Read>(source: &mut R) -> Result<Vec<u8>, FsError> {
     let file = source;
