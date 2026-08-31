@@ -38,23 +38,46 @@ listado de declaraciones de los dos archivos.
 **nombrable**. Que corresponda a la capacidad **no es mecanizable**, y fingir que
 lo es sería el mismo error otra vez.
 
+## 2026-08-31 — las citas se movieron otra vez, y ahora hay quien lo note
+
+**Una cita por número de línea envejece en cuanto alguien edita el archivo por
+encima**, y eso es lo que pasó: la tanda que arregló QYR-0368 a QYR-0371 añadió
+líneas a `flows.rs`, a `native_transfer_service.dart` y a `transfer_screens.dart`,
+y **once de las catorce citas quedaron apuntando a un `}`, a un `///` o a un
+comentario**. Exactamente el estado que este documento describe arriba, once días
+después de arreglarlo.
+
+Las citas están puestas otra vez, a mano, contra el listado de declaraciones. Y
+para que la próxima vez no dependa de que alguien mire:
+**`qyro_core::repository_contract::the_parity_table_still_points_at_code`** las
+resuelve todas dentro de `cargo test --workspace`, o sea dentro de la puerta, en
+cada commit. `check_parity.ps1` sigue existiendo y hace lo mismo; la diferencia
+es que la guarda de Rust corre donde ya se corre todo, y la de PowerShell hay que
+acordarse de llamarla.
+
+**Y una fila cambió de contenido, no sólo de número.** «Canal óptico» decía
+`NO -- [...] el lado Android que acumula frames todavía no existe`, y desde la
+fase 24B sí existe: `ScanScreen`, `QyroScanner`, `ScannerChannel.kt` y `qyro_eye`.
+Lo que no existía era **la puerta** — nadie construía esa pantalla (QYR-0371). Con
+la puerta puesta, la celda cita el sitio que la abre.
+
 <!-- PARIDAD-INICIO -->
 
 | Capacidad | GUI | CLI |
 |---|---|---|
-| Mandar por código tecleado | `apps/qyro/lib/transfer/native_transfer_service.dart:227` | `rust/crates/qyro_cli/src/flows.rs:143` |
-| Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:365` | `rust/crates/qyro_cli/src/flows.rs:235` |
-| Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:110` | `rust/crates/qyro_cli/src/flows.rs:102` |
-| Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:692` | `rust/crates/qyro_cli/src/flows.rs:235` |
-| Rechazar con motivo | `apps/qyro/lib/transfer/native_transfer_service.dart:365` | `rust/crates/qyro_cli/src/flows.rs:235` |
-| Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:227` | `rust/crates/qyro_cli/src/flows.rs:370` |
-| Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:227` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
-| Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:213` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
-| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:191` | `rust/crates/qyro_cli/src/flows.rs:409` |
-| Canal optico (fase 15) | `NO -- ADR-0044 §6: el CLI dibuja y el telefono lee. La GUI de escritorio no dibuja QR porque la maquina que los necesita es la que no tiene GUI, y el lado Android que acumula frames todavia no existe -- esta anotado en STATUS.md como hueco en blanco, no como capacidad` | `rust/crates/qyro_cli/src/flows.rs:501` |
+| Mandar por código tecleado | `apps/qyro/lib/transfer/native_transfer_service.dart:241` | `rust/crates/qyro_cli/src/flows.rs:152` |
+| Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:379` | `rust/crates/qyro_cli/src/flows.rs:326` |
+| Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:124` | `rust/crates/qyro_cli/src/flows.rs:106` |
+| Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:613` | `rust/crates/qyro_cli/src/flows.rs:345` |
+| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:640` | `rust/crates/qyro_cli/src/flows.rs:384` |
+| Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:241` | `rust/crates/qyro_cli/src/flows.rs:505` |
+| Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:241` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
+| Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:231` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
+| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:205` | `rust/crates/qyro_cli/src/flows.rs:544` |
+| Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:70` | `rust/crates/qyro_cli/src/flows.rs:642` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
-| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:692` | `rust/crates/qyro_cli/src/flows.rs:235` |
-| Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:572` |
+| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:613` | `rust/crates/qyro_cli/src/flows.rs:358` |
+| Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:902` |
 
 <!-- PARIDAD-FIN -->
 

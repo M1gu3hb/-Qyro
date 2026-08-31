@@ -244,3 +244,102 @@ fn strip_line_comments(source: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+/// Every `archivo:línea` in the parity table points at something nameable.
+///
+/// **A citation by line number ages the moment somebody edits the file above
+/// it**, and this repository has now paid for that twice. The first time,
+/// fifteen of the table's citations pointed at `setState(() {`, `};`, `}` and a
+/// comment — thirteen rows of fourteen — while the document said it was checked.
+/// The second time was the round that closed QYR-0368 to QYR-0371: adding lines
+/// to `flows.rs`, `native_transfer_service.dart` and `transfer_screens.dart`
+/// pushed eleven of the fourteen off their targets, eleven days after the first
+/// repair.
+///
+/// `scripts/check_parity.ps1` makes the same check and is the specification for
+/// it (ADR-0046 §3). This is not a replacement: it is the same rule inside
+/// `cargo test --workspace`, which is what `scripts/gate.ps1` runs and what CI
+/// runs on every commit. The PowerShell one has to be remembered; this one
+/// cannot be forgotten.
+///
+/// **What «nameable» excludes**, and it is deliberately narrow: a bare brace, a
+/// doc or line comment, a blank line. Whether the line corresponds to the
+/// *capability* is not mechanisable and pretending otherwise is how the first
+/// repair produced «Rechazar con motivo → `_drainReceive`» — precision that is
+/// false, which is worse than a stale number because it no longer looks stale.
+#[test]
+fn the_parity_table_still_points_at_code() {
+    let root = repo_root();
+    let table = root.join("docs/PARIDAD-GUI-CLI.md");
+    let source = std::fs::read_to_string(&table)
+        .unwrap_or_else(|error| panic!("the parity table is at {}: {error}", table.display()));
+
+    let body = source
+        .split_once("<!-- PARIDAD-INICIO -->")
+        .and_then(|(_, rest)| rest.split_once("<!-- PARIDAD-FIN -->"))
+        .map(|(rows, _)| rows)
+        .expect("the table must keep its PARIDAD-INICIO / PARIDAD-FIN markers");
+
+    let citations = citations_in(body);
+    // The reader has to work before it can be believed. A pattern that matched
+    // nothing would make this test pass while every citation rotted.
+    assert!(
+        citations.len() >= 20,
+        "found {} citations in the parity table, so the reader broke rather \
+         than the table: {citations:?}",
+        citations.len()
+    );
+
+    let mut rotten = Vec::new();
+    for (path, number) in &citations {
+        let file = root.join(path);
+        let Ok(content) = std::fs::read_to_string(&file) else {
+            rotten.push(format!("{path}:{number} — the file does not exist"));
+            continue;
+        };
+        let Some(line) = content.lines().nth(number - 1) else {
+            rotten.push(format!(
+                "{path}:{number} — the file has only {} lines",
+                content.lines().count()
+            ));
+            continue;
+        };
+        let text = line.trim();
+        let nameable = !text.is_empty()
+            && !text.starts_with("//")
+            && !text.starts_with('#')
+            && text.trim_matches(|c: char| "{}()[];,".contains(c) || c.is_whitespace()) != "";
+        if !nameable {
+            rotten.push(format!("{path}:{number} — points at `{text}`"));
+        }
+    }
+
+    assert!(
+        rotten.is_empty(),
+        "the parity table cites lines that say nothing. A citation that points \
+         at a brace or a comment reads as verified and is not:\n  {}\n\
+         Put them back by hand against the declaration listing -- resolving each \
+         number to the nearest symbol above was tried and thrown away, because \
+         it produced false precision.",
+        rotten.join("\n  ")
+    );
+}
+
+/// Every `` `path:line` `` inside a markdown fragment.
+fn citations_in(body: &str) -> Vec<(String, usize)> {
+    let mut found = Vec::new();
+    for chunk in body.split('`').skip(1).step_by(2) {
+        let Some((path, number)) = chunk.rsplit_once(':') else {
+            continue;
+        };
+        if !(path.ends_with(".rs") || path.ends_with(".dart")) {
+            continue;
+        }
+        if let Ok(number) = number.parse::<usize>()
+            && number > 0
+        {
+            found.push((path.to_owned(), number));
+        }
+    }
+    found
+}
