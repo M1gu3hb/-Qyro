@@ -522,6 +522,27 @@ class _SendScreenState extends State<SendScreen> {
       if (!mounted) return;
       setState(() => _state = state);
     }
+
+    // **QYR-0388: un descriptor se gasta al usarlo, y esta lista no se vaciaba.**
+    //
+    // En Android el selector devuelve **descriptores**, no rutas (ADR-0034), y
+    // el motor los **adopta**: `session_abi.rs` los toma antes de validar nada,
+    // así que Rust los cierra pase lo que pase. Pulsar Enviar una segunda vez
+    // volvía a entregar **los mismos números**, ya cerrados.
+    //
+    // Y el caso malo no es que falle. Un descriptor cerrado deja su número
+    // libre, y el proceso lo reutiliza: el siguiente socket, o el archivo de
+    // identidad. Entregar ese número a `from_raw_fd` es mandar **lo que haya
+    // ahí ahora**.
+    //
+    // Se vacían los descriptores y se conservan las rutas: en Windows el
+    // selector devuelve rutas, una ruta se puede volver a abrir, y obligar a
+    // elegir otra vez ahí sería quitar algo que funciona. La pantalla vuelve a
+    // decir «no hay archivos elegidos», que es la verdad.
+    if (!mounted) return;
+    setState(() {
+      _chosen = _chosen.whereType<QyroPickedPath>().toList();
+    });
   }
 
   @override

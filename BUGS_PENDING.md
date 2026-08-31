@@ -12,6 +12,35 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0388 — El segundo envío desde el teléfono entregaba descriptores ya cerrados
+
+- Estado: **CERRADO**
+- Severidad: **ALTA**, y con una forma peor que «falla»
+- Fecha: 2026-08-31
+
+**El defecto.** En Android el selector devuelve **descriptores**, no rutas
+(ADR-0034), y el motor los **adopta**: `session_abi.rs` los toma antes de validar
+nada, precisamente para que un argumento rechazado no filtre ninguno. O sea que
+**Rust los cierra pase lo que pase**.
+
+La pantalla guardaba la selección en `_chosen` y **no la vaciaba después de
+enviar**. Pulsar Enviar una segunda vez volvía a entregar **los mismos números**,
+ya cerrados.
+
+**Y el caso malo no es que falle.** Un descriptor cerrado deja su número libre, y
+el proceso lo reutiliza en cuanto abre cualquier otra cosa: el siguiente socket,
+el archivo de identidad. Entregar ese número a `from_raw_fd` es mandar **lo que
+haya ahí ahora**, sin que nada lo note.
+
+**El arreglo.** Se vacían los descriptores al terminar el envío y **se conservan
+las rutas**. Un descriptor se gasta al usarlo; una ruta se puede volver a abrir,
+y en Windows —donde el selector devuelve rutas— obligar a elegir otra vez sería
+quitar algo que funciona. La pantalla vuelve a decir «no hay archivos elegidos»,
+que es la verdad.
+
+**Las dos pruebas van en pareja** y la segunda es la que impide que el arreglo se
+pase de largo: un descriptor gastado desaparece de la lista, una ruta no.
+
 ## QYR-0387 — El script de firma deshacía la alineación de 16 KB que acababa de medirse
 
 - Estado: **CERRADO**

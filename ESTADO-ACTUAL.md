@@ -215,6 +215,15 @@ la 35, y el APK **firmado** pasa por el inspector antes de imprimir su hash:
 firmar es lo ultimo que toca el paquete, asi que medir antes de firmar mide otro
 archivo.
 
+**QYR-0388.** En Android el selector devuelve **descriptores** y el motor los
+ADOPTA -- los toma antes de validar nada -- asi que Rust los cierra pase lo que
+pase. La pantalla no vaciaba la seleccion, asi que un segundo Enviar entregaba los
+mismos numeros ya cerrados. Y el caso malo no es que falle: un descriptor cerrado
+deja su numero libre y el proceso lo reutiliza -- el siguiente socket, el archivo
+de identidad -- asi que entregarlo a `from_raw_fd` es mandar lo que haya ahi
+ahora. Se vacian los descriptores y se conservan las rutas, que si se pueden
+volver a abrir.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

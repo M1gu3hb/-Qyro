@@ -173,6 +173,79 @@ void main() {
       expect(find.byKey(const Key('pairing-field')), findsOneWidget);
     });
 
+    testWidgets('un descriptor gastado no se puede volver a mandar',
+        (tester) async {
+      // **QYR-0388.** En Android el selector devuelve descriptores, no rutas
+      // (ADR-0034), y el motor los ADOPTA: los toma antes de validar nada, asi
+      // que Rust los cierra pase lo que pase. Esta lista no se vaciaba, asi que
+      // pulsar Enviar una segunda vez entregaba los mismos numeros, ya cerrados.
+      //
+      // Y el caso malo no es que falle: un descriptor cerrado deja su numero
+      // libre y el proceso lo reutiliza -- el siguiente socket, el archivo de
+      // identidad -- asi que entregarlo a from_raw_fd es mandar lo que haya ahi
+      // ahora.
+      final service = FakeService(picked: const <QyroPicked>[
+        QyroPickedDescriptor(name: 'foto.jpg', size: 10, descriptor: 7),
+      ]);
+      await tester.pumpWidget(_wrap(SendScreen(service: service)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('send-pick')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('send-address')),
+        '192.168.1.5:49517',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('send-no-files')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('send-start')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('send-no-files')),
+        findsOneWidget,
+        reason: 'el descriptor sigue en la lista despues de gastarse, asi que '
+            'un segundo Enviar lo volveria a entregar ya cerrado',
+      );
+      expect(
+        tester
+            .widget<ButtonStyleButton>(find.byKey(const Key('send-start')))
+            .onPressed,
+        isNull,
+        reason: 'y el boton sigue encendido sobre una lista gastada',
+      );
+    });
+
+    testWidgets('pero una ruta si se puede volver a mandar', (tester) async {
+      // El control, y es lo que impide que el arreglo se pase de largo. En
+      // Windows el selector devuelve RUTAS, una ruta se puede volver a abrir, y
+      // obligar a elegir otra vez ahi seria quitar algo que funciona.
+      final service = FakeService(picked: const <QyroPicked>[
+        QyroPickedPath(name: 'a.bin', size: 10, path: '/tmp/a.bin'),
+      ]);
+      await tester.pumpWidget(_wrap(SendScreen(service: service)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('send-pick')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('send-address')),
+        '192.168.1.5:49517',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('send-start')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('send-no-files')), findsNothing);
+      expect(
+        tester
+            .widget<ButtonStyleButton>(find.byKey(const Key('send-start')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
     testWidgets('el boton de enviar se enciende al escribir la direccion',
         (tester) async {
       // **QYR-0380, y era la mitad de por que mandar desde el telefono no
