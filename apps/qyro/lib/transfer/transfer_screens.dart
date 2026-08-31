@@ -625,6 +625,9 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   QyroTransferState _state = const QyroIdle();
   QyroAwaitingDecision? _offer;
 
+  /// Whether a worker is already listening. See [_listen].
+  bool _listening = false;
+
   /// The codes the other device has to be given.
   ///
   /// QYR-0322, and this is the visible half of the fix. They are loaded when
@@ -664,6 +667,30 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   Completer<bool>? _pending;
 
   Future<void> _listen() async {
+    // **QYR-0389: el botón no tenía guarda.**
+    //
+    // Pulsar Recibir dos veces arrancaba un **segundo** worker sobre el **mismo
+    // puerto** — el 49517 es fijo a propósito (ADR-0041 §3) — así que el segundo
+    // se estrellaba contra el primero. Y desde QYR-0370 eso sale como «el puerto
+    // no está libre; lo tiene otro programa», siendo el otro programa **Qyro**:
+    // un mensaje correcto que manda a buscar en el sitio equivocado.
+    //
+    // Peor: el segundo `_listen` pisa `_state` mientras el primero sigue vivo, y
+    // no hay forma de parar al primero. La pantalla enseña el fallo del segundo
+    // mientras el primero sigue escuchando de verdad.
+    //
+    // Una bandera y el botón apagado. No es una carrera con el worker: los dos
+    // pasan por el hilo de la interfaz, que es de uno en uno.
+    if (_listening) return;
+    setState(() => _listening = true);
+    try {
+      await _listenOnce();
+    } finally {
+      if (mounted) setState(() => _listening = false);
+    }
+  }
+
+  Future<void> _listenOnce() async {
     // **QYR-0373.** Esto pasaba `destination: ''`, que en el servicio significa
     // «usa el de siempre» — y el de siempre, en Android, era
     // `Directory.current.path + '/Qyro'`, o sea **`/Qyro`**: la raíz del
@@ -711,9 +738,13 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       children: <Widget>[
         FilledButton.icon(
           key: const Key('receive-start'),
-          onPressed: _listen,
+          // Apagado mientras uno escucha (QYR-0389): un segundo worker sobre el
+          // mismo puerto se estrella contra el primero y enseña su fallo.
+          onPressed: _listening ? null : _listen,
           icon: const Icon(Icons.download),
-          label: Text(strings.receiveStart),
+          label: Text(
+            _listening ? strings.receiveWaiting : strings.receiveStart,
+          ),
         ),
         const SizedBox(height: 16),
         Text(

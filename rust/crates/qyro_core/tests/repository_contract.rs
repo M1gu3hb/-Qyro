@@ -322,7 +322,8 @@ fn the_parity_table_still_points_at_code() {
          at a brace or a comment reads as verified and is not:\n  {}\n\
          Put them back by hand against the declaration listing -- resolving each \
          number to the nearest symbol above was tried and thrown away, because \
-         it produced false precision.",
+         it produced false precision. The listing is one command per file:\n  \
+         grep -nE '^pub fn |^fn |^  Future|^  Stream|^  String' <file>",
         rotten.join("\n  ")
     );
 }

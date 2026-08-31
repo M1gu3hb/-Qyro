@@ -12,6 +12,31 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0389 — Pulsar «Recibir» dos veces arrancaba dos receptores sobre el mismo puerto
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA**, y su síntoma manda a buscar donde no es
+- Fecha: 2026-08-31
+
+**El defecto.** `onPressed: _listen`, sin guarda. El puerto **49517 es fijo a
+propósito** (ADR-0041 §3, para que el cortafuegos de Windows se responda una sola
+vez), así que un segundo worker se estrella contra el primero.
+
+**Y desde QYR-0370 —de esta misma tanda— eso ya no falla en silencio, falla con
+un mensaje**: «el puerto no está libre; lo tiene otro programa». Correcto, y el
+otro programa es **Qyro**. Un mensaje que manda a mirar Hyper-V y Docker por algo
+que hizo el propio botón.
+
+**Y hay una mitad peor.** El segundo `_listen` pisa `_state` mientras el primero
+sigue vivo, y **no hay forma de parar al primero**. La pantalla enseña el fallo
+del segundo mientras el primero sigue escuchando de verdad: alguien puede
+conectarse y ser aceptado por un receptor que la pantalla ya da por muerto.
+
+**El arreglo.** Una bandera, el botón apagado mientras uno escucha, y la etiqueta
+cambia a «esperando a que se conecte un aparato», que es lo que está pasando. No
+es una carrera con el worker: los dos pasan por el hilo de la interfaz, que es de
+uno en uno.
+
 ## QYR-0388 — El segundo envío desde el teléfono entregaba descriptores ya cerrados
 
 - Estado: **CERRADO**

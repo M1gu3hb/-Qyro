@@ -173,6 +173,39 @@ void main() {
       expect(find.byKey(const Key('pairing-field')), findsOneWidget);
     });
 
+    testWidgets('el boton de recibir se apaga mientras uno escucha',
+        (tester) async {
+      // **QYR-0389.** El boton no tenia guarda: pulsar Recibir dos veces
+      // arrancaba un SEGUNDO worker sobre el MISMO puerto -- el 49517 es fijo a
+      // proposito (ADR-0041 seccion 3) -- asi que el segundo se estrellaba
+      // contra el primero. Y desde QYR-0370 eso sale como «el puerto no esta
+      // libre; lo tiene otro programa», siendo el otro programa Qyro: un
+      // mensaje correcto que manda a buscar en el sitio equivocado.
+      //
+      // Un servicio que no emite nada es exactamente un receptor esperando: es
+      // el estado que dura, y el que hay que poder ver.
+      final service = FakeService(states: const <QyroTransferState>[]);
+      await tester.pumpWidget(_wrap(ReceiveScreen(service: service)));
+      await tester.pumpAndSettle();
+
+      final boton = find.byKey(const Key('receive-start'));
+      expect(
+        tester.widget<ButtonStyleButton>(boton).onPressed,
+        isNotNull,
+        reason: 'sin pulsar nada, escuchar tiene que poder empezar',
+      );
+
+      await tester.tap(boton);
+      await tester.pump();
+
+      expect(
+        tester.widget<ButtonStyleButton>(boton).onPressed,
+        isNull,
+        reason: 'sigue encendido con un worker ya escuchando, asi que un '
+            'segundo toque arranca otro sobre el mismo puerto',
+      );
+    });
+
     testWidgets('un descriptor gastado no se puede volver a mandar',
         (tester) async {
       // **QYR-0388.** En Android el selector devuelve descriptores, no rutas

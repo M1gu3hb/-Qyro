@@ -224,6 +224,13 @@ de identidad -- asi que entregarlo a `from_raw_fd` es mandar lo que haya ahi
 ahora. Se vacian los descriptores y se conservan las rutas, que si se pueden
 volver a abrir.
 
+**QYR-0389.** El boton de Recibir no tenia guarda, y el puerto es fijo a
+proposito, asi que pulsarlo dos veces arrancaba **dos receptores sobre el mismo
+puerto**. Desde QYR-0370 el segundo falla con un mensaje -- «el puerto no esta
+libre; lo tiene otro programa» -- siendo el otro programa Qyro. Y el segundo pisa
+el estado mientras el primero sigue vivo, asi que la pantalla ensena el fallo del
+segundo mientras el primero sigue escuchando de verdad.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.
