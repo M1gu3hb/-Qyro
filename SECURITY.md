@@ -1,11 +1,32 @@
 # Seguridad
 
-Estado: diseño inicial; no hay transferencia real.
+**Estado: el protocolo está en el cable, y no ha tocado hardware.** Un archivo
+cruza un socket TCP sellado frame a frame con ChaCha20-Poly1305 bajo una clave
+derivada de un handshake autenticado, y se verifica con SHA-256 antes de
+entregarse. Lo que sigue sin existir es la evidencia de aparato real: ver
+`docs/testing/hardware-protocol.md`, veintiséis huecos en blanco.
+
+> **Dos frases que estuvieron aquí hasta 2026-08-31, y las dos eran falsas.**
+> Se dejan escritas para que no vuelvan; este documento se verifica contra el
+> código desde una guarda que corre en el gate (QYR-0395).
+>
+> 1. *«Estado: diseño inicial; no hay transferencia real.»* Dejó de ser cierta
+>    en la fase 12.
+> 2. *«TLS 1.3 para red.»* **Nunca fue cierta, y es la peor frase que puede
+>    tener un documento de seguridad: prometía un protocolo que este programa no
+>    usa.** Qyro no habla TLS por ninguna parte. Su transporte es un handshake
+>    propio —X25519, Ed25519, HKDF-SHA256— sobre un socket TCP desnudo, y el
+>    secreto de cada frame lo da ChaCha20-Poly1305 (ADR-0021, ADR-0022,
+>    ADR-0028). Quien leyera esta línea y dedujera «entonces tiene la
+>    autenticación de servidor y la revocación de certificados de TLS» estaría
+>    equivocado en las dos cosas: aquí la autenticación es **una huella que dos
+>    personas comparan**, y no hay ninguna autoridad que revoque nada.
 
 ## Principios
 
 - Primitivas revisadas, separación de identidad/sesión/contenido y nonces únicos.
-- TLS 1.3 para red; capa de contenido consistente entre transportes.
+- **Nada de TLS.** Handshake propio y sellado por frame, con la misma capa de
+  contenido en los cuatro transportes: red local, cable directo, óptico y serie.
 - Suite fijada por ADR: X25519, Ed25519, SHA-256, HKDF-SHA256 y HMAC-SHA256 para
   el handshake (ADR-0021); ChaCha20-Poly1305 para los frames (ADR-0022). Se
   descartó XChaCha20-Poly1305 —su nonce largo sirve para elegirlo al azar, y aquí

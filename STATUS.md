@@ -95,19 +95,43 @@ Los artefactos los construyó el run **31994299360** de `release.yml` sobre
 código del producto**, comprobable con `git diff --stat v1.0.0 4c297af`. La
 etiqueta **no se movió**: mover una etiqueta es reescribir historia.
 
-| Artefacto | SHA-256 |
-|---|---|
-| `app-release.apk`, firmado con la clave de release | `d0d7afaa…225f700a` |
-| `qyro-windows-x64.zip` | `4e21923c…c17e0370` |
-| `app-release-debugkey.apk`, el de CI | `f17125de…3a961a2e` |
+**Sí existe una GitHub Release, es pública, y ya la ha descargado alguien**
+(QYR-0395). Consultada a la API el 2026-08-31, no deducida de otro documento:
 
-Los tres completos están en `docs/release/v1.0.md`. El certificado del APK
-firmado se verificó con `apksigner verify --print-certs`: **un solo firmante**,
-`CN=Qyro`, RSA 4096, esquemas v2 y v3, y el digest que ese documento publica.
+- <https://github.com/M1gu3hb/-Qyro/releases/tag/v1.0.0>
+- Publicada el 2026-08-17, marcada **prerelease**, y titulada
+  **«Qyro v1.0.0 — RETRACTADO: estos binarios no pueden enviar»**.
+- Tres archivos, y dos de ellos con **`download_count: 2`**.
 
-**No existe una GitHub Release.** La etiqueta es lo que se pidió; publicar
-binarios en abierto es una decisión del propietario, sobre software que nadie ha
-ejecutado nunca en un teléfono.
+Los digests que GitHub sirve **hoy**, tal cual los devuelve la API:
+
+| Artefacto publicado | SHA-256 servido | Descargas |
+|---|---|---|
+| `app-release.apk` | `e550e56dfa4ad6c60721e819236875304573e2d271ca3b67fad0bad5de46b2c0` | 2 |
+| `qyro-windows-x64.zip` | `a1cf050d91024e9a42f5825853b2ded45f1ec612fa9521966272e3a6676c468b` | 2 |
+| `qyro-cli-windows-x64-QYR-0361-arreglado.zip` | `8932b4ff9c74d40e3203dbf04523e891d3ff7ec4999bbe6db7145edf2f11f804` | 0 |
+
+> **Lo que decía esta sección hasta 2026-08-31, y las dos cosas eran falsas.**
+>
+> 1. *«No existe una GitHub Release.»* Existe desde el 2026-08-17.
+> 2. Publicaba como artefactos de la v1.0.0 los hashes `d0d7afaa…225f700a` y
+>    `4e21923c…c17e0370`. **Son los de la publicación retirada** — los que las
+>    propias notas de la Release señalan diciendo *«si tienes uno de ésos, no lo
+>    instales»*. Quien comprobara una descarga contra esta tabla habría
+>    **confirmado** un binario que este proyecto le pide borrar.
+>
+> Se deja escrito, y hay una guarda que corre en el gate para que esos dos
+> prefijos no vuelvan a esta página.
+
+**Y lo que esos binarios son:** los de antes de QYR-0361 y QYR-0362, así que
+**enviar no funciona en ninguno de los dos**. Recibir sí. La retractación lo dice
+en el título de la Release y arriba del todo en sus notas, que es donde tiene que
+estar. El certificado del APK se verificó con `apksigner verify --print-certs`:
+un solo firmante, `CN=Qyro`, RSA 4096, esquemas v2 y v3.
+
+**Nada de lo que se pruebe hoy sale de esa Release.** Los artefactos de la prueba
+de hardware se construyen del commit que nombra `docs/GUIA-DE-PRUEBA.md`, y esa
+guía explica cómo comprobar su SHA-256.
 
 ### Fase 11 — runs de cierre
 

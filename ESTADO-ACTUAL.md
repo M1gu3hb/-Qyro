@@ -238,6 +238,30 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0395, y el peor de los seis no es una frase: es un hash.** `STATUS.md`
+--la pagina que este repositorio declara unica fuente de verdad-- publicaba como
+artefactos de la v1.0.0 los dos hashes de la publicacion **retirada**. Las notas
+de la propia Release dicen de ellos «si tienes uno de esos, no lo instales».
+Quien comprobara una descarga contra esa tabla habria **confirmado** un binario
+que este proyecto le pide borrar.
+
+Y decia «No existe una GitHub Release». **Existe**, consultada a la API el
+2026-08-31 y no deducida de otro documento: publica, del 2026-08-17, marcada
+prerelease, titulada «Qyro v1.0.0 — RETRACTADO: estos binarios no pueden
+enviar», con tres archivos y **dos de ellos ya descargados dos veces**. Los
+digests que GitHub sirve hoy son otros y ahora estan en `STATUS.md`, con su
+cuenta de descargas.
+
+Los otros cuatro: `SECURITY.md` prometia **TLS 1.3**, que es la peor frase que
+puede tener un documento de seguridad porque promete un protocolo que este
+programa no usa; `ARCHITECTURE.md` decia que lo unico implementado era
+`qyro_core`; `RELEASES.md` decia que no hay release; y `docs/release/v1.0.md`
+dice cuatro cosas que ya no son ciertas -- **y no se reescribe**, porque es una
+nota de version y reescribirla borra lo que esa version era: lleva una cabecera
+que lo dice.
+
+Tres guardas nuevas en el gate, dos con dientes comprobados.
+
 **QYR-0394, y trae una afirmacion falsa medida por el camino.** Android 15 corre
 con paginas de 16 KB y una biblioteca alineada a 4 KB **no carga** -- la
 aplicacion muere al abrirse sin mencionar la alineacion. Nada en el repositorio

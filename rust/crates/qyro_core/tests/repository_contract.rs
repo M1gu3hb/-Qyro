@@ -371,7 +371,7 @@ fn citations_in(body: &str) -> Vec<(String, usize)> {
 fn the_front_page_does_not_reassert_what_the_code_disproved() {
     let root = repo_root();
     // Each: the document, the retired claim, and the file that disproves it.
-    let retired: [(&str, &str, &str); 5] = [
+    let retired: [(&str, &str, &str); 9] = [
         (
             "AGENTS.md",
             "Qyro sigue sin transferir archivos",
@@ -396,6 +396,29 @@ fn the_front_page_does_not_reassert_what_the_code_disproved() {
             "README.md",
             "no se escanea",
             "apps/qyro/lib/scanner/scan_screen.dart",
+        ),
+        // QYR-0395. Las cuatro de abajo son del BIBLIOTECARIO de la fase 28, y
+        // la primera es la peor que puede tener este proyecto: un documento de
+        // seguridad prometiendo un protocolo que no usa.
+        (
+            "SECURITY.md",
+            "TLS 1.3 para red",
+            "rust/crates/qyro_crypto/src/handshake",
+        ),
+        (
+            "SECURITY.md",
+            "no hay transferencia real",
+            "rust/crates/qyro_transfer/src/session.rs",
+        ),
+        (
+            "ARCHITECTURE.md",
+            "Solo qyro_core, ABI C mínima y ScrambleDecodeEngine",
+            "rust/crates/qyro_session/src/session.rs",
+        ),
+        (
+            "RELEASES.md",
+            "no hay release ni artefactos retenidos",
+            "docs/release/v1.0.md",
         ),
     ];
 
@@ -690,5 +713,95 @@ fn every_android_target_asks_the_linker_for_sixteen_kilobyte_pages() {
         config.contains("[target.x86_64-pc-windows-msvc]"),
         "the Windows table is gone from this file, so the reader above is \
          looking at something else"
+    );
+}
+
+/// La nota de versión de la v1.0 dice que es una nota de versión.
+///
+/// **QYR-0395.** Cuatro de sus frases ya no son ciertas de `main` — que los
+/// aparatos no se encuentran solos, que no se escanea, el número de pruebas y
+/// los dos SHA-256 — y la respuesta correcta **no es reescribirla**: es una nota
+/// de versión, y reescribirla borra lo que esa versión era.
+///
+/// La respuesta es que lo diga ella misma, arriba, antes de que nadie lea el
+/// cuerpo. Esta guarda existe porque una cabecera así se borra en la primera
+/// edición que la encuentre incómoda.
+#[test]
+fn the_v1_release_note_says_it_describes_v1_and_not_today() {
+    let root = repo_root();
+    let path = root.join("docs/release/v1.0.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("the v1.0 note is at {}: {error}", path.display()));
+
+    // Los primeros 2 KB: la advertencia sirve arriba o no sirve. Una nota al pie
+    // de un documento de doscientas lineas la lee quien ya se creyo el cuerpo.
+    let head = text.get(..2048).unwrap_or(&text);
+    assert!(
+        head.contains("no `main`") || head.contains("no main"),
+        "the v1.0 release note does not say it describes v1.0.0 rather than \
+         `main`, and four of its statements are no longer true: that devices do \
+         not find each other, that nothing is scanned, its test count, and its \
+         two SHA-256 sums"
+    );
+    assert!(
+        head.contains("STATUS.md"),
+        "the header does not point anywhere for the live state, so a reader who \
+         learns the document is stale has nowhere to go"
+    );
+
+    // El control: el cuerpo **sigue** diciendo las frases viejas, que es como
+    // tiene que ser. Si desaparecieran, alguien reescribio la nota de version y
+    // esta guarda esta protegiendo una advertencia sobre nada.
+    assert!(
+        text.contains("No se encuentran solos"),
+        "the body no longer carries the sentences the header warns about, so \
+         either the note was rewritten -- which loses what v1.0.0 was -- or this \
+         guard is now guarding nothing"
+    );
+}
+
+/// `STATUS.md` no vuelve a publicar los hashes de la publicación retirada.
+///
+/// **QYR-0395.** Publicaba `d0d7afaa…` y `4e21923c…` como los artefactos de la
+/// v1.0.0. Son los de la **primera** publicación, la que se retiró, y las notas
+/// de la propia Release dicen de ellos *«si tienes uno de ésos, no lo
+/// instales»*. Quien comprobara una descarga contra esa tabla habría
+/// **confirmado** un binario que este proyecto le pide borrar — que es peor que
+/// no publicar ningún hash, porque el hash es lo que convierte una descarga en
+/// una certeza.
+///
+/// Comprobado estáticamente y a propósito: una guarda que llamara a la API de
+/// GitHub no correría en el gate, y ésta sí.
+#[test]
+fn the_status_page_does_not_republish_the_withdrawn_hashes() {
+    let root = repo_root();
+    let path = root.join("STATUS.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("STATUS.md must exist to be checked: {error}"));
+
+    for withdrawn in ["d0d7afaa", "4e21923c"] {
+        // Dentro de una cita se puede nombrar: eso es la advertencia, no la
+        // afirmación. Es la misma regla que la guarda de frases retiradas.
+        let asserted = text
+            .lines()
+            .filter(|line| !line.trim_start().starts_with('>'))
+            .any(|line| line.contains(withdrawn));
+        assert!(
+            !asserted,
+            "STATUS.md publishes `{withdrawn}…` outside a blockquote again. That \
+             is a hash from the withdrawn release, and the release notes say of \
+             those «si tienes uno de ésos, no lo instales». A reader checking a \
+             download against this page would confirm a binary the project asks \
+             them to delete."
+        );
+    }
+
+    // El control: los hashes que GitHub sirve hoy sí están, así que la página
+    // no pasa esta prueba simplemente por no publicar ninguno.
+    assert!(
+        text.contains("e550e56dfa4ad6c60721e819236875304573e2d271ca3b67fad0bad5de46b2c0"),
+        "STATUS.md no longer carries the digest GitHub actually serves for \
+         app-release.apk, so it passes the assertions above by publishing \
+         nothing -- which helps nobody verify a download"
     );
 }

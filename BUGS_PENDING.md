@@ -12,6 +12,64 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0395 — Seis documentos publicados decían cosas que el código desmiente, y uno mandaba a comprobar un binario que hay que borrar
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** por dos de las seis; el resto, MEDIA
+- Fecha: 2026-08-31
+
+Hallazgos del BIBLIOTECARIO de la fase 28. Ninguno necesita un escenario que
+falle: basta abrir el documento y el código.
+
+**1. `STATUS.md` publicaba, como artefactos de la v1.0.0, los dos hashes de la
+publicación retirada.** `d0d7afaa…225f700a` y `4e21923c…c17e0370`. Las notas de
+la propia Release dicen de ellos, literal: *«si tienes uno de ésos, no lo
+instales»*. **Quien comprobara una descarga contra esa tabla habría confirmado un
+binario que este proyecto le pide borrar** — que es peor que no publicar ningún
+hash, porque el hash es justo lo que convierte una descarga en una certeza.
+
+**2. `STATUS.md` decía «No existe una GitHub Release».** Existe. Consultada a la
+API el 2026-08-31, no deducida de otro documento: publicada el 2026-08-17,
+pública, marcada prerelease, titulada **«Qyro v1.0.0 — RETRACTADO: estos binarios
+no pueden enviar»**, con tres archivos y **dos de ellos ya descargados dos
+veces**. Los digests que GitHub sirve hoy son otros —`e550e56d…`, `a1cf050d…` y
+`8932b4ff…`— y ahora están en `STATUS.md` con su cuenta de descargas.
+
+La retractación pública está donde tiene que estar: en el título de la Release y
+arriba del todo en sus notas. Lo que fallaba era la página que este repositorio
+declara **única fuente de verdad**.
+
+**3. `SECURITY.md` prometía TLS 1.3.** Es la peor frase que puede tener un
+documento de seguridad: **prometía un protocolo que este programa no usa.** Qyro
+no habla TLS por ninguna parte — handshake propio (X25519, Ed25519, HKDF-SHA256)
+sobre TCP desnudo y ChaCha20-Poly1305 por frame. Quien leyera esa línea deduciría
+que tiene autenticación de servidor y revocación de certificados, y las dos son
+falsas: aquí la autenticación es **una huella que dos personas comparan**, y no
+hay autoridad que revoque nada. Abría además con «no hay transferencia real».
+
+**4. `ARCHITECTURE.md` decía que lo único implementado era «qyro_core, ABI C
+mínima y ScrambleDecodeEngine».** Falso desde la fase 12, y siguió escrito
+dieciséis fases.
+
+**5. `RELEASES.md` decía «no hay release ni artefactos retenidos»**, con v1.0.0
+etiquetada, publicada y descargada.
+
+**6. `docs/release/v1.0.md` dice cuatro cosas que ya no son ciertas** — que los
+aparatos no se encuentran solos, que no se escanea, 639 pruebas, y dos SHA-256.
+**No se reescribe**: es una nota de versión, y reescribirla borra lo que esa
+versión era. Lleva ahora una cabecera que dice que describe la v1.0.0 y no
+`main`, con las cuatro listadas y con dónde está el estado vivo.
+
+**Las pruebas, primero.** Se añadieron al guardián de frases retiradas las cuatro
+del punto 3 al 5 **antes** de tocar los documentos, y falló nombrando las cuatro.
+Después, dos guardas nuevas: que la nota de la v1.0 diga que es una nota de
+versión, y que `STATUS.md` no vuelva a publicar los dos hashes retirados fuera de
+una cita. La segunda se comprobó teniendo dientes: añadir `d0d7afaa…` al final de
+`STATUS.md` la pone en rojo.
+
+Las tres corren **en el gate**, que es lo que distingue a un documento corregido
+de un documento que se vuelve a estropear.
+
 ## QYR-0394 — Los 16 KB del `.so` dependían del NDK que tuviera quien construye, y el archivo que lo explica decía algo falso
 
 - Estado: **CERRADO**
