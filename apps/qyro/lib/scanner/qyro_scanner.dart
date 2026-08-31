@@ -148,6 +148,29 @@ final class QyroScanner {
     }
   }
 
+  /// Pide el permiso de cámara si hace falta. **No espera la respuesta.**
+  ///
+  /// **QYR-0378.** `CAMERA` es un permiso **peligroso**: declararlo en el
+  /// manifiesto no concede nada desde Android 6, hay que pedirlo en ejecución, y
+  /// **nada en este repositorio lo pedía**. `bindToLifecycle` con el permiso
+  /// denegado lanza `SecurityException`, que llegaba a la pantalla como «este
+  /// aparato no puede mirar» — una frase sobre el aparato, cuando lo que faltaba
+  /// era una pregunta que nadie hizo.
+  ///
+  /// - `granted` — ya está.
+  /// - `asked` — el diálogo del sistema está en pantalla **ahora**; quien llama
+  ///   lo dice y ofrece reintentar.
+  /// - `unavailable` — no hay Activity a la que preguntar, o no es Android.
+  Future<String> permission() async {
+    try {
+      return await _channel.invokeMethod<String>('permission') ?? 'unavailable';
+    } on MissingPluginException {
+      return 'unavailable';
+    } on PlatformException catch (error) {
+      throw QyroScannerUnavailable(error.message ?? error.code);
+    }
+  }
+
   /// Le pide a la cámara que empiece.
   Future<void> start() async {
     try {

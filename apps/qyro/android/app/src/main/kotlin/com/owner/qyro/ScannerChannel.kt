@@ -1,6 +1,9 @@
 package com.owner.qyro
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -43,6 +46,9 @@ class ScannerChannel(private val context: Context) : MethodChannel.MethodCallHan
     companion object {
         const val CHANNEL = "dev.qyro/scanner"
 
+        /** El código de petición del permiso de cámara. Sólo se usa aquí. */
+        const val CAMERA_REQUEST = 0x9101
+
         /**
          * La resolución que se pide, y no es negociable.
          *
@@ -77,6 +83,7 @@ class ScannerChannel(private val context: Context) : MethodChannel.MethodCallHan
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "start" -> start(result)
+            "permission" -> result.success(cameraPermission())
             "latest" -> result.success(latestFrame())
             "stop" -> {
                 stop()
@@ -86,7 +93,56 @@ class ScannerChannel(private val context: Context) : MethodChannel.MethodCallHan
         }
     }
 
+    /**
+     * El permiso de cámara: si está, si se acaba de pedir, o si no hay a quién.
+     *
+     * **QYR-0378, y sin esto el canal óptico no existe en un teléfono.** `CAMERA`
+     * es un permiso **peligroso**, así que declararlo en el manifiesto no
+     * concede nada desde Android 6: hay que pedirlo en ejecución. **Nada en este
+     * repositorio lo pedía.** `bindToLifecycle` con el permiso denegado lanza
+     * `SecurityException`, que llegaba a la pantalla como «este aparato no puede
+     * mirar» — una frase sobre el aparato, cuando lo que faltaba era una
+     * pregunta que nadie hizo.
+     *
+     * Devuelve tres respuestas y ninguna es una excepción:
+     *
+     * - `granted` — ya está.
+     * - `asked` — no estaba y **el diálogo del sistema está en pantalla ahora
+     *   mismo**. Quien llama lo dice y ofrece reintentar. Se hace así, y no
+     *   esperando el resultado, porque esperar exige `onRequestPermissionsResult`
+     *   y una máquina de estados a través del canal para una respuesta que la
+     *   persona ve con sus ojos: pulsar otra vez es más barato de escribir y de
+     *   entender.
+     * - `unavailable` — este contexto no es una Activity, así que no hay a quién
+     *   preguntar. Es un estado real en una prueba, no un fallo.
+     *
+     * `requestPermissions` de la plataforma y no `ActivityCompat`: existe desde
+     * API 23, el `minSdk` de este proyecto está muy por encima, y no depende de
+     * que `androidx.core` siga en el grafo por una biblioteca de cámara.
+     */
+    private fun cameraPermission(): String {
+        val granted = context.checkSelfPermission(Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) return "granted"
+        val activity = context as? Activity ?: return "unavailable"
+        activity.requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST)
+        return "asked"
+    }
+
     private fun start(result: MethodChannel.Result) {
+        // El permiso, antes de la cámara. Sin esto, `bindToLifecycle` lanza
+        // `SecurityException` y la pantalla culpa al aparato.
+        if (context.checkSelfPermission(Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            (context as? Activity)?.requestPermissions(
+                arrayOf(Manifest.permission.CAMERA),
+                CAMERA_REQUEST,
+            )
+            result.error("permission", "camera permission not granted", null)
+            return
+        }
+
         val owner = context as? LifecycleOwner
         if (owner == null) {
             // Un contexto sin ciclo de vida no puede sostener una cámara. Se

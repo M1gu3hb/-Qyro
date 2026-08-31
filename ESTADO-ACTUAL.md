@@ -127,6 +127,19 @@ antes de intentar nada. Y la DLL de Windows se construye antes de copiarse, desd
 el directorio de objetivo correcto: el paso 3 copiaba una DLL que ningun paso
 construia.
 
+**QYR-0378 y QYR-0379: el canal optico tenia dos puertas mas cerradas detras de
+la de QYR-0371.** `CAMERA` es un permiso peligroso y **nadie lo pedia en tiempo de
+ejecucion** -- un grep de `requestPermissions` en todo el arbol de Android no
+devolvia una linea --, asi que `bindToLifecycle` lanzaba `SecurityException` y la
+pantalla decia «este aparato no puede mirar»: una frase sobre el aparato, cuando
+faltaba una pregunta que nadie hizo. Y al completarse un escaneo, la pantalla
+**leia el archivo entero y se quedaba con su longitud**: imprimia «Recibido: N
+bytes» y tiraba los bytes.
+
+Ahora se pide el permiso -- y se ofrece reintentar, sin esperar la respuesta por
+el canal --, y lo que llega se escribe en la misma carpeta que el resto, con un
+nombre que Qyro elige **y dice que ha elegido**: un QR no lleva el nombre dentro.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

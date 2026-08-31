@@ -12,6 +12,79 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0378 — El permiso de cámara no se pedía nunca, así que no había canal óptico
+
+- Estado: **CERRADO**
+- Severidad: **P0 para el canal óptico**
+- Fecha: 2026-08-31
+
+**`CAMERA` es un permiso peligroso**, y desde Android 6 declararlo en el
+manifiesto **no concede nada**: hay que pedirlo en tiempo de ejecución. **Nada en
+este repositorio lo pedía** — ni `ScannerChannel.kt`, ni `MainActivity.kt`, ni el
+lado Dart. Un `grep` de `requestPermissions` en todo el árbol de Android no
+devolvía una sola línea.
+
+`bindToLifecycle` con el permiso denegado lanza `SecurityException`, que llegaba
+a la pantalla como **«Este aparato no puede mirar»** — una frase sobre el
+aparato, cuando lo que faltaba era una pregunta que nadie había hecho.
+
+Y era la última puerta cerrada del canal óptico, después de QYR-0371: el botón se
+arregló por la mañana y detrás no había cámara.
+
+**El arreglo.** `ScannerChannel` comprueba y pide, y `start` se niega con el
+código `permission` en vez de dejar que CameraX lance. La pantalla lo distingue:
+dice que el aviso del sistema está en pantalla y ofrece **volver a intentarlo**.
+
+**Se pide y no se espera la respuesta**, a propósito: esperarla exige
+`onRequestPermissionsResult` y una máquina de estados a través del canal para una
+respuesta que la persona ve con sus ojos. Pulsar otra vez es más barato de
+escribir y de entender, y no tiene estados intermedios que puedan quedarse
+colgados.
+
+`requestPermissions` de la plataforma y no `ActivityCompat`: existe desde API 23,
+el `minSdk` está muy por encima, y así no depende de que `androidx.core` siga en
+el grafo por una biblioteca de cámara.
+
+**La pregunta que cierra esta ficha:** al pulsar «Leer códigos con la cámara»,
+¿sale el aviso del sistema? **Sí. Que después la cámara lea un QR de verdad es el
+escenario F2, y sigue en blanco.**
+
+## QYR-0379 — El canal óptico recibía el archivo y lo tiraba
+
+- Estado: **CERRADO**
+- Severidad: **P0 para el canal óptico** (recibía y no entregaba)
+- Fecha: 2026-08-31
+
+**El defecto, en una línea.** `scan_screen.dart`, al completarse un escaneo:
+
+```dart
+final bytes = scanner.result();
+setState(() => _receivedBytes = bytes?.length);
+```
+
+El ojo reensamblaba el archivo entero, lo verificaba, lo devolvía **y la pantalla
+se quedaba con su longitud**. Imprimía «Recibido: N bytes» y tiraba los bytes.
+
+**El único canal que funciona sin red de ninguna clase no entregaba nada**, y lo
+decía con una frase que sonaba a éxito.
+
+**El arreglo.** Se escribe en la misma carpeta que el resto de lo que llega
+—`getExternalFilesDir(null)/Qyro`, la de QYR-0373— y la pantalla **dice dónde**.
+
+**El nombre lo pone Qyro, y eso también se dice.** Un QR no lleva el nombre del
+archivo dentro: `qyro_eye` reensambla un bloque de bytes y nada más, porque un
+código que cargara con un nombre cargaría con menos archivo. Así que el nombre es
+`qyro-optico-<fecha>.bin`, **y la pantalla explica que lo eligió ella**. Un
+nombre inventado que se anuncia es honesto; uno que se calla hace creer a la
+persona que lo eligió quien mandó el archivo.
+
+La marca de tiempo va dentro para que dos lecturas seguidas no colisionen, y aquí
+una colisión no se puede negociar con nadie: no hay otro extremo al que
+preguntarle.
+
+**La pregunta que cierra esta ficha:** cuando el escaneo termina, ¿hay un archivo
+en el disco? **Sí, y la pantalla dice cuál y dónde.**
+
 ## QYR-0376 — La identidad se escribía en la raíz del sistema, así que no había identidad
 
 - Estado: **CERRADO**
