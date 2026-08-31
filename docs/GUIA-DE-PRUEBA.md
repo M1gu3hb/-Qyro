@@ -59,6 +59,17 @@ En el teléfono, activa antes la **depuración por USB**:
 Todo lo de aquí se hace **una vez**, en el PC, con una ventana de **PowerShell**
 abierta en la carpeta del repositorio.
 
+> **Aviso, y es el que más tiempo puede hacer perder: hay DOS `qyro.exe`.**
+>
+> | Cuál | Dónde queda | Qué es |
+> |---|---|---|
+> | `target\x86_64-pc-windows-msvc\release\qyro.exe` | §2.1 | **El de terminal.** Un solo archivo, sin instalador, se copia y funciona. **Es el de esta guía.** |
+> | `apps\qyro\build\windows\x64\runner\Release\qyro.exe` | `flutter build windows` | La **aplicación con ventanas**, la misma que el teléfono. Necesita **toda la carpeta** que la rodea: si copias sólo el `.exe`, no arranca. |
+>
+> Se llaman igual y **no son intercambiables**. Esta guía usa el primero, porque
+> un solo archivo es más fácil de mover y de comprobar. El segundo es opcional y
+> está en §8.
+
 ### 2.1 El binario de terminal (`qyro.exe`)
 
 ```
@@ -515,6 +526,31 @@ ocurrió arruina todos los demás, porque a partir de ahí ninguno se puede cree
 ---
 
 ## 8. Si quieres ir más allá
+
+### La aplicación con ventanas en Windows
+
+El PC también puede usar la **misma aplicación** que el teléfono, en vez del
+binario de terminal. Se construye así:
+
+```
+cd D:\Qyro\repo
+cargo build --release -p qyro_ffi --target x86_64-pc-windows-msvc
+cd apps\qyro
+flutter build windows --release
+copy ..\..\target\x86_64-pc-windows-msvc\release\qyro_ffi.dll build\windows\x64\runner\Release\
+```
+
+Y se abre `apps\qyro\build\windows\x64\runner\Release\qyro.exe`.
+
+**Si lo mueves, mueve la carpeta entera.** Esa carpeta lleva DLLs y datos que la
+aplicación necesita; el `.exe` solo no arranca. Es la diferencia con el binario
+de terminal, que sí es un archivo único.
+
+Con esto, PC→PC se puede hacer también entre dos ventanas en lugar de dos
+terminales. Los pasos son los mismos: uno pulsa **Recibir** y enseña su código,
+el otro lo teclea en **Aparatos** y manda desde **Enviar**.
+
+### Los otros comandos del binario de terminal
 
 Cosas que el `.exe` sabe hacer y que esta guía no necesita:
 
