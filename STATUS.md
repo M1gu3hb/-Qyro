@@ -3,7 +3,7 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-31T18:00:00Z
+- Updated UTC: 2026-08-31T23:30:00Z
 - Branch: main (rama única desde 2026-08-18)
 - Verified commit: 918bd6ffde047f44364d5bd83962dd855ff77cdc
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
@@ -33,7 +33,8 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 El propietario va a probar Qyro en una PC y un teléfono reales por primera vez.
 Esta tanda audita, arregla y deja escrito lo que hace falta para esa prueba.
 
-**Ocho fichas, y tres de ellas impedían que la prueba funcionara en absoluto:**
+**Veintiocho fichas —QYR-0368 a QYR-0395— y cinco de ellas impedían que la
+prueba funcionara en absoluto.** Las ocho primeras:
 
 | Ficha | Qué | Cara |
 |---|---|---|
@@ -50,29 +51,57 @@ Esta tanda audita, arregla y deja escrito lo que hace falta para esa prueba.
 no llegaban a ninguna cara, o mensajes que tiraban el motivo que el motor sí
 daba. **Ninguna es un defecto del motor.**
 
-**Y tres se encontraron ejecutándolo**, no leyéndolo: QYR-0372, QYR-0374 y
-QYR-0375 salieron de correr `qyro send` y `qyro recv` uno contra otro y mirar la
-pantalla.
+**Y las veinte siguientes, en una línea cada bloque:** la identidad de Android
+escribía en la raíz del sistema (QYR-0376), los comandos de construcción de
+Android no podían construir (QYR-0377), el permiso de cámara no se pedía nunca
+(QYR-0378), el canal óptico recibía el archivo y lo tiraba (QYR-0379), mandar
+desde el teléfono no funcionaba por dos motivos a la vez (QYR-0380), la huella
+del código se validaba y se tiraba (QYR-0381 en la terminal, **QYR-0392** en el
+teléfono), nada recuerda un aparato (QYR-0382), un archivo vacío se llevaba por
+delante toda la transferencia (QYR-0383), un fallo antes de empezar no decía
+nada (QYR-0384), `qyro beam` scrolleaba el QR en Windows (QYR-0385), ocho
+códigos del motor salían como «llegó algo que no verificó» (QYR-0386), el script
+de firma deshacía los 16 KB (QYR-0387), el segundo envío entregaba descriptores
+cerrados (QYR-0388), pulsar Recibir dos veces arrancaba dos receptores
+(QYR-0389), un archivo en la raíz de una unidad no se podía mandar (QYR-0390),
+doscientos archivos abrían **402 descriptores** (QYR-0391), tardar más de un
+minuto en aceptar mataba la transferencia (QYR-0393), los 16 KB dependían del
+NDK de quien construyera (QYR-0394), y seis documentos publicados decían cosas
+que el código desmiente (QYR-0395).
+
+**Seis se encontraron ejecutándolo o midiéndolo**, no leyéndolo: QYR-0372,
+QYR-0374 y QYR-0375 salieron de correr `qyro send` y `qyro recv` uno contra otro
+y mirar la pantalla; QYR-0391 y QYR-0393 salieron de contar descriptores y
+segundos con la transferencia corriendo; y la mitad de QYR-0394 salió de medir
+qué flags pasa `cargo` de verdad.
 
 **Guardas nuevas, todas dentro de `cargo test --workspace`**, o sea dentro de la
 puerta y de CI, en cada commit y en cada plataforma:
 
 - `qyro_net::guards::the_android_manifest_declares_internet`
-- `qyro_core::repository_contract`, cinco contratos de repositorio: los secretos
-  de firma, el canal óptico, la tabla de paridad, las frases retiradas del
-  README/PROTOCOL/AGENTS, y la carpeta de destino de Android
+- `qyro_core::repository_contract`, **diez** contratos de repositorio: los
+  secretos de firma y que ninguno esté rastreado hoy, el canal óptico, la tabla
+  de paridad, las frases retiradas de nueve documentos, la carpeta de destino de
+  Android, que un código escaneado ate la sesión a una **clave** y no sólo a una
+  dirección, que los tres objetivos de Android pidan páginas de 16 KB, que la
+  nota de la v1.0 diga que describe la v1.0, y que esta página no republique los
+  hashes de la publicación retirada
 - `tools/apk_inspector/`, que mide sobre el APK las tres cosas que deciden si
   Qyro arranca en un teléfono: las ABIs, la alineación de 16 KB y la posición del
   `.so` dentro del zip. Once pruebas, con los ELF fabricados en Python
 
-**ADR-0032 enmienda 6**, congelada antes del código: dos símbolos,
-**treinta y tres**.
+**ADR-0032 enmiendas 6 y 7**, las dos congeladas antes del código: tres símbolos
+en total, **treinta y cuatro**. Y **ADR-0028 enmienda 1** y **ADR-0047
+enmienda 1**, las dos con la medida delante del argumento.
 
 **Documentos reescritos contra el código:** `AGENTS.md` —que decía «Qyro sigue
 sin transferir archivos», falso desde la fase 12—, `README.md` y `PROTOCOL.md`.
 
-**Entregables nuevos:** `docs/GUIA-DE-PRUEBA.md` y
-`docs/reports/lo-que-no-se-ha-probado.md`.
+**Entregables nuevos:** `docs/GUIA-DE-PRUEBA.md`,
+`docs/reports/lo-que-no-se-ha-probado.md` y `docs/reports/revision-final.md` —
+este último con los nueve informes de dominio, sus 64 hallazgos, los refutados
+con su motivo, las diez preguntas de la fase respondidas por código, y el
+veredicto en tres métricas con su método.
 
 **Lo que esta tanda NO pudo hacer, y está dicho donde toca:** corrió en un
 contenedor de Linux sin Flutter, sin SDK de Android, sin PowerShell y sin el

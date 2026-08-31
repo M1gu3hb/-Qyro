@@ -70,6 +70,27 @@ abierta en la carpeta del repositorio.
 > un solo archivo es más fácil de mover y de comprobar. El segundo es opcional y
 > está en §8.
 
+### 2.0 Traerte el código de hoy, antes de construir nada
+
+**Es el paso que más fácil es saltarse y el que más caro sale.** Una copia del
+repositorio de hace unos días **no lleva los arreglos de hoy**, y uno de ellos es
+el permiso `INTERNET` que faltaba en el manifiesto de release: sin él el APK
+**no puede abrir un socket**, así que la aplicación instala, arranca y no
+transfiere nada — sin decir por qué.
+
+```
+cd D:\Qyro\repo
+git checkout main
+git pull origin main
+git rev-parse --short HEAD
+```
+
+Apunta lo que diga ese último comando: es el commit del que sale todo lo que vas
+a construir, y es lo que `BUILD-INFO.txt` guardará en §2.4.
+
+**Si `git pull` dice que tienes cambios locales**, no los mezcles a la brava:
+haz `git stash`, construye, y decide después qué hacer con ellos.
+
 ### 2.1 El binario de terminal (`qyro.exe`)
 
 ```
@@ -511,6 +532,20 @@ error: alguien al otro lado no es quien creías, o reinstalaste la aplicación �
 que crea una identidad nueva— y la otra máquina todavía recuerda la vieja.
 
 **No hay «continuar de todos modos» y no lo va a haber.**
+
+### En el teléfono: «Ese no es el aparato del código»
+
+**La dirección contestó y la huella no coincide.** El aparato que hay en esa
+dirección **no es** el del código que escaneaste o tecleaste, y Qyro no lo
+pregunta: rechaza y no manda nada. Es lo mismo que en la terminal hace
+`REFUSED`, y desde hoy lo hace también el teléfono.
+
+Casi siempre es lo aburrido: el código es viejo —el otro aparato se reinstaló, o
+lo cerró y lo volvió a abrir— o se copió mal. Pide el código otra vez.
+
+**Si el código es recién sacado y sigue saliendo esto, para.** Significa que en
+esa dirección hay algo que no es el aparato que crees, y ése es exactamente el
+caso para el que existe la comprobación.
 
 ### En el teléfono: «se ha detenido la aplicación» nada más abrirla
 
