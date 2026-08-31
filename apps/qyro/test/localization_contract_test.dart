@@ -108,6 +108,10 @@ void main() {
       'receiveRefuse': (english.receiveRefuse, spanish.receiveRefuse),
       'receiveRefused': (english.receiveRefused, spanish.receiveRefused),
       'receiveNoRoom': (english.receiveNoRoom, spanish.receiveNoRoom),
+      'sendAddressLabel': (
+        english.sendAddressLabel,
+        spanish.sendAddressLabel
+      ),
       'receivePortUnavailable': (
         english.receivePortUnavailable,
         spanish.receivePortUnavailable

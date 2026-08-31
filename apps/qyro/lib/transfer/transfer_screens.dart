@@ -501,8 +501,21 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   Future<void> _send() async {
+    // **QYR-0380: el campo decía «código de emparejamiento» y el motor quiere
+    // `ip:puerto`.** El texto se pasaba tal cual a `send`, y por debajo
+    // `qyro_session_open_sender_blocking` hace `address.parse::<SocketAddr>()`,
+    // así que un código —lo que el otro aparato enseña, y lo que la etiqueta
+    // pedía— salía como `bad_argument`. La pantalla de Aparatos sí lo resolvía;
+    // ésta no, y ésta es la que se usa para mandar.
+    //
+    // Se aceptan los dos: el mismo analizador del motor devuelve `null` cuando
+    // no es un código, y entonces el texto se usa tal cual, que es lo correcto
+    // para un `ip:puerto` tecleado a mano.
+    final typed = _address.text.trim();
+    final resolved = await widget.service.addressOfPairingString(typed);
+    if (!mounted) return;
     final stream = widget.service.send(
-      address: _address.text.trim(),
+      address: resolved ?? typed,
       files: _chosen,
     );
     await for (final state in stream) {
@@ -525,7 +538,14 @@ class _SendScreenState extends State<SendScreen> {
         TextField(
           key: const Key('send-address'),
           controller: _address,
-          decoration: InputDecoration(labelText: strings.peersManualLabel),
+          // **QYR-0380: sin esto el botón no se encendía nunca.** `onPressed`
+          // mira `_address.text`, y un `TextEditingController` **no reconstruye
+          // nada** al escribir: el botón se quedaba apagado hasta que otra cosa
+          // llamara a `setState` — elegir archivos, por ejemplo. Así que
+          // funcionaba si se escribía la dirección **antes** de elegir, y no si
+          // se hacía al revés, que es el orden natural.
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(labelText: strings.sendAddressLabel),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(

@@ -173,6 +173,48 @@ void main() {
       expect(find.byKey(const Key('pairing-field')), findsOneWidget);
     });
 
+    testWidgets('el boton de enviar se enciende al escribir la direccion',
+        (tester) async {
+      // **QYR-0380, y era la mitad de por que mandar desde el telefono no
+      // funcionaba.** `onPressed` mira `_address.text`, y un
+      // `TextEditingController` **no reconstruye nada** al escribir: el boton se
+      // quedaba apagado hasta que otra cosa llamara a `setState`.
+      //
+      // Asi que funcionaba si se escribia la direccion **antes** de elegir los
+      // archivos -- porque elegir llama a setState -- y no si se hacia al reves,
+      // que es el orden natural: primero eliges lo que mandas.
+      //
+      // Este orden, elegir y luego escribir, es el que fallaba.
+      final service = FakeService(picked: const <QyroPicked>[
+        QyroPickedPath(name: 'foto.jpg', size: 10, path: '/tmp/foto.jpg'),
+      ]);
+      await tester.pumpWidget(_wrap(SendScreen(service: service)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('send-pick')));
+      await tester.pumpAndSettle();
+
+      final boton = find.byKey(const Key('send-start'));
+      expect(
+        tester.widget<ButtonStyleButton>(boton).onPressed,
+        isNull,
+        reason: 'sin direccion no se puede mandar, y eso esta bien',
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('send-address')),
+        '192.168.1.5:49517',
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<ButtonStyleButton>(boton).onPressed,
+        isNotNull,
+        reason: 'la direccion esta escrita y el boton sigue apagado, asi que '
+            'no hay forma de mandar nada desde esta pantalla',
+      );
+    });
+
     testWidgets('en Android el boton de escanear existe Y se puede pulsar',
         (tester) async {
       // **QYR-0371, y son dos defectos que se sostenian el uno al otro.**

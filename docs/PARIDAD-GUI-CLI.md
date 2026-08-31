@@ -69,7 +69,7 @@ la puerta puesta, la celda cita el sitio que la abre.
 | Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:393` | `rust/crates/qyro_cli/src/flows.rs:400` |
 | Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:138` | `rust/crates/qyro_cli/src/flows.rs:106` |
 | Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:419` |
-| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:652` | `rust/crates/qyro_cli/src/flows.rs:476` |
+| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:672` | `rust/crates/qyro_cli/src/flows.rs:476` |
 | Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:623` |
 | Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
 | Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:232` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |

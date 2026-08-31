@@ -140,6 +140,16 @@ Ahora se pide el permiso -- y se ofrece reintentar, sin esperar la respuesta por
 el canal --, y lo que llega se escribe en la misma carpeta que el resto, con un
 nombre que Qyro elige **y dice que ha elegido**: un QR no lleva el nombre dentro.
 
+**QYR-0380, P0 del escenario D1.** Mandar desde el telefono no funcionaba por dos
+motivos a la vez, y cada uno bastaba. El boton de enviar **no se encendia al
+escribir** -- el `TextField` no tenia `onChanged`, asi que el estado no se
+reconstruia--, y funcionaba solo si se escribia la direccion ANTES de elegir los
+archivos, porque elegir si llama a setState: al reves, que es el orden natural,
+se quedaba apagado. Y el campo decia «Codigo de emparejamiento» y pasaba el texto
+tal cual a un motor que hace `parse::<SocketAddr>()`, asi que un codigo salia como
+`bad_argument`. La pantalla de Aparatos si lo resolvia; esta, que es la que manda,
+no. Ahora acepta las dos cosas y la etiqueta lo dice.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

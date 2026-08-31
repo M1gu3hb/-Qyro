@@ -12,6 +12,59 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0380 — Mandar desde el teléfono no funcionaba, por dos motivos a la vez
+
+- Estado: **CERRADO**
+- Severidad: **P0 para el escenario D1** (teléfono → PC, la primera prueba con el teléfono)
+- Fecha: 2026-08-31
+
+**Dos defectos en la misma pantalla, y cada uno basta para que no se pueda
+mandar nada.**
+
+### 1. El botón no se encendía al escribir
+
+```dart
+onPressed: _chosen.isEmpty || _address.text.trim().isEmpty ? null : _send,
+```
+
+El `TextField` lleva un `TextEditingController` y **ningún `onChanged`**. Un
+controlador no reconstruye nada al escribir, así que el botón se quedaba apagado
+hasta que otra cosa llamara a `setState`.
+
+**Y por eso pasaba las pruebas y no la vida:** elegir archivos **sí** llama a
+`setState`, así que la pantalla funcionaba si se escribía la dirección **antes**
+de elegir — y no si se hacía al revés, que es el orden natural: primero eliges lo
+que mandas, luego dices a dónde.
+
+### 2. El campo pedía un código y el motor quiere una dirección
+
+La etiqueta era `peersManualLabel`, «Código de emparejamiento» — que es
+exactamente lo que el otro aparato enseña. Y `_send` pasaba el texto **tal cual**:
+
+```dart
+address: _address.text.trim(),
+```
+
+Por debajo, `qyro_session_open_sender_blocking` hace
+`address.parse::<SocketAddr>()`. Un código de emparejamiento **no** es un
+`SocketAddr`, así que salía `bad_argument`.
+
+**La pantalla de Aparatos sí lo resolvía** —tiene su `_resolve()` con
+`addressOfPairingString`— y ésta no. Y ésta es la que se usa para mandar.
+
+**El arreglo.** `onChanged: (_) => setState(() {})`, y `_send` pasa el texto por
+el mismo analizador del motor: devuelve `null` cuando no es un código, y entonces
+se usa tal cual, que es lo correcto para un `ip:puerto` tecleado a mano. **Se
+aceptan los dos**, y la etiqueta lo dice: «Código de emparejamiento, o dirección
+como ip:puerto».
+
+**La prueba nueva hace las cosas en el orden que fallaba:** elegir primero,
+escribir después. Es lo que ninguna prueba hacía.
+
+**La pregunta que cierra esta ficha:** desde el teléfono, ¿se puede mandar un
+archivo tecleando el código que el PC enseña? **Sí, y la etiqueta ya no promete
+algo distinto de lo que acepta.**
+
 ## QYR-0378 — El permiso de cámara no se pedía nunca, así que no había canal óptico
 
 - Estado: **CERRADO**
