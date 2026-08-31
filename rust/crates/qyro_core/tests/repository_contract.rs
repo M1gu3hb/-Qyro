@@ -308,7 +308,9 @@ fn the_parity_table_still_points_at_code() {
         let nameable = !text.is_empty()
             && !text.starts_with("//")
             && !text.starts_with('#')
-            && text.trim_matches(|c: char| "{}()[];,".contains(c) || c.is_whitespace()) != "";
+            && !text
+                .trim_matches(|c: char| "{}()[];,".contains(c) || c.is_whitespace())
+                .is_empty();
         if !nameable {
             rotten.push(format!("{path}:{number} — points at `{text}`"));
         }
