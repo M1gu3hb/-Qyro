@@ -34,16 +34,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rustup target add aarch64-linux-android x86_64-linux-android
+          # **Tres ABIs, y armeabi-v7a es la que faltaba.** Con solo arm64-v8a y
+          # x86_64, un telefono de 32 bits -- que sigue siendo mucho aparato
+          # barato y mucho aparato de hace cinco anos -- instala el APK y muere
+          # con UnsatisfiedLinkError al primer uso del motor, porque no hay
+          # lib/armeabi-v7a/ que cargar. x86_64 se queda: es el emulador, y sin
+          # el no hay forma de probar nada sin un telefono delante.
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
           qyro_ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}}"
           test -n "$qyro_ndk"
           bin="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$bin/aarch64-linux-android21-clang"
+          # `armv7a-...-androideabi21`, con la `a` y con `eabi`: el nombre del
+          # enlazador de 32 bits no se deriva del triple de Rust.
+          export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$bin/armv7a-linux-androideabi21-clang"
           export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$bin/x86_64-linux-android21-clang"
           cargo build --locked --release --package qyro_ffi --target aarch64-linux-android
+          cargo build --locked --release --package qyro_ffi --target armv7-linux-androideabi
           cargo build --locked --release --package qyro_ffi --target x86_64-linux-android
-          mkdir -p apps/qyro/android/app/src/main/jniLibs/{arm64-v8a,x86_64}
+          mkdir -p apps/qyro/android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86_64}
           cp target/aarch64-linux-android/release/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/arm64-v8a/
+          cp target/armv7-linux-androideabi/release/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/armeabi-v7a/
           cp target/x86_64-linux-android/release/libqyro_ffi.so apps/qyro/android/app/src/main/jniLibs/x86_64/
       - uses: subosito/flutter-action@v2
         with:
@@ -78,11 +89,27 @@ jobs:
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-release.apk
           unzip -l "$apk" | grep -q 'lib/arm64-v8a/libqyro_ffi.so'
+          unzip -l "$apk" | grep -q 'lib/armeabi-v7a/libqyro_ffi.so'
           unzip -l "$apk" | grep -q 'lib/x86_64/libqyro_ffi.so'
           if unzip -l "$apk" | grep -qi 'qyro_crypto_smoke'; then
             echo "[FAIL] the APK contains the crypto smoke harness" >&2
             exit 1
           fi
+      # **Comprobacion 20, y ahora automatica.** Android 15 corre con paginas de
+      # 16 KB y un `.so` cuyos PT_LOAD estan alineados a 0x1000 **no carga**:
+      # dlopen falla y la aplicacion muere al primer uso del motor. Se mide
+      # sobre el `.so` EXTRAIDO DEL APK y no sobre el que salio de cargo, porque
+      # entre el enlazador y el paquete hay un empaquetador que puede no
+      # conservar lo que el enlazador dejo. Hasta hoy se media a mano, una vez,
+      # y quedaba escrita en un mensaje de commit.
+      - name: Las tres ABIs, y los 16 KB medidos donde carga
+        working-directory: apps/qyro
+        run: |
+          python3 ../../tools/apk_inspector/inspect_apk.py \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --require-abi arm64-v8a \
+            --require-abi armeabi-v7a \
+            --require-abi x86_64
       - name: Record what this APK is, and what it is not
         shell: bash
         working-directory: apps/qyro

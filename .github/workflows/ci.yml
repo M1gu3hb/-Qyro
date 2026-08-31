@@ -263,4 +263,10 @@ jobs:
           bash scripts/tests/crypto_platform_evidence_contract_test.sh || status=1
           pwsh -NoProfile -File scripts/tests/crypto_platform_evidence_contract_test.ps1 || status=1
           python3 -m unittest tools/logo_ascii_generator/test_logo_ascii_generator.py || status=1
+          # Que el inspector de APK sepa fallar. Mide las tres cosas que deciden
+          # si Qyro arranca en un telefono -- que ABIs lleva, la alineacion de
+          # pagina de cada .so y su posicion dentro del zip -- y una comprobacion
+          # que nunca ha estado roja no es una comprobacion. Los ELF de prueba se
+          # fabrican en Python, asi que esto corre sin NDK.
+          python3 -m unittest tools/apk_inspector/test_inspect_apk.py || status=1
           exit "$status"
