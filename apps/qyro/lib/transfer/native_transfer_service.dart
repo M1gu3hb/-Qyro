@@ -378,7 +378,28 @@ final class NativeTransferService implements QyroTransferService {
   ) async* {
     var last = const _Sample(0, 0);
     final subscription = samples.listen((sample) => last = sample);
-    final code = await outcome;
+    // **QYR-0384: esto era `await outcome` a secas, y por eso un envío que
+    // fallaba al abrir no decía nada.**
+    //
+    // `QyroSession.send` se construye **fuera** del `try` del worker, así que si
+    // lanza —una dirección que no parsea, un puerto que no se puede abrir, la
+    // biblioteca que no carga— el futuro se completa con un error, y este
+    // `await` dentro de un `async*` lo convierte en un **error de stream**. La
+    // pantalla hace `await for` sin `catch`, así que no llega ningún estado:
+    // pulsar Enviar no hacía nada visible, que es el peor final posible.
+    //
+    // `_drainReceive` ya lo capturaba. Esta mitad no.
+    var code = QyroCode.unknown;
+    try {
+      code = await outcome;
+    } on QyroSessionFailure catch (failure) {
+      code = failure.code;
+    } on Object {
+      // Un worker puede morir por cosas que no son un `QyroSessionFailure`, y
+      // ninguna de ellas debe salir por el stream sin un estado: «no pasó nada»
+      // no es un final que alguien pueda leer. `unknown` llega a la pantalla
+      // como un fallo, que es lo que fue.
+    }
     await subscription.cancel();
 
     if (code == 0) {
@@ -396,7 +417,17 @@ final class NativeTransferService implements QyroTransferService {
     required Future<bool> Function(QyroAwaitingDecision offer) decide,
   }) async* {
     final where = destination.isEmpty ? defaultDestination() : destination;
-    Directory(where).createSync(recursive: true);
+    // **QYR-0384, y es el cinturón del arreglo de QYR-0373.** Esto lanzaba
+    // dentro de un `async*` **antes del primer `yield`**, así que la pantalla no
+    // recibía ni un estado: pulsar Recibir no hacía nada visible. Era el camino
+    // exacto que tomaba `/Qyro` en Android, y seguirá siendo el camino de
+    // cualquier carpeta que no se pueda crear -- un disco lleno, un permiso.
+    try {
+      Directory(where).createSync(recursive: true);
+    } on FileSystemException {
+      yield const QyroFailed(kind: QyroFailureKind.noRoom);
+      return;
+    }
 
     // QYR-0322, and this is the whole fix. `QyroSession.receive` binds and
     // accepts inside one call and does not return until a peer connects, so
@@ -611,6 +642,11 @@ final class NativeTransferService implements QyroTransferService {
         code = await outcome;
       } on QyroSessionFailure catch (failure) {
         code = failure.code;
+      } on Object {
+        // QYR-0384, la misma razón que en `_drain`: un worker puede morir por
+        // algo que no es un `QyroSessionFailure`, y salir por el stream sin un
+        // estado deja la pantalla en blanco.
+        code = QyroCode.unknown;
       }
       await reader.cancel();
       for (final state in pending) {

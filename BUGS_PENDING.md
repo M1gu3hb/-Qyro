@@ -12,6 +12,47 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0384 — Cuando fallaba antes de empezar, la pantalla no decía nada
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** («no pasa nada» es el peor final que puede tener un botón)
+- Fecha: 2026-08-31
+
+**El defecto, y son tres sitios con la misma forma.** Un fallo que ocurre
+**antes** de que el stream emita su primer estado sale como **error de stream**,
+y la pantalla hace `await for` sin `catch`. Resultado: **pulsar el botón no hace
+nada visible.** Ni un error, ni un estado, nada.
+
+1. **`_drain`, en el camino de enviar.** Era `final code = await outcome;`, sin
+   `try`. `QyroSession.send` se construye **fuera** del `try` del worker, así que
+   si lanza —una dirección que no parsea, un puerto que no se abre, la biblioteca
+   que no carga— el futuro se completa con un error y este `await` lo convierte
+   en error de stream.
+
+   `_drainReceive`, la mitad de recibir, **sí** lo capturaba. Ésta no. Dos
+   caminos gemelos y sólo uno protegido, que es la forma que tienen los defectos
+   de sobrevivir a una revisión: se mira uno y se da por hecho el otro.
+
+2. **`receive()`, antes del primer `yield`.** `Directory(where).createSync()`
+   lanzaba dentro de un `async*` **antes** de emitir nada. Era el camino exacto
+   que tomaba `/Qyro` en Android (QYR-0373), y seguirá siendo el de cualquier
+   carpeta que no se pueda crear: un disco lleno, un permiso.
+
+3. **Y lo que ninguno de los dos capturaba:** un worker puede morir por algo que
+   **no** es un `QyroSessionFailure`. `Isolate.run` propaga lo que sea, y nada
+   de eso debía salir por el stream sin un estado.
+
+**El arreglo.** Los dos drenajes capturan `QyroSessionFailure` **y** cualquier
+otra cosa, esta última como `unknown` — que llega a la pantalla como un fallo,
+que es lo que fue. Y `createSync` se captura y se convierte en un estado.
+
+**El criterio, dicho una vez:** un stream que la interfaz escucha **nunca**
+termina en error. Termina en un estado, aunque el estado sea «no sé qué pasó».
+«No sé qué pasó» se puede leer; un stream muerto, no.
+
+**La pregunta que cierra esta ficha:** ¿puede un botón de esta aplicación no
+hacer nada al pulsarlo? **Por estos tres caminos, no.**
+
 ## QYR-0383 — Un archivo vacío se llevaba por delante toda la transferencia
 
 - Estado: **CERRADO**

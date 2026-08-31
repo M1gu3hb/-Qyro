@@ -177,6 +177,15 @@ corrupto --, y `Session::finish` tenia **dos `return` dentro del bucle**, asi qu
 un solo item que fallara abandonaba todos los que venian detras. Ese es el grande;
 el archivo vacio solo es la forma mas facil de alcanzarlo.
 
+**QYR-0384.** Tres sitios con la misma forma: un fallo **antes** del primer
+`yield` sale como error de stream, y la pantalla hace `await for` sin `catch`, asi
+que **pulsar el boton no hace nada visible**. El drenaje de enviar no capturaba
+nada -- el de recibir si, que es como los defectos sobreviven a una revision: se
+mira uno y se da por hecho el otro --, `createSync` del destino lanzaba antes de
+emitir, y ninguno de los dos cubria a un worker que muere por algo que no es un
+`QyroSessionFailure`. El criterio, escrito una vez: un stream que la interfaz
+escucha nunca termina en error, termina en un estado, aunque sea «no se que paso».
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.
