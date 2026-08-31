@@ -238,6 +238,30 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0391, y es el unico que se encontro midiendo.** Una transferencia de 200
+archivos mantenia **402 descriptores abiertos a la vez** — dos por archivo: el
+que lee el origen y la parte abierta del destino, ninguno cerrado hasta el final
+de toda la transferencia. ADR-0047 §3 limita una transferencia a **256 archivos**
+y la razon escrita ahi son los descriptores, contando **uno** por archivo; con
+dos, 256 archivos son ~512, que es exactamente el techo del CRT de Windows. Un
+proceso sin descriptores no falla en el archivo que los agota: falla en lo
+siguiente que necesite abrir algo — el socket, la reanudacion, la identidad.
+
+Medido antes y despues con la misma prueba, que pregunta a `/proc/self/fd`
+mientras la transferencia corre:
+
+| | Descriptores de mas, 200 archivos |
+|---|---|
+| Antes | **402** |
+| Despues | **11** |
+
+Y los 11 no crecen con el numero de archivos. El destino cierra la parte en
+cuanto tiene los bytes que el manifiesto declara (se podia: `finish_item` ya
+verificaba **por ruta**), y el origen mantiene una cache de ocho. **Sólo se
+desaloja lo que tiene ruta**: en Android el selector devuelve descriptores
+(ADR-0034) y cerrar uno de esos no ahorra nada, pierde el archivo. Esa guarda se
+comprobo haciendo el desalojo incondicional a proposito, para ver si fallaba.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

@@ -146,3 +146,42 @@ escribe en disco pasan por las reglas de ADR-0027, que son otras y más estricta
 - **Que ninguno de estos límites esté comprobado.** Esta ADR fija los números;
   los cinco escenarios de la fase son los que dan la evidencia, y hasta que
   existan **estos límites son decisiones, no medidas**.
+
+---
+
+## Enmienda 1 (2026-08-31, fase 28) — el techo de 256 estaba calculado contra un descriptor por archivo, y eran dos
+
+La §3 dice que 256 «deja margen ancho bajo cualquier `RLIMIT_NOFILE` razonable».
+**El margen no era ancho: era la mitad de lo que decía**, y ésta es la primera
+vez que alguien lo mide en vez de razonarlo.
+
+Una transferencia de 200 archivos mantenía **402 descriptores abiertos a la
+vez** — dos por archivo, no uno:
+
+```
+[measure] 200 files: 4 descriptors before, 406 at the peak, 402 extra
+```
+
+- El origen (`FileSource::try_read`) abría en el primer trozo y no cerraba
+  nunca.
+- El destino (`FileSink::part_for`) abría el `.qyro-part` en el primer trozo y
+  sólo lo soltaba en `finish_item`, que corre al final — cuando ya están todos
+  abiertos.
+
+Con dos por archivo, **256 archivos son ~512**, que es exactamente el techo por
+omisión del CRT de Windows. El número de la §3 seguía siendo defendible; la
+aritmética que lo defendía, no.
+
+**Lo que cambia y lo que no.** El techo **sigue siendo 256** y se sigue negando
+por nombre antes de abrir nada: el número era razonable y lo que estaba mal era
+la cuenta debajo. Lo que cambia es el consumo (QYR-0391): el destino cierra la
+parte en cuanto tiene los bytes que el manifiesto declara —se podía, porque
+`finish_item` ya verificaba **por ruta**— y el origen mantiene una caché de
+ocho. Medido igual después: **11 de más**, y no crecen con el número de
+archivos.
+
+**La excepción que esta enmienda escribe para que no se pierda:** el desalojo
+**sólo toca lo que tiene ruta**. En Android el selector entrega descriptores
+(ADR-0034) y cerrar uno de ésos no ahorra un descriptor — pierde el archivo,
+porque no hay forma de reabrirlo. Es la misma razón por la que existe el techo,
+y habría sido la forma más fácil de romper el arreglo mientras se arreglaba.

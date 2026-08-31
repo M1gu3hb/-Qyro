@@ -15,7 +15,7 @@
 )]
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -149,10 +149,31 @@ const fn libc_o_nofollow() -> i32 {
 ///
 /// Holds paths, not contents. A hundred-megabyte file never becomes a
 /// hundred-megabyte allocation because nothing here ever asks for one.
+/// Cuantos archivos abiertos a la vez tolera un origen con rutas.
+///
+/// **QYR-0391.** No habia ningun tope: `try_read` abria en el primer trozo y no
+/// cerraba nunca, asi que doscientos archivos eran doscientos descriptores
+/// abiertos a la vez -- y ADR-0047 §3 limita una transferencia a 256 archivos
+/// *precisamente* porque los descriptores son un limite duro del proceso (512
+/// en el CRT de Windows, 1024 en Android). El limite estaba puesto contra un
+/// consumo que era el doble del que se suponia.
+///
+/// Ocho, y no uno: una transferencia lee los items en orden, asi que con ocho
+/// no se reabre nada en la practica, y con uno se reabriria en cada cambio de
+/// archivo. Es una cache, no un candado.
+const OPEN_HANDLE_CAP: usize = 8;
+
 pub struct FileSource {
     paths: BTreeMap<u32, PathBuf>,
     /// Open handles, kept so a transfer does not reopen per chunk.
     handles: RefCell<BTreeMap<u32, File>>,
+    /// Los ids **con ruta** que hay abiertos, del mas viejo al mas reciente.
+    ///
+    /// Sólo entran aqui los que se pueden reabrir. Un descriptor de SAF no
+    /// tiene ruta (`from_open_files`), asi que no se apunta y por tanto no se
+    /// puede desalojar: cerrarlo seria perder el archivo, no ahorrarse un
+    /// descriptor.
+    recent: RefCell<VecDeque<u32>>,
     /// Largest single read this source has served, counted under test.
     #[cfg(test)]
     pub(crate) peak_read: std::cell::Cell<usize>,
@@ -165,6 +186,7 @@ impl FileSource {
         Self {
             paths,
             handles: RefCell::new(BTreeMap::new()),
+            recent: RefCell::new(VecDeque::new()),
             #[cfg(test)]
             peak_read: std::cell::Cell::new(0),
         }
@@ -180,6 +202,8 @@ impl FileSource {
         Self {
             paths: BTreeMap::new(),
             handles: RefCell::new(handles),
+            // Vacia a proposito: nada de lo que hay aqui se puede reabrir.
+            recent: RefCell::new(VecDeque::new()),
             #[cfg(test)]
             peak_read: std::cell::Cell::new(0),
         }
@@ -194,17 +218,21 @@ impl FileSource {
     /// implementation was the wrong seam.
     fn try_read(&self, item_id: u32, offset: u64, out: &mut [u8]) -> Option<usize> {
         let mut handles = self.handles.borrow_mut();
-        let file = match handles.entry(item_id) {
-            std::collections::btree_map::Entry::Occupied(slot) => slot.into_mut(),
+        if let std::collections::btree_map::Entry::Vacant(slot) = handles.entry(item_id) {
             // Only a path-backed source opens lazily. A descriptor-backed one
             // has no path to reopen, and an item it has no handle for is an
             // item it cannot serve -- which reads as a short read, exactly as
             // any other read failure does.
-            std::collections::btree_map::Entry::Vacant(slot) => {
-                let path = self.paths.get(&item_id)?;
-                slot.insert(File::open(path).ok()?)
-            }
-        };
+            let path = self.paths.get(&item_id)?;
+            slot.insert(File::open(path).ok()?);
+        }
+        if self.paths.contains_key(&item_id) {
+            // Sólo se apunta -- y por tanto sólo se desaloja -- lo que tiene
+            // ruta. La condición es la misma que abre: si se pudo abrir por
+            // ruta, se puede reabrir por ruta.
+            self.remember(item_id, &mut handles);
+        }
+        let file = handles.get_mut(&item_id)?;
         file.seek(SeekFrom::Start(offset)).ok()?;
 
         let mut filled = 0usize;
@@ -217,6 +245,31 @@ impl FileSource {
             }
         }
         Some(filled)
+    }
+
+    /// Cuantos archivos tiene abiertos ahora mismo, contado bajo prueba.
+    #[cfg(test)]
+    pub(crate) fn open_handles(&self) -> usize {
+        self.handles.borrow().len()
+    }
+
+    /// Apunta `item_id` como el mas reciente y cierra lo que sobre del tope.
+    ///
+    /// El desalojo cierra el archivo mas antiguo, no el actual: `item_id` acaba
+    /// de entrar por el final de la cola y el tope es mayor que cero, asi que
+    /// lo que sale por delante nunca es el que se esta leyendo.
+    fn remember(&self, item_id: u32, handles: &mut BTreeMap<u32, File>) {
+        let mut recent = self.recent.borrow_mut();
+        recent.retain(|held| *held != item_id);
+        recent.push_back(item_id);
+        while recent.len() > OPEN_HANDLE_CAP {
+            match recent.pop_front() {
+                Some(oldest) => {
+                    handles.remove(&oldest);
+                }
+                None => break,
+            }
+        }
     }
 }
 
@@ -232,7 +285,17 @@ impl ContentSource for FileSource {
 /// One item being written.
 struct PartFile {
     resolved: Resolved,
-    handle: File,
+    /// **Vacio cuando el item ya recibio todo lo que declaraba** (QYR-0391).
+    ///
+    /// El descriptor se suelta en cuanto `written` alcanza el tamaño del
+    /// manifiesto, y no en `finish_item`: entre una cosa y la otra pasa toda la
+    /// transferencia, y ahi es donde estaban abiertos a la vez los doscientos.
+    ///
+    /// Que se pueda volver a abrir no es una suposicion: `part_path` es una
+    /// ruta bajo el destino, y `finish_item` ya calculaba el digest **por
+    /// ruta** y no por este descriptor, asi que cerrarlo antes no le quita
+    /// nada.
+    handle: Option<File>,
     written: u64,
 }
 
@@ -380,7 +443,7 @@ impl FileSink {
                 item_id,
                 PartFile {
                     resolved,
-                    handle,
+                    handle: Some(handle),
                     written,
                 },
             );
@@ -390,18 +453,64 @@ impl FileSink {
             .ok_or(FsError::DigestMismatch { item_id })
     }
 
+    /// Cuantas partes tienen el descriptor abierto ahora, contado bajo prueba.
+    #[cfg(test)]
+    pub(crate) fn open_part_handles(&self) -> usize {
+        self.open
+            .values()
+            .filter(|part| part.handle.is_some())
+            .count()
+    }
+
+    /// Deja abierto el archivo de parte de `item_id`, reabriendolo si hizo falta.
+    ///
+    /// `part_for` sólo abre la primera vez, porque su condicion es que el item
+    /// no este en `self.open`. Desde QYR-0391 un item **puede estar abierto en
+    /// ese sentido y tener el descriptor cerrado**, y ese es el caso que esto
+    /// cubre: un trozo que llega despues de completar el archivo -- un reenvio,
+    /// una reanudacion -- reabre y escribe, en vez de fallar.
+    fn ready_part(&mut self, item_id: u32) -> Result<&mut PartFile, FsError> {
+        // La raiz se copia antes de tomar prestado `self.open`: `open_part` la
+        // necesita y el prestamo del mapa es exclusivo.
+        let root = self.root.clone();
+        let part = self.part_for(item_id)?;
+        if part.handle.is_none() {
+            let path = part.resolved.part_path.clone();
+            part.handle = Some(open_part(&root, &path, false)?);
+        }
+        Ok(part)
+    }
+
     /// Writes `bytes` for `item_id` at `offset`.
     ///
     /// # Errors
     ///
     /// Whatever the path resolution or the filesystem reports.
     pub fn put(&mut self, item_id: u32, offset: u64, bytes: &[u8]) -> Result<(), FsError> {
+        let declared = self.plan.get(&item_id).map(|(_, size, _)| *size);
         {
-            let part = self.part_for(item_id)?;
-            part.handle.seek(SeekFrom::Start(offset))?;
-            part.handle.write_all(bytes)?;
+            let part = self.ready_part(item_id)?;
+            let handle = part
+                .handle
+                .as_mut()
+                .ok_or(FsError::DigestMismatch { item_id })?;
+            handle.seek(SeekFrom::Start(offset))?;
+            handle.write_all(bytes)?;
             let end = offset.saturating_add(bytes.len() as u64);
             part.written = part.written.max(end);
+
+            // **Aqui se cierra, y no en `finish_item`** (QYR-0391). El item ya
+            // tiene todos los bytes que el manifiesto le declara; lo que falta
+            // es verificar y renombrar, y las dos cosas se hacen por ruta.
+            //
+            // Si el manifiesto no dice nada de este item no se cierra nada: sin
+            // tamaño declarado no hay forma de saber que esta completo, y
+            // cerrar a ciegas seria reabrir en cada trozo.
+            if declared.is_some_and(|size| part.written >= size) {
+                if let Some(done) = part.handle.take() {
+                    done.sync_all()?;
+                }
+            }
         }
         #[cfg(test)]
         {
@@ -512,8 +621,12 @@ impl FileSink {
             .map(|(_, _, digest)| digest.clone())
             .unwrap_or_default();
 
-        part.handle.sync_all()?;
-        drop(part.handle);
+        // Puede estar ya cerrado: `put` lo suelta al completar el item, y lo
+        // que se sincroniza aqui es lo que aun no paso por ese camino -- un
+        // item que llego corto, o uno cuyo tamaño el plan no declaraba.
+        if let Some(handle) = part.handle {
+            handle.sync_all()?;
+        }
 
         let actual = digest_of(&part.resolved.part_path)?;
         if actual != expected {

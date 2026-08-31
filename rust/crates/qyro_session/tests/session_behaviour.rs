@@ -1950,3 +1950,93 @@ fn an_empty_file_does_not_abandon_the_files_that_follow_it() {
     );
     assert_eq!(read_all(&destination.join("a-vacio.txt")).len(), 0);
 }
+
+/// How many descriptors a batch of two hundred files holds open **at once**.
+///
+/// **FASE-28 §4, pregunta 2, contestada con un número y no con una lectura.**
+/// The question is not rhetorical: ADR-0047 §3 caps a transfer at 256 files
+/// *because of* descriptors, and on Windows the CRT's default is 512 while
+/// Android's `RLIMIT_NOFILE` is commonly 1024. «Two hundred files» and «two
+/// hundred open descriptors» are one bad loop apart, and the difference is
+/// invisible until a real batch runs on a real phone.
+///
+/// Measured on `/proc/self/fd`, which counts **both** ends plus the test
+/// harness, because the sender and the receiver are two threads of this
+/// process. That makes the number pessimistic — it can only over-count — which
+/// is the safe direction for a ceiling.
+#[cfg(target_os = "linux")]
+#[test]
+fn two_hundred_files_do_not_hold_two_hundred_descriptors() {
+    fn open_descriptors() -> usize {
+        fs::read_dir("/proc/self/fd")
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    }
+
+    ensure_identity();
+    let scratch = Scratch::new("descriptors");
+    let root = scratch.path("origen");
+    let destination = scratch.path("destino");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&destination).unwrap();
+
+    const FILES: usize = 200;
+    let files: Vec<PathBuf> = (0..FILES)
+        .map(|index| {
+            let path = root.join(format!("f{index:03}.bin"));
+            write_pattern(&path, 512);
+            path
+        })
+        .collect();
+
+    let baseline = open_descriptors();
+    let peak = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(baseline));
+    let watching = std::sync::Arc::clone(&peak);
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let halt = std::sync::Arc::clone(&stop);
+
+    // A sampler rather than a hook: what is being measured is a property of the
+    // running process, and asking the process is the only way to learn it that
+    // cannot be satisfied by the code under test agreeing with itself.
+    let sampler = thread::spawn(move || {
+        while !halt.load(Ordering::Relaxed) {
+            let now = open_descriptors();
+            watching.fetch_max(now, Ordering::Relaxed);
+            thread::sleep(std::time::Duration::from_millis(2));
+        }
+    });
+
+    let moved = move_files(&root, &files, &destination);
+    stop.store(true, Ordering::Relaxed);
+    sampler.join().unwrap();
+
+    assert_eq!(
+        moved.materialised,
+        Ok(FILES as u32),
+        "the batch did not land"
+    );
+
+    let high = peak.load(Ordering::Relaxed);
+    let extra = high.saturating_sub(baseline);
+    eprintln!(
+        "[measure] {FILES} files: {baseline} descriptors before, {high} at the \
+         peak, {extra} extra"
+    );
+
+    // **Medido: 402 de mas antes de QYR-0391, 11 despues.** Dos descriptores
+    // por archivo -- el que lee en el origen y la parte abierta en el destino
+    // --, ninguno de los dos cerrado hasta el final de la transferencia.
+    //
+    // **Thirty-two, and the number is a ceiling with room, not a measurement.**
+    // What is being refused is the shape `O(files)`: two hundred files holding
+    // two hundred descriptors would blow through this by a factor of six, and
+    // anything under a few dozen is the `O(1)` this is checking for. The margin
+    // absorbs the sampler, the two sockets and whatever the harness holds.
+    assert!(
+        extra < 32,
+        "{FILES} files held {extra} extra descriptors at once. That is the \
+         shape of one-per-file, and ADR-0047 §3 caps a transfer at 256 files \
+         precisely because descriptors are a hard per-process limit -- 512 on \
+         the Windows CRT, commonly 1024 on Android"
+    );
+}

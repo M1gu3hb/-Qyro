@@ -1018,3 +1018,140 @@ fn resume_metadata_for_another_transfer_makes_the_part_an_orphan() {
         fs::read(from.path("a.bin")).unwrap()
     );
 }
+
+// ---------------------------------------------- los descriptores (QYR-0391)
+
+#[test]
+fn a_source_over_many_paths_does_not_hold_one_file_open_per_item() {
+    // Cuarenta items leidos en orden, que es como los lee el motor. Antes de
+    // QYR-0391 el origen abria en el primer trozo y no cerraba nunca, asi que
+    // al final habia cuarenta archivos abiertos a la vez; con doscientos, y con
+    // los del destino, la cuenta medida fueron 402 descriptores de mas.
+    let from = Scratch::new("source-handles");
+    const ITEMS: u32 = 40;
+    let mut paths = std::collections::BTreeMap::new();
+    for index in 1..=ITEMS {
+        let path = from.path(&format!("f{index:02}.bin"));
+        write_pattern(&path, 64);
+        paths.insert(index, path);
+    }
+    let source = FileSource::new(paths);
+
+    let mut buffer = [0u8; 64];
+    for index in 1..=ITEMS {
+        assert_eq!(
+            source.read_at(index, 0, &mut buffer),
+            64,
+            "item {index} did not read"
+        );
+    }
+
+    let open = source.open_handles();
+    assert!(
+        open <= 8,
+        "{ITEMS} items dejaron {open} archivos abiertos a la vez; el tope son 8"
+    );
+
+    // Y lo que se cerro se vuelve a abrir: un item ya desalojado sigue
+    // sirviendo sus bytes. Un tope que rompe la lectura no es un tope, es un
+    // fallo con otro nombre.
+    let mut again = [0u8; 64];
+    assert_eq!(source.read_at(1, 0, &mut again), 64, "el primero ya no lee");
+    assert_eq!(again, buffer, "el primero devolvio otros bytes al reabrir");
+}
+
+#[test]
+fn a_descriptor_backed_source_never_closes_what_it_cannot_reopen() {
+    // El otro lado del tope, y el que importa de verdad: en Android el selector
+    // devuelve **descriptores**, no rutas (ADR-0034). Desalojar uno no ahorra
+    // nada -- se pierde el archivo, porque no hay forma de volver a abrirlo.
+    //
+    // Veinte, que son mas del tope de ocho a proposito.
+    use crate::manifest_builder::{PlannedOpenFile, descriptors_by_item};
+
+    let from = Scratch::new("descriptor-source");
+    const ITEMS: u32 = 20;
+    let mut planned = Vec::new();
+    for index in 1..=ITEMS {
+        let path = from.path(&format!("d{index:02}.bin"));
+        write_pattern(&path, 32);
+        planned.push(PlannedOpenFile {
+            handle: fs::File::open(&path).unwrap(),
+            relative: format!("d{index:02}.bin"),
+        });
+    }
+    let source = FileSource::from_open_files(descriptors_by_item(planned));
+
+    let mut first = [0u8; 32];
+    assert_eq!(source.read_at(1, 0, &mut first), 32);
+    for index in 2..=ITEMS {
+        let mut buffer = [0u8; 32];
+        assert_eq!(source.read_at(index, 0, &mut buffer), 32);
+    }
+
+    assert_eq!(
+        source.open_handles(),
+        ITEMS as usize,
+        "un origen de descriptores cerro alguno, y eso no se puede deshacer"
+    );
+
+    let mut again = [0u8; 32];
+    assert_eq!(
+        source.read_at(1, 0, &mut again),
+        32,
+        "el primer descriptor ya no sirve bytes: se cerro"
+    );
+    assert_eq!(again, first);
+}
+
+#[test]
+fn a_completed_item_stops_holding_its_part_file_open() {
+    // El destino tenia el mismo problema y por la otra punta: la parte se abria
+    // al primer trozo y sólo se cerraba en `finish_item`, que llega al final de
+    // **toda** la transferencia. Dos descriptores por archivo, no uno.
+    let from = Scratch::new("sink-handles-from");
+    let to = Scratch::new("sink-handles-to");
+    const ITEMS: usize = 12;
+    let mut files = Vec::new();
+    for index in 0..ITEMS {
+        let path = from.path(&format!("s{index:02}.bin"));
+        write_pattern(&path, 200);
+        files.push(plan(&path, &format!("s{index:02}.bin")));
+    }
+    let manifest = manifest_from_disk(7, 0, &files).expect("manifest");
+    let mut paths = std::collections::BTreeMap::new();
+    for (index, file) in files.iter().enumerate() {
+        paths.insert((index + 1) as u32, file.source.clone());
+    }
+    let source = FileSource::new(paths);
+    let mut sink = FileSink::new(&to.dir, &manifest).expect("sink");
+
+    // Todos los bytes de todos los items, y **ningun** `finish_item` todavia:
+    // ese es exactamente el momento en que estaban abiertos todos a la vez.
+    let mut buffer = vec![0u8; 200];
+    for item in manifest.items() {
+        let filled = source.read_at(item.item_id(), 0, &mut buffer);
+        assert_eq!(filled, 200);
+        sink.put(item.item_id(), 0, &buffer[..filled]).expect("put");
+    }
+    assert_eq!(
+        sink.open_part_handles(),
+        0,
+        "{ITEMS} items completos seguian con su parte abierta antes de verificar"
+    );
+
+    // Y un trozo que llega despues de completar -- un reenvio, una reanudacion
+    // -- reabre en vez de fallar.
+    sink.put(1, 0, &buffer[..200]).expect("reenvio");
+    for item in manifest.items() {
+        sink.finish_item(item.item_id()).expect("finish");
+    }
+    for index in 0..ITEMS {
+        let name = format!("s{index:02}.bin");
+        assert_eq!(
+            fs::read(to.path(&name)).unwrap(),
+            fs::read(from.path(&name)).unwrap(),
+            "{name} no llego identico"
+        );
+    }
+}

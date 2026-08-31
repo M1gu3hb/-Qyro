@@ -114,4 +114,10 @@ el gusto: en Android el selector devuelve descriptores, no rutas, así que una
 selección de unos miles no es una transferencia lenta sino un proceso agotado
 (ADR-0047 §3). Se rechaza **antes de abrir nada**.
 
+> **Y la cuenta debajo estuvo mal hasta 2026-08-31.** El techo suponía un
+> descriptor por archivo y eran dos, así que 256 archivos rozaban las 512
+> aperturas del CRT de Windows. Medido: 200 archivos abrían **402** de más;
+> ahora abren **11**, y no crecen con el número de archivos (QYR-0391,
+> ADR-0047 enmienda 1). El techo sigue siendo 256.
+
 Quedan pendientes los de ventana y tiempo de transferencia.

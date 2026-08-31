@@ -12,6 +12,68 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0391 — Doscientos archivos abrían cuatrocientos dos descriptores a la vez
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** en la única plataforma donde el límite es bajo, y el
+  síntoma llega en el archivo 250 de 256
+- Fecha: 2026-08-31
+
+**El defecto, medido.** Una transferencia de 200 archivos mantenía **402
+descriptores abiertos a la vez**:
+
+```
+[measure] 200 files: 4 descriptors before, 406 at the peak, 402 extra
+```
+
+Dos por archivo, y ninguno de los dos se cerraba hasta el final de **toda** la
+transferencia:
+
+- `rust/crates/qyro_fs/src/io.rs`, `FileSource::try_read`: abría el archivo en
+  el primer trozo y lo dejaba en `handles`. Nada lo quitaba nunca.
+- `rust/crates/qyro_fs/src/io.rs`, `FileSink::part_for`: abría el `.qyro-part`
+  en el primer trozo y sólo lo soltaba en `finish_item`, que corre al final,
+  cuando ya están todos abiertos.
+
+**Por qué importa, y por qué no se veía.** ADR-0047 §3 limita una transferencia
+a **256 archivos** y la razón escrita ahí son los descriptores: son un límite
+duro del proceso —512 en el CRT de Windows, 1024 es lo común en Android—. El
+límite estaba calculado contra un consumo de **uno por archivo**, y el real era
+**dos**. Con 256 archivos son ~512: exactamente el techo de Windows, alcanzado
+por una transferencia que el propio protocolo declara legal.
+
+Un proceso sin descriptores no falla en el archivo que los agota: falla en lo
+siguiente que necesite abrir algo, que puede ser el socket, el archivo de
+reanudación o la identidad. Por eso no se veía leyendo: nada en el código dice
+«descriptor».
+
+**La prueba, primero y en rojo.** `two_hundred_files_do_not_hold_two_hundred_-`
+`descriptors` en `rust/crates/qyro_session/tests/session_behaviour.rs` mide
+`/proc/self/fd` desde un hilo muestreador mientras la transferencia corre —
+preguntarle al proceso, y no al código si está de acuerdo consigo mismo—. Falló
+con los 402 de arriba. Y tres unitarias en `rust/crates/qyro_fs/src/tests.rs`:
+dos fallaron sin el arreglo (40 items → 40 abiertos; 12 items completos →
+12 partes abiertas), y la tercera es la guarda del arreglo.
+
+**El arreglo.**
+
+- El destino cierra la parte **en `put`**, en cuanto `written` alcanza el tamaño
+  que el manifiesto declara, no en `finish_item`. Se podía porque `finish_item`
+  ya calculaba el digest **por ruta** y no por ese descriptor. Un trozo que
+  llegue después —un reenvío, una reanudación— reabre: `FileSink::ready_part`.
+- El origen mantiene una caché de ocho, la más antigua sale
+  (`FileSource::remember`). Ocho y no uno porque el motor lee los items en
+  orden: con ocho no se reabre nada en la práctica.
+- **Y sólo se desaloja lo que tiene ruta.** En Android el selector devuelve
+  descriptores, no rutas (ADR-0034), y cerrar uno de ésos no ahorra un
+  descriptor: pierde el archivo, porque no hay forma de reabrirlo.
+  `a_descriptor_backed_source_never_closes_what_it_cannot_reopen` es esa
+  guarda, y se comprobó que tiene dientes: al hacer el desalojo incondicional,
+  falla.
+
+**Después del arreglo, medido igual:** `200 files: 4 descriptors before, 15 at
+the peak, 11 extra`. De 402 a 11, y los 11 no crecen con el número de archivos.
+
 ## QYR-0390 — Un archivo en la raíz de una unidad no se podía mandar
 
 - Estado: **CERRADO**
