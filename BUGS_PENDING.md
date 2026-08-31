@@ -12,6 +12,66 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0368 — El APK de release no podía abrir un socket
+
+- Estado: **CERRADO**
+- Severidad: **P0** (el producto entero, inutilizable en el único build que se instala)
+- Fecha: 2026-08-31
+
+**El defecto.** `android.permission.INTERNET` estaba declarado **sólo** en
+`apps/qyro/android/app/src/debug/AndroidManifest.xml` y en
+`apps/qyro/android/app/src/profile/AndroidManifest.xml`. Gradle fusiona `main`
+más el sourceSet **de la variante que construye**, así que ninguno de esos dos
+llega a una build de release: el manifiesto fusionado de
+`flutter build apk --release` no lo contenía ni una vez.
+
+Tres de los cuatro canales de Qyro son un socket TCP —la red local, el cable
+directo sin router y el descubrimiento— y empiezan en `qyro_net`:
+`TcpListener::bind` en `listener.rs`, `TcpStream::connect` en `stream.rs`. Sin el
+permiso los dos lanzan.
+
+**Lo que la persona habría visto:** `Permission denied (errno = 13)` desde una
+llamada de socket dentro de `libqyro_ffi.so`. Un mensaje que **no nombra ni a
+Qyro ni a un permiso**, en el único tipo de build que alguien instala. Debug y
+profile sí lo llevan, así que `flutter run`, el emulador y los tres trabajos de
+CI que construyen debug pasaban: **el único build que fallaba era el único que se
+instala.**
+
+**Y el comentario mentía en las dos direcciones.** La cabecera del manifiesto de
+`main` decía «The only permission this application declares» cuando ya había dos
+—`CHANGE_WIFI_MULTICAST_STATE` y `CAMERA`— y faltaba el tercero. Una frase así
+hace que la ausencia parezca deliberada, que es exactamente cómo sobrevivió.
+
+**Por qué ninguna prueba lo vio.** `apps/qyro/test/android_manifest_test.dart`
+comprobaba **sólo ausencias**: ninguna de almacenamiento, ningún
+`ACCESS_LOCAL_NETWORK`, y el conjunto exacto de permisos **del manifiesto
+fuente**. Un permiso que tiene que **estar** podía desaparecer y todo seguía
+verde. Es el mismo defecto que ese archivo se escribió para evitar —una medida
+que no puede ver el fallo para el que existe— aplicado a sí mismo.
+
+**El arreglo.** El permiso en `app/src/main/AndroidManifest.xml`, con su
+argumento al lado, y el comentario corregido. Y tres guardas, las tres rojas
+antes del cambio:
+
+1. `qyro_net::guards::the_android_manifest_declares_internet` — lee el manifiesto
+   fuente y corre dentro de `cargo test --workspace`, o sea en `scripts/gate.ps1`,
+   en cada commit y en cada plataforma. Está en `qyro_net` y no al lado del
+   manifiesto porque el fallo es de ese crate: es el crate cuyo propósito entero
+   se vuelve inalcanzable. Con su control, que prueba que el analizador lee
+   declaraciones y no prosa en los dos sentidos.
+2. `android_manifest_test.dart` — el conjunto exacto pasa de dos permisos a tres,
+   y una prueba aparte sólo para `INTERNET`, para que el fallo diga **cuál** y
+   **por qué** en vez de imprimir la diferencia de dos listas.
+3. `android_manifest_test.dart` sobre el manifiesto **fusionado de release**, que
+   es el único sitio donde se ve lo que un plugin añade o quita. Sólo release: el
+   fusionado de debug **sí** lleva `INTERNET` desde `app/src/debug/`, así que
+   afirmarlo ahí pasaría mientras el APK publicado sigue roto. `release.yml` pone
+   `QYRO_REQUIRE_RELEASE_MANIFEST=1` para que leer el de debug en ese trabajo sea
+   rojo y no un pase.
+
+**La pregunta que cierra esta ficha:** ¿puede el APK de release abrir un socket?
+**Sí, y hay una guarda que se pone roja el día que deje de poder.**
+
 ## QYR-0367 — Un commit de una línea de documentación compilaba el árbol dos veces
 
 - Estado: **CERRADO**

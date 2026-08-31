@@ -1,11 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- The only permission this application declares.
-         ADR-0035 section 7: NsdManager with FLAG_SHOW_PICKER needs no runtime
-         permission and no ACCESS_LOCAL_NETWORK - the user picking a service
-         *is* the grant, and it survives a reboot. CHANGE_WIFI_MULTICAST_STATE
-         is normal, granted at install, and is what lets the Wi-Fi stack stop
-         filtering multicast beneath the socket; without it a browse succeeds
-         and receives nothing, with no error at all.
+    <!-- Tres permisos, y cada uno con su argumento. Este comentario decia
+         "The only permission this application declares" y era falso en las dos
+         direcciones: habia dos, y faltaba el tercero sin el cual no funciona
+         nada.
+
+         El primero. ADR-0035 section 7: NsdManager with FLAG_SHOW_PICKER needs
+         no runtime permission and no ACCESS_LOCAL_NETWORK - the user picking a
+         service *is* the grant, and it survives a reboot.
+         CHANGE_WIFI_MULTICAST_STATE is normal, granted at install, and is what
+         lets the Wi-Fi stack stop filtering multicast beneath the socket;
+         without it a browse succeeds and receives nothing, with no error at
+         all.
 
          There is deliberately no storage permission: the Storage Access
          Framework needs none (ADR-0034 section 4), and if one ever appears here the
@@ -22,6 +27,33 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <!-- QYR-0368, P0, y el permiso sin el cual Qyro no es nada.
+
+         Estuvo declarado SOLO en app/src/debug/AndroidManifest.xml y en
+         app/src/profile/. Gradle fusiona `main` mas el sourceSet de la variante
+         que construye, asi que ninguno de esos dos llega a una build de
+         release: el APK que la gente instala no lo declaraba. Debug y profile
+         si, de modo que `flutter run` y el emulador funcionaban y el unico
+         build que fallaba era el unico que alguien instala.
+
+         Tres de los cuatro canales de Qyro son un socket TCP - la red local, el
+         cable directo sin router y el descubrimiento - y empiezan en
+         `qyro_net`: TcpListener::bind en listener.rs, TcpStream::connect en
+         stream.rs. Sin este permiso los dos lanzan, y lo que la persona ve es
+         "Permission denied (errno = 13)" desde dentro de la biblioteca nativa,
+         un mensaje que no nombra ni a Qyro ni a un permiso.
+
+         Es normal, se concede al instalar y NO se pide en tiempo de ejecucion,
+         asi que no anade ningun dialogo: el unico que se pide en ejecucion
+         sigue siendo CAMERA. Y no es un permiso de "internet" pese al nombre:
+         Android lo exige para abrir cualquier socket, tambien uno que nunca
+         sale de la red local.
+
+         Lo vigilan `qyro_net::guards::the_android_manifest_declares_internet`
+         sobre este archivo, y `test/android_manifest_test.dart` sobre el
+         manifiesto FUSIONADO de release, que es donde se ve lo que de verdad
+         se instala. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- QYR-0349. ADR-0025 section 3.4 decided `allowBackup=false` and nobody wrote
          it, so the application shipped with Android's default, which is **true**.
          Auto Backup would have copied the wrapped identity blob to Google Drive:

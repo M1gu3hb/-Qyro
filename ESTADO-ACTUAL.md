@@ -1,6 +1,37 @@
-# Estado actual — QYR-0365 cerrada, y no era del motor
+# Estado actual — el APK de release no podia abrir un socket
 
-**2026-08-20** · rama unica `main`
+**2026-08-31** · rama unica `main`
+
+## Fase 28 en marcha — la revision antes de la primera prueba en hardware
+
+El propietario va a probar Qyro en una PC y un telefono reales por primera vez.
+Esta tanda audita, arregla y deja escrito lo que hace falta para esa prueba.
+
+**QYR-0368, P0, arreglado.** `android.permission.INTERNET` estaba declarado
+**solo** en `app/src/debug/AndroidManifest.xml` y en `app/src/profile/`. Gradle
+fusiona `main` mas el sourceSet de la variante que construye, asi que ninguno de
+los dos llega a release: **el APK que la gente instala no lo declaraba.** Tres de
+los cuatro canales de Qyro son un socket TCP, asi que el APK construido no podia
+transferir nada; lo que se ve en el telefono es `Permission denied (errno = 13)`
+desde dentro de la biblioteca nativa, sin nombrar ni a Qyro ni a un permiso.
+
+**Por que nadie lo vio:** `android_manifest_test.dart` solo comprobaba
+**ausencias**. Un permiso que tiene que **estar** podia desaparecer y todo seguia
+verde. Ahora hay tres guardas: una en `qyro_net::guards` sobre el manifiesto
+fuente —corre en la puerta, en cada commit—, el conjunto exacto de tres permisos
+en Dart, y la afirmacion sobre el manifiesto **fusionado de release**, con
+`QYRO_REQUIRE_RELEASE_MANIFEST=1` en `release.yml` para que leer el de debug alli
+sea rojo.
+
+**`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
+«no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
+archivos». Falso desde la fase 12.
+
+---
+
+## Lo anterior — QYR-0365 cerrada, y no era del motor
+
+**2026-08-20**
 
 ## Lo que costo tres sesiones
 
