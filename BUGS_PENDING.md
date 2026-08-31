@@ -12,6 +12,32 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0390 — Un archivo en la raíz de una unidad no se podía mandar
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA** (y el mensaje culpaba al nombre del archivo)
+- Fecha: 2026-08-31
+
+**El defecto.** `_commonRoot(['D:\\video.mp4'])` deja `prefix` en `['D:']`, y
+unir eso da **`D:`**. En Windows `D:` **no es** la raíz de la unidad: es «el
+directorio actual de la unidad D», que es otra cosa y tiene su propia historia.
+
+El motor hace `strip_prefix(root)` sobre cada ruta (ADR-0026, para que el nombre
+que viaja sea el resto), y `D:\video.mp4` **no empieza por `D:` en componentes**:
+uno lleva raíz y el otro no. Así que mandar cualquier archivo que esté en la raíz
+de una unidad salía como `BadArgument`.
+
+**Y desde QYR-0375 —de esta misma tanda— `BadArgument` en el envío se explica
+como «ese archivo no se puede poner en este cable: el nombre fue rechazado».** Lo
+cual, para un archivo llamado `video.mp4`, es una acusación falsa contra un nombre
+perfectamente normal. El arreglo de un mensaje puede empeorar otro defecto cuando
+el defecto está en otra parte.
+
+**El arreglo.** Cuando el prefijo se reduce a una letra de unidad, se le añade el
+separador. La comprobación es estrecha a propósito —una letra y dos puntos—
+porque un directorio llamado `datos:` no existe en Windows y no puede confundirse
+con esto.
+
 ## QYR-0389 — Pulsar «Recibir» dos veces arrancaba dos receptores sobre el mismo puerto
 
 - Estado: **CERRADO**

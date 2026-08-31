@@ -231,6 +231,13 @@ libre; lo tiene otro programa» -- siendo el otro programa Qyro. Y el segundo pi
 el estado mientras el primero sigue vivo, asi que la pantalla ensena el fallo del
 segundo mientras el primero sigue escuchando de verdad.
 
+**QYR-0390.** `_commonRoot(['D:\\video.mp4'])` devolvia **`D:`**, que en Windows
+no es la raiz de la unidad sino «el directorio actual de la unidad D». El motor
+hace `strip_prefix(root)` y `D:\video.mp4` no empieza por `D:` en componentes,
+asi que mandar cualquier archivo de la raiz de una unidad salia como
+`BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
+una acusacion falsa contra un `video.mp4` perfectamente normal.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

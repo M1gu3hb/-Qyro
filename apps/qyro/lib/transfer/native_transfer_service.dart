@@ -730,7 +730,24 @@ final class NativeTransferService implements QyroTransferService {
       }
       prefix = prefix.sublist(0, shared);
     }
-    return prefix.isEmpty ? separator : prefix.join(separator);
+    if (prefix.isEmpty) return separator;
+
+    // **Un archivo en la raíz de una unidad** (QYR-0390). `D:\video.mp4` deja
+    // `prefix` en `['D:']`, y unir eso da **`D:`** — que en Windows no es la
+    // raíz de la unidad, es «el directorio actual de la unidad D», una cosa
+    // distinta y con historia propia. El motor hace `strip_prefix(root)` sobre
+    // cada ruta, y `D:\video.mp4` no empieza por `D:` en componentes: uno lleva
+    // raíz y el otro no. Así que mandar cualquier cosa que esté en la raíz de
+    // una unidad salía como `BadArgument`.
+    //
+    // El separador lo convierte en la raíz de verdad. Y la comprobación es
+    // estrecha a propósito -- una letra y dos puntos -- porque un directorio
+    // que se llame `datos:` no existe en Windows y no puede confundirse con esto.
+    final root = prefix.join(separator);
+    if (prefix.length == 1 && RegExp(r'^[A-Za-z]:$').hasMatch(prefix.first)) {
+      return '$root$separator';
+    }
+    return root;
   }
 }
 
