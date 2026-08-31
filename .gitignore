@@ -9,6 +9,22 @@ config/features.json
 .env
 .env.*
 
+# Las contrasenas del almacen de claves. `*.jks` y `*.keystore` protegen el
+# almacen y no lo que lo abre: `apps/qyro/android/key.properties` lleva
+# storePassword, keyPassword, keyAlias y storeFile en texto plano
+# --`app/build.gradle.kts` lee esas cuatro claves de ahi-- y este repositorio es
+# publico.
+#
+# Ya estaba cubierto, pero por `apps/qyro/android/.gitignore`, que **lo genera
+# Flutter**: un `flutter create .` sobre el proyecto existente lo reescribe desde
+# la plantilla. La cobertura era real y prestada. Esta linea es la copia que este
+# repositorio si controla.
+#
+# El `.example` sigue commiteado a proposito: es como se aprende que necesita el
+# archivo de verdad, y no tiene ningun secreto dentro.
+# Lo vigila `qyro_core`, tests/repository_contract.rs.
+key.properties
+
 # Rust
 target/
 # cargo-mutants working directory. Tool output belongs in a report with its
