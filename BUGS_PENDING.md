@@ -113,6 +113,18 @@ vez de creerse el comentario. La protección era real; la razón escrita, no.
 `kilobyte_pages`, en el contrato de repositorio que corre dentro del gate. Falló
 con «there is no `[target.aarch64-linux-android]` in .cargo/config.toml».
 
+**Y comprobado sobre el objetivo de verdad, no sobre un ejemplo.** Este
+contenedor tiene instalado `aarch64-linux-android` (aunque no un NDK con el que
+enlazar), así que se puede mirar qué recibe `rustc`:
+
+```
+cargo build --release -p qyro_ffi --target aarch64-linux-android -v
+  -> link-arg=-Wl,-z,max-page-size=16384        (2 invocaciones, las dos con el flag)
+
+RUSTFLAGS="-C opt-level=2" cargo build ... -v
+  -> 0 apariciones                              (la tabla desaparece entera)
+```
+
 **El arreglo.** Las tres tablas de Android en `.cargo/config.toml`, con el flag.
 Ahora lo lleva **cualquiera** que construya. Es redundante con CI, y la
 redundancia es el punto: si `RUSTFLAGS` está puesto esta tabla se pierde, y si no

@@ -47,6 +47,13 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # Es redundante con CI --que exporta el mismo flag en `RUSTFLAGS`-- y la
 # redundancia es el punto: si `RUSTFLAGS` esta puesto, esta tabla se pierde
 # (ver arriba), y si no lo esta, esta tabla es lo unico que hay.
+#
+# Comprobado sobre el objetivo de verdad y no sobre un ejemplo:
+#
+#   cargo build --release -p qyro_ffi --target aarch64-linux-android -v
+#     -> link-arg=-Wl,-z,max-page-size=16384
+#   RUSTFLAGS="-C opt-level=2" cargo build ... -v
+#     -> 0 apariciones
 
 [target.aarch64-linux-android]
 rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

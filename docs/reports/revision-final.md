@@ -10,8 +10,10 @@ teléfono ni un PC con Windows. La página que hay que leer antes de enchufar do
 aparatos es [`lo-que-no-se-ha-probado.md`](lo-que-no-se-ha-probado.md), y sus
 veintiséis huecos siguen en blanco.
 
-**La puerta, en el commit que este informe nombra.** `7217323`, medido en este
-contenedor Linux:
+**La puerta, en el commit que este informe nombra.** `7e61b98`, medido en este
+contenedor Linux. Los commits posteriores de esta tanda cambian **sólo
+documentos y este archivo**, y las guardas que los leen corren en esa misma
+puerta, así que un documento roto la pone en rojo igual que un `.rs`:
 
 | | |
 |---|---|
@@ -408,6 +410,12 @@ contenedor no tiene Flutter ni SDK de Android.
 - **Quién lo pide:** desde QYR-0394, `.cargo/config.toml`, en las tres tablas de
   Android. Antes dependía de que quien construyera tuviera el NDK 28 o más nuevo
   **y se acordara**; CI lo pasaba a mano y la guía del propietario no.
+- **Y que la petición llega, comprobado sobre el objetivo de verdad.** Este
+  contenedor tiene `aarch64-linux-android` instalado (sin NDK con el que
+  enlazar, así que el enlace falla — pero lo que se mira es qué recibe `rustc`):
+  `cargo build -p qyro_ffi --target aarch64-linux-android -v` pasa
+  `link-arg=-Wl,-z,max-page-size=16384`, y con `RUSTFLAGS` puesto a otra cosa
+  **desaparece: 0 apariciones**. Por eso la guía dice que no se ponga a mano.
 
 ### 4.10 Cada capacidad de la tabla de paridad, ¿tiene llamante de producción?
 
