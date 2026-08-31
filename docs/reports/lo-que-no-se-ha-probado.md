@@ -57,6 +57,9 @@ Para que la lista de arriba no se lea como «no se sabe nada»:
 | Un nombre con un retorno de carro | **Sí**: rechazado antes de tocar el socket, y no reescribe el terminal al imprimirse |
 | Un nombre con un `U+202E` (RTL override) | **Sí**: rechazado igual |
 | Una huella que no coincide | **Sí**: `REFUSED`, sin «continuar de todos modos» |
+| Descriptores abiertos con 200 archivos | **402 antes, 11 después** (QYR-0391). Contados en `/proc/self/fd` por un hilo muestreador **mientras la transferencia corre**, no deducidos |
+| Una persona que tarda **65 s** en aceptar | **Antes**: el emisor moría a los 60,11 s con «el otro aparato no responde». **Después**: entregado a los 65,76 s (QYR-0393) |
+| Quitar la comprobación de caracteres de control del validador de nombres | **3 pruebas en rojo**. Quitar la de caracteres de formato Unicode: **6**. Ejecutado, y el árbol restaurado |
 
 **Todo eso es Linux, en un contenedor, con un binario de depuración.** Ninguna de
 esas cifras dice nada sobre Windows ni sobre Android.

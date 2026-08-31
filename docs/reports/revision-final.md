@@ -10,14 +10,14 @@ teléfono ni un PC con Windows. La página que hay que leer antes de enchufar do
 aparatos es [`lo-que-no-se-ha-probado.md`](lo-que-no-se-ha-probado.md), y sus
 veintiséis huecos siguen en blanco.
 
-**La puerta, en el commit que este informe nombra.** `a466d7e`, medido en este
+**La puerta, en el commit que este informe nombra.** `7217323`, medido en este
 contenedor Linux:
 
 | | |
 |---|---|
 | `cargo fmt --all --check` | limpio |
 | `cargo clippy --workspace --all-targets -- -D warnings` | limpio |
-| `cargo test --workspace` | **814 pruebas, 0 fallos** |
+| `cargo test --workspace` | **816 pruebas, 0 fallos** |
 | `cargo test --workspace --all-features` | verde |
 | `cargo test --doc --workspace` | verde |
 | `cargo doc --workspace --no-deps` | verde |
@@ -162,24 +162,27 @@ capacidad no existe. Encontró nueve, y **cinco eran ciertas**.
 
 ### 2.9 EL BIBLIOTECARIO — documentos contra código (12)
 
-El dominio con más hallazgos, y con la tasa de acierto más alta: **doce de doce
-eran ciertos**, porque un documento que se contradice con el código no necesita
-un escenario que falle — basta abrir los dos.
+El dominio con más hallazgos, y casi con la tasa de acierto más alta: **once de
+doce eran ciertos**, porque un documento que se contradice con el código no
+necesita un escenario que falle — basta abrir los dos. El que falla es el que
+decía que `STATUS.md` afirma que los aparatos «no se encuentran solos»:
+`STATUS.md:14-15` dice **«Y también se encuentran solos cuando la red lo
+permite»**, y lo decía ya. Un hallazgo del BIBLIOTECARIO también se comprueba.
 
 | Sev | Hallazgo | Hoy |
 |---|---|---|
 | P1 | `README` manda a `docs/GUIA-DE-PRUEBA.md`, que no existía | **Arreglado**: la guía existe |
 | P1 | `cargo test --workspace` está en rojo en `main` por seis citas de paridad | **Arreglado**, y con guarda |
 | P1 | El protocolo de hardware copia una DLL que ningún paso suyo construye | **Arreglado** — QYR-0377 |
-| P1 | `docs/release/v1.0.md` dice «no se encuentran solos y no se escanea» | **Abierto** — §5 |
+| P1 | `docs/release/v1.0.md` dice «no se encuentran solos y no se escanea» | **Arreglado** — QYR-0395, con cabecera y sin reescribir el cuerpo |
 | P2 | El número de escenarios de hardware es falso en cinco documentos | **Abierto** — §5 |
-| P2 | `STATUS.md` dice que los aparatos «no se encuentran solos» | **Abierto** — §5 |
+| P2 | `STATUS.md` dice que los aparatos «no se encuentran solos» | **Falso**: `STATUS.md:15` dice lo contrario y lo decía ya |
 | P2 | `check_docs_consistency.sh` sale con código 1 | **Arreglado**: hoy sale `[OK]` |
-| P2 | `STATUS.md` publica hashes que `docs/release/v1.0.md` dice retirados | **Abierto** — §5 |
-| P2 | `SECURITY.md` abre con «no hay transferencia real» y promete TLS 1.3 | **Abierto** — §5 |
-| P3 | `ARCHITECTURE.md` dice que lo único implementado es `qyro_core` | **Abierto** — §5 |
-| P3 | La ficha de `docs/release/v1.0.md` tiene cuatro cifras falsas | **Abierto** — §5 |
-| P3 | `RELEASES.md` dice que no hay release, con v1.0.0 etiquetada | **Abierto** — §5 |
+| P2 | `STATUS.md` publica hashes que `docs/release/v1.0.md` dice retirados | **Arreglado, y era peor de lo que decía** — QYR-0395, §3.5 |
+| P2 | `SECURITY.md` abre con «no hay transferencia real» y promete TLS 1.3 | **Arreglado** — QYR-0395 |
+| P3 | `ARCHITECTURE.md` dice que lo único implementado es `qyro_core` | **Arreglado** — QYR-0395 |
+| P3 | La ficha de `docs/release/v1.0.md` tiene cuatro cifras falsas | **Arreglado** — QYR-0395, listadas en su cabecera |
+| P3 | `RELEASES.md` dice que no hay release, con v1.0.0 etiquetada | **Arreglado** — QYR-0395 |
 
 **Y el que este informe añade a ese dominio, medido:** `.cargo/config.toml`
 explicaba que una tabla por objetivo no la pisa `RUSTFLAGS`. **La pisa**, y está
@@ -219,6 +222,23 @@ guarda». El refutador: *«Refutado a medias, pero el defecto sobrevive. El bot�
 SÍ tiene guarda: `transfer_screens.dart:743` es `onPressed: _listening ? null
 : …`»* — porque QYR-0389 ya la había puesto. **Lo que no tiene arreglo es la
 otra mitad:** el isolate sigue sin poder cancelarse.
+
+### 3.5 El que resultó ser peor de lo que decía, verificado contra la API
+
+«`STATUS.md` publica como artefactos de la v1.0.0 los dos hashes que
+`docs/release/v1.0.md` dice que se retiraron.» Cierto, y con dos agravantes que
+sólo aparecen preguntándole a GitHub en vez de a otro documento:
+
+1. **La Release existe y es pública.** `STATUS.md` decía «No existe una GitHub
+   Release». Existe desde el 2026-08-17, marcada prerelease, titulada **«Qyro
+   v1.0.0 — RETRACTADO: estos binarios no pueden enviar»**.
+2. **Ya la ha descargado alguien.** `download_count: 2` en el APK y 2 en el ZIP
+   de Windows.
+
+Y el hash es lo que convierte una descarga en una certeza, así que publicar el
+equivocado no es un error de documentación: **es confirmarle a alguien un binario
+que este proyecto le pide borrar.** Arreglado en QYR-0395, con los digests que
+GitHub sirve hoy y una guarda que impide que los retirados vuelvan.
 
 ### 3.4 Los trece que aguantaron el juicio completo
 
@@ -439,13 +459,13 @@ QYR-0382, que es la que impide que «esta clave ha cambiado» pueda ocurrir.
 - Las carpetas del manifiesto **se crean antes de que la persona acepte**, y
   rechazar no las borra.
 
-**De los documentos** (los ocho del BIBLIOTECARIO que siguen en pie):
-`docs/release/v1.0.md` dice que los aparatos «no se encuentran solos y no se
-escanea»; `STATUS.md` repite lo primero y publica dos hashes retirados;
-`SECURITY.md` abre con «no hay transferencia real» y promete TLS 1.3;
-`ARCHITECTURE.md` dice que lo único implementado es `qyro_core`; `RELEASES.md`
-dice que no hay release; y el número de escenarios de hardware es falso en cinco
-documentos.
+**De los documentos, uno.** Los otros siete se arreglaron en QYR-0395, con tres
+guardas nuevas que corren en el gate. El que queda: **el número de escenarios de
+hardware es falso en cinco documentos**, y en un sexto sitio que no es un
+documento — las notas de la Release publicada dicen «los veinte escenarios» y el
+protocolo tiene veintiséis. Se deja abierto y no se toca hoy: cambiar un número
+en seis sitios el día antes de una prueba de hardware es exactamente el tipo de
+edición que rompe otra cosa.
 
 **Ninguno de estos bloquea la prueba de hoy.** Los tres que la bloqueaban —el
 linker de Android, la DLL que nadie construía y el permiso `INTERNET` que faltaba
