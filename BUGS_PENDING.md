@@ -12,6 +12,50 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0387 — El script de firma deshacía la alineación de 16 KB que acababa de medirse
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (produce un APK que no carga en Android 15, y no se ve hasta instalarlo)
+- Fecha: 2026-08-31
+
+**El defecto.** `scripts/sign_release_apk.ps1` re-alinea el APK antes de firmarlo:
+
+```powershell
+& $zipalign -p -f 4 $stripped $aligned
+```
+
+`-p` alinea los `.so` sin comprimir **a la página**, y hasta build-tools 34 esa
+página son **4 KB**. Android 15 corre con páginas de **16 KB** en aparatos
+nuevos.
+
+**Así que este script tiraba la alineación que el NDK había puesto** — después de
+que la fase 27 la midiera sobre el APK, y **sobre el artefacto que se publica**,
+que es el único que alguien instala. La medida era correcta y se tomaba sobre el
+paquete equivocado: el de antes de firmar.
+
+**Y el valor por omisión hacía el arreglo imposible de aplicar.** `$BuildTools`
+estaba clavado en `34.0.0`, y el flag `-P` —el que fija el tamaño de página—
+**no existe antes de build-tools 35**.
+
+**El arreglo.**
+
+- `zipalign -P 16 -f 4`.
+- `$BuildTools` deja de tener un valor fijo: se resuelve la versión **más nueva**
+  instalada, ordenando por versión y no alfabéticamente —`9.0.0` es mayor que
+  `35.0.0` en texto— y **se para al empezar** si es anterior a la 35, en vez de
+  fallar a mitad de una firma. Un valor por omisión que no puede hacer el trabajo
+  es peor que ninguno.
+- Y el APK **firmado** pasa por `inspect_apk.py` antes de imprimir su hash.
+  Firmar es lo último que toca el paquete, así que es lo último que puede
+  romperlo: medir antes de firmar mide otro archivo.
+
+**Lo que este arreglo NO puede decir:** el script no se ha ejecutado. Necesita
+PowerShell, un `key.properties` y un SDK de Android, y aquí no hay ninguno de los
+tres. Lo que sí se ha comprobado es que **ninguna comilla invertida quede dentro
+de una cadena entrecomillada** — el primer borrador metió tres en un `throw`, y
+en PowerShell la comilla invertida es el carácter de escape: habría roto el
+script en el sitio exacto donde intenta explicar un error.
+
 ## QYR-0386 — Ocho códigos del motor salían todos como «llegó algo que no verificó»
 
 - Estado: **CERRADO**

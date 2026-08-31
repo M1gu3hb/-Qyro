@@ -249,6 +249,20 @@ Si `adb` no existe, viene con las herramientas de Android; también sirve copiar
 el `.apk` al teléfono y abrirlo desde el explorador de archivos, aceptando
 «instalar de orígenes desconocidos» cuando lo pida.
 
+> **El APK que construyes va firmado con la clave de depuración**, y eso está
+> bien para probar. Lo que hay que saber es la consecuencia: **Android no deja
+> actualizar** una aplicación con otra firmada por una clave distinta. Así que el
+> día que instales una versión firmada de verdad, tendrás que **desinstalar
+> primero** — y desinstalar **borra la identidad del teléfono**, con lo que su
+> huella cambia y hay que volver a leer los códigos.
+>
+> Mientras uses los APK que tú construyes, se actualizan entre ellos sin
+> problema.
+>
+> Y si al instalar sale «la aplicación no se ha instalado» sin más explicación,
+> casi siempre es esto: ya hay una Qyro instalada con otra firma. `adb uninstall
+> dev.qyro.app` y repite.
+
 **Qué permisos pide, y cuándo:**
 
 | Permiso | Cuándo se pide | Qué pasa si dices que no |

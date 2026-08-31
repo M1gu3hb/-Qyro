@@ -30,7 +30,15 @@ param(
     [Parameter(Mandatory = $true)][string]$InputApk,
     [Parameter(Mandatory = $true)][string]$OutputApk,
     [string]$KeyProperties = "$PSScriptRoot\..\apps\qyro\android\key.properties",
-    [string]$BuildTools = 'D:\android-sdk\build-tools\34.0.0'
+    # **Sin valor fijo, y la version importa** (QYR-0387). Estaba clavado en
+    # `34.0.0`, y el flag `-P` de `zipalign` -- el que alinea a 16 KB, que es lo
+    # que Android 15 exige -- no existe antes de build-tools 35. Un valor por
+    # omision que no puede hacer el trabajo es peor que ninguno: falla en la
+    # linea de zipalign, a mitad de una firma, en vez de al empezar.
+    #
+    # Se resuelve el mas nuevo que haya instalado. Si no hay ninguno, se dice
+    # aqui y no tres pasos mas tarde.
+    [string]$BuildTools
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +46,27 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $InputApk)) { throw "No such APK: $InputApk" }
 if (-not (Test-Path -LiteralPath $KeyProperties)) {
     throw "No key.properties at $KeyProperties. It is deliberately not in the repository; see apps/qyro/android/key.properties.example."
+}
+
+if (-not $BuildTools) {
+    $sdk = if ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT }
+           elseif ($env:ANDROID_HOME) { $env:ANDROID_HOME }
+           else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
+    $root = Join-Path $sdk 'build-tools'
+    if (-not (Test-Path -LiteralPath $root)) {
+        throw "No hay build-tools en $root. Instalalos desde Android Studio (SDK Manager, SDK Tools), o pasa -BuildTools con la ruta."
+    }
+    # Orden por version y no alfabetico: '9.0.0' es mayor que '35.0.0' en texto.
+    $newest = Get-ChildItem -LiteralPath $root -Directory |
+        Where-Object { $_.Name -as [version] } |
+        Sort-Object { [version]$_.Name } -Descending |
+        Select-Object -First 1
+    if (-not $newest) { throw "No hay ninguna version de build-tools en $root" }
+    if ([version]$newest.Name -lt [version]'35.0.0') {
+        throw "build-tools $($newest.Name) es demasiado antiguo: el flag -P de zipalign, que alinea a 16 KB para Android 15, existe desde la 35. Instala una mas nueva."
+    }
+    $BuildTools = $newest.FullName
+    Write-Host "build-tools: $BuildTools"
 }
 
 $apksigner = Join-Path $BuildTools 'apksigner.bat'
@@ -76,9 +105,23 @@ try {
 
     # zipalign before signing: apksigner preserves alignment, the other order
     # does not.
+    #
+    # **`-P 16`, y sin eso este script deshacia el trabajo del enlazador.**
+    # QYR-0387: `-p` alinea los `.so` sin comprimir a la pagina, y hasta
+    # build-tools 34 esa pagina son **4 KB**. Android 15 corre con paginas de
+    # **16 KB** en aparatos nuevos, asi que re-alinear a 4 aqui tiraba la
+    # alineacion que el NDK habia puesto -- despues de medirla, y sobre el
+    # artefacto que se publica.
+    #
+    # `-P <kb>` existe desde build-tools 35. Si esta caja tiene una mas vieja,
+    # el flag se rechaza y el script para: parar es correcto, porque firmar con
+    # una herramienta que no sabe alinear a 16 KB produce un APK que no carga en
+    # un telefono nuevo, y eso no se ve hasta que alguien lo instala.
     $aligned = Join-Path $work 'aligned.apk'
-    & $zipalign -p -f 4 $stripped $aligned
-    if ($LASTEXITCODE -ne 0) { throw "zipalign failed with $LASTEXITCODE" }
+    & $zipalign -P 16 -f 4 $stripped $aligned
+    if ($LASTEXITCODE -ne 0) {
+        throw "zipalign -P 16 fallo con $LASTEXITCODE. Necesita build-tools 35 o mas nuevo, porque el flag -P no existe antes. Sin el, el .so queda alineado a 4 KB y no carga en Android 15."
+    }
 
     & $apksigner sign `
         --ks $store `
@@ -93,6 +136,19 @@ try {
     Write-Host '=== the certificate it is actually signed with ==='
     & $apksigner verify --print-certs --verbose $OutputApk
     if ($LASTEXITCODE -ne 0) { throw "apksigner verify failed with $LASTEXITCODE" }
+
+    Write-Host ''
+    Write-Host '=== las ABIs y los 16 KB, medidos sobre el APK firmado ==='
+    # QYR-0387. Firmar es lo ultimo que toca el paquete, asi que es lo ultimo
+    # que puede romperlo: medir antes de firmar mide otro archivo.
+    $inspector = Join-Path $PSScriptRoot '..\tools\apk_inspector\inspect_apk.py'
+    if (Test-Path -LiteralPath $inspector) {
+        & python3 $inspector $OutputApk --require-abi arm64-v8a --require-abi armeabi-v7a
+        if ($LASTEXITCODE -ne 0) { throw 'el APK firmado no pasa la inspeccion' }
+    }
+    else {
+        Write-Host "[SKIP] no esta $inspector, asi que nadie mide el APK firmado"
+    }
 
     Write-Host ''
     Write-Host '=== SHA-256, for docs/release/v1.0.md ==='

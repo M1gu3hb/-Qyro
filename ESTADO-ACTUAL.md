@@ -204,6 +204,17 @@ sintoma del P0 de QYR-0376, asi que la pantalla decia «los datos llegaron mal»
 cuando no habia llegado nada. Y `badArgument`, que es el unico que se corrige
 escribiendo. Tres clases nuevas con sus frases en los dos idiomas.
 
+**QYR-0387.** `sign_release_apk.ps1` re-alineaba el APK con `zipalign -p -f 4`
+antes de firmarlo, y `-p` alinea a la pagina, que hasta build-tools 34 son **4
+KB**. Asi que **deshacia la alineacion de 16 KB** que el NDK habia puesto --
+despues de que la fase 27 la midiera, y sobre el artefacto que se publica. Y el
+valor por omision de `$BuildTools` estaba clavado en `34.0.0`, donde el flag `-P`
+ni existe. Ahora es `-P 16`, la version se resuelve a la mas nueva instalada
+ordenando por VERSION y no alfabeticamente, se para al empezar si es anterior a
+la 35, y el APK **firmado** pasa por el inspector antes de imprimir su hash:
+firmar es lo ultimo que toca el paquete, asi que medir antes de firmar mide otro
+archivo.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.
