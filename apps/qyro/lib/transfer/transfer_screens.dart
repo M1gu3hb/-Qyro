@@ -828,6 +828,7 @@ class TransferStatus extends StatelessWidget {
         QyroFailureKind.cancelled => strings.sendCancelledByUser,
         QyroFailureKind.noRoom => strings.receiveNoRoom,
         QyroFailureKind.tooManyFiles => strings.sendTooManyFiles,
+        QyroFailureKind.portUnavailable => strings.receivePortUnavailable,
       };
 
   static String _reasonText(

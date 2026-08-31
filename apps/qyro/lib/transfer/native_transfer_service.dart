@@ -569,6 +569,7 @@ final class NativeTransferService implements QyroTransferService {
         QyroCode.storageRefused => QyroFailureKind.noRoom,
         QyroCode.cancelled => QyroFailureKind.cancelled,
         QyroCode.tooManyFiles => QyroFailureKind.tooManyFiles,
+        QyroCode.portUnavailable => QyroFailureKind.portUnavailable,
         _ => QyroFailureKind.integrity,
       };
 

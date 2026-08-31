@@ -154,6 +154,16 @@ enum QyroFailureKind {
   /// que una persona puede corregir —mandar menos— asi que merece decirlo en vez
   /// de salir como «algo no verifico».
   tooManyFiles,
+
+  /// El puerto que el receptor iba a escuchar no esta disponible.
+  ///
+  /// ADR-0041 §3: se dice cual es y se ofrece elegir otro; **nunca** se mueve
+  /// solo al siguiente libre, porque un puerto que se mueve pierde el permiso
+  /// del cortafuegos y la prediccion del codigo, y los pierde sin avisar.
+  ///
+  /// En Windows es el caso que de verdad pasa: los rangos reservados por
+  /// Hyper-V, WSL2 y Docker rechazan la ligadura con el error 10013.
+  portUnavailable,
 }
 
 /// Everything a screen may ask of the engine.

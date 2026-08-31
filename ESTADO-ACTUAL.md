@@ -33,6 +33,16 @@ texto. Un par que abre y cierra, nunca «comillas donde las haya»: una comilla
 suelta es un codigo copiado corto, y uno truncado que **parsea** es peor que uno
 que no.
 
+**QYR-0370, arreglado.** ADR-0041 §3 decia que un puerto ocupado «se dice, no se
+mueve [...] y ofrece elegir otro», y el codigo no tenia palabra para decirlo:
+`open_receiver` mapeaba **toda** ligadura fallida a `BadArgument`. En Windows es
+el caso que pasa de verdad -- los rangos reservados por Hyper-V, WSL2 y Docker
+rechazan con `WSAEACCES` (10013), que ni siquiera es «en uso». Ahora hay
+`SessionError::PortUnavailable`, su codigo `-15` en la frontera C con su espejo en
+Dart y su frase en dos idiomas, `qyro recv --port <n>`, y un mensaje que nombra el
+puerto, el comando de `netsh` y por que Qyro **no** se mueve solo. Lo forzaron dos
+guardas que ya existian y que se pusieron rojas solas.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

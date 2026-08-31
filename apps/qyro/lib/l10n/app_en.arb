@@ -369,6 +369,10 @@
   "@receiveNoRoom": {
     "description": "Transfer interface string: receiveNoRoom."
   },
+  "receivePortUnavailable": "Port 49517 is not free on this machine, so nothing can listen on it. Another program has it, or Windows has reserved it for Hyper-V, WSL or Docker. Close the other program, or run the terminal version with another port: qyro recv --port 49518",
+  "@receivePortUnavailable": {
+    "description": "Transfer interface string: receivePortUnavailable."
+  },
   "historyEmpty": "Nothing has been transferred yet.",
   "@historyEmpty": {
     "description": "Transfer interface string: historyEmpty."

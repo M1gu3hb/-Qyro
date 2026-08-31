@@ -108,6 +108,10 @@ void main() {
       'receiveRefuse': (english.receiveRefuse, spanish.receiveRefuse),
       'receiveRefused': (english.receiveRefused, spanish.receiveRefused),
       'receiveNoRoom': (english.receiveNoRoom, spanish.receiveNoRoom),
+      'receivePortUnavailable': (
+        english.receivePortUnavailable,
+        spanish.receivePortUnavailable
+      ),
       'historyEmpty': (english.historyEmpty, spanish.historyEmpty),
       'historyFailed': (english.historyFailed, spanish.historyFailed),
       'historySucceeded': (english.historySucceeded, spanish.historySucceeded),

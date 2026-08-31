@@ -218,6 +218,27 @@ impl core::fmt::Debug for Session {
     }
 }
 
+/// Why a **bind** failed, which is not the same question as why a wire ended.
+///
+/// ADR-0041 §3 wants «that port is taken» to reach the person as its own fact,
+/// with the offer to choose another. Every other reason a bind fails is the
+/// caller's argument being wrong — an address this machine does not hold, a
+/// malformed one — and telling somebody to try another port there would send
+/// them looking in the wrong place.
+///
+/// `PermissionDenied` sits beside `AddrInUse` because of Windows: a bind inside
+/// a range reserved for Hyper-V, WSL2 or Docker fails with `WSAEACCES` (10013),
+/// not with «in use». Same fact to the person, same answer.
+fn bind_error(error: NetError) -> SessionError {
+    match error {
+        NetError::SocketFailed {
+            kind: std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied,
+            ..
+        } => SessionError::PortUnavailable,
+        _ => SessionError::BadArgument,
+    }
+}
+
 const fn net_error(error: &NetError) -> SessionError {
     if error.poisons() {
         SessionError::NotAuthenticated
@@ -536,7 +557,7 @@ impl Session {
         destination: &Path,
         observer: Option<ProgressObserver>,
     ) -> Result<Self, SessionError> {
-        let listener = Listener::bind(bind).map_err(|_| SessionError::BadArgument)?;
+        let listener = Listener::bind(bind).map_err(bind_error)?;
         let identity = crate::identity::current()?;
         let accepted = listener.accept().map_err(|error| net_error(&error))?;
         let established = respond(accepted, identity).map_err(|error| net_error(&error))?;

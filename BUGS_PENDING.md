@@ -12,6 +12,62 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0370 — Un puerto ocupado salía como «argumento no usable», y no había con qué elegir otro
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (el receptor no arranca, y el mensaje manda a mirar donde no es)
+- Fecha: 2026-08-31
+
+**Lo que la ADR decidió y el código no sabía decir.** ADR-0041 §3, con estas
+palabras: *«Si el puerto está ocupado: se dice, no se mueve. Nada de "siguiente
+libre en silencio". [...] Qyro dice qué puerto está ocupado y ofrece elegir
+otro.»*
+
+Lo que `Session::open_receiver` hacía era
+`Listener::bind(bind).map_err(|_| SessionError::BadArgument)`: **todas** las
+razones por las que una ligadura puede fallar colapsadas en la variante cuyo
+mensaje es «the address, port or path was not usable». Nada por encima podía
+distinguir «ese puerto está cogido» de «esa ruta está mal», así que nada por
+encima podía ofrecer otro puerto. Y `qyro recv` **no tenía bandera de puerto**,
+así que ni siquiera había con qué aceptar la oferta.
+
+**Una decisión escrita en una ADR que el código no puede expresar es una decisión
+que nadie implementó.**
+
+**Y en Windows no es teórico.** Windows reserva rangos TCP para Hyper-V, WSL2 y
+Docker —`netsh interface ipv4 show excludedportrange protocol=tcp` los enseña— y
+una ligadura dentro de uno falla con **`WSAEACCES`, 10013**, que `std` presenta
+como `PermissionDenied` y **no** como «en uso». Quien instaló Docker una vez hace
+dos años se encuentra un receptor que no arranca y un mensaje sobre un argumento
+que nunca escribió.
+
+**El arreglo, en las dos caras, porque la GUI tenía el mismo defecto.**
+
+- `SessionError::PortUnavailable` en el motor, con `AddrInUse` y
+  `PermissionDenied` mapeados a ella: para quien tiene la máquina delante las dos
+  significan *este puerto no es tuyo hoy*, y las dos se contestan igual.
+- `QYRO_ERR_PORT_UNAVAILABLE = -15` en la frontera C, su espejo en Dart, su
+  `QyroFailureKind` y su frase en los dos idiomas. Lo forzaron dos guardas que ya
+  existían: la que cuenta las variantes de `SessionError` contra los brazos de
+  `session_code`, y la que **lee `abi.rs`** y exige que Dart cubra cada código.
+  Las dos se pusieron rojas solas al añadir la variante, que es exactamente para
+  lo que están.
+- `qyro recv --port <n>`, y cuando el puerto no está libre: una frase que **nombra
+  el puerto**, nombra los dos motivos de Windows, da el comando de `netsh`,
+  explica **por qué Qyro no se mueve solo**, y pregunta por otro puerto si hay
+  terminal que pueda contestar.
+- Y `whoami_on(port)`: el código de emparejamiento se vuelve a imprimir en cada
+  intento **con el puerto de verdad dentro**. Enseñar el código de 49517 mientras
+  se escucha en 49518 sería enseñar una dirección donde no hay nadie.
+
+**Sin respaldo automático, y ésa es la mitad que no se hizo.** Un puerto que se
+mueve solo pierde las dos propiedades por las que ADR-0041 lo eligió fijo —un
+permiso de cortafuegos en vez de uno por sesión, y una cadena que se puede
+predecir— y las pierde sin avisar.
+
+**La pregunta que cierra esta ficha:** si el 49517 está ocupado, ¿sabe la persona
+qué pasó y cómo seguir? **Sí, y sin salir de la pantalla donde está.**
+
 ## QYR-0369 — El `|` del código de emparejamiento es una tubería en PowerShell y en `cmd`
 
 - Estado: **CERRADO**

@@ -1583,3 +1583,69 @@ fn el_progreso_dice_por_que_archivo_va() {
         }
     }
 }
+
+/// A port already in use has its own answer, and it is not «bad argument».
+///
+/// **ADR-0041 §3 decided this behaviour and the code did not have the vocabulary
+/// for it.** The ADR says, in those words: *«Si el puerto está ocupado: se dice,
+/// no se mueve. Qyro dice qué puerto está ocupado y ofrece elegir otro.»* What
+/// `open_receiver` actually did was
+/// `Listener::bind(bind).map_err(|_| SessionError::BadArgument)` — every reason a
+/// bind can fail collapsed into the one variant whose message is «the address,
+/// port or path was not usable». Nothing downstream could tell «that port is
+/// taken» from «that path is wrong», so nothing downstream could offer another
+/// port.
+///
+/// **This is not hypothetical on the machine this is for.** Windows reserves
+/// port ranges for Hyper-V, WSL2 and Docker (`netsh interface ipv4 show
+/// excludedportrange protocol=tcp`), and a bind inside one fails with
+/// `WSAEACCES` — **10013**, «permission denied» — not with «address in use». A
+/// person who installed Docker once, two years ago, gets a receiver that refuses
+/// to start and a message about an argument they never passed.
+///
+/// So both kinds map here: `AddrInUse` and `PermissionDenied`. They are the same
+/// fact to the person holding the machine — *this port is not yours today* — and
+/// the answer to both is the same: pick another one.
+#[test]
+fn a_port_that_is_taken_says_so_instead_of_blaming_the_arguments() {
+    let occupier = std::net::TcpListener::bind("127.0.0.1:0").expect("a free port to occupy");
+    let taken = occupier.local_addr().expect("the port it took");
+    let scratch = Scratch::new("port-taken");
+    ensure_identity();
+
+    // `open_receiver` blocks in `accept` once it binds, so this call is only
+    // ever safe in a test *because* the bind fails. That is also why the happy
+    // path has no assertion here.
+    let Err(refusal) = qyro_session::Session::open_receiver(taken, &scratch.dir, None) else {
+        panic!("binding a port somebody else holds cannot succeed");
+    };
+
+    assert_eq!(
+        refusal,
+        qyro_session::SessionError::PortUnavailable,
+        "a taken port came back as {refusal:?}, so nothing above this can offer \
+         another port -- which is what ADR-0041 §3 asks for"
+    );
+}
+
+/// The control: a bind that fails for a reason that **is** the caller's fault
+/// still says so.
+///
+/// Without this, mapping every bind failure to `PortUnavailable` would satisfy
+/// the test above and would tell a person to try another port when the address
+/// they typed does not exist on this machine.
+#[test]
+fn but_an_address_this_machine_does_not_have_is_still_a_bad_argument() {
+    let scratch = Scratch::new("address-absent");
+    ensure_identity();
+    // RFC 5737 documentation address. It is not assigned to any interface here,
+    // so the bind fails with `AddrNotAvailable` — a different fact, and one no
+    // amount of choosing another port fixes.
+    let elsewhere: std::net::SocketAddr = "192.0.2.1:49517".parse().expect("a literal address");
+
+    let Err(refusal) = qyro_session::Session::open_receiver(elsewhere, &scratch.dir, None) else {
+        panic!("binding an address this machine does not hold cannot succeed");
+    };
+
+    assert_eq!(refusal, qyro_session::SessionError::BadArgument);
+}

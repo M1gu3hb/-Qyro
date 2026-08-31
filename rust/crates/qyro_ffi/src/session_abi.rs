@@ -42,8 +42,8 @@ use qyro_session::{Progress, ProgressObserver, Session, SessionError, SessionSta
 use crate::abi::{
     QYRO_ERR_BAD_ARGUMENT, QYRO_ERR_CANCELLED, QYRO_ERR_IDENTITY_UNREADABLE,
     QYRO_ERR_NOT_AUTHENTICATED, QYRO_ERR_NULL_OUT, QYRO_ERR_PEER_UNREACHABLE, QYRO_ERR_POISONED,
-    QYRO_ERR_STORAGE_REFUSED, QYRO_ERR_TOO_MANY_FILES, QYRO_ERR_TRANSFER_REFUSED, QYRO_ERR_UNKNOWN,
-    QYRO_OK, guard,
+    QYRO_ERR_PORT_UNAVAILABLE, QYRO_ERR_STORAGE_REFUSED, QYRO_ERR_TOO_MANY_FILES,
+    QYRO_ERR_TRANSFER_REFUSED, QYRO_ERR_UNKNOWN, QYRO_OK, guard,
 };
 use crate::handle::HandleTable;
 
@@ -87,6 +87,7 @@ pub(crate) const fn session_code(error: SessionError) -> i32 {
         SessionError::StorageRefused => QYRO_ERR_STORAGE_REFUSED,
         SessionError::Cancelled => QYRO_ERR_CANCELLED,
         SessionError::IdentityUnreadable => QYRO_ERR_IDENTITY_UNREADABLE,
+        SessionError::PortUnavailable => QYRO_ERR_PORT_UNAVAILABLE,
         // Required: `SessionError` is `#[non_exhaustive]`. Never silently an
         // existing code -- see QYRO_ERR_UNKNOWN and the guard below.
         _ => QYRO_ERR_UNKNOWN,
@@ -866,8 +867,8 @@ mod tests {
 
         assert_eq!(
             declared.len(),
-            8,
-            "qyro_session declares {} variants, not the 8 this module translates: {declared:?}. \
+            9,
+            "qyro_session declares {} variants, not the 9 this module translates: {declared:?}. \
              Add the arm in session_code and a code in abi.rs, then update this number.",
             declared.len()
         );

@@ -14,11 +14,11 @@
     clippy::indexing_slicing
 )]
 
-use std::io::Write as _;
+use std::io::{IsTerminal as _, Write as _};
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 
-use qyro_session::{Protection, Session, SessionState, parse_pairing};
+use qyro_session::{Protection, Session, SessionError, SessionState, parse_pairing};
 use std::time::Duration;
 
 use crate::term::{self, Vt};
@@ -99,7 +99,16 @@ fn local_addresses() -> Vec<(String, IpAddr)> {
 }
 
 /// `qyro whoami` — the fingerprint and where this device can be reached.
+///
+/// On the fixed port, which is what a person running `whoami` on its own wants
+/// to know. `receive` calls [`whoami_on`] with the port it is really listening
+/// on, because a code that names a port nobody is on is worse than no code.
 pub fn whoami(vt: Vt) -> i32 {
+    whoami_on(DEFAULT_PORT, vt)
+}
+
+/// The same, for a receiver that had to move off the fixed port.
+pub fn whoami_on(port: u16, vt: Vt) -> i32 {
     if let Err(why) = ensure_identity() {
         eprintln!("qyro: {why}");
         return 1;
@@ -132,10 +141,7 @@ pub fn whoami(vt: Vt) -> i32 {
         let compact = fingerprint.replace('-', "");
         for (name, ip) in &addresses {
             println!("    [{name}]");
-            println!(
-                "    {}",
-                typeable(&format!("QYRO1|{ip}:{DEFAULT_PORT}|{compact}"))
-            );
+            println!("    {}", typeable(&format!("QYRO1|{ip}:{port}|{compact}")));
         }
     }
     println!();
@@ -239,8 +245,85 @@ pub fn send_interactive(vt: Vt) -> i32 {
     send(file.trim(), code.trim(), None, vt)
 }
 
-/// `qyro recv [--out <dir>]`.
-pub fn receive(out: Option<&str>, expect: Option<&str>, vt: Vt) -> i32 {
+/// Binds a receiver, and when the port is not available **says so and offers
+/// another** rather than moving on its own.
+///
+/// **ADR-0041 §3, verbatim:** *«Si el puerto está ocupado: se dice, no se mueve.
+/// Nada de "siguiente libre en silencio". Un puerto que se mueve solo pierde las
+/// dos propiedades por las que se eligió fijo —el permiso de firewall y la
+/// cadena predecible— y las pierde sin avisar, que es peor que fallar. Qyro dice
+/// qué puerto está ocupado y ofrece elegir otro.»*
+///
+/// So: no automatic fallback, ever. What there is instead is a sentence that
+/// names the port, names the two things that take it on Windows, and a prompt.
+///
+/// **On Windows this is the case that will actually happen**, and it is not
+/// «another Qyro is running». Windows reserves TCP ranges for Hyper-V, WSL2 and
+/// Docker — `netsh interface ipv4 show excludedportrange protocol=tcp` lists
+/// them — and a bind inside one fails with `WSAEACCES`, **10013**, which is a
+/// permission error and not an «in use» error. Somebody who installed Docker
+/// once, two years ago, meets it on their first run.
+///
+/// The pairing code is printed **again** on each attempt, deliberately: it
+/// carries the port inside, so the code for 49518 is a different code, and
+/// showing the old one would be showing an address nobody is on.
+fn listen_somewhere(port: Option<u16>, destination: &Path, vt: Vt) -> Option<Session> {
+    let mut port = port.unwrap_or(DEFAULT_PORT);
+    loop {
+        // The code is shown **before** binding, which is the whole of ADR-0041:
+        // the port is known in advance, so there is nothing to ask a socket.
+        let _ = whoami_on(port, vt);
+        println!("  waiting for the other device. Ctrl-C to stop.");
+
+        let bind = SocketAddr::from(([0, 0, 0, 0], port));
+        match Session::open_receiver(bind, destination, None) {
+            Ok(session) => return Some(session),
+            Err(SessionError::PortUnavailable) => {
+                eprintln!();
+                eprintln!(
+                    "{}qyro: port {port} is not free on this machine.{}",
+                    vt.red(),
+                    vt.reset()
+                );
+                eprintln!("  Another program holds it, or Windows has reserved it.");
+                eprintln!("  Windows reserves ranges for Hyper-V, WSL and Docker; to see them:");
+                eprintln!("    netsh interface ipv4 show excludedportrange protocol=tcp");
+                eprintln!();
+                eprintln!("  Qyro does not move to another port on its own: the port is in the");
+                eprintln!("  pairing code and in the firewall permission, so moving it quietly");
+                eprintln!("  would break both without saying so. Pick one and it will be in the");
+                eprintln!("  code the other device gets.");
+                eprintln!();
+
+                if !std::io::stdin().is_terminal() {
+                    eprintln!("  There is no terminal here to ask, so: qyro recv --port 49518");
+                    return None;
+                }
+                // `?` on purpose: end of input is a person pressing Ctrl-D,
+                // and giving up is the same answer as an empty line.
+                let answer = ask("  another port, or Enter to give up: ")?;
+                let answer = answer.trim();
+                if answer.is_empty() {
+                    return None;
+                }
+                match answer.parse::<u16>() {
+                    Ok(0) | Err(_) => {
+                        eprintln!("  '{answer}' is not a port. A port is 1 to 65535.");
+                        return None;
+                    }
+                    Ok(chosen) => port = chosen,
+                }
+            }
+            Err(error) => {
+                eprintln!("\nqyro: could not listen on port {port}: {error}");
+                return None;
+            }
+        }
+    }
+}
+
+/// `qyro recv [--out <dir>] [--port <n>]`.
+pub fn receive(out: Option<&str>, expect: Option<&str>, port: Option<u16>, vt: Vt) -> i32 {
     if let Err(why) = ensure_identity() {
         eprintln!("qyro: {why}");
         return 1;
@@ -252,18 +335,11 @@ pub fn receive(out: Option<&str>, expect: Option<&str>, vt: Vt) -> i32 {
         return 2;
     }
 
-    // The code is shown **before** binding, which is the whole of ADR-0041: the
-    // port is known in advance, so there is nothing to ask a socket.
-    let _ = whoami(vt);
-    println!("  waiting for the other device. Ctrl-C to stop.");
-
-    let bind = SocketAddr::from(([0, 0, 0, 0], DEFAULT_PORT));
-    let mut session = match Session::open_receiver(bind, &destination, None) {
-        Ok(session) => session,
-        Err(error) => {
-            eprintln!("\nqyro: could not listen on port {DEFAULT_PORT}: {error}");
-            return 1;
-        }
+    let mut session = match listen_somewhere(port, &destination, vt) {
+        Some(session) => session,
+        // Every reason is printed where it happened, with the port in it.
+        // Repeating it here would say the same thing twice, in two wordings.
+        None => return 1,
     };
 
     let peer = session.peer_fingerprint();

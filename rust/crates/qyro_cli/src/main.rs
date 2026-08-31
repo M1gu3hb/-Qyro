@@ -63,6 +63,16 @@ enum Command {
     Receive {
         out: Option<String>,
         expect: Option<String>,
+        /// The port to listen on, when the fixed one is not available.
+        ///
+        /// ADR-0041 §3 chose a fixed port so the Windows firewall is answered
+        /// **once** and the pairing code is predictable, and in the same
+        /// paragraph said what happens when it is taken: «se dice, no se mueve
+        /// [...] y ofrece elegir otro». This flag is the «elegir otro», and it
+        /// costs neither property — the pairing code carries the port inside,
+        /// so a hand-picked one still works; what is lost is the convenience,
+        /// not the function.
+        port: Option<u16>,
     },
     WhoAmI,
     Find,
@@ -178,10 +188,38 @@ fn parse(args: &[String]) -> Command {
             port: flag(args, "--serial").unwrap_or_default(),
             out: flag(args, "--out").unwrap_or_else(|| "qyro-received.bin".to_owned()),
         },
-        "recv" | "receive" => Command::Receive {
-            out: flag(args, "--out"),
-            expect: flag(args, "--expect"),
-        },
+        "recv" | "receive" => {
+            // Parsed here rather than inside the flow, so a value that is not a
+            // port is refused **before** anything prints a pairing code. A
+            // `--port` that fell back to the default in silence would leave a
+            // person listening on 49517 while believing otherwise, holding a
+            // code that names a port nobody is on.
+            let port = match flag(args, "--port") {
+                None => None,
+                Some(text) => match text.parse::<u16>() {
+                    Ok(0) => {
+                        return Command::Refused(
+                            "--port 0 asks the system to pick one, and by then the pairing \
+                             code is already printed with a port nobody is on. Name a \
+                             number between 1 and 65535."
+                                .to_owned(),
+                        );
+                    }
+                    Ok(port) => Some(port),
+                    Err(_) => {
+                        return Command::Refused(format!(
+                            "--port {text} is not a port. A port is a number between 1 and \
+                             65535; the one Qyro uses unless told otherwise is 49517."
+                        ));
+                    }
+                },
+            };
+            Command::Receive {
+                out: flag(args, "--out"),
+                expect: flag(args, "--expect"),
+                port,
+            }
+        }
         other => Command::Refused(format!("unknown command '{other}'. Try: qyro help")),
     }
 }
@@ -229,7 +267,9 @@ fn run(command: Command, vt: Vt) -> i32 {
         Command::SerialSend { file, port } => serial::send(&file, &port, vt),
         Command::SerialReceive { port, out } => serial::receive(&port, &out),
         Command::Send { file, to, expect } => flows::send(&file, &to, expect.as_deref(), vt),
-        Command::Receive { out, expect } => flows::receive(out.as_deref(), expect.as_deref(), vt),
+        Command::Receive { out, expect, port } => {
+            flows::receive(out.as_deref(), expect.as_deref(), port, vt)
+        }
         Command::Refused(why) => {
             eprintln!("qyro: {why}");
             2
@@ -255,7 +295,7 @@ fn menu_loop(vt: Vt) -> i32 {
 
         match line.trim() {
             "1" => return flows::send_interactive(vt),
-            "2" => return flows::receive(None, None, vt),
+            "2" => return flows::receive(None, None, None, vt),
             "3" => return flows::whoami(vt),
             "4" => return flows::find(vt),
             "q" | "Q" | "quit" | "exit" => return 0,
@@ -274,6 +314,7 @@ fn help_text() -> String {
          \x20 qyro send <file> --to <code>          send without asking\n\
          \x20 qyro send --self --to <code>          send THIS binary (bootstrap)\n\
          \x20 qyro recv [--out <directory>]         receive without asking\n\
+         \x20 qyro recv --port <number>             ... on another port\n\
          \x20 qyro whoami                           this device's code\n\
          \x20 qyro find                             who else is on this network\n\
          \x20 qyro qr                               draw this device's code as a QR\n\
@@ -312,6 +353,63 @@ mod tests {
     )]
 
     use super::{Command, flag, help_text, parse};
+
+    #[test]
+    fn recv_acepta_otro_puerto_y_rechaza_uno_imposible() {
+        // ADR-0041 §3, la parte que el codigo no tenia: «si el puerto esta
+        // ocupado: se dice, no se mueve. Qyro dice que puerto esta ocupado y
+        // ofrece elegir otro». No habia con que elegir otro: `recv` no tenia
+        // bandera de puerto, asi que la unica salida era rendirse.
+        //
+        // En Windows esto no es teorico. Los rangos que reservan Hyper-V, WSL2 y
+        // Docker rechazan la ligadura con WSAEACCES (10013) --
+        // `netsh interface ipv4 show excludedportrange protocol=tcp` los
+        // enseña-- y quien instalo Docker una vez hace dos anos se encuentra un
+        // receptor que no arranca.
+        let Command::Receive { port, .. } =
+            parse(&["recv".to_owned(), "--port".to_owned(), "49518".to_owned()])
+        else {
+            panic!("recv --port no produjo una recepcion");
+        };
+        assert_eq!(port, Some(49518));
+
+        // Y sin la bandera sigue siendo el puerto fijo, que es lo que compra el
+        // permiso del cortafuegos una sola vez.
+        let Command::Receive { port, .. } = parse(&["recv".to_owned()]) else {
+            panic!("recv sin banderas dejo de ser una recepcion");
+        };
+        assert_eq!(port, None);
+    }
+
+    #[test]
+    fn un_puerto_que_no_es_un_puerto_se_rechaza_por_su_nombre() {
+        // El control. Un `--port` que se ignorara en silencio cuando no parsea
+        // dejaria a la persona escuchando en 49517 mientras cree que escucha en
+        // otro sitio, y el codigo que le ensena Qyro seria el bueno para un
+        // puerto donde no hay nadie.
+        for bad in ["cero", "70000", "-1", "0"] {
+            let refusal = parse(&["recv".to_owned(), "--port".to_owned(), bad.to_owned()]);
+            let Command::Refused(why) = refusal else {
+                panic!("--port {bad} fue aceptado");
+            };
+            assert!(
+                why.contains(bad),
+                "el rechazo de --port {bad} no dice que valor fue: {why}"
+            );
+        }
+        // Y el puerto 0 se rechaza con su propio motivo: ADR-0041 §3 dice que
+        // el 0 es una peticion, nunca una respuesta -- el sistema elegiria uno
+        // y la cadena de emparejamiento ya estaria impresa con otro.
+        let Command::Refused(why) =
+            parse(&["recv".to_owned(), "--port".to_owned(), "0".to_owned()])
+        else {
+            panic!("--port 0 fue aceptado");
+        };
+        assert!(
+            why.contains("0 "),
+            "el rechazo del puerto 0 no lo distingue de un numero ilegible: {why}"
+        );
+    }
 
     #[test]
     fn el_help_dice_que_el_codigo_va_entre_comillas() {

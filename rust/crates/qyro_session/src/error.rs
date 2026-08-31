@@ -62,6 +62,33 @@ pub enum SessionError {
     /// becomes a stranger to every peer that trusted it, and that is the exact
     /// defect this variant exists to make impossible to reach by accident.
     IdentityUnreadable,
+    /// The port could not be bound: somebody else holds it, or this machine
+    /// will not hand it out.
+    ///
+    /// **ADR-0041 §3 decided the behaviour and the enum had no word for it.**
+    /// The ADR says «si el puerto está ocupado: se dice, no se mueve. Qyro dice
+    /// qué puerto está ocupado y ofrece elegir otro» — and `open_receiver`
+    /// mapped *every* bind failure to [`Self::BadArgument`], whose message is
+    /// «the address, port or path was not usable». Nothing above could tell «that
+    /// port is taken» from «that path is wrong», so nothing above could offer
+    /// another port. A decision written in an ADR that the code cannot express
+    /// is a decision nobody implemented.
+    ///
+    /// **Two operating-system errors, one fact.** `AddrInUse` is the obvious
+    /// one. The other is Windows-specific and is the one that will actually
+    /// happen: Windows reserves TCP ranges for Hyper-V, WSL2 and Docker — visible
+    /// with `netsh interface ipv4 show excludedportrange protocol=tcp` — and a
+    /// bind inside one fails with **`WSAEACCES`, 10013**, which `std` surfaces as
+    /// `PermissionDenied`, not as «in use». To the person holding the machine
+    /// both mean *this port is not yours today*, and both have the same answer:
+    /// choose another. Separating them here would buy a distinction that changes
+    /// nothing anybody does.
+    ///
+    /// Deliberately **not** a silent move to the next free port. ADR-0041 §3
+    /// refuses that: a port that moves on its own loses the two properties it
+    /// was chosen fixed for — one firewall grant instead of one per session, and
+    /// a pairing code somebody can predict — and loses them without saying so.
+    PortUnavailable,
 }
 
 // There is deliberately no `AlreadyFailed`. ADR-0032 §5 freezes stickiness as
@@ -83,6 +110,9 @@ impl fmt::Display for SessionError {
             Self::StorageRefused => "the destination refused the content",
             Self::Cancelled => "the session was cancelled",
             Self::IdentityUnreadable => "there is no usable identity for this process",
+            Self::PortUnavailable => {
+                "that port is already taken, or this machine will not give it out"
+            }
         })
     }
 }

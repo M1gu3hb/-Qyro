@@ -95,6 +95,22 @@ pub const QYRO_ERR_IDENTITY_UNREADABLE: i32 = -13;
 /// the call printed as if the network were at fault.
 pub const QYRO_ERR_TOO_MANY_FILES: i32 = -14;
 
+/// The port could not be bound: somebody else holds it, or this machine will
+/// not hand it out.
+///
+/// **Its own code and not `BAD_ARGUMENT`**, for the same reason as the one
+/// above and with a sharper edge: ADR-0041 §3 says a busy port must be **said,
+/// not moved around** — «Qyro dice qué puerto está ocupado y ofrece elegir
+/// otro» — and an interface that receives «the address, port or path was not
+/// usable» cannot make that offer, because it does not know which of the three
+/// went wrong.
+///
+/// Covers `AddrInUse` and, on Windows, `WSAEACCES` (10013): Windows reserves TCP
+/// ranges for Hyper-V, WSL2 and Docker, and a bind inside one is refused as
+/// «permission denied» rather than «in use». Both mean *this port is not yours
+/// today* and both are answered by choosing another.
+pub const QYRO_ERR_PORT_UNAVAILABLE: i32 = -15;
+
 impl HandleError {
     /// The code this error crosses the boundary as.
     #[must_use]

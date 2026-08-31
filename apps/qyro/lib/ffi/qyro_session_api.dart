@@ -50,6 +50,18 @@ abstract final class QyroCode {
   /// leia «error de integridad» donde el motor decia «has elegido demasiados».
   static const tooManyFiles = -14;
 
+  /// El puerto no se pudo ligar: lo tiene otro, o esta maquina no lo da.
+  ///
+  /// ADR-0041 §3: un puerto ocupado **se dice, no se mueve**, y la pantalla
+  /// ofrece elegir otro. Con `badArgument` no podia ofrecer nada, porque no
+  /// sabia cual de las tres cosas -- direccion, puerto o ruta -- habia fallado.
+  ///
+  /// Cubre `AddrInUse` y, en Windows, `WSAEACCES` (10013): Windows reserva
+  /// rangos TCP para Hyper-V, WSL2 y Docker, y ligar dentro de uno se rechaza
+  /// como «permiso denegado», no como «en uso». Las dos cosas significan lo
+  /// mismo para quien tiene la maquina delante.
+  static const portUnavailable = -15;
+
   static const names = <int, String>{
     ok: 'ok',
     invalidHandle: 'invalid_handle',
@@ -63,6 +75,7 @@ abstract final class QyroCode {
     transferRefused: 'transfer_refused',
     identityUnreadable: 'identity_unreadable',
     tooManyFiles: 'too_many_files',
+    portUnavailable: 'port_unavailable',
     storageRefused: 'storage_refused',
     cancelled: 'cancelled',
     unknown: 'unknown',
