@@ -499,6 +499,27 @@ fn the_phone_is_told_where_to_write() {
          the Kotlin side of this went missing the first time"
     );
 
+    // **Y la identidad, que era el mayor de los dos** (QYR-0376).
+    // `defaultIdentityPath()` devolvía en Android `/identity.qyro`, la raíz del
+    // sistema, así que `openIdentity()` fallaba y **toda sesión contestaba
+    // `identity_unreadable`** (ADR-0040). Eso no es medio producto como el
+    // destino: sin identidad no hay handshake, ni huella, ni código de
+    // emparejamiento, en ninguna dirección.
+    assert!(
+        kotlin_source.contains("noBackupFilesDir"),
+        "PathsChannel does not answer with getNoBackupFilesDir for the identity.          Internal storage, private by the UID sandbox -- which is the protection          THREAT_MODEL.md names for this seed -- and a directory the system never          puts in a backup, which is the third lock after QYR-0349."
+    );
+    assert!(
+        !kotlin_source.contains("getExternalFilesDir(null), IDENTITY"),
+        "the identity is being put in external storage, which any application          with a storage permission can read. A private key does not go there."
+    );
+    let home = std::fs::read_to_string(root.join("apps/qyro/lib/home/home_screen.dart"))
+        .expect("the home screen is readable");
+    assert!(
+        strip_line_comments(&home).contains("androidIdentityPath()"),
+        "HomeScreen opens the identity without asking Android where it goes, so          it lands on defaultIdentityPath() -- which on Android is          `/identity.qyro`, and every session then answers identity_unreadable"
+    );
+
     let screen = root.join("apps/qyro/lib/transfer/transfer_screens.dart");
     let screen_source = std::fs::read_to_string(&screen).expect("the screens are readable");
     let code = strip_line_comments(&screen_source);

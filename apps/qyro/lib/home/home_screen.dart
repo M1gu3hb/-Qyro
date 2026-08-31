@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../generated/branding.g.dart';
 import '../scanner/scan_screen.dart';
+import '../transfer/qyro_paths.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../transfer/native_transfer_service.dart';
 import '../transfer/transfer_screens.dart';
@@ -36,15 +37,29 @@ class HomeScreen extends StatelessWidget {
   /// that is exactly what the engine used to do implicitly, and it is what made
   /// the fingerprint change between one transfer and the next. It surfaces as
   /// the failure it is.
-  static NativeTransferService _nativeEngine() {
-    final engine = _engine ??= NativeTransferService()..openIdentity();
+  static Future<NativeTransferService> _nativeEngine() async {
+    // **QYR-0376: la ruta se pregunta antes de abrir, y por eso esto es async.**
+    //
+    // `defaultIdentityPath()` devolvia en Android `/identity.qyro` -- la raiz del
+    // sistema--, asi que `openIdentity()` fallaba y **toda sesion contestaba
+    // `identity_unreadable`**. Sin identidad no hay handshake, ni huella que
+    // ensenar, ni codigo de emparejamiento: el producto entero, no la mitad.
+    //
+    // `null` en Windows y donde el canal no conteste, y ahi `openIdentity()`
+    // vuelve a lo de siempre, que en Windows es `%LOCALAPPDATA%\Qyro`.
+    final existing = _engine;
+    if (existing != null) return existing;
+    final engine = NativeTransferService();
+    engine.openIdentity(at: await androidIdentityPath());
+    _engine = engine;
     return engine;
   }
 
   static NativeTransferService? _engine;
 
-  void _open(BuildContext context, int tab) {
-    final engine = service ?? _nativeEngine();
+  Future<void> _open(BuildContext context, int tab) async {
+    final engine = service ?? await _nativeEngine();
+    if (!context.mounted) return;
     // **QYR-0371: the library is what opens the optical channel.**
     //
     // `ScanScreen` needs the loaded engine, and the only construction of

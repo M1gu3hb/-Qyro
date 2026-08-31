@@ -94,8 +94,31 @@ máquina** y no sirve para la prueba.
 
 ### 2.2 La aplicación del teléfono (`app-release.apk`)
 
+**Primero, decirle a Rust con qué enlazar.** Éste es el paso que no está en
+ningún sitio del repositorio y sin el cual el siguiente falla con
+`linker 'cc' not found`: Rust sabe compilar para Android y **no sabe con qué
+enlazador**, y eso se le dice con dos variables de entorno.
+
 ```
 cd D:\Qyro\repo
+$ndk = "$env:LOCALAPPDATA\Android\Sdk\ndk"
+$ndk = (Get-ChildItem $ndk -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName
+$bin = "$ndk\toolchains\llvm\prebuilt\windows-x86_64\bin"
+Test-Path "$bin\aarch64-linux-android21-clang.cmd"
+```
+
+Ese `Test-Path` tiene que decir **True**. Si dice `False`, el NDK no está
+instalado: ábrelo desde Android Studio → SDK Manager → SDK Tools → marca
+**NDK (Side by side)**.
+
+> **Y usa el NDK 28 o más nuevo.** A partir de esa versión, el enlazador alinea
+> la biblioteca a 16 KB por omisión, que es lo que Android 15 exige. Con un NDK
+> más viejo hay que añadirlo a mano —`-Wl,-z,max-page-size=16384`— y el paso §2.3
+> te dirá que falta.
+
+```
+$env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "$bin\aarch64-linux-android21-clang.cmd"
+$env:CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER = "$bin\armv7a-linux-androideabi21-clang.cmd"
 rustup target add aarch64-linux-android armv7-linux-androideabi
 cargo build --release --package qyro_ffi --target aarch64-linux-android
 cargo build --release --package qyro_ffi --target armv7-linux-androideabi
@@ -106,6 +129,11 @@ copy target\armv7-linux-androideabi\release\libqyro_ffi.so apps\qyro\android\app
 cd apps\qyro
 flutter build apk --release
 ```
+
+> **`armv7a-…-androideabi21-clang`, con la `a` y con `eabi`.** El nombre del
+> enlazador de 32 bits no se deriva del nombre del objetivo de Rust
+> (`armv7-linux-androideabi`), y escribirlo como el de 64 es el error que da
+> «no such file or directory» sin decir cuál.
 
 Queda en `apps\qyro\build\app\outputs\flutter-apk\app-release.apk`.
 

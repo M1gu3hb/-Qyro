@@ -108,6 +108,25 @@ mirar la red. Ahora hay una frase por razon. Y la linea nueva imprimia
 lo anunciaba** -- en el unico programa que ya sabe que un terminal es un
 interprete. Pasa por `safe_terminal_name`, y se imprime el nombre y no la ruta.
 
+**QYR-0376, P0, y es el hermano mayor de QYR-0373.** `defaultIdentityPath()`
+devolvia fuera de Windows `Directory.current.path + '/identity.qyro'`, o sea
+**`/identity.qyro`** en Android. Escribir ahi falla, asi que `openIdentity()`
+fallaba, asi que **toda sesion contestaba `identity_unreadable`**. El destino roto
+impedia recibir; esto impide TODO: sin identidad no hay handshake, ni huella, ni
+codigo de emparejamiento. `PathsChannel` gana `identity`, que devuelve
+`getNoBackupFilesDir()/identity.qyro` -- interno, privado por el sandbox de UID, y
+un directorio que el sistema nunca copia a una nube, que es la tercera cerradura
+de QYR-0349.
+
+**QYR-0377, P0.** Los comandos de construccion de Android **no podian construir**:
+`cargo build --target aarch64-linux-android` falla con «linker `cc` not found»
+porque a Rust hay que decirle con que enlazar, y ni el protocolo de hardware ni la
+primera version de mi propia guia lo decian. Los dos llevan ahora el bloque de
+PowerShell que resuelve la ruta del NDK sola y comprueba que el clang existe
+antes de intentar nada. Y la DLL de Windows se construye antes de copiarse, desde
+el directorio de objetivo correcto: el paso 3 copiaba una DLL que ningun paso
+construia.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

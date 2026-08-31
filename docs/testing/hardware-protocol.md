@@ -36,6 +36,12 @@ cd D:\Qyro\repo
 # 1. La biblioteca nativa para el telefono. DOS arquitecturas de ARM, no una:
 #    arm64-v8a es casi todo telefono de hoy y armeabi-v7a es el de 32 bits, que
 #    instala el APK igual y muere con UnsatisfiedLinkError si no esta su .so.
+# Rust sabe compilar para Android y NO sabe con que enlazar. Sin estas dos
+# variables el cargo build de abajo falla con "linker `cc` not found".
+# La guia de prueba tiene la version de PowerShell que resuelve la ruta sola.
+#   $bin = "$env:LOCALAPPDATA\Android\Sdk\ndk\<version>\toolchains\llvm\prebuilt\windows-x86_64\bin"
+#   $env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER  = "$bin\aarch64-linux-android21-clang.cmd"
+#   $env:CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER = "$bin\armv7a-linux-androideabi21-clang.cmd"
 rustup target add aarch64-linux-android armv7-linux-androideabi
 cargo build --release --package qyro_ffi --target aarch64-linux-android
 cargo build --release --package qyro_ffi --target armv7-linux-androideabi
@@ -54,9 +60,14 @@ python3 ..\..\tools\apk_inspector\inspect_apk.py ^
   build\app\outputs\flutter-apk\app-release.apk ^
   --require-abi arm64-v8a --require-abi armeabi-v7a
 
-# 3. El .exe de Windows.
+# 3. El .exe de Windows. La DLL se CONSTRUYE primero: ningun paso de este
+#    protocolo la construia, y copiar target\release\qyro_ffi.dll copiaba lo
+#    que hubiera dejado ahi otra compilacion, o nada.
+cd ..\..
+cargo build --release -p qyro_ffi --target x86_64-pc-windows-msvc
+cd apps\qyro
 flutter build windows --release
-copy ..\..\target\release\qyro_ffi.dll build\windows\x64\runner\Release\
+copy ..\..\target\x86_64-pc-windows-msvc\release\qyro_ffi.dll build\windows\x64\runner\Release\
 ```
 
 **Si el paso 2 o el 3 falla con «Building with plugins requires symlink

@@ -51,13 +51,53 @@ class PathsChannel(private val context: Context) : MethodChannel.MethodCallHandl
          * merece estar separado de lo que la aplicación se guarda a sí misma.
          */
         const val FOLDER = "Qyro"
+
+        /**
+         * El nombre del blob, el mismo que usa el CLI y el mismo que usa
+         * `defaultIdentityPath()` fuera de Windows. Un nombre y no dos: dos
+         * serían dos identidades el día que alguien mueva una.
+         */
+        const val IDENTITY = "identity.qyro"
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "destination" -> result.success(destination())
+            "identity" -> result.success(identity())
             else -> result.notImplemented()
         }
+    }
+
+    /**
+     * Dónde vive el blob de identidad de este aparato, o `null` si no se puede.
+     *
+     * **QYR-0376, y era el P0 más grande de los dos.** `defaultIdentityPath()`
+     * devolvía en Android `Directory.current.path + "/identity.qyro"`, o sea
+     * **`/identity.qyro`**: la raíz del sistema. Escribir ahí falla, así que
+     * `openIdentity()` fallaba, así que **toda sesión contestaba
+     * `identity_unreadable`** (ADR-0040) — y eso no es medio producto como el
+     * destino, es el producto entero: sin identidad no hay handshake, ni huella
+     * que enseñar, ni código de emparejamiento, en ninguna de las dos
+     * direcciones.
+     *
+     * # `getNoBackupFilesDir` y no `getFilesDir`
+     *
+     * Almacenamiento **interno**, o sea privado por el sandbox de UID, que es lo
+     * que `THREAT_MODEL.md` dice que protege esta semilla y lo que ADR-0040 §7
+     * asume. Nada de externo: `getExternalFilesDir` lo puede leer cualquier
+     * aplicación con permiso de almacenamiento, y ahí no va una clave privada.
+     *
+     * **`NoBackup` y no a secas.** QYR-0349: la aplicación llegó a enviar el blob
+     * envuelto a Google Drive por omisión. Se arregló con `allowBackup=false` y
+     * `dataExtractionRules`, y esto es la tercera cerradura: un directorio que el
+     * sistema **nunca** incluye en una copia de seguridad, diga lo que diga el
+     * manifiesto el día que alguien lo edite.
+     */
+    private fun identity(): String? {
+        val base = context.noBackupFilesDir ?: return null
+        if (!base.exists() && !base.mkdirs()) return null
+        if (!base.isDirectory) return null
+        return File(base, IDENTITY).absolutePath
     }
 
     /**

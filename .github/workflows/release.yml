@@ -44,6 +44,14 @@ jobs:
           qyro_ndk="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-${ANDROID_NDK_LATEST_HOME:-}}}"
           test -n "$qyro_ndk"
           bin="$qyro_ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # **La alineacion de 16 KB, pedida y no supuesta.** El NDK r28 la pone
+          # por omision y el r27 y anteriores no, y un runner de GitHub cambia de
+          # NDK sin avisar a nadie. Un .so alineado a 0x1000 NO CARGA en Android
+          # 15: dlopen falla y la aplicacion muere al primer uso del motor, con
+          # la aplicacion ya instalada. Pedirlo explicitamente cuesta una linea
+          # y es idempotente donde ya estaba puesto.
+          # inspect_apk.py lo mide despues sobre el APK, que es donde importa.
+          export RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$bin/aarch64-linux-android21-clang"
           # `armv7a-...-androideabi21`, con la `a` y con `eabi`: el nombre del
           # enlazador de 32 bits no se deriva del triple de Rust.

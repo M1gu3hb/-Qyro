@@ -12,6 +12,104 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0376 — La identidad se escribía en la raíz del sistema, así que no había identidad
+
+- Estado: **CERRADO**
+- Severidad: **P0** (sin identidad no hay nada, en ninguna dirección)
+- Fecha: 2026-08-31
+
+**Es el hermano mayor de QYR-0373, y es peor.** `defaultIdentityPath()` devolvía,
+fuera de Windows, `Directory.current.path + '/identity.qyro'`, bajo un comentario
+gemelo del otro: *«On Android the Kotlin side is what knows
+`getNoBackupFilesDir()`; until it passes one in, the app's working directory is
+the honest answer»*. Ese lado Kotlin tampoco se escribió.
+
+**En Android eso es `/identity.qyro`**, la raíz del sistema. Escribir ahí falla,
+así que `openIdentity()` fallaba, así que **toda sesión contestaba
+`identity_unreadable`** (ADR-0040, que decidió a propósito que una identidad que
+no abre **no se regenera**).
+
+**Y eso no es medio producto, es el producto.** El destino roto (QYR-0373)
+impedía **recibir**. Esto impide **todo**: sin identidad no hay handshake, ni
+huella que enseñar, ni código de emparejamiento — así que el teléfono no puede ni
+mandar ni recibir, y la pantalla de aparatos no tiene código que dibujar.
+
+**El arreglo.** `PathsChannel` gana un método `identity`, que devuelve
+`getNoBackupFilesDir()/identity.qyro`, y `HomeScreen` lo pregunta antes de abrir.
+
+**`getNoBackupFilesDir` y no `getFilesDir` ni `getExternalFilesDir`**, y las tres
+razones son distintas:
+
+- **Interno**, o sea privado por el sandbox de UID, que es exactamente la
+  protección que `THREAT_MODEL.md` nombra para esta semilla y la que ADR-0040 §7
+  asume. `getExternalFilesDir` —donde sí va lo que se recibe— lo puede leer
+  cualquier aplicación con permiso de almacenamiento. **Ahí no va una clave
+  privada.**
+- **`NoBackup`**, que es la tercera cerradura de QYR-0349: esa ficha encontró que
+  la aplicación mandaba el blob envuelto a Google Drive por omisión, y se cerró
+  con `allowBackup=false` y `dataExtractionRules`. Un directorio que el sistema
+  **nunca** copia lo cierra otra vez, diga lo que diga el manifiesto el día que
+  alguien lo edite.
+
+**Vigilado** por `qyro_core::repository_contract::the_phone_is_told_where_to_write`,
+que ahora comprueba las dos rutas y **que la identidad no acabe en la externa**.
+
+**La pregunta que cierra esta ficha:** ¿tiene el teléfono una identidad estable?
+**Tiene dónde guardarla, que es lo que le faltaba.** Que sobreviva a un reinicio
+es el escenario **B2**, y sigue en blanco.
+
+## QYR-0377 — Los comandos de construcción de Android no podían construir
+
+- Estado: **CERRADO**
+- Severidad: **P0** (el propietario no podía llegar ni a tener un APK)
+- Fecha: 2026-08-31
+
+**El defecto.** `docs/testing/hardware-protocol.md` §1 —y la primera versión de
+`docs/GUIA-DE-PRUEBA.md`, o sea el mío— decían:
+
+```
+rustup target add aarch64-linux-android
+cargo build --release --package qyro_ffi --target aarch64-linux-android
+```
+
+**Y eso falla**, con `linker \`cc\` not found`. Rust sabe **compilar** para
+Android y no sabe **con qué enlazar**: hace falta apuntarle al `clang` del NDK
+con `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER`. Los workflows de CI lo hacen
+—cuatro líneas de `export` en cada uno— y **ninguno de los dos documentos que una
+persona sigue lo decía**.
+
+**Y el segundo, en el mismo sitio:** el paso 3 del protocolo hacía
+
+```
+copy ..\..\target\release\qyro_ffi.dll build\windows\x64\runner\Release\
+```
+
+sobre una DLL que **ningún paso construye**. Copiaba lo que hubiera dejado ahí
+otra compilación, o nada. Y `target\release\` es el objetivo del **host**, que no
+es el mismo directorio que `target\x86_64-pc-windows-msvc\release\`.
+
+**El arreglo.** Los dos documentos llevan ahora el bloque completo, en
+PowerShell, que **resuelve la ruta del NDK sola** y comprueba con un `Test-Path`
+que el `clang` existe antes de intentar nada — porque «no such file or directory»
+sin decir cuál es media hora perdida. Y el nombre del enlazador de 32 bits se
+escribe con su aviso: es `armv7a-…-androideabi21-clang`, con la `a` y con `eabi`,
+y **no se deriva** del nombre del objetivo de Rust.
+
+La DLL de Windows se construye antes de copiarse, y desde el directorio de
+objetivo correcto.
+
+**Y de paso, la alineación de 16 KB, pedida en vez de supuesta.** Los dos
+workflows que construyen para Android exportan ahora
+`RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384"`. El NDK r28 la pone por
+omisión y el r27 no, y un runner de GitHub cambia de NDK sin avisar a nadie. Un
+`.so` alineado a `0x1000` **no carga** en Android 15. Es seguro ponerlo ahí:
+`.cargo/config.toml` sólo tiene tablas de Windows, los comandos pasan `--target`
+—así que los scripts de compilación del host no lo ven— y es idempotente donde ya
+estaba puesto.
+
+**La pregunta que cierra esta ficha:** siguiendo la guía al pie de la letra,
+¿sale un APK? **Sí, o sale un mensaje que dice qué falta.**
+
 ## QYR-0375 — Todo fallo de envío se anunciaba como un problema de red
 
 - Estado: **CERRADO**

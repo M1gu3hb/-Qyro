@@ -52,3 +52,37 @@ Future<String?> androidDestination({
     return null;
   }
 }
+
+/// Dónde escribir el blob de identidad de este aparato, o `null` para el de
+/// siempre.
+///
+/// **QYR-0376, y era el P0 más grande.** `defaultIdentityPath()` devolvía en
+/// Android `Directory.current.path + '/identity.qyro'`, o sea
+/// **`/identity.qyro`**: la raíz del sistema. Escribir ahí falla, así que
+/// `openIdentity()` fallaba, así que **toda sesión contestaba
+/// `identity_unreadable`** (ADR-0040). Eso no es medio producto como el destino:
+/// es el producto entero, porque sin identidad no hay handshake, ni huella que
+/// enseñar, ni código de emparejamiento, en ninguna dirección.
+///
+/// Kotlin contesta con `getNoBackupFilesDir()`, que es almacenamiento interno
+/// —privado por el sandbox de UID, que es la protección que `THREAT_MODEL.md`
+/// nombra para esta semilla— y que el sistema nunca copia a una nube.
+///
+/// Los mismos tres fallos que [androidDestination], y por la misma razón:
+/// devuelve `null` y nunca lanza.
+Future<String?> androidIdentityPath({
+  MethodChannel? channel,
+  bool? isAndroid,
+}) async {
+  if (!(isAndroid ?? Platform.isAndroid)) return null;
+  try {
+    final answer =
+        await (channel ?? qyroPathsChannel).invokeMethod<String>('identity');
+    if (answer == null || answer.isEmpty) return null;
+    return answer;
+  } on MissingPluginException {
+    return null;
+  } on PlatformException {
+    return null;
+  }
+}
