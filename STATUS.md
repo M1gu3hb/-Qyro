@@ -3,25 +3,86 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-08-20T18:00:00Z
+- Updated UTC: 2026-08-31T18:00:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 2871488b274f7771ebbc6ead1146c0526f465765
+- Verified commit: 918bd6ffde047f44364d5bd83962dd855ff77cdc
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
   entrega — y hay cuatro pantallas, en dos idiomas, con los botones **encendidos**
   desde la fase 05. Dos aparatos se emparejan **con un código tecleado**, que
-  desde la fase 12 el receptor enseña de verdad (QYR-0322); **no se
-  encuentran solos**, porque el descubrimiento no cruza la frontera C y es
-  la fase 14. La identidad sobrevive al proceso en las dos plataformas
+  desde la fase 12 el receptor enseña de verdad (QYR-0322). **Y también se
+  encuentran solos cuando la red lo permite**: la fase 14 conectó el
+  descubrimiento en las dos caras, `qyro find` en la terminal y la lista
+  «cerca de ti» en la aplicación. Un aparato que se anuncia no ha probado
+  nada: pasa por la misma comprobación de confianza que un código tecleado. La identidad sobrevive al proceso en las dos plataformas
   (fase 11): DPAPI en Windows y **el sandbox por UID en Android, no
   Keystore** (ADR-0040 §7), y el paquete se llama `dev.qyro.app` y se
   firma con una clave real (fase 08). **Lo que sigue sin existir es la
   evidencia**: ningún teléfono ha ejecutado nunca esta aplicación, ninguna
   transferencia ha cruzado una Wi-Fi de verdad, y `flutter build` no corre en
   esta máquina por el Modo Desarrollador (QYR-0324). Dos procesos en
-  `127.0.0.1` no son dos aparatos en una red. Los veinte escenarios que cierran
-  ese hueco están escritos y **sin marcar** en `docs/testing/hardware-protocol.md`
+  `127.0.0.1` no son dos aparatos en una red. Los **veintiséis** escenarios que
+  cierran ese hueco están escritos y **sin marcar** en
+  `docs/testing/hardware-protocol.md`, y lo que falta por probar está reunido en
+  `docs/reports/lo-que-no-se-ha-probado.md`. Para ejecutarlo:
+  `docs/GUIA-DE-PRUEBA.md`
+
+### Fase 28 — la revisión antes de la primera prueba en hardware (2026-08-31)
+
+El propietario va a probar Qyro en una PC y un teléfono reales por primera vez.
+Esta tanda audita, arregla y deja escrito lo que hace falta para esa prueba.
+
+**Ocho fichas, y tres de ellas impedían que la prueba funcionara en absoluto:**
+
+| Ficha | Qué | Cara |
+|---|---|---|
+| **QYR-0368** | **P0.** El APK de release no declaraba `INTERNET`, así que no podía abrir un socket | Android |
+| **QYR-0373** | **P0.** El destino en Android era `/Qyro` —la raíz del sistema—, así que recibir fallaba antes de emitir un estado | Android |
+| **QYR-0369** | El `\|` del código es una tubería en PowerShell y en `cmd`, y el error no nombraba a Qyro | CLI |
+| **QYR-0370** | Un puerto ocupado salía como «argumento no usable», y no había con qué elegir otro | las dos |
+| **QYR-0371** | El botón del escáner se dibujaba apagado: el canal óptico no tenía puerta | GUI |
+| **QYR-0372** | Se pedía aceptar sin decir qué; la tarjeta del teléfono ofrecía «0 archivos, 0 B» | las dos |
+| **QYR-0374** | La barra llegaba al 100 % y no se guardaba nada; la GUI decía «entregado» | las dos |
+| **QYR-0375** | Todo fallo de envío se anunciaba como un problema de red | CLI |
+
+**Lo que las une:** seis de las ocho son capacidades que existían en el motor y
+no llegaban a ninguna cara, o mensajes que tiraban el motivo que el motor sí
+daba. **Ninguna es un defecto del motor.**
+
+**Y tres se encontraron ejecutándolo**, no leyéndolo: QYR-0372, QYR-0374 y
+QYR-0375 salieron de correr `qyro send` y `qyro recv` uno contra otro y mirar la
+pantalla.
+
+**Guardas nuevas, todas dentro de `cargo test --workspace`**, o sea dentro de la
+puerta y de CI, en cada commit y en cada plataforma:
+
+- `qyro_net::guards::the_android_manifest_declares_internet`
+- `qyro_core::repository_contract`, cinco contratos de repositorio: los secretos
+  de firma, el canal óptico, la tabla de paridad, las frases retiradas del
+  README/PROTOCOL/AGENTS, y la carpeta de destino de Android
+- `tools/apk_inspector/`, que mide sobre el APK las tres cosas que deciden si
+  Qyro arranca en un teléfono: las ABIs, la alineación de 16 KB y la posición del
+  `.so` dentro del zip. Once pruebas, con los ELF fabricados en Python
+
+**ADR-0032 enmienda 6**, congelada antes del código: dos símbolos,
+**treinta y tres**.
+
+**Documentos reescritos contra el código:** `AGENTS.md` —que decía «Qyro sigue
+sin transferir archivos», falso desde la fase 12—, `README.md` y `PROTOCOL.md`.
+
+**Entregables nuevos:** `docs/GUIA-DE-PRUEBA.md` y
+`docs/reports/lo-que-no-se-ha-probado.md`.
+
+**Lo que esta tanda NO pudo hacer, y está dicho donde toca:** corrió en un
+contenedor de Linux sin Flutter, sin SDK de Android, sin PowerShell y sin el
+objetivo `x86_64-pc-windows-msvc`. Así que **los dos artefactos no se
+construyeron**, el Dart y el Kotlin **no se ejecutaron** —sus pruebas las corre
+CI—, y `scripts/gate.ps1` no se pudo correr: lo que se corrió son los mismos
+comandos `cargo` que ese script lee de `ci.yml`, que es todo lo que hace en un
+sistema sin Windows.
+
+---
 
 ### v1.0.0 — la etiqueta y sus artefactos
 
@@ -1009,8 +1070,10 @@ permaneció invisible durante tres sprints.
 - **Nada se ha ejecutado en hardware físico.** Ni un teléfono, ni una Wi-Fi. Todo
   lo demás de esta lista es una limitación conocida y acotada; esto es un hueco
   de evidencia sobre el producto entero. `docs/testing/hardware-protocol.md`
-  tiene los veinte escenarios con su comando literal y **sus veinte huecos en
-  blanco**.
+  tiene los **veintiséis** escenarios con su comando literal y **sus veintiséis
+  huecos en blanco**. La lista honesta de qué depende de un aparato físico está
+  en `docs/reports/lo-que-no-se-ha-probado.md`; los pasos para ejecutarla, en
+  `docs/GUIA-DE-PRUEBA.md`.
 
 **Corregidos en la fase 10 — tres bloqueadores que ya no lo son:**
 
