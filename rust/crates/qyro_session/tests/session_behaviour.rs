@@ -1748,3 +1748,83 @@ fn what_is_offered_is_unknown_until_await_offer_and_known_after_it() {
          offers a number that is not the size of what is arriving"
     );
 }
+
+/// A name that is already taken is refused, and **the refusal is a value**.
+///
+/// **QYR-0374, found by running it three times.** Sending the same file twice to
+/// the same folder gives, on the second go: a progress bar that reaches 100 %,
+/// and then `0 file(s) saved in .` — with no reason anywhere. The wire transfer
+/// really did complete; what failed was the last step, `finish`, refusing to
+/// overwrite a file that was already there.
+///
+/// **Refusing is right.** ADR-0027 §4: nothing overwrites, ever. What is wrong is
+/// that both consumers threw the reason away — the CLI with `unwrap_or(0)`, the
+/// Dart worker with a bare `on QyroSessionFailure {}` in a `finally` whose
+/// comment argued that the ending had already said everything. It had not: the
+/// ending is `Completed`, because the **transfer** completed. The refusal comes
+/// from the filesystem, which the ending knows nothing about — so the phone
+/// reported **«delivered»** with nothing on disk, which is the exact shape of
+/// QYR-0357 that the comment above it claims to have closed.
+///
+/// This test pins the engine half: the refusal must arrive as
+/// `StorageRefused`, distinguishable from «zero files were offered». Both are
+/// «nothing was written» to a caller that only looks at the count.
+#[test]
+fn a_second_arrival_under_a_taken_name_refuses_with_a_reason_and_not_a_zero() {
+    ensure_identity();
+    let scratch = Scratch::new("collision");
+    let root = scratch.path("origen");
+    let destination = scratch.path("destino");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&destination).unwrap();
+
+    let source = root.join("informe.pdf");
+    write_pattern(&source, 8192);
+    let files = vec![source.clone()];
+
+    // First time: it lands.
+    let first = move_files(&root, &files, &destination);
+    assert_eq!(
+        first.materialised,
+        Ok(1),
+        "the first arrival did not land, so the second proves nothing"
+    );
+
+    // Second time, same name, same folder.
+    let second = move_files(&root, &files, &destination);
+
+    assert_eq!(
+        second.received,
+        Ok(SessionState::Completed),
+        "the transfer itself should complete: the bytes cross fine and it is \
+         only the last step that refuses. If this changed, the message the \
+         person sees changes with it"
+    );
+    assert_eq!(
+        second.materialised,
+        Err(SessionError::StorageRefused),
+        "a name that is already taken came back as {:?}. A caller that only \
+         reads the count cannot tell «refused because the name is taken» from \
+         «nothing was offered», and both faces printed the second",
+        second.materialised
+    );
+
+    // And nothing was damaged: the original is intact and no part file is left.
+    let landed = read_all(&destination.join("informe.pdf"));
+    assert_eq!(
+        landed.len(),
+        8192,
+        "the first file was truncated or replaced"
+    );
+    let leftovers: Vec<_> = fs::read_dir(&destination)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".qyro-part"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "a refused arrival left {leftovers:?} behind, so the folder fills up \
+         with parts nobody can open"
+    );
+}

@@ -12,6 +12,69 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0374 — La barra llegaba al 100 % y no se guardaba nada, sin decir por qué
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (y en la GUI era peor: decía «entregado» con el disco vacío)
+- Fecha: 2026-08-31
+
+**Encontrado ejecutándolo tres veces seguidas.** Mandar el mismo archivo dos
+veces a la misma carpeta da, la segunda:
+
+```
+[################################] 100%  100000 / 100000 bytes
+
+  0 file(s) saved in .
+```
+
+Una barra completa, y después una línea que dice que no se guardó nada. **Sin una
+palabra de por qué.** Quien lo vea concluye, con razón, que el programa está roto.
+
+**Y negarse es lo correcto.** ADR-0027 §4: no se sobrescribe **nunca**. El
+defecto no es la negativa, es que los dos consumidores **tiraban el motivo**:
+
+- El CLI, con `session.finish().unwrap_or(0)`. Una negativa se convertía en un
+  cero, y «cero archivos guardados» y «no había nada que guardar» se imprimen
+  igual.
+- **La GUI, peor.** `finish()` vivía en un `finally` con un `on
+  QyroSessionFailure {}` vacío, y el comentario que lo justificaba decía que «el
+  final ya decidió lo que fue esta transferencia». **No lo había decidido:** el
+  final es `Completed` porque **la transferencia** terminó —los bytes cruzan
+  bien—, y `finish` se niega por una razón del sistema de archivos que ese final
+  no conoce. Así que el worker devolvía `0`, o sea éxito, y **el teléfono decía
+  «entregado» con nada en el disco**.
+
+  Es exactamente la forma de **QYR-0357** que el comentario de encima dice haber
+  cerrado. La misma mentira, por otra puerta.
+
+**El motor no tenía nada que arreglar**, y eso es parte del hallazgo:
+`Session::finish` devuelve `Err(StorageRefused)` y lo devuelve bien. Lo pinta
+ahora `a_second_arrival_under_a_taken_name_refuses_with_a_reason_and_not_a_zero`,
+que además comprueba que el archivo de la primera vez sigue intacto y que no
+queda ningún `.qyro-part` tirado.
+
+**El arreglo.**
+
+- El CLI distingue los dos casos y, cuando la transferencia terminó y no se
+  materializó nada, dice el error, **dice que Qyro no sobrescribe nunca** y da el
+  comando para recibir en otra carpeta.
+- La GUI materializa **dentro** del camino feliz, así que su fallo puede cambiar
+  la respuesta; una bandera evita que el `finally` lo llame dos veces. En un
+  final que no fue `Completed`, tragárselo ahí sigue siendo correcto y no
+  esconde nada: esa transferencia ya fracasó por otra razón.
+- Y `receiveNoRoom` —la frase que ahora sale— deja de decir sólo «No hay sitio
+  para esto»: nombra la causa que de verdad se va a dar.
+
+**Medido antes y después**, con el mismo archivo mandado dos veces:
+
+| | Antes | Después |
+|---|---|---|
+| CLI | `0 file(s) saved in .` | «los archivos llegaron y no se guardó ninguno», el error, y qué hacer |
+| GUI | «entregado» | la negativa, con su frase |
+
+**La pregunta que cierra esta ficha:** cuando la barra llega al 100 % y no se
+guarda nada, ¿sabe la persona por qué? **Sí.**
+
 ## QYR-0373 — El teléfono escribía en la raíz del sistema, así que no escribía
 
 - Estado: **CERRADO**

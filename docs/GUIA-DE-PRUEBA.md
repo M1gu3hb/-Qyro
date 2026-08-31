@@ -475,6 +475,23 @@ Espera **un minuto entero**. Qyro tiene un reloj de 60 segundos: si el otro lado
 se calla, lo dice al vencer. Si a los dos minutos sigue igual, **Ctrl-C** en el
 PC, y empieza otra vez por el receptor.
 
+### «los archivos llegaron y no se guardó ninguno»
+
+O, en el teléfono: «El destino no lo aceptó».
+
+**Ya hay un archivo con ese nombre en la carpeta de destino.** Qyro **nunca**
+sobrescribe: prefiere no entregar a pisar algo que ya estaba. Es lo que pasa al
+mandar dos veces el mismo archivo, que es justo lo que se hace al repetir una
+prueba.
+
+Mueve o renombra el que ya está, o recibe en otra carpeta:
+
+```
+.\qyro.exe recv --out C:\Users\tu-usuario\Desktop\qyro-2
+```
+
+**No es un fallo.** Anótalo como el resultado que es.
+
 ### La aplicación pide permiso de fotos o de archivos
 
 **Eso sí es un fallo.** No debería pedir ningún permiso de almacenamiento.

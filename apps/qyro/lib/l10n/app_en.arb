@@ -365,7 +365,7 @@
       }
     }
   },
-  "receiveNoRoom": "There is no room for this.",
+  "receiveNoRoom": "The destination did not take it. Qyro never overwrites: if a file with the same name is already there, move it and try again. It can also be that there is no room left.",
   "@receiveNoRoom": {
     "description": "Transfer interface string: receiveNoRoom."
   },

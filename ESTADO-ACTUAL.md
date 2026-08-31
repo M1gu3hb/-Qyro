@@ -86,6 +86,19 @@ Ahora existe: `PathsChannel.kt` en `dev.qyro/paths`, que devuelve
 desinstalar. Lo vigila una guarda en la puerta que comprueba las cuatro piezas,
 incluido que los dos lados abren el mismo nombre de canal.
 
+**QYR-0374, arreglado, y lo encontro ejecutarlo tres veces seguidas.** Mandar el
+mismo archivo dos veces a la misma carpeta da una barra al 100 % y despues
+`0 file(s) saved in .`, sin una palabra de por que. Negarse es lo correcto --
+ADR-0027 §4, no se sobrescribe nunca -- y el defecto era que los dos consumidores
+**tiraban el motivo**: el CLI con `unwrap_or(0)` y la GUI con un `catch` vacio en
+un `finally`, cuyo comentario decia que «el final ya decidio lo que fue esta
+transferencia». No lo habia decidido: el final es `Completed` porque la
+TRANSFERENCIA termino, y `finish` se niega por una razon del sistema de archivos.
+Asi que **el telefono decia «entregado» con nada en el disco** -- la misma forma
+de QYR-0357 por otra puerta.
+
+El motor no tenia nada que arreglar, y eso es parte del hallazgo.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

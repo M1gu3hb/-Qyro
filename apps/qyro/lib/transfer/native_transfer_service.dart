@@ -472,6 +472,8 @@ final class NativeTransferService implements QyroTransferService {
         bind: bind,
         destination: where,
       );
+      // Si el camino feliz ya materializó, el `finally` no vuelve a hacerlo.
+      var finished = false;
       try {
         // **ADR-0032 enmienda 6.** Esto daba UN `stepBlocking()` y preguntaba,
         // con un comentario que decía «un paso trae la oferta y el manifiesto».
@@ -528,7 +530,33 @@ final class NativeTransferService implements QyroTransferService {
           final now = session.progress();
           sink.send(<Object>['moving', now.done, now.total, fingerprint]);
         }
-        return state == QyroSessionState.completed ? 0 : _receiveIntegrity;
+        if (state != QyroSessionState.completed) {
+          return _receiveIntegrity;
+        }
+        // **QYR-0374: materialising is part of arriving, so its failure is part
+        // of the answer.**
+        //
+        // Esto devolvía `0` —éxito— y dejaba `finish` para el `finally`, que se
+        // tragaba el fallo con el argumento de que «el final ya dijo lo que
+        // hubo». No lo había dicho: el final es `completed` porque **la
+        // transferencia** terminó, y `finish` se niega por una razón del sistema
+        // de archivos que el final no conoce.
+        //
+        // Medido mandando el mismo archivo dos veces a la misma carpeta: el
+        // segundo llega al 100 % y no se guarda nada, porque Qyro no
+        // sobrescribe nunca (ADR-0027 §4). Con la versión anterior, el teléfono
+        // decía **«entregado»** y en el disco no había nada — que es exactamente
+        // la forma de QYR-0357 que el comentario de abajo dice haber cerrado.
+        //
+        // `finished` evita llamarlo dos veces: el `finally` sigue haciéndolo en
+        // todos los demás finales, que es para lo que está.
+        finished = true;
+        try {
+          session.finish();
+          return 0;
+        } on QyroSessionFailure catch (failure) {
+          return failure.code;
+        }
       } on QyroSessionFailure catch (failure) {
         return failure.code;
       } finally {
@@ -544,13 +572,19 @@ final class NativeTransferService implements QyroTransferService {
         // one: a receiver that stopped early leaves a part per started item and
         // nothing else removes it (QYR-0087, QYR-0088). A refusal materialises
         // nothing and releases the parts, which is the same call.
-        try {
-          session.finish();
-        } on QyroSessionFailure {
-          // The ending already decided what this transfer was. A failure to
-          // materialise cannot promote a refusal into a success, and swallowing
-          // it here is not hiding anything: the digest that did not verify is
-          // what `state` already reported.
+        //
+        // **Y sólo cuando el camino feliz no lo hizo ya** (QYR-0374). En un
+        // final que no fue `completed`, tragarse el fallo aquí sí es correcto y
+        // no esconde nada: la transferencia ya fracasó por otra razón, y no se
+        // puede degradar más de lo que está. Lo que no era correcto era
+        // tragárselo **también** cuando todo había ido bien hasta el último
+        // paso, porque entonces el único fallo que hubo era éste.
+        if (!finished) {
+          try {
+            session.finish();
+          } on QyroSessionFailure {
+            // Ver arriba: este final ya fracasó por su cuenta.
+          }
         }
         session.dispose();
       }

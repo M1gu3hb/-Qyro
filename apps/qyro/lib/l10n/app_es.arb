@@ -79,7 +79,7 @@
   "receiveRefuse": "Rechazar",
   "receiveRefused": "Rechazado. No se escribió nada.",
   "receiveDelivered": "{count} archivo(s) guardados en {destination}",
-  "receiveNoRoom": "No hay sitio para esto.",
+  "receiveNoRoom": "El destino no lo aceptó. Qyro nunca sobrescribe: si ya hay un archivo con el mismo nombre, muévelo y vuelve a intentarlo. También puede ser que no quede sitio.",
   "receivePortUnavailable": "El puerto 49517 no está libre en esta máquina, así que nadie puede escuchar en él. Lo tiene otro programa, o Windows lo tiene reservado para Hyper-V, WSL o Docker. Cierra el otro programa, o usa la versión de terminal con otro puerto: qyro recv --port 49518",
   "historyEmpty": "Todavía no se ha transferido nada.",
   "historyFailed": "Falló",

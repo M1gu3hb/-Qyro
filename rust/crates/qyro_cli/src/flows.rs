@@ -413,16 +413,42 @@ pub fn receive(out: Option<&str>, expect: Option<&str>, port: Option<u16>, vt: V
     // and renames the `.qyro-part` to its final name. It runs on every ending,
     // not only the happy one, because a receiver that stopped early leaves a
     // part per started item and nothing else removes it.
-    let materialised = session.finish().unwrap_or(0);
+    //
+    // **QYR-0374: the reason used to be thrown away here.** This line was
+    // `session.finish().unwrap_or(0)`, so a refusal became a zero, and the
+    // person saw a progress bar reach 100 % followed by `0 file(s) saved` with
+    // nothing to explain it. Measured by sending the same file to the same
+    // folder twice: the second time is exactly that.
+    let materialised = session.finish();
 
     match ending {
-        Some(SessionState::Completed) => {
-            println!(
-                "\n  {materialised} file(s) saved in {}",
-                destination.display()
-            );
-            0
-        }
+        Some(SessionState::Completed) => match materialised {
+            Ok(count) => {
+                println!("\n  {count} file(s) saved in {}", destination.display());
+                0
+            }
+            // **The transfer completed and the last step refused.** Those are
+            // two different facts and they used to arrive as one number.
+            // Nothing overwrites, ever (ADR-0027 §4), so the likeliest cause by
+            // far is a name that is already there -- and that is worth naming,
+            // because «0 files saved» after a full progress bar reads as a
+            // broken program rather than as a rule doing its job.
+            Err(error) => {
+                eprintln!(
+                    "\n{}  the files arrived and none was kept.{}",
+                    vt.red(),
+                    vt.reset()
+                );
+                eprintln!("  {error}");
+                eprintln!(
+                    "  Qyro never overwrites. If {} already holds a file with",
+                    destination.display()
+                );
+                eprintln!("  the same name, move it or receive into another folder:");
+                eprintln!("    qyro recv --out <otra-carpeta>");
+                1
+            }
+        },
         _ => {
             eprintln!("\n  the transfer did not complete, and nothing was kept.");
             1
