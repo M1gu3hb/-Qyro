@@ -232,9 +232,28 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
     println!("  the other device says it is:");
     println!("    {}{peer}{}", vt.green(), vt.reset());
 
+    // **QYR-0381: el código que se tecleó YA dice a quién se espera.**
+    //
+    // ADR-0035 §2.1, literal: «si la cadena llevaba una huella y no coincide con
+    // la autenticada, la sesión se rechaza **sin preguntar a nadie**. Quien
+    // escaneó ya contestó la pregunta, y preguntar otra vez es cómo la gente
+    // aprende a decir que sí.»
+    //
+    // No se comprobaba. `parse_pairing` devolvía la dirección y **tiraba la
+    // huella**, así que un código tecleado a mano —comparado carácter a carácter
+    // por una persona— establecía **menos** que teclear un `ip:puerto` y añadir
+    // `--expect` después. La mitad cara del emparejamiento se hacía y no servía
+    // de nada.
+    //
+    // `--expect` explícito gana, porque es una decisión que alguien escribió a
+    // propósito para esta ejecución.
+    let expected = expect
+        .map(str::to_owned)
+        .or_else(|| qyro_session::pairing_fingerprint(to).ok());
+
     // `--expect` is not `--yes`. It is a decision made **before** the run, and a
     // fingerprint that does not match is a refusal, not a question (ADR-0042 §4).
-    if let Some(wanted) = expect
+    if let Some(wanted) = expected.as_deref()
         && !fingerprint_matches(&peer, wanted)
     {
         eprintln!(
@@ -242,6 +261,12 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
             vt.red(),
             vt.reset()
         );
+        if expect.is_none() {
+            eprintln!();
+            eprintln!("  That expectation came from the pairing code itself, not");
+            eprintln!("  from a flag. The other device is answering on that address");
+            eprintln!("  and it is not the device whose code you were given.");
+        }
         return 3;
     }
 

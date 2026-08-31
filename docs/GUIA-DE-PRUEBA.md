@@ -555,11 +555,21 @@ Resultado: `[x]` OK, 2026-08-31, hash origen y destino iguales
 | Leer las dos huellas en voz alta (§5.1) | **B4** |
 | El código tecleado (§5.1, §5.2, §5.3) | **C1** |
 | Si los aparatos se ven solos en la lista | **C2**, **C3** |
-| Reinstalar la aplicación y ver que el PC la rechaza | **C4** |
+| Reinstalar la aplicación y ver que el PC la rechaza | **C4** — ver el aviso de abajo |
 | Probar en una Wi-Fi con aislamiento de cliente | **C5** |
 | Teléfono → PC (§5.2) | **D1** |
 | PC → teléfono con 100 MB o más (§5.3) | **D2** |
 | Los casos de la sección 6 | **E1**, **E2**, **E3** |
+
+> **Sobre C4, y hay que saberlo antes de intentarlo.** Ese escenario espera que
+> el PC muestre el aparato **en rojo** con «la clave de este aparato ha
+> cambiado». **Eso no puede ocurrir todavía**: Qyro no lleva una libreta de
+> aparatos conocidos —nada la escribe— así que para Qyro todos los aparatos son
+> nuevos cada vez. Anota C4 como **no ejecutable**, no como fallido.
+>
+> Lo que **sí** puedes comprobar, y es la mitad que protege de verdad: teclea un
+> código con **una letra cambiada en la huella** y manda. Tiene que salir
+> `REFUSED`, diciendo qué esperabas y qué hay. Eso es **E3**.
 
 **Los escenarios que no ejecutes se quedan en blanco.** No los marques «no
 probado» ni los borres: un hueco vacío ya significa exactamente eso, y es la

@@ -84,6 +84,6 @@ pub use scanner::Scanner;
 pub const QYRO_PORT: u16 = qyro_net::QYRO_PORT;
 pub use session::{
     MAX_FILES_PER_TRANSFER, Progress, ProgressObserver, RejectReason, Session, SessionState,
-    parse_pairing,
+    pairing_fingerprint, parse_pairing,
 };
 pub use trust::{PeerTrust, TrustBook, fingerprint_text};

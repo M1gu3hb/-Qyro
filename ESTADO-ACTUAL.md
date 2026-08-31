@@ -150,6 +150,24 @@ tal cual a un motor que hace `parse::<SocketAddr>()`, asi que un codigo salia co
 `bad_argument`. La pantalla de Aparatos si lo resolvia; esta, que es la que manda,
 no. Ahora acepta las dos cosas y la etiqueta lo dice.
 
+**QYR-0381.** ADR-0035 §2.1 dice que una huella que no coincide con la
+autenticada refusa la sesion **sin preguntar a nadie**, y el doc-comment de
+`parse_pairing` decia lo mismo en presente. **Nadie la comprobaba, y nadie
+podia**: `parse_pairing` tira la huella y `qyro_pairing_parse` emite solo la
+direccion. Asi que un codigo tecleado a mano -- comparado caracter a caracter por
+una persona -- establecia **menos** que teclear un `ip:puerto` y anadir
+`--expect`. Ahora `qyro send` usa la huella del codigo como expectativa
+automatica. **En la GUI queda abierto**, con su forma escrita: la huella no cruza
+la frontera C y arreglarlo es otra enmienda de ADR-0032 mas su lado Dart, sin
+Flutter con el que ejecutarlo.
+
+**QYR-0382.** `remember_peer` no tiene llamante de produccion, asi que la libreta
+esta siempre vacia y **`PeerTrust::Changed` es inalcanzable**: la defensa que el
+README prometia -- «si un aparato conocido presenta otra clave, Qyro se niega» --
+no puede ocurrir, porque ningun aparato llega a ser conocido. El escenario C4 no
+es ejecutable. Escrito en el README y en la guia; conectarlo pide una pantalla
+donde una persona nombre un aparato, que es una funcion y no un cableado.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

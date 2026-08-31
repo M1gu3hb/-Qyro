@@ -12,6 +12,104 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0381 — La huella del código de emparejamiento se validaba y se tiraba
+
+- Estado: **CERRADO en el CLI. Abierto en la GUI, y aquí está el argumento.**
+- Severidad: **ALTA** (la mitad cara del emparejamiento no compraba nada)
+- Fecha: 2026-08-31
+
+**ADR-0035 §2.1, literal:**
+
+> *«Si la cadena llevaba una huella y no coincide con la autenticada, la sesión
+> se refusa **sin preguntar a nadie**. Quien escaneó ya contestó la pregunta, y
+> preguntar otra vez es cómo la gente aprende a decir que sí.»*
+
+**Y el doc-comment de `parse_pairing` decía lo mismo**, en presente: «la mitad de
+la huella **no** se devuelve a propósito: es una expectativa que hay que
+comprobar contra la huella autenticada, no un valor que enseñar como si estuviera
+establecido».
+
+**Nadie la comprobaba, y nadie podía.** `parse_pairing` devuelve la dirección y
+tira la huella; `qyro_pairing_parse` —el símbolo por el que pasa la GUI— emite la
+dirección **y nada más**. Ningún llamante tenía forma de recuperarla.
+
+**Así que un código tecleado a mano establecía menos que un `ip:puerto`.** Quien
+teclea un código lo compara carácter a carácter con la pantalla del otro aparato
+— la parte cara del emparejamiento, la que hace una persona con los ojos — y
+Qyro se quedaba con la mitad barata, la dirección. Teclear `192.168.1.5:49517` y
+añadir `--expect <huella>` daba **más** garantía que teclear el código entero.
+
+**El arreglo, en el CLI.** `qyro_session::pairing_fingerprint` devuelve la
+expectativa, y `qyro send` la usa **automáticamente** cuando `--to` es un código.
+`--expect` explícito sigue ganando, porque es una decisión que alguien escribió a
+propósito para esa ejecución. Y cuando la negativa viene del código y no de una
+bandera, el mensaje lo dice: *«esa expectativa venía del código de emparejamiento,
+no de una bandera»*.
+
+Comprobado ejecutándolo: con el código bueno manda; con una huella cambiada,
+`REFUSED`.
+
+Devuelta aparte y no como par, para que todos los llamantes de `parse_pairing`
+sigan significando lo que significaban. Y las dos nunca discrepan sobre qué es un
+código, lo cual tiene su prueba: si pudieran, un llamante obtendría dirección
+para una cadena cuya huella no puede leer, y marcaría **sin expectativa
+ninguna**, en silencio.
+
+### Lo que queda abierto, y por qué no se hace aquí
+
+**La GUI no puede hacer lo mismo todavía.** `qyro_pairing_parse` emite sólo la
+dirección, así que la huella no cruza la frontera C. Arreglarlo es **otro símbolo
+más** —o cambiar el que hay, que es peor: cambiar la forma de un símbolo
+existente rompe a cualquiera que lo llame— y eso es una enmienda de ADR-0032, la
+segunda del día.
+
+**No se hace en esta tanda por una razón concreta y no por cansancio:** el
+entorno donde se arregló **no tiene Flutter**, así que un cambio de la frontera C
+más su lado Dart más su pantalla se escribiría entero sin poder ejecutarse. Ya
+hay seis cambios así en esta tanda; el séptimo, en el camino de la seguridad, no
+lo compensa. Queda escrito aquí con su forma completa para quien lo tome.
+
+**Lo que sí protege a la GUI hoy:** la huella que enseña la tarjeta de oferta es
+la **autenticada**, y una persona puede compararla. Es la comprobación que
+siempre ha sido de la persona.
+
+## QYR-0382 — Nada recuerda un aparato, así que «esta clave ha cambiado» no puede ocurrir
+
+- Estado: **CERRADO como documentación. La capacidad sigue sin llamante.**
+- Severidad: **ALTA** (el `README` prometía una defensa que no existe)
+- Fecha: 2026-08-31
+
+**El defecto.** `Session::remember_peer` existe, tiene símbolo en la frontera C
+(`qyro_session_remember_peer`), tiene enlace en Dart (`rememberPeer`) — y
+**nadie lo llama en producción**. Los únicos llamantes están en
+`session_behaviour.rs`.
+
+**La consecuencia.** La libreta está **siempre vacía**, así que `peerTrust`
+contesta `newPeer` para todo el mundo y **`PeerTrust::Changed` es inalcanzable**.
+La defensa que el `README` prometía —«si un aparato conocido presenta otra clave,
+Qyro se niega»— **no puede ocurrir**, porque ningún aparato llega a ser conocido.
+
+Y el escenario **C4** del protocolo de hardware pide exactamente eso: reinstalar
+la aplicación y ver el aparato en rojo. **No es ejecutable**, y descubrirlo con
+el teléfono en la mano es la peor forma de descubrirlo.
+
+**Qué se hace en esta tanda.** Escribirlo donde se lee:
+
+- El `README` lo dice, en el mismo punto donde antes prometía lo contrario.
+- La guía de prueba avisa antes de C4 y dice qué anotar: **no ejecutable**, no
+  fallido. Y ofrece la mitad que **sí** se puede comprobar —un código con una
+  letra cambiada, que sale `REFUSED`— que es el escenario **E3**.
+
+**Qué NO se hace, y por qué.** Conectarlo no es cablear una llamada: hace falta
+**una pantalla donde una persona le ponga nombre a un aparato**, porque la
+libreta va por nombre y un nombre que el programa se invente es un nombre que
+nadie reconoce. Eso es una función, no un arreglo, y una función que además
+decide cómo se ve la confianza en este producto. Merece su ADR y su fase, no el
+final de una tanda de auditoría.
+
+**La pregunta que cierra esta ficha:** ¿promete Qyro una defensa que no tiene?
+**Ya no.**
+
 ## QYR-0380 — Mandar desde el teléfono no funcionaba, por dos motivos a la vez
 
 - Estado: **CERRADO**

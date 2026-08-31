@@ -64,9 +64,16 @@ celda y con `archivo:línea`, es [docs/PARIDAD-GUI-CLI.md](docs/PARIDAD-GUI-CLI.
   necesita los códigos no hay cámara.
 - Eliges archivos con el selector del sistema. En Android, sin un solo permiso de
   almacenamiento y **sin copiar el archivo** para leerlo.
-- Ves con quién hablas: una huella corta para comparar en voz alta, y su estado.
-  Si un aparato conocido presenta otra clave, Qyro **se niega** y no ofrece
-  «continuar de todos modos».
+- Ves con quién hablas: una huella corta para comparar en voz alta. **Y el
+  código que tecleas es una promesa**: lleva dentro la huella que el otro aparato
+  tiene que demostrar, y si la que sale del handshake no es ésa, Qyro **se niega
+  sin preguntar**. No hay «continuar de todos modos» y no lo va a haber.
+
+  **Lo que todavía no hace, dicho aquí:** Qyro no lleva una libreta de aparatos
+  conocidos. Nada llama a `remember_peer` en producción, así que la advertencia
+  «este aparato conocido presenta otra clave» **no puede ocurrir**: para Qyro
+  todos los aparatos son nuevos cada vez. Lo que sí protege es la comparación de
+  arriba, que es la que una persona hace con los ojos.
 - El receptor decide, siempre, y ve **qué** le mandan antes de aceptar: los
   nombres y los tamaños. **Nada se acepta solo, nunca.**
 - Handshake autenticado, ChaCha20-Poly1305 por frame, SHA-256 por archivo. Un

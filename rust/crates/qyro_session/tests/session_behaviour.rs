@@ -1828,3 +1828,56 @@ fn a_second_arrival_under_a_taken_name_refuses_with_a_reason_and_not_a_zero() {
          with parts nobody can open"
     );
 }
+
+/// The fingerprint a pairing string carries can be read back, and it is right.
+///
+/// **QYR-0381.** `parse_pairing` returned the address and threw the fingerprint
+/// away, under a doc comment that said the half it discarded «is an expectation
+/// to check against the authenticated fingerprint». Nothing checked it, and
+/// nothing could: no caller had any way to get it back — not the CLI, not
+/// `qyro_pairing_parse`, which emits the address and nothing else.
+///
+/// So a code **typed by hand**, compared character by character by a person,
+/// established **less** than typing a bare `ip:port` and adding `--expect`. The
+/// expensive half of pairing happened and bought nothing.
+///
+/// ADR-0035 §2.1 is explicit about what it should buy: a fingerprint that does
+/// not match the authenticated one refuses the session **without asking anybody**.
+#[test]
+fn a_pairing_string_hands_back_the_fingerprint_it_carries() {
+    let code = "QYRO1|192.168.1.9:49517|ab12cd34ab12cd34ab12cd34ab12cd34";
+
+    assert_eq!(
+        qyro_session::pairing_fingerprint(code),
+        Ok("ab12cd34ab12cd34ab12cd34ab12cd34".to_owned()),
+        "the expectation the person typed cannot be read back, so nothing can \
+         compare it with the fingerprint the handshake authenticated"
+    );
+
+    // The two never disagree about what is a pairing string. If they could, a
+    // caller would get an address for a string whose fingerprint it cannot read,
+    // and would then dial with no expectation at all — silently.
+    assert!(qyro_session::parse_pairing(code).is_ok());
+    for broken in [
+        "QYRO1|192.168.1.9:49517|ab12",
+        "QYRO1|192.168.1.9|ab12cd34ab12cd34ab12cd34ab12cd34",
+        "NOTQYRO|192.168.1.9:49517|ab12cd34ab12cd34ab12cd34ab12cd34",
+        "192.168.1.9:49517",
+        "",
+    ] {
+        assert_eq!(
+            qyro_session::pairing_fingerprint(broken).is_ok(),
+            qyro_session::parse_pairing(broken).is_ok(),
+            "the two parsers disagree about {broken:?}"
+        );
+    }
+
+    // And the control: a different code gives a different expectation. A
+    // function that returned a constant would satisfy everything above.
+    assert_ne!(
+        qyro_session::pairing_fingerprint(code),
+        qyro_session::pairing_fingerprint(
+            "QYRO1|192.168.1.9:49517|00112233445566778899aabbccddeeff"
+        )
+    );
+}

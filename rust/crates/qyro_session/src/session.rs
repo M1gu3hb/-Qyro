@@ -320,6 +320,43 @@ pub fn parse_pairing(text: &str) -> Result<String, SessionError> {
         .map_err(|_| SessionError::BadArgument)
 }
 
+/// The **expectation** a pairing string carries: thirty-two lowercase hex.
+///
+/// **QYR-0381, and the comment above this was describing an intention.** It says
+/// the fingerprint half «is an expectation to check against the authenticated
+/// fingerprint», and ADR-0035 §2.1 is explicit: *«si la cadena llevaba una huella
+/// y no coincide con la autenticada, la sesión se rechaza **sin preguntar a
+/// nadie**. Quien escaneó ya contestó la pregunta, y preguntar otra vez es cómo
+/// la gente aprende a decir que sí.»*
+///
+/// Nothing checked it. `parse_pairing` returned the address, threw the
+/// fingerprint away, and no caller had any way to get it back — not the CLI, not
+/// `qyro_pairing_parse`, which emits the address and nothing else. So the code a
+/// person **typed by hand, comparing it character by character**, established
+/// less than typing an `ip:port` and adding `--expect` afterwards.
+///
+/// Returned separately from [`parse_pairing`] rather than as a pair, so that
+/// every existing caller keeps meaning what it meant: an address is what most of
+/// them want, and a tuple would have made each of them decide what to do with a
+/// second value they had not asked for.
+///
+/// # Errors
+///
+/// [`SessionError::BadArgument`], for exactly the same inputs as
+/// [`parse_pairing`] — the two never disagree about whether a string is a
+/// pairing string.
+pub fn pairing_fingerprint(text: &str) -> Result<String, SessionError> {
+    qyro_net::PairingEndpoint::parse(text)
+        .map(|endpoint| {
+            endpoint
+                .fingerprint()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect()
+        })
+        .map_err(|_| SessionError::BadArgument)
+}
+
 /// How many files one transfer may carry.
 ///
 /// **ADR-0047 §3, and the reason is Android, not taste.** The per-process limit

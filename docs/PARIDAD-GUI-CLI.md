@@ -66,18 +66,18 @@ la puerta puesta, la celda cita el sitio que la abre.
 | Capacidad | GUI | CLI |
 |---|---|---|
 | Mandar por código tecleado | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:152` |
-| Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:393` | `rust/crates/qyro_cli/src/flows.rs:400` |
+| Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:393` | `rust/crates/qyro_cli/src/flows.rs:425` |
 | Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:138` | `rust/crates/qyro_cli/src/flows.rs:106` |
-| Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:419` |
-| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:672` | `rust/crates/qyro_cli/src/flows.rs:476` |
-| Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:623` |
+| Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:444` |
+| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:672` | `rust/crates/qyro_cli/src/flows.rs:501` |
+| Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:648` |
 | Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
 | Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:232` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
-| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:219` | `rust/crates/qyro_cli/src/flows.rs:662` |
-| Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:85` | `rust/crates/qyro_cli/src/flows.rs:760` |
+| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:219` | `rust/crates/qyro_cli/src/flows.rs:687` |
+| Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:85` | `rust/crates/qyro_cli/src/flows.rs:785` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
-| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:448` |
-| Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:1020` |
+| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:473` |
+| Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:1045` |
 
 <!-- PARIDAD-FIN -->
 
