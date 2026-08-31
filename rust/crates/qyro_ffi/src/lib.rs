@@ -30,9 +30,10 @@ mod trust_abi;
 // the boundary's behaviour, and dlopen would only add a way for the test to
 // be looking at a stale build.
 pub use trust_abi::{
-    qyro_pairing_parse, qyro_session_local_address, qyro_session_peer_fingerprint,
-    qyro_session_peer_trust, qyro_session_reject, qyro_session_rejection,
-    qyro_session_remember_peer, qyro_trust_forget_peer, qyro_trust_list_peers,
+    qyro_pairing_fingerprint, qyro_pairing_parse, qyro_session_local_address,
+    qyro_session_peer_fingerprint, qyro_session_peer_trust, qyro_session_reject,
+    qyro_session_rejection, qyro_session_remember_peer, qyro_trust_forget_peer,
+    qyro_trust_list_peers,
 };
 
 use crate::abi::guard;

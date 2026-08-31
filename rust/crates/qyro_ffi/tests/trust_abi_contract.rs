@@ -13,8 +13,8 @@
 )]
 
 use qyro_ffi::{
-    qyro_pairing_parse, qyro_session_peer_fingerprint, qyro_session_peer_trust,
-    qyro_session_rejection, qyro_trust_forget_peer, qyro_trust_list_peers,
+    qyro_pairing_fingerprint, qyro_pairing_parse, qyro_session_peer_fingerprint,
+    qyro_session_peer_trust, qyro_session_rejection, qyro_trust_forget_peer, qyro_trust_list_peers,
 };
 
 /// The codes, transcribed. `qyro_ffi` publishes them and this asserts the two
@@ -209,5 +209,113 @@ fn every_operation_refuses_a_handle_that_names_nothing() {
     assert_eq!(
         verdict, -99,
         "a refused call still wrote into the caller's out-parameter"
+    );
+}
+
+// -------------------------------------------------- la expectativa (QYR-0392)
+
+#[test]
+fn a_pairing_string_also_gives_up_the_fingerprint_it_promises() {
+    // La otra mitad de la cadena, y la que faltaba: sin esto la GUI podia
+    // marcar la direccion y no podia comparar nada contra ella.
+    let good = "QYRO1|192.168.1.7:47001|00112233445566778899aabbccddeeff";
+    let mut buffer = [0_u8; 64];
+    let mut len = 0_usize;
+
+    let code = unsafe {
+        qyro_pairing_fingerprint(
+            good.as_ptr(),
+            good.len(),
+            buffer.as_mut_ptr(),
+            buffer.len(),
+            &raw mut len,
+        )
+    };
+    assert_eq!(code, QYRO_OK);
+    assert_eq!(text_of(&buffer, len), "00112233445566778899aabbccddeeff");
+
+    // Y las dos mitades son de la misma cadena: la direccion de una y la huella
+    // de la otra no pueden salir de textos distintos.
+    let mut address = [0_u8; 64];
+    let mut address_len = 0_usize;
+    let code = unsafe {
+        qyro_pairing_parse(
+            good.as_ptr(),
+            good.len(),
+            address.as_mut_ptr(),
+            address.len(),
+            &raw mut address_len,
+        )
+    };
+    assert_eq!(code, QYRO_OK);
+    assert_eq!(text_of(&address, address_len), "192.168.1.7:47001");
+}
+
+#[test]
+fn the_fingerprint_half_refuses_exactly_what_the_address_half_refuses() {
+    // Una sola de las dos aceptando algo seria peor que ninguna: la GUI marca
+    // con una y compara con la otra, asi que una cadena que una acepta y la
+    // otra rechaza es una sesion sin expectativa que nadie ve.
+    for bad in [
+        "NOTQYRO|192.168.1.7:47001|00112233445566778899aabbccddeeff",
+        "QYRO1|192.168.1.7:47001",
+        "QYRO1|0.0.0.0:47001|00112233445566778899aabbccddeeff",
+        "QYRO1|192.168.1.7:47001|00112233445566778899AABBCCDDEEFF",
+        "QYRO1|192.168.1.7:47001|00112233445566778899aabbccddee",
+        "",
+    ] {
+        let mut scratch = [0xAA_u8; 64];
+        let mut wrote = 999_usize;
+        let code = unsafe {
+            qyro_pairing_fingerprint(
+                bad.as_ptr(),
+                bad.len(),
+                scratch.as_mut_ptr(),
+                scratch.len(),
+                &raw mut wrote,
+            )
+        };
+        assert_eq!(code, QYRO_ERR_BAD_ARGUMENT, "{bad:?} fue aceptada");
+        assert!(
+            scratch.iter().all(|byte| *byte == 0xAA),
+            "{bad:?} se rechazo y aun asi escribio en el buffer del llamante"
+        );
+    }
+}
+
+#[test]
+fn asking_the_fingerprint_with_no_room_reports_the_length_and_writes_nothing() {
+    // El mismo contrato de texto de ADR-0032 enmienda 1: preguntar con
+    // `capacity == 0` no es un exito, es la forma documentada de preguntar.
+    let good = "QYRO1|[fe80::1]:47001|00112233445566778899aabbccddeeff";
+    let mut needed = 0_usize;
+    let code = unsafe {
+        qyro_pairing_fingerprint(
+            good.as_ptr(),
+            good.len(),
+            std::ptr::null_mut(),
+            0,
+            &raw mut needed,
+        )
+    };
+    assert_eq!(code, QYRO_ERR_BAD_ARGUMENT);
+    assert_eq!(needed, 32, "una huella son treinta y dos hex");
+
+    let mut tight = vec![0xAA_u8; needed - 1];
+    let mut reported = 0_usize;
+    let code = unsafe {
+        qyro_pairing_fingerprint(
+            good.as_ptr(),
+            good.len(),
+            tight.as_mut_ptr(),
+            tight.len(),
+            &raw mut reported,
+        )
+    };
+    assert_eq!(code, QYRO_ERR_BAD_ARGUMENT);
+    assert_eq!(reported, needed);
+    assert!(
+        tight.iter().all(|byte| *byte == 0xAA),
+        "media huella escrita es peor que ninguna"
     );
 }

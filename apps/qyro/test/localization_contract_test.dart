@@ -111,6 +111,10 @@ void main() {
       'failIdentity': (english.failIdentity, spanish.failIdentity),
       'failBadAddress': (english.failBadAddress, spanish.failBadAddress),
       'failInternal': (english.failInternal, spanish.failInternal),
+      'sendNotTheExpectedDevice': (
+        english.sendNotTheExpectedDevice,
+        spanish.sendNotTheExpectedDevice
+      ),
       'sendAddressLabel': (
         english.sendAddressLabel,
         spanish.sendAddressLabel

@@ -30,6 +30,60 @@ void main() {
   final library = _libraryPath;
   final skip = library == null ? 'QYRO_FFI_LIBRARY_PATH is not set' : null;
 
+  // **Sin biblioteca y sin `skip`.** Comparar dos huellas es aritmetica de
+  // texto: no necesita motor, y una prueba que se salta en la mayoria de las
+  // maquinas no es la que debe guardar una comprobacion de seguridad.
+  group('comparar la huella del codigo con la del apreton (QYR-0392)', () {
+    test('la misma huella, escrita de las dos maneras, coincide', () {
+      // La del apreton lleva guiones y la del codigo no (ADR-0035 §2). Una
+      // comparacion literal diria siempre que no, y decir siempre que no es
+      // tan inutil como decir siempre que si: rechazaria todo envio con codigo.
+      expect(
+        NativeTransferService.fingerprintMatches(
+          '0011-2233-4455-6677-8899-aabb-ccdd-eeff',
+          '00112233445566778899aabbccddeeff',
+        ),
+        isTrue,
+      );
+      expect(
+        NativeTransferService.fingerprintMatches(
+          '00112233445566778899AABBCCDDEEFF',
+          '00112233445566778899aabbccddeeff',
+        ),
+        isTrue,
+        reason: 'las mayusculas de un lado no son otro aparato',
+      );
+    });
+
+    test('una huella distinta no coincide, aunque se parezca mucho', () {
+      expect(
+        NativeTransferService.fingerprintMatches(
+          '00112233445566778899aabbccddeef0',
+          '00112233445566778899aabbccddeeff',
+        ),
+        isFalse,
+        reason: 'un solo caracter distinto es otro aparato',
+      );
+    });
+
+    test('una expectativa vacia no coincide con nada', () {
+      // Y esto importa mas de lo que parece: si una cadena vacia coincidiera,
+      // cualquier fallo al sacar la huella del codigo se convertiria en «pasa»,
+      // que es exactamente el defecto que esto arregla, con otro disfraz.
+      expect(
+        NativeTransferService.fingerprintMatches(
+          '00112233445566778899aabbccddeeff',
+          '',
+        ),
+        isFalse,
+      );
+      expect(
+        NativeTransferService.fingerprintMatches('', ''),
+        isFalse,
+      );
+    });
+  });
+
   group('the pairing code this device shows', () {
     late Directory scratch;
     late NativeTransferService service;

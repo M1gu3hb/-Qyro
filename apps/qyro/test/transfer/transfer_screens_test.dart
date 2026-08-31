@@ -32,6 +32,7 @@ final class FakeService implements QyroTransferService {
   FakeService({
     this.peers = const <QyroPeerEntry>[],
     this.pairingAddress,
+    this.pairingFingerprint,
     this.ownCode,
     this.candidates = const <QyroListenAddress>[],
     this.picked = const <QyroPicked>[],
@@ -41,7 +42,16 @@ final class FakeService implements QyroTransferService {
 
   List<QyroPeerEntry> peers;
   String? pairingAddress;
+  String? pairingFingerprint;
   String? ownCode;
+
+  /// La expectativa con la que la pantalla llamó a [send], o null.
+  ///
+  /// Se guarda en vez de comprobarse aquí: lo que esta prueba mira es que la
+  /// pantalla la **pase**, y una comprobación dentro del doble sería el doble
+  /// probándose a sí mismo.
+  String? sentExpectation;
+  bool sendWasCalled = false;
   List<QyroListenAddress> candidates;
   List<QyroPicked> picked;
   List<QyroTransferState> states;
@@ -62,6 +72,10 @@ final class FakeService implements QyroTransferService {
   Future<String?> addressOfPairingString(String text) async => pairingAddress;
 
   @override
+  Future<String?> fingerprintOfPairingString(String text) async =>
+      pairingFingerprint;
+
+  @override
   Future<String?> ownPairingString() async => ownCode;
 
   @override
@@ -75,8 +89,11 @@ final class FakeService implements QyroTransferService {
     required String address,
     required List<QyroPicked> files,
     String? expectedFingerprint,
-  }) =>
-      Stream<QyroTransferState>.fromIterable(states);
+  }) {
+    sendWasCalled = true;
+    sentExpectation = expectedFingerprint;
+    return Stream<QyroTransferState>.fromIterable(states);
+  }
 
   @override
   Stream<QyroTransferState> receive({
@@ -277,6 +294,65 @@ void main() {
             .onPressed,
         isNotNull,
       );
+    });
+
+    testWidgets('un codigo escaneado llega a enviar con su huella',
+        (tester) async {
+      // **QYR-0392.** La pantalla sacaba la direccion del codigo y **tiraba la
+      // huella**: escanear un QR ataba la sesion a una direccion y a ninguna
+      // clave, asi que el trabajo caro del emparejamiento no llegaba a ninguna
+      // parte. ADR-0035 §2.1 dice que una huella que no coincide se rechaza
+      // **sin preguntar**, y para eso hay que llevarla hasta abajo.
+      const codigo = 'QYRO1|192.168.1.5:49517|00112233445566778899aabbccddeeff';
+      final service = FakeService(
+        picked: const <QyroPicked>[
+          QyroPickedPath(name: 'foto.jpg', size: 10, path: '/tmp/foto.jpg'),
+        ],
+        pairingAddress: '192.168.1.5:49517',
+        pairingFingerprint: '00112233445566778899aabbccddeeff',
+      );
+      await tester.pumpWidget(_wrap(SendScreen(service: service)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('send-pick')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('send-address')), codigo);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('send-start')));
+      await tester.pumpAndSettle();
+
+      expect(service.sendWasCalled, isTrue, reason: 'no se llego a mandar');
+      expect(
+        service.sentExpectation,
+        '00112233445566778899aabbccddeeff',
+        reason: 'la huella del codigo no llego a enviar, asi que nadie la '
+            'compara con la del apreton',
+      );
+    });
+
+    testWidgets('un ip:puerto tecleado no inventa una expectativa',
+        (tester) async {
+      // El control del anterior. Quien teclea una direccion a secas no ha
+      // comparado ninguna huella, asi que no hay expectativa que romper: una
+      // inventada aqui rechazaria envios perfectamente correctos.
+      final service = FakeService(picked: const <QyroPicked>[
+        QyroPickedPath(name: 'foto.jpg', size: 10, path: '/tmp/foto.jpg'),
+      ]);
+      await tester.pumpWidget(_wrap(SendScreen(service: service)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('send-pick')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('send-address')),
+        '192.168.1.5:49517',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('send-start')));
+      await tester.pumpAndSettle();
+
+      expect(service.sendWasCalled, isTrue);
+      expect(service.sentExpectation, isNull);
     });
 
     testWidgets('el boton de enviar se enciende al escribir la direccion',

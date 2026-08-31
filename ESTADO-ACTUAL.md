@@ -238,6 +238,29 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0392, y es el que mas importa de los dos ultimos.** Un codigo de
+emparejamiento lleva direccion **y huella**. La pantalla de Enviar sacaba la
+direccion y **tiraba la huella**, y `NativeTransferService.send` aceptaba un
+parametro `expectedFingerprint` que **no usaba en ninguna rama**: sus unicos
+llamantes eran dos pruebas, que pasaban la huella correcta y por tanto pasaban.
+
+ADR-0035 §2.1, PROTOCOL.md y el propio comentario de `qyro_pairing_parse` dicen
+los tres que una huella que no coincide **rechaza la sesion sin preguntar a
+nadie**. QYR-0381 lo arreglo en la terminal. En el telefono no -- y el telefono
+es el que tiene camara, asi que es donde el QR es la forma normal de emparejar.
+Escanear ponia una direccion en un campo, y nada mas.
+
+La otra cara no podia arreglarse igual porque **la frontera C no exponia esa
+mitad**. Ahora si: `qyro_pairing_fingerprint`, el simbolo **34** (ADR-0032
+enmienda 7), sin ningun tipo nuevo. Los dos caminos de envio comparan cuando el
+apreton termina y **antes del primer paso**, asi que un rechazo no manda un solo
+byte, y el fallo llega a la pantalla como lo que es y no como otra cosa.
+
+**Lo que no se puede afirmar:** este contenedor no tiene Flutter, asi que las
+pruebas de Dart de este arreglo no se han ejecutado aqui. Las corre CI. Lo que si
+corre aqui es una guarda de Rust que lee las tres piezas del cableado y falla si
+falta cualquiera; se comprobo que tiene dientes quitando la linea del arreglo.
+
 **QYR-0391, y es el unico que se encontro midiendo.** Una transferencia de 200
 archivos mantenia **402 descriptores abiertos a la vez** — dos por archivo: el
 que lee el origen y la parte abierta del destino, ninguno cerrado hasta el final

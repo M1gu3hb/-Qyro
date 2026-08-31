@@ -84,6 +84,14 @@ teclear un código no establece confianza por sí solo: fija qué huella tiene q
 salir del handshake, y si la autenticada no coincide la sesión se rechaza **sin
 preguntar a nadie**. Quien escaneó ya contestó la pregunta.
 
+> **Esto fue cierto en un consumidor de dos hasta 2026-08-31.** La terminal lo
+> comprobaba (QYR-0381); el teléfono sacaba la dirección del código y tiraba la
+> huella, así que escanear ataba la sesión a una dirección y a ninguna clave —y
+> el teléfono es el que tiene cámara—. La frontera C no exponía esa mitad; ahora
+> sí (QYR-0392, ADR-0032 enmienda 7). Se deja escrito porque una propiedad de
+> seguridad que sólo la mitad del producto cumple **no se ve leyendo la
+> especificación**: se ve preguntándole a cada consumidor.
+
 El puerto es fijo, **49517**, del rango Dynamic/Private de IANA, y la razón es el
 cortafuegos de Windows: el permiso se concede una vez por programa y puerto, así
 que un puerto efímero devolvería el diálogo en cada sesión (ADR-0041 §3). Si está

@@ -329,6 +329,51 @@ pub unsafe extern "C" fn qyro_pairing_parse(
     })
 }
 
+/// La **expectativa** que lleva una cadena de emparejamiento: 32 hex.
+///
+/// **QYR-0392, y es la otra mitad de QYR-0381.** El comentario de
+/// [`qyro_pairing_parse`] dice, literalmente, que lo que hace el llamante con
+/// una cadena valida es «marcar la direccion y despues comparar
+/// `qyro_session_peer_fingerprint` contra lo que escaneo». **La interfaz no
+/// tenia forma de recuperar «lo que escaneo».** El unico simbolo de
+/// emparejamiento devolvia la direccion y tiraba la huella, asi que la GUI podia
+/// marcar y no podia comparar: escanear un QR no ataba la sesion a ninguna
+/// clave. La CLI se arreglo en QYR-0381 porque llama a Rust directamente; la
+/// otra cara no tenia por donde.
+///
+/// Se devuelve **separado** de la direccion, y no como un par, por la misma
+/// razon que en `qyro_session`: quien solo quiere marcar sigue pidiendo lo
+/// mismo, y una tupla obligaria a cada llamante a decidir que hace con un valor
+/// que no pidio.
+///
+/// **No establece confianza.** Es lo que hay que comparar contra la huella
+/// autenticada, no una huella autenticada (ADR-0035 §2.1).
+///
+/// # Safety
+///
+/// `text` must address `text_len` readable bytes; `out`/`out_len` as in
+/// [`qyro_session_peer_fingerprint`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qyro_pairing_fingerprint(
+    text: *const u8,
+    text_len: usize,
+    out: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> i32 {
+    guard(|| {
+        // SAFETY: the caller's contract.
+        let Some(text) = (unsafe { borrow_text(text, text_len) }) else {
+            return QYRO_ERR_BAD_ARGUMENT;
+        };
+        let Ok(fingerprint) = qyro_session::pairing_fingerprint(text) else {
+            return QYRO_ERR_BAD_ARGUMENT;
+        };
+        // SAFETY: the caller's contract.
+        unsafe { emit_text(&fingerprint, out, capacity, out_len) }
+    })
+}
+
 /// The integer a verdict travels as. Written out, not derived from the ordering.
 const fn trust_code(verdict: PeerTrust) -> i32 {
     verdict.code()

@@ -28,6 +28,18 @@ const int _receiveRefusedByMe = -1001;
 /// The worker's way of saying "it finished and did not verify".
 const int _receiveIntegrity = -1002;
 
+/// La forma que tiene el trabajador de decir «contestó otro aparato».
+///
+/// **QYR-0392, y no lo produce el motor.** El apretón salió bien y la huella
+/// autenticada no es la que prometía el código que alguien escaneó o tecleó. El
+/// motor no puede decirlo porque no sabe qué código se leyó: la expectativa vive
+/// donde se escaneó, no en la sesión.
+///
+/// Del mismo lado de la recta que los otros dos y por la misma razón: lejos de
+/// los del motor, para que un choque fuera un accidente visible y no un
+/// reetiquetado silencioso.
+const int _sendNotTheExpectedDevice = -1003;
+
 /// Where received files land.
 ///
 /// ADR-0034 §4: the app's own directory on Android and `Downloads/Qyro` on
@@ -169,6 +181,31 @@ final class NativeTransferService implements QyroTransferService {
   Future<String?> addressOfPairingString(String text) async =>
       _trust.addressOfPairingString(text);
 
+  @override
+  Future<String?> fingerprintOfPairingString(String text) async =>
+      _trust.fingerprintOfPairingString(text);
+
+  /// Si dos huellas son la misma, escritas como cada una se escriba.
+  ///
+  /// La del apretón lleva guiones y la de la cadena no (ADR-0035 §2), así que
+  /// una comparación literal diría siempre que no — y decir siempre que no es
+  /// tan inútil como decir siempre que sí. Es la misma normalización que hace
+  /// la terminal en `flows.rs`, y lo es a propósito: dos caras que comparan
+  /// distinto son dos productos.
+  ///
+  /// **Una expectativa vacía no coincide con nada.** Quien no tiene expectativa
+  /// no llega aquí; quien llega con la cadena vacía tiene una y está rota.
+  static bool fingerprintMatches(String actual, String wanted) {
+    String normalise(String text) => text
+        .toLowerCase()
+        .split('')
+        .where((c) => RegExp(r'[a-z0-9]').hasMatch(c))
+        .join();
+    final left = normalise(actual);
+    final right = normalise(wanted);
+    return right.isNotEmpty && left == right;
+  }
+
   /// This device's pairing code, once it is receiving.
   ///
   /// **This returned `null` unconditionally until phase 11**, so the peers
@@ -270,7 +307,7 @@ final class NativeTransferService implements QyroTransferService {
       // not survive being sent. Android's path goes through the same session on
       // this isolate instead, which blocks the frame for the length of the
       // transfer and is the honest cost until phase 07 measures it.
-      yield* _sendDescriptors(address, files);
+      yield* _sendDescriptors(address, files, expectedFingerprint);
       return;
     }
 
@@ -296,6 +333,10 @@ final class NativeTransferService implements QyroTransferService {
     // a real peer. That is the same seam as QYR-0361 on the other face, found
     // the same way and on the same day (QYR-0362).
     final sendPort = port.sendPort;
+    // Izada por la misma razón que `sendPort`: lo que el cierre captura se
+    // serializa, y una cadena lo hace sin ruido. Leerla de `this` dentro del
+    // cierre arrastraría el servicio entero al otro isolate.
+    final expected = expectedFingerprint;
     final outcome = Isolate.run<int>(() {
       final bindings = library == null
           ? QyroSessionBindings.openDefault()
@@ -309,6 +350,21 @@ final class NativeTransferService implements QyroTransferService {
             sendPort.send(<int>[progress.done, progress.total]),
       );
       try {
+        // **La expectativa se comprueba aquí, antes del primer paso**
+        // (QYR-0392). El apretón ya terminó —`QyroSession.send` no vuelve
+        // hasta que termina— así que la huella autenticada existe, y ningún
+        // byte del archivo ha salido todavía.
+        //
+        // ADR-0035 §2.1: si no coincide **no se pregunta**. Quien escaneó ya
+        // contestó esa pregunta, y volver a hacerla es como la gente aprende a
+        // decir que sí.
+        if (expected != null) {
+          final peer =
+              QyroTrustBindings.openDefault(bindings).peerFingerprint(session);
+          if (!NativeTransferService.fingerprintMatches(peer, expected)) {
+            return _sendNotTheExpectedDevice;
+          }
+        }
         var state = QyroSessionState.inProgress;
         while (state == QyroSessionState.inProgress) {
           state = session.stepBlocking();
@@ -330,6 +386,7 @@ final class NativeTransferService implements QyroTransferService {
   Stream<QyroTransferState> _sendDescriptors(
     String address,
     List<QyroPicked> files,
+    String? expectedFingerprint,
   ) async* {
     final descriptors = files.whereType<QyroPickedDescriptor>().toList();
     yield const QyroConnecting();
@@ -341,6 +398,17 @@ final class NativeTransferService implements QyroTransferService {
         names: descriptors.map((f) => f.name).toList(),
       );
       try {
+        // La misma comprobación que el otro camino, y en el mismo momento: el
+        // apretón terminó y no ha salido un byte (QYR-0392). **Éste es el
+        // camino del teléfono**, que es donde se escanea.
+        if (expectedFingerprint != null &&
+            !fingerprintMatches(
+              _trust.peerFingerprint(session),
+              expectedFingerprint,
+            )) {
+          yield const QyroFailed(kind: QyroFailureKind.notTheExpectedDevice);
+          return;
+        }
         var state = QyroSessionState.inProgress;
         while (state == QyroSessionState.inProgress) {
           state = session.stepBlocking();
@@ -690,6 +758,9 @@ final class NativeTransferService implements QyroTransferService {
         // «los datos llegaron mal» mientras no había llegado nada.
         QyroCode.identityUnreadable => QyroFailureKind.identityUnreadable,
         QyroCode.badArgument => QyroFailureKind.badAddress,
+        // QYR-0392. Éste no viene del motor: lo pone esta capa cuando la huella
+        // autenticada no es la que prometía el código escaneado.
+        _sendNotTheExpectedDevice => QyroFailureKind.notTheExpectedDevice,
         // El resto son fallos internos y se dicen así. Menos informativo y
         // verdad, que es la única propiedad que un mensaje de error necesita.
         _ => QyroFailureKind.internal,

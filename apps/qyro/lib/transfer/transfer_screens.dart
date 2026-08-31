@@ -513,10 +513,26 @@ class _SendScreenState extends State<SendScreen> {
     // para un `ip:puerto` tecleado a mano.
     final typed = _address.text.trim();
     final resolved = await widget.service.addressOfPairingString(typed);
+    // **QYR-0392: la mitad cara del emparejamiento se hacía y se tiraba.**
+    //
+    // Un código lleva dirección **y huella**. Hasta aquí esta pantalla sacaba
+    // la dirección, marcaba, y la huella no la miraba nadie: escanear un QR
+    // —o teclear treinta y dos caracteres comparándolos de uno en uno—
+    // establecía **menos** que teclear un `ip:puerto`, porque el trabajo caro
+    // no llegaba a ninguna parte.
+    //
+    // ADR-0035 §2.1 es explícita: si la cadena llevaba una huella y no coincide
+    // con la autenticada, la sesión **se rechaza sin preguntar a nadie**. Quien
+    // escaneó ya contestó la pregunta.
+    //
+    // Null cuando lo tecleado es un `ip:puerto` a secas, y entonces no hay
+    // expectativa que romper: se manda igual, como siempre.
+    final expected = await widget.service.fingerprintOfPairingString(typed);
     if (!mounted) return;
     final stream = widget.service.send(
       address: resolved ?? typed,
       files: _chosen,
+      expectedFingerprint: expected,
     );
     await for (final state in stream) {
       if (!mounted) return;
@@ -961,6 +977,8 @@ class TransferStatus extends StatelessWidget {
         QyroFailureKind.identityUnreadable => strings.failIdentity,
         QyroFailureKind.badAddress => strings.failBadAddress,
         QyroFailureKind.internal => strings.failInternal,
+        QyroFailureKind.notTheExpectedDevice =>
+          strings.sendNotTheExpectedDevice,
       };
 
   static String _reasonText(

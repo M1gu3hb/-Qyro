@@ -146,6 +146,12 @@ final class QyroTrustBindings {
         ),
         _pairingParse = library.lookupFunction<_PairingNative, _PairingDart>(
           'qyro_pairing_parse',
+        ),
+        // QYR-0392. La otra mitad de la cadena, y la que faltaba: sin ella
+        // esta cara podia marcar la direccion y no podia comparar nada.
+        _pairingFingerprint =
+            library.lookupFunction<_PairingNative, _PairingDart>(
+          'qyro_pairing_fingerprint',
         );
 
   /// Opens the trust half of the same library the session half already opened.
@@ -164,6 +170,7 @@ final class QyroTrustBindings {
   final _HandleOnlyDart _awaitOffer;
   final _TextOutDart _offeredFiles;
   final _PairingDart _pairingParse;
+  final _PairingDart _pairingFingerprint;
 
   /// Runs the two-call text protocol: ask the length, allocate, ask again.
   ///
@@ -352,15 +359,33 @@ final class QyroTrustBindings {
 
   /// Validates a pairing string and returns the address to dial.
   ///
-  /// Returns null when the string is not one of ours. The fingerprint half is
-  /// deliberately not returned: it is an expectation to check against
-  /// [peerFingerprint] after the handshake, not a value to display as if it
-  /// were established (ADR-0035 §2.1).
-  String? addressOfPairingString(String text) {
+  /// Returns null when the string is not one of ours.
+  String? addressOfPairingString(String text) =>
+      _pairingHalf(_pairingParse, text);
+
+  /// La **expectativa** que lleva la misma cadena: treinta y dos hex.
+  ///
+  /// **No es una huella autenticada y no establece nada** (ADR-0035 §2.1). Es
+  /// lo que hay que comparar contra [peerFingerprint] cuando el apreton termine;
+  /// si no coincide, la sesion se rechaza **sin preguntar a nadie**, porque
+  /// quien escaneo ya contesto esa pregunta.
+  ///
+  /// **QYR-0392: hasta aqui la comparacion era imposible desde esta cara.** El
+  /// unico simbolo de emparejamiento devolvia la direccion y tiraba la huella,
+  /// asi que escanear un QR ataba la sesion a una direccion y a ninguna clave.
+  String? fingerprintOfPairingString(String text) =>
+      _pairingHalf(_pairingFingerprint, text);
+
+  /// El protocolo de dos llamadas de ADR-0032 enmienda 1, sobre una cadena.
+  ///
+  /// Una funcion y no dos copias: las dos mitades de una cadena de
+  /// emparejamiento tienen que aceptar y rechazar **lo mismo**, y dos copias de
+  /// «pregunta, reserva, pregunta» son dos sitios donde eso deja de ser cierto.
+  String? _pairingHalf(_PairingDart half, String text) {
     final input = QyroBorrowed.ofUtf8(_session, text);
     final lengthCell = QyroBorrowed.ofBytes(_session, List<int>.filled(8, 0));
     try {
-      _pairingParse(
+      half(
         input.pointer,
         input.length,
         nullptr,
@@ -373,7 +398,7 @@ final class QyroTrustBindings {
       }
       final out = QyroBorrowed.ofBytes(_session, List<int>.filled(needed, 0));
       try {
-        final code = _pairingParse(
+        final code = half(
           input.pointer,
           input.length,
           out.pointer,

@@ -550,3 +550,91 @@ fn the_phone_is_told_where_to_write() {
          fall back to the broken default"
     );
 }
+
+/// The pairing fingerprint reaches the engine and is compared (QYR-0392).
+///
+/// **ADR-0035 §2.1 is a security claim and it was half true.** The terminal
+/// checked the expectation (QYR-0381); the phone did not, and the phone is
+/// where the QR is scanned. The screen resolved the address out of the code and
+/// dropped the fingerprint, so scanning bound the session to an address and to
+/// no key at all.
+///
+/// Guarded from Rust because this container has no Flutter: the Dart tests that
+/// cover the same wiring run in CI, and this one runs in the gate.
+#[test]
+fn a_scanned_code_binds_the_session_to_a_key_and_not_only_to_an_address() {
+    let root = repo_root();
+
+    let screen_path = root.join("apps/qyro/lib/transfer/transfer_screens.dart");
+    let screen_source = std::fs::read_to_string(&screen_path)
+        .unwrap_or_else(|error| panic!("the screens are at {}: {error}", screen_path.display()));
+    let screen = strip_line_comments(&screen_source);
+
+    assert!(
+        screen.contains("fingerprintOfPairingString("),
+        "the send screen never asks what fingerprint the code promised, so the \
+         expensive half of pairing -- the thirty-two characters somebody \
+         compared one by one -- reaches nothing. ADR-0035 §2.1"
+    );
+    assert!(
+        screen.contains("expectedFingerprint: expected"),
+        "the send screen resolves the code and does not hand the expectation \
+         to `send`, so nothing downstream can compare it. Look for the `_send` \
+         method: grep -n 'expectedFingerprint' \
+         apps/qyro/lib/transfer/transfer_screens.dart"
+    );
+
+    let service_path = root.join("apps/qyro/lib/transfer/native_transfer_service.dart");
+    let service_source = std::fs::read_to_string(&service_path)
+        .unwrap_or_else(|error| panic!("the service is at {}: {error}", service_path.display()));
+    let service = strip_line_comments(&service_source);
+
+    assert!(
+        service.contains("static bool fingerprintMatches("),
+        "the comparison itself is gone. It is `static` so a test can reach it \
+         without a library, which is the only reason it can be checked at all \
+         on a machine with no engine built"
+    );
+    assert!(
+        service.contains("fingerprintMatches(peer, expected)"),
+        "the path-backed send accepts an expectation and does not compare it. \
+         An ignored parameter is worse than an absent one: every caller reads \
+         as if the check happens. grep -n 'fingerprintMatches' \
+         apps/qyro/lib/transfer/native_transfer_service.dart"
+    );
+    assert!(
+        service.contains("_sendDescriptors(address, files, expectedFingerprint)"),
+        "the descriptor-backed send -- the Android one, and Android is where \
+         the camera is -- is handed the files and not the expectation, so the \
+         phone checks nothing while the desktop checks everything"
+    );
+    assert!(
+        service.contains("QyroFailureKind.notTheExpectedDevice"),
+        "a mismatch has no ending of its own, so it arrives at the screen as \
+         some other failure and the person reads the wrong sentence"
+    );
+
+    // Y el simbolo por el que la huella cruza la frontera C: sin el, lo de
+    // arriba tendria que analizar la cadena en Dart, y entonces el formato de
+    // ADR-0035 §2 viviria en dos sitios.
+    let boundary_path = root.join("rust/crates/qyro_ffi/src/trust_abi.rs");
+    let boundary = std::fs::read_to_string(&boundary_path)
+        .unwrap_or_else(|error| panic!("the boundary is at {}: {error}", boundary_path.display()));
+    assert!(
+        boundary.contains("pub unsafe extern \"C\" fn qyro_pairing_fingerprint("),
+        "`qyro_pairing_fingerprint` is gone from the C surface, so the only way \
+         for Dart to know what a code promised is to parse the string itself -- \
+         and then the wire format of ADR-0035 §2 lives in two places"
+    );
+
+    // El control del despojador, igual que en las otras guardas de este archivo.
+    assert!(
+        screen_source.contains("QYR-0392"),
+        "the explanation of this wiring is gone from transfer_screens.dart"
+    );
+    assert!(
+        !screen.contains("QYR-0392"),
+        "the comment stripper did not strip, so the assertions above may be \
+         reading prose rather than code"
+    );
+}

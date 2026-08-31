@@ -12,6 +12,71 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0392 — Escanear un QR ataba la sesión a una dirección y a ninguna clave
+
+- Estado: **CERRADO**
+- Severidad: **ALTA**, y es una propiedad de seguridad que tres documentos
+  afirmaban
+- Fecha: 2026-08-31
+
+**El defecto.** Un código de emparejamiento es `QYRO1|ip:puerto|huella`. La
+pantalla de Enviar sacaba la dirección —`transfer_screens.dart`, `_send`— y
+**tiraba la huella**. `NativeTransferService.send` aceptaba un parámetro
+`expectedFingerprint` y **no lo usaba en ninguna rama**: sus únicos llamantes
+eran dos pruebas, que pasaban la huella correcta y por tanto pasaban.
+
+Un parámetro ignorado es peor que uno ausente: todo el que lo lee da por hecho
+que la comprobación ocurre.
+
+**Lo que eso significa.** ADR-0035 §2.1, PROTOCOL.md y el comentario de
+`qyro_pairing_parse` dicen los tres lo mismo: la huella de la cadena es una
+expectativa, y una que no coincide **rechaza la sesión sin preguntar a nadie**.
+QYR-0381 lo arregló en la terminal. En el teléfono no —y el teléfono es el que
+tiene cámara, así que es donde el QR es la forma normal de emparejar—.
+
+Escanear ponía una dirección en un campo. Nada más. Quien contestara en esa
+dirección era aceptado.
+
+**Por qué la otra cara no podía arreglarse igual.** La terminal llama a
+`qyro_session::pairing_fingerprint` directamente. La frontera C **no exponía esa
+mitad**: `qyro_pairing_parse` devuelve la dirección y tira la huella, a propósito
+y por una buena razón —una huella devuelta se dibuja, y dibujarla la hace parecer
+establecida—. Pero devolverla para **comparar** y devolverla para **enseñar** son
+dos cosas distintas, y al no separarlas se perdieron las dos.
+
+**Las pruebas, primero.** El guardián de la superficie C se puso en 34 símbolos
+antes de que el 34 existiera, y falló. Luego tres contratos sobre el símbolo
+nuevo, tres unitarias sobre la comparación —sin motor, porque comparar dos
+huellas es aritmética de texto y una prueba de seguridad no debe saltarse en la
+mayoría de las máquinas— y dos de interfaz sobre que la pantalla la pasa. Y una
+guarda en Rust, `a_scanned_code_binds_the_session_to_a_key_and_not_only_to_an_-`
+`address`, que corre **en el gate** porque este contenedor no tiene Flutter; se
+comprobó que tiene dientes quitando la línea del arreglo.
+
+**El arreglo.**
+
+- `qyro_pairing_fingerprint` en la frontera C, el símbolo 34 (ADR-0032
+  enmienda 7). No cruza ningún tipo nuevo: es el contrato de texto de la
+  enmienda 1.
+- `QyroTrustBindings.fingerprintOfPairingString`, y las dos mitades comparten
+  **una** implementación del protocolo de dos llamadas: dos copias son dos
+  sitios donde una acepta lo que la otra rechaza.
+- La pantalla la pide y la pasa; los **dos** caminos de envío —rutas y
+  descriptores— la comparan justo cuando el apretón termina y **antes del primer
+  paso**, así que un rechazo no manda un solo byte.
+- La comparación normaliza como la terminal: la del apretón lleva guiones y la
+  del código no, y una comparación literal diría siempre que no. **Una
+  expectativa vacía no coincide con nada**, que es la mitad que evita convertir
+  cualquier fallo al leer la huella en un «pasa».
+- Un final propio en la pantalla, `notTheExpectedDevice`, con su cadena en los
+  dos idiomas. Distinto de «la clave cambió»: aquél es la libreta local, éste es
+  una expectativa que alguien acaba de comparar carácter a carácter.
+
+**Lo que no se puede afirmar.** Que ningún teléfono haya escaneado nunca un QR de
+verdad. Este contenedor no tiene Flutter, así que las pruebas de Dart de este
+arreglo **no se han ejecutado aquí**: las corre CI. Lo que sí corre aquí es el
+guardián de Rust, y corre en el gate.
+
 ## QYR-0391 — Doscientos archivos abrían cuatrocientos dos descriptores a la vez
 
 - Estado: **CERRADO**

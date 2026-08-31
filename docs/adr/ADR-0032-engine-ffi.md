@@ -602,3 +602,68 @@ ya pagó con el puerto —tres copias y ningún original—. Vive en
 **Que ningún teléfono haya enseñado esta tarjeta.** Los dos símbolos son el
 camino; que por él pase la oferta de un emisor real, en un aparato real, es la
 fase 19 y el hueco sigue en blanco.
+
+---
+
+## Enmienda 7 (2026-08-31, fase 28) — un símbolo, porque la comparación que esta ADR describe era imposible desde el otro lado
+
+El comentario de `qyro_pairing_parse` dice, palabra por palabra, que lo que hace
+el llamante con una cadena válida es «marcar la dirección y después comparar
+`qyro_session_peer_fingerprint` contra **lo que escaneó**».
+
+**La frontera no tenía forma de devolver «lo que escaneó».** El único símbolo de
+emparejamiento entrega la dirección y tira la huella —a propósito, y el propósito
+era bueno: una huella devuelta se dibuja, y dibujarla la hace parecer
+establecida—. Pero devolverla *para comparar* y devolverla *para enseñar* son dos
+cosas, y al no separarlas se perdieron las dos.
+
+### Lo que eso costaba
+
+QYR-0381 arregló esto en la terminal, que llama a `qyro_session` directamente y
+tiene `pairing_fingerprint` a mano. **La otra cara no tenía por dónde**, así que
+en el teléfono —que es donde está la cámara, y donde el QR es la forma normal de
+emparejar— escanear un código ataba la sesión a **una dirección y a ninguna
+clave**: el trabajo caro del emparejamiento se hacía y no servía de nada, que es
+literalmente lo que QYR-0381 dice de la mitad que sí se arregló.
+
+ADR-0035 §2.1 no es ambigua: *«si la cadena llevaba una huella y no coincide con
+la autenticada, la sesión se rechaza **sin preguntar a nadie**»*. Era cierto en
+un consumidor de dos.
+
+### El símbolo
+
+```c
+/* La expectativa que promete una cadena de emparejamiento: 32 hex.
+   No es una huella autenticada y no establece nada (ADR-0035 §2.1). */
+int32_t qyro_pairing_fingerprint(const uint8_t *text, size_t text_len,
+                                 uint8_t *out, size_t capacity,
+                                 size_t *out_len);
+```
+
+**Treinta y cuatro.** No cruza ningún tipo nuevo: es el contrato de texto de la
+enmienda 1, el mismo `emit_text` y la misma llamada de capacidad cero para
+preguntar el tamaño.
+
+### Por qué separado y no un par
+
+Por lo mismo que en `qyro_session`: quien sólo quiere marcar sigue pidiendo lo
+mismo que pedía, y una tupla obligaría a cada llamante existente a decidir qué
+hace con un valor que no pidió. Y por una segunda razón que esta enmienda escribe
+para que no se pierda: **las dos mitades tienen que aceptar y rechazar
+exactamente lo mismo**. Una cadena que una acepta y la otra no es una sesión sin
+expectativa que nadie ve, y hay una prueba que lo comprueba sobre la misma lista
+de cadenas rotas.
+
+### Por qué no se analizó la cadena en Dart
+
+Era más barato: `QYRO1|dirección|huella` se parte con un `split('|')`. Se
+descarta porque entonces el formato de ADR-0035 §2 viviría en dos sitios, y una
+versión futura del formato tendría que arreglarse en los dos —o peor, en uno—.
+Es la misma razón por la que existe la enmienda 6.
+
+### Lo que esta enmienda **no** promete
+
+**Que nadie haya escaneado nunca un código con una cámara de verdad.** El símbolo
+existe, la GUI lo llama y hay una guarda que lo comprueba desde el gate. Que un
+teléfono lea un QR dibujado por una terminal es la fase 19 y el hueco sigue en
+blanco.

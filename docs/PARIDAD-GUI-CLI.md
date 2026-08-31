@@ -67,19 +67,33 @@ la puerta puesta, la celda cita el sitio que la abre.
 |---|---|---|
 | Mandar por código tecleado | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:152` |
 | Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:393` | `rust/crates/qyro_cli/src/flows.rs:425` |
-| Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:138` | `rust/crates/qyro_cli/src/flows.rs:106` |
+| Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:150` | `rust/crates/qyro_cli/src/flows.rs:106` |
 | Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:658` | `rust/crates/qyro_cli/src/flows.rs:444` |
-| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:693` | `rust/crates/qyro_cli/src/flows.rs:501` |
+| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:674` | `rust/crates/qyro_cli/src/flows.rs:501` |
 | Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:657` |
 | Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
 | Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:232` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
-| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:219` | `rust/crates/qyro_cli/src/flows.rs:696` |
+| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:256` | `rust/crates/qyro_cli/src/flows.rs:696` |
 | Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:85` | `rust/crates/qyro_cli/src/flows.rs:794` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
 | Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:658` | `rust/crates/qyro_cli/src/flows.rs:473` |
+| Comprobar la huella que promete el codigo | `apps/qyro/lib/transfer/transfer_screens.dart:503` | `rust/crates/qyro_cli/src/flows.rs:250` |
 | Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:1054` |
 
 <!-- PARIDAD-FIN -->
+
+## La fila que se anadio porque el codigo la desmentia
+
+**Comprobar la huella que promete el codigo** (QYR-0392) no estaba en esta tabla,
+y por eso nadie vio que la GUI no la tenia. La terminal la comprueba desde
+QYR-0381; la pantalla sacaba la direccion del codigo y tiraba la huella, con un
+parametro `expectedFingerprint` que se aceptaba y no se usaba. Un parametro
+ignorado es peor que uno ausente: todo el que lo lee da por hecho que la
+comprobacion ocurre.
+
+La fila se anade **con las dos celdas llenas**, porque el arreglo entro en el
+mismo commit. Lo que la fila compra es que la proxima vez que una de las dos
+mitades se quede atras, esto lo diga.
 
 ## Dos filas dijeron «todavía» y las dos se cerraron llenándolas
 

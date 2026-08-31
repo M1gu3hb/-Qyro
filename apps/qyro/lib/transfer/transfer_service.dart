@@ -192,6 +192,15 @@ enum QyroFailureKind {
   /// Decir «algo interno falló» es menos informativo y es **verdad**, que es la
   /// única propiedad que un mensaje de error tiene que tener.
   internal,
+
+  /// El aparato que contestó no es el del código que se escaneó o se tecleó.
+  ///
+  /// **QYR-0392.** Distinto de [keyChanged]: aquél es «la clave de este nombre
+  /// no es la que este aparato recordaba», que es una libreta local. Éste es
+  /// «la cadena decía esta huella y salió otra», que es una expectativa que
+  /// alguien acaba de comparar carácter a carácter — y por eso **no se
+  /// pregunta**, se rechaza (ADR-0035 §2.1).
+  notTheExpectedDevice,
 }
 
 /// Everything a screen may ask of the engine.
@@ -251,6 +260,14 @@ abstract interface class QyroTransferService {
 
   /// The address inside a pairing string, or null if it is not one of ours.
   Future<String?> addressOfPairingString(String text);
+
+  /// La huella que **promete** una cadena de emparejamiento, o null.
+  ///
+  /// **No es una huella autenticada.** Es la expectativa que hay que comparar
+  /// contra la del apretón de manos; si no coinciden la sesión se rechaza sin
+  /// preguntar (ADR-0035 §2.1). Existe desde QYR-0392: sin ella esta cara podía
+  /// marcar la dirección de un código escaneado y no podía comprobar nada.
+  Future<String?> fingerprintOfPairingString(String text);
 
   /// The pairing string this device would show, or null before it has one.
   ///

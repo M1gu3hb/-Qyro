@@ -377,6 +377,10 @@
   "@failBadAddress": {
     "description": "Transfer interface string: failBadAddress."
   },
+  "sendNotTheExpectedDevice": "That is not the device the code named. The address answered, but the fingerprint the handshake produced is not the one the code you scanned or typed promised. Nothing was sent, and Qyro does not ask about it: comparing that code was already the answer.",
+  "@sendNotTheExpectedDevice": {
+    "description": "Transfer interface string: sendNotTheExpectedDevice."
+  },
   "failInternal": "Something inside Qyro failed. Nothing was delivered. Try again, and if it happens twice it is worth reporting.",
   "@failInternal": {
     "description": "Transfer interface string: failInternal."
