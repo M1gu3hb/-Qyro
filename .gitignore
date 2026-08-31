@@ -58,6 +58,14 @@ release/windows/*
 !release/ios/.gitkeep
 !release/windows/.gitkeep
 
+# La carpeta de la prueba en hardware: los dos artefactos que el propietario
+# construye, y sus hashes. El LEEME.md si se commitea -- es lo que explica por
+# que la carpeta esta vacia -- y los binarios no, por la misma razon que los de
+# arriba: un binario en el arbol se desincroniza del codigo en el primer commit
+# que no lo regenere, y entonces el paquete lleva un motor que no es el que se lee.
+release/prueba-en-hardware/*
+!release/prueba-en-hardware/LEEME.md
+
 # El .so de Android se construye, no se guarda: lo produce
 # `cargo build --target aarch64-linux-android` y CI lo rehace en cada APK.
 # Un binario de 1 MB en el arbol se desincroniza del codigo en el primer commit

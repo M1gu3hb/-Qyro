@@ -13,6 +13,7 @@ import 'package:qyro/ffi/qyro_file_picker.dart';
 import 'package:qyro/scanner/qyro_scanner.dart';
 import 'package:qyro/ffi/qyro_trust_api.dart';
 import 'package:qyro/l10n/generated/app_localizations.dart';
+import 'package:qyro/transfer/qyro_paths.dart';
 import 'package:qyro/transfer/transfer_service.dart';
 
 /// Bytes, in something a person reads.
@@ -622,13 +623,24 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   Completer<bool>? _pending;
 
   Future<void> _listen() async {
+    // **QYR-0373.** Esto pasaba `destination: ''`, que en el servicio significa
+    // «usa el de siempre» — y el de siempre, en Android, era
+    // `Directory.current.path + '/Qyro'`, o sea **`/Qyro`**: la raíz del
+    // sistema. Recibir en el teléfono fallaba al crear la carpeta, antes de
+    // emitir un solo estado, así que pulsar Recibir no hacía nada.
+    //
+    // `null` en Windows y en cualquier sitio donde el canal no conteste, y ahí
+    // `destination: ''` vuelve a ser lo correcto: `%USERPROFILE%\Downloads\Qyro`
+    // existe y es escribible.
+    final where = await androidDestination();
+    if (!mounted) return;
     final stream = widget.service.receive(
       // ADR-0041 §3. Not `:0`: an ephemeral port is a port nobody can compose
       // into a code before the socket exists, and it costs a firewall dialog
       // every session. `0.0.0.0` and not one interface, because the person may
       // be reached on any of them and the code names which one (§4).
       bind: '0.0.0.0:$qyroDefaultPort',
-      destination: '',
+      destination: where ?? '',
       decide: _decide,
     );
     await for (final state in stream) {

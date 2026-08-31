@@ -65,18 +65,18 @@ la puerta puesta, la celda cita el sitio que la abre.
 
 | Capacidad | GUI | CLI |
 |---|---|---|
-| Mandar por código tecleado | `apps/qyro/lib/transfer/native_transfer_service.dart:241` | `rust/crates/qyro_cli/src/flows.rs:152` |
-| Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:379` | `rust/crates/qyro_cli/src/flows.rs:326` |
-| Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:124` | `rust/crates/qyro_cli/src/flows.rs:106` |
-| Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:613` | `rust/crates/qyro_cli/src/flows.rs:345` |
-| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:640` | `rust/crates/qyro_cli/src/flows.rs:402` |
-| Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:241` | `rust/crates/qyro_cli/src/flows.rs:523` |
-| Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:241` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
-| Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:231` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
-| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:205` | `rust/crates/qyro_cli/src/flows.rs:562` |
+| Mandar por código tecleado | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:152` |
+| Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:393` | `rust/crates/qyro_cli/src/flows.rs:326` |
+| Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:138` | `rust/crates/qyro_cli/src/flows.rs:106` |
+| Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:345` |
+| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:652` | `rust/crates/qyro_cli/src/flows.rs:402` |
+| Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:523` |
+| Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
+| Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:232` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
+| Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:219` | `rust/crates/qyro_cli/src/flows.rs:562` |
 | Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:70` | `rust/crates/qyro_cli/src/flows.rs:660` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
-| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:613` | `rust/crates/qyro_cli/src/flows.rs:374` |
+| Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:614` | `rust/crates/qyro_cli/src/flows.rs:374` |
 | Consejero de canal (fase 21) | `apps/qyro/lib/ffi/qyro_identity_api.dart:141` | `rust/crates/qyro_cli/src/flows.rs:920` |
 
 <!-- PARIDAD-FIN -->

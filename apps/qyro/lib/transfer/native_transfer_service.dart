@@ -37,9 +37,23 @@ String defaultDestination() {
     final home = Platform.environment['USERPROFILE'] ?? '.';
     return '$home\\Downloads\\Qyro';
   }
-  // Android hands the app its own directory; the Kotlin side passes it in. Until
-  // it does, the process working directory is the honest answer rather than a
-  // guessed path that would fail at write time.
+  // **En Android esto NO es una respuesta usable, y el comentario que había aquí
+  // decía lo contrario.** Decía «el lado Kotlin la pasa; hasta que lo haga, el
+  // directorio de trabajo del proceso es la respuesta honesta». El directorio de
+  // trabajo de un proceso de Android es **`/`**, así que la respuesta era
+  // `/Qyro` — la raíz del sistema, que ninguna aplicación puede escribir. Y el
+  // lado Kotlin nunca se escribió (QYR-0373).
+  //
+  // Quien llama en Android es `ReceiveScreen`, y desde QYR-0373 pregunta primero
+  // a `androidDestination()`, que va por `dev.qyro/paths` y contesta
+  // `/sdcard/Android/data/dev.qyro.app/files/Qyro` — escribible sin ningún
+  // permiso, visible por USB, y borrada al desinstalar.
+  //
+  // Esta línea es lo que queda si ese canal no contesta, y no se ha cambiado por
+  // algo «más seguro» a propósito: cualquier ruta que se pusiera aquí sería una
+  // suposición sobre un aparato que este taller no ha tocado nunca, y una
+  // suposición que falle al escribir el primer byte es peor que un fallo al
+  // crear la carpeta, que al menos ocurre antes de que nada esté en el cable.
   return '${Directory.current.path}${Platform.pathSeparator}Qyro';
 }
 

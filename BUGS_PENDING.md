@@ -12,6 +12,70 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0373 — El teléfono escribía en la raíz del sistema, así que no escribía
+
+- Estado: **CERRADO**
+- Severidad: **P0** (recibir en el teléfono no hacía nada, y ése es medio producto)
+- Fecha: 2026-08-31
+
+**El defecto.** `defaultDestination()` en
+`apps/qyro/lib/transfer/native_transfer_service.dart` devolvía, en Android,
+`Directory.current.path + '/Qyro'`, bajo este comentario:
+
+> *«Android hands the app its own directory; the Kotlin side passes it in. Until
+> it does, the process working directory is the honest answer rather than a
+> guessed path that would fail at write time.»*
+
+**El directorio de trabajo de un proceso de Android es `/`.** Así que la
+respuesta era **`/Qyro`**: la raíz del sistema de archivos, que ninguna
+aplicación puede escribir. `Directory('/Qyro').createSync(recursive: true)`
+lanza, y lanza dentro de `receive()` **antes de emitir un solo estado**: pulsar
+Recibir en el teléfono no producía nada visible — ni código propio, ni
+«esperando», ni error.
+
+**El comentario decía la verdad sobre el plan y era falso sobre el resultado.**
+«El lado Kotlin la pasa» describía algo que **nunca se escribió**, y «el
+directorio de trabajo es la respuesta honesta» era falso: una respuesta honesta
+es una que se puede usar, y ésta falla siempre.
+
+**El arreglo.**
+
+- `PathsChannel.kt`, nuevo, en `dev.qyro/paths`, con un solo método
+  `destination`. Devuelve `getExternalFilesDir(null)/Qyro` y **la crea**.
+  `getExternalFilesDir` y no otra cosa por tres propiedades que hacen falta a la
+  vez: no pide **ningún permiso** —un permiso de almacenamiento aquí sería el
+  defecto que ADR-0034 §4 existe para impedir—, **la persona puede llegar a lo
+  que recibió** por USB o con un explorador de archivos, y **se borra al
+  desinstalar**. `getFilesDir()` también es escribible y **no se ve desde
+  fuera**: un archivo que llega y que su dueño no puede abrir no ha llegado.
+- Se registra en `MainActivity`, junto a los otros tres canales.
+- `qyro_paths.dart` lo pregunta, y **ninguno de sus fallos lanza**: canal
+  ausente, `PlatformException`, `null` y cadena vacía devuelven `null` y quien
+  llama se queda con lo de antes. Un arreglo que revienta cuando el canal no está
+  sería peor que el defecto.
+- `ReceiveScreen` pregunta antes de abrir la sesión, en vez de pasar `''`.
+
+**Y lo que no se ha cambiado, a propósito:** la línea de respaldo de
+`defaultDestination()` sigue siendo la de antes, con el comentario ahora
+corregido. Poner ahí otra ruta sería una suposición sobre un aparato que este
+taller no ha tocado nunca, y una suposición que falle **al escribir el primer
+byte** es peor que un fallo al crear la carpeta, que al menos ocurre antes de que
+nada esté en el cable.
+
+**Cómo se vigila.** `qyro_core::repository_contract::the_phone_is_told_where_to_write`
+comprueba las cuatro piezas —el canal, su registro en `MainActivity`, que la
+pantalla pregunta, y que los dos lados abren **el mismo nombre de canal**— y
+corre dentro de la puerta. Una prueba de Dart puede demostrar que el puente
+pregunta bien, y `qyro_paths_test.dart` lo hace; **no** puede demostrar que
+Kotlin conteste ni que la pantalla llegue a preguntar.
+
+**Lo que esta ficha NO puede decir.** Que un teléfono haya escrito un archivo en
+esa carpeta. El entorno donde se arregló no tiene Android ni Flutter. El
+escenario **D2** sigue en blanco, y la guía dice qué mirar si vuelve a fallar.
+
+**La pregunta que cierra esta ficha:** ¿tiene el teléfono una carpeta escribible
+donde dejar lo que llega? **Sí, y se la da quien la conoce.**
+
 ## QYR-0372 — «¿Aceptas 0 archivos, 0 B?»
 
 - Estado: **CERRADO**

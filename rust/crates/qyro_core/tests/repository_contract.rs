@@ -448,3 +448,83 @@ fn the_front_page_does_not_reassert_what_the_code_disproved() {
         );
     }
 }
+
+/// The phone must be told where to write, and by the side that knows.
+///
+/// **QYR-0373, and it was a P0 on the phone.** `defaultDestination()` returned,
+/// on Android, `Directory.current.path + "/Qyro"`, under a comment that said
+/// «Android hands the app its own directory; the Kotlin side passes it in. Until
+/// it does, the process working directory is the honest answer».
+///
+/// **A process on Android has `/` as its working directory.** So the answer was
+/// `/Qyro` — the root of the filesystem, which no application can write.
+/// `Directory('/Qyro').createSync(recursive: true)` throws, and it throws inside
+/// `receive()` **before a single state is emitted**: tapping Receive on the
+/// phone did nothing visible. The Kotlin side that was going to pass the path
+/// was never written, and the comment saying so had been reading like a
+/// temporary note ever since.
+///
+/// This guard is in Rust for the same reason as the two above: the property is
+/// «two languages agree», and there is no other place both can be read without a
+/// build of each. A Dart test can prove the bridge asks correctly — and
+/// `qyro_paths_test.dart` does — but not that Kotlin answers, nor that the
+/// screen asks at all.
+#[test]
+fn the_phone_is_told_where_to_write() {
+    let root = repo_root();
+
+    let kotlin = root.join("apps/qyro/android/app/src/main/kotlin/com/owner/qyro/PathsChannel.kt");
+    let kotlin_source = std::fs::read_to_string(&kotlin).unwrap_or_else(|error| {
+        panic!(
+            "the channel that answers where to write is at {}: {error}",
+            kotlin.display()
+        )
+    });
+    assert!(
+        kotlin_source.contains("getExternalFilesDir"),
+        "PathsChannel no longer uses getExternalFilesDir. It is the one\
+         directory that needs no permission, that the person can reach over USB, \
+         and that goes away on uninstall. getFilesDir is writable too and \
+         invisible from outside: a file that arrives and its owner cannot open \
+         has not arrived."
+    );
+
+    let activity =
+        root.join("apps/qyro/android/app/src/main/kotlin/com/owner/qyro/MainActivity.kt");
+    let activity_source = std::fs::read_to_string(&activity).expect("MainActivity is readable");
+    assert!(
+        activity_source.contains("PathsChannel.CHANNEL"),
+        "MainActivity does not register PathsChannel, so the channel exists and \
+         nothing answers on it -- which is the same as not existing, and is how \
+         the Kotlin side of this went missing the first time"
+    );
+
+    let screen = root.join("apps/qyro/lib/transfer/transfer_screens.dart");
+    let screen_source = std::fs::read_to_string(&screen).expect("the screens are readable");
+    let code = strip_line_comments(&screen_source);
+    assert!(
+        code.contains("androidDestination()"),
+        "the receive screen does not ask where to write, so it falls back to \
+         defaultDestination(), which on Android is `/Qyro` and is not writable"
+    );
+    assert!(
+        !code.contains("destination: '',"),
+        "the receive screen still passes an empty destination, which means «use \
+         the default» -- and the default on Android is the root of the filesystem"
+    );
+
+    // The control: the constants this guard matches on are real, not hopeful.
+    // A guard that asserts on strings nobody defines passes for the wrong reason.
+    assert!(
+        kotlin_source.contains("const val CHANNEL = \"dev.qyro/paths\""),
+        "PathsChannel does not declare the channel name this guard assumes"
+    );
+    let bridge = std::fs::read_to_string(root.join("apps/qyro/lib/transfer/qyro_paths.dart"))
+        .expect("the Dart bridge is readable");
+    assert!(
+        bridge.contains("MethodChannel('dev.qyro/paths')"),
+        "the Dart side opens a different channel than Kotlin registers, so the \
+         call would return MissingPluginException and the screen would silently \
+         fall back to the broken default"
+    );
+}

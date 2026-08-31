@@ -10,6 +10,7 @@ class MainActivity : FlutterActivity() {
     private var picker: FilePickerChannel? = null
     private var discovery: DiscoveryChannel? = null
     private var scanner: ScannerChannel? = null
+    private var paths: PathsChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -33,6 +34,15 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             ScannerChannel.CHANNEL,
         ).setMethodCallHandler(eye)
+
+        // QYR-0373. Sin esto, el destino en Android era `/Qyro` -- la raiz del
+        // sistema-- y recibir fallaba antes de emitir un solo estado.
+        val where = PathsChannel(this)
+        paths = where
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PathsChannel.CHANNEL,
+        ).setMethodCallHandler(where)
     }
 
     override fun onDestroy() {

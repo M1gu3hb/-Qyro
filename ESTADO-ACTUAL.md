@@ -73,6 +73,19 @@ mide en `two_process_pairing_test.dart`, que es la unica prueba que pone un
 receptor de Dart de verdad frente a un emisor de verdad: una prueba de widgets no
 habria visto nada, porque la tarjeta ya sabia dibujar nombres.
 
+**QYR-0373, P0, arreglado.** `defaultDestination()` devolvia en Android
+`Directory.current.path + '/Qyro'`, y **el directorio de trabajo de un proceso de
+Android es `/`**: la respuesta era `/Qyro`, la raiz del sistema, que ninguna
+aplicacion puede escribir. Recibir en el telefono lanzaba al crear la carpeta,
+**antes de emitir un solo estado**, asi que pulsar Recibir no hacia nada visible.
+El comentario decia «el lado Kotlin la pasa; hasta que lo haga, el directorio de
+trabajo es la respuesta honesta» -- y ese lado Kotlin nunca se escribio.
+
+Ahora existe: `PathsChannel.kt` en `dev.qyro/paths`, que devuelve
+`getExternalFilesDir(null)/Qyro` -- sin permisos, visible por USB, y borrada al
+desinstalar. Lo vigila una guarda en la puerta que comprueba las cuatro piezas,
+incluido que los dos lados abren el mismo nombre de canal.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.
