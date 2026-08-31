@@ -96,13 +96,20 @@ void main() {
       // Errors are collected, never swallowed: a silent `onError` is how a
       // receiver that never ran looks exactly like one that ran fine.
       final failures = <Object>[];
+      // Lo que se le enseña a la persona **en el momento de decidir**, guardado
+      // para mirarlo después. ADR-0032 enmienda 6: esto llegaba con cero
+      // nombres y cero bytes.
+      QyroAwaitingDecision? asked;
       final session = service
           .receive(
             bind: '0.0.0.0:$qyroDefaultPort',
             destination: destination.path,
             // Accepting is a decision a person makes; here the test is the
             // person, and it says yes exactly once.
-            decide: (_) async => true,
+            decide: (offer) async {
+              asked = offer;
+              return true;
+            },
           )
           .listen(seen.add, onError: failures.add);
 
@@ -137,7 +144,43 @@ void main() {
               '${sender.stdout}\n${sender.stderr}',
         );
 
-        // 4. The file is at the destination and it is the same file.
+        // 4. **La pregunta tenía objeto.** ADR-0036 §1 dice que nada se acepta
+        //    solo, y una pregunta sin objeto es una formalidad, no una
+        //    decisión. Hasta ADR-0032 enmienda 6 la tarjeta ofrecía «0
+        //    archivos, 0 B»: `fileNames` estaba escrito a mano como lista vacía
+        //    —no había símbolo que trajera los nombres— y `totalBytes` venía de
+        //    `progress().total` tras **un** paso, cuando hacen falta dos.
+        //
+        //    Se mide aquí y no en una prueba de widgets porque lo que fallaba
+        //    no era la tarjeta, que ya sabía dibujar nombres: era que nadie se
+        //    los daba. Sólo un receptor de verdad frente a un emisor de verdad
+        //    puede ver eso.
+        expect(
+          asked,
+          isNotNull,
+          reason: 'a nadie se le preguntó, así que el receptor aceptó solo',
+        );
+        expect(
+          asked!.fileNames,
+          hasLength(1),
+          reason: 'la tarjeta ofrecía ${asked!.fileCount} archivos, así que se '
+              'pide aceptar sin decir qué',
+        );
+        expect(
+          asked!.fileNames.single,
+          'payload.bin',
+          reason: 'el nombre que se enseña no es el del archivo que se manda; '
+              'se enseñó «${asked!.fileNames.single}»',
+        );
+        expect(
+          asked!.totalBytes,
+          payload.length,
+          reason: 'la tarjeta ofrece ${asked!.totalBytes} B y llegan '
+              '${payload.length}. Cero significaba «nada» para quien lo leía, '
+              'que es una mentira distinta de «no lo sé»',
+        );
+
+        // 5. The file is at the destination and it is the same file.
         //
         // `QyroDelivered` is waited for rather than a fixed delay: the engine
         // renames the `.qyro-part` into place only after the digest verifies

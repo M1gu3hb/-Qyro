@@ -12,6 +12,76 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0372 — «¿Aceptas 0 archivos, 0 B?»
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (se pedía aceptar una transferencia sin decir qué, en las dos caras)
+- Fecha: 2026-08-31
+
+**Encontrado ejecutándolo, no leyéndolo.** `qyro recv` contra un emisor real
+imprime, literal:
+
+```
+  someone connected. They say they are:
+    b76c0bb3-034672e9-4c9ab47b-632ddcc0
+  they have not said what they are sending yet.
+  accept from this device? [y/N]
+```
+
+Y en el teléfono, la tarjeta de oferta dibuja
+`receiveOfferFrom(fileCount, humanBytes(totalBytes))` y recibía **cero y cero**:
+«0 archivos, 0 B».
+
+**QYR-0364 está registrada como cerrada con la frase «una pregunta sin objeto es
+una formalidad, no una decisión».** Se cerró en el motor —`offered_files()` lee
+el manifiesto y lo lee bien— y **en ningún consumidor**.
+
+**La causa, medida.** `Session::open_receiver` vuelve en cuanto el handshake
+termina; la oferta y el manifiesto llegan **dos pasos** después, no uno:
+
+| tras | `offered_files()` | `progress().total` |
+|---|---|---|
+| paso 1 | vacío | **0** |
+| paso 2 | el manifiesto | el total real |
+
+- **El CLI** llamaba a `offered_files()` sin dar **ningún** paso, así que el
+  motor no tenía nada que decir y el terminal preguntaba a ciegas.
+- **La GUI** daba **un** paso —con un comentario que decía «un paso trae la
+  oferta y el manifiesto», y son dos— y mandaba `progress().total`, que ahí vale
+  0. Y `fileNames` estaba **escrito a mano como lista vacía**, porque
+  `Session::offered_files()` **no cruzaba la frontera C**: existía desde
+  QYR-0364, tenía un llamante en el CLI, y ningún símbolo. La tarjeta que dibuja
+  los nombres ya estaba hecha y nadie se los daba.
+
+**Y 0 no es «no lo sé» para quien lo lee: es «nada»**, que es una mentira
+distinta.
+
+**El arreglo.**
+
+1. `Session::await_offer()` en el motor: da pasos hasta que el manifiesto está, y
+   no más. Acotado en ocho —dos es lo que hace falta— para que un par que conecta
+   y se calla termine en el plazo de lectura y no aquí. **El número vive en un
+   solo sitio**, que es la lección del puerto: tres copias y ningún original.
+2. `qyro recv` lo llama antes de preguntar. Ahora dice: «they want to send 1
+   file(s), 200000 bytes: informe.pdf (200000 bytes)».
+3. **ADR-0032 enmienda 6**, congelada antes del código en su propio commit, y dos
+   símbolos —**treinta y tres**—:
+   `qyro_session_await_offer_blocking` y `qyro_session_offered_files`, el segundo
+   con el contrato de texto de la enmienda 1 y el separador NUL de
+   `qyro_trust_list_peers`.
+4. El worker de Dart los usa, y `totalBytes` pasa a ser **el total del
+   manifiesto** en vez del progreso: es lo que el par dice que va a mandar, que
+   es la pregunta que se le hace a la persona.
+
+**Dónde se mide, y por qué ahí.** En `two_process_pairing_test.dart`, que pone un
+receptor de Dart de verdad frente a un emisor de verdad. Una prueba de widgets no
+habría visto nada: la tarjeta ya sabía dibujar nombres, y las dos pruebas que la
+cubren le pasan `fileNames` a mano. **Lo que fallaba no era la tarjeta, era que
+nadie se los daba.**
+
+**La pregunta que cierra esta ficha:** ¿sabe la persona qué está aceptando?
+**Sí, en las dos caras.** Comprobado a mano en el CLI, entre dos procesos.
+
 ## QYR-0371 — El canal óptico no tenía puerta en el teléfono
 
 - Estado: **CERRADO**

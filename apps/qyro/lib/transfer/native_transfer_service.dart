@@ -425,7 +425,11 @@ final class NativeTransferService implements QyroTransferService {
           final offer = QyroAwaitingDecision(
             fingerprint: message[1] as String,
             trust: QyroPeerTrust.values[message[2] as int],
-            fileNames: const <String>[],
+            // **Estaba escrito a mano como lista vacía**, porque no había
+            // símbolo que trajera los nombres: `Session::offered_files()`
+            // existía desde QYR-0364 y no cruzaba la frontera. La tarjeta que
+            // los dibuja ya estaba hecha. ADR-0032 enmienda 6.
+            fileNames: (message[5] as List<Object?>).cast<String>(),
             totalBytes: message[3] as int,
           );
           states.add(offer);
@@ -455,10 +459,15 @@ final class NativeTransferService implements QyroTransferService {
         destination: where,
       );
       try {
-        // One step takes the offer and the manifest; the decision happens
-        // before anything else is accepted (ADR-0036 §1).
-        session.stepBlocking();
-        final progress = session.progress();
+        // **ADR-0032 enmienda 6.** Esto daba UN `stepBlocking()` y preguntaba,
+        // con un comentario que decía «un paso trae la oferta y el manifiesto».
+        // Son **dos**, medidos: tras el primero `offered_files` está vacío y
+        // `progress().total` es 0. Así que la tarjeta ofrecía «0 archivos, 0 B»
+        // -- y 0 no es «no lo sé» para quien lo lee, es «nada».
+        //
+        // El número vive en `Session::await_offer`, en Rust, no aquí.
+        trust.awaitOffer(session);
+        final offered = trust.offeredFiles(session);
         // The real verdict, not a hardcoded `newPeer`. With ADR-0040 the
         // fingerprint on the other end is stable between transfers, so
         // `Changed` finally means what ADR-0031 says it means.
@@ -484,8 +493,12 @@ final class NativeTransferService implements QyroTransferService {
           'offer',
           fingerprint,
           verdict.index,
-          progress.total,
+          // El total del **manifiesto**, no el del progreso: es lo que el par
+          // dice que va a mandar, que es la pregunta que se le hace a la
+          // persona. El progreso mide lo que ya llegó, y todavía no llegó nada.
+          offered.totalBytes,
           answer.sendPort,
+          offered.names,
         ]);
         final accepted = await answer.first as bool;
         answer.close();

@@ -115,7 +115,7 @@ fn the_analysis_reaches_the_end_of_every_production_file() {
 /// one of these -- so a symbol that appears without anybody writing it down is a
 /// symbol nobody reviewed. Adding one should cost an ADR amendment and a line
 /// here, in that order.
-const EXPORTED_SYMBOLS: [&str; 31] = [
+const EXPORTED_SYMBOLS: [&str; 33] = [
     "qyro_scanner_close",
     "qyro_scanner_look",
     "qyro_scanner_open",
@@ -131,10 +131,12 @@ const EXPORTED_SYMBOLS: [&str; 31] = [
     "qyro_pairing_parse",
     "qyro_protocol_version_len",
     "qyro_protocol_version_ptr",
+    "qyro_session_await_offer_blocking",
     "qyro_session_cancel",
     "qyro_session_close",
     "qyro_session_finish",
     "qyro_session_local_address",
+    "qyro_session_offered_files",
     "qyro_session_open_receiver_blocking",
     "qyro_session_open_sender_blocking",
     "qyro_session_open_sender_fd_blocking",

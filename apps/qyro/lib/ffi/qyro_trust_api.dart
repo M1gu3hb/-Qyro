@@ -83,6 +83,9 @@ typedef _ListNative = Int32 Function(
     Pointer<Uint8> out, UintPtr capacity, Pointer<UintPtr> len);
 typedef _ListDart = int Function(Pointer<Uint8>, int, Pointer<UintPtr>);
 
+typedef _HandleOnlyNative = Int32 Function(Uint64 handle);
+typedef _HandleOnlyDart = int Function(int);
+
 typedef _RejectNative = Int32 Function(Uint64 handle, Int32 reason);
 typedef _RejectDart = int Function(int, int);
 
@@ -94,7 +97,20 @@ typedef _PairingNative = Int32 Function(Pointer<Uint8> text, UintPtr textLen,
 typedef _PairingDart = int Function(
     Pointer<Uint8>, int, Pointer<Uint8>, int, Pointer<UintPtr>);
 
-/// The nine symbols of ADR-0032 amendment 1, looked up once.
+/// Lo que el par está ofreciendo, ya emparejado nombre con tamaño.
+///
+/// Una clase y no un registro para que el tipo tenga nombre en los mensajes de
+/// error del análisis: esto cruza un `Isolate` y un tipo anónimo allí se lee
+/// como una tupla sin contexto.
+final class QyroOffered {
+  const QyroOffered({required this.names, required this.totalBytes});
+
+  final List<String> names;
+  final int totalBytes;
+}
+
+/// Los símbolos de ADR-0032 enmienda 1, más los dos de la enmienda 6, buscados
+/// una sola vez.
 final class QyroTrustBindings {
   QyroTrustBindings(this._session, DynamicLibrary library)
       : _peerFingerprint = library.lookupFunction<_TextOutNative, _TextOutDart>(
@@ -121,6 +137,13 @@ final class QyroTrustBindings {
         _rejection = library.lookupFunction<_RejectionNative, _RejectionDart>(
           'qyro_session_rejection',
         ),
+        _awaitOffer =
+            library.lookupFunction<_HandleOnlyNative, _HandleOnlyDart>(
+          'qyro_session_await_offer_blocking',
+        ),
+        _offeredFiles = library.lookupFunction<_TextOutNative, _TextOutDart>(
+          'qyro_session_offered_files',
+        ),
         _pairingParse = library.lookupFunction<_PairingNative, _PairingDart>(
           'qyro_pairing_parse',
         );
@@ -138,6 +161,8 @@ final class QyroTrustBindings {
   final _ListDart _listPeers;
   final _RejectDart _reject;
   final _RejectionDart _rejection;
+  final _HandleOnlyDart _awaitOffer;
+  final _TextOutDart _offeredFiles;
   final _PairingDart _pairingParse;
 
   /// Runs the two-call text protocol: ask the length, allocate, ask again.
@@ -254,6 +279,53 @@ final class QyroTrustBindings {
       return const <String>[];
     }
     return joined.split('\x00');
+  }
+
+  /// Waits until the offer and its manifest have arrived. **Blocks.**
+  ///
+  /// ADR-0032 enmienda 6, y el número es el hallazgo: hacen falta **dos** pasos,
+  /// no uno. `QyroSession.receive` vuelve en cuanto termina el handshake, y este
+  /// worker daba un `stepBlocking()` y preguntaba — con `progress().total` a
+  /// cero y sin un solo nombre. La tarjeta ofrecía «0 archivos, 0 B».
+  ///
+  /// El límite vive en `Session::await_offer`, en Rust, y no aquí: un número del
+  /// protocolo escrito en los dos lados es el defecto del puerto otra vez.
+  ///
+  /// Sólo desde un worker: lleva `_blocking` porque bloquea (ADR-0032 §7).
+  void awaitOffer(QyroSession session) {
+    final code = _awaitOffer(session.handle);
+    if (code != QyroCode.ok) {
+      throw QyroSessionFailure(code, 'qyro_session_await_offer_blocking');
+    }
+  }
+
+  /// Qué se está ofreciendo: los nombres y cuántos bytes suman.
+  ///
+  /// Vacío cuando el manifiesto todavía no ha llegado, que es un estado real:
+  /// llama a [awaitOffer] antes. Los nombres llegan **tal como el par los
+  /// mandó** y se dibujan con `safeDisplayName`, que es donde ADR-0047 §6 pone
+  /// esa regla.
+  QyroOffered offeredFiles(QyroSession session) {
+    final joined = _readText(
+      'qyro_session_offered_files',
+      (out, capacity, len) => _offeredFiles(session.handle, out, capacity, len),
+    );
+    if (joined.isEmpty) {
+      return const QyroOffered(names: <String>[], totalBytes: 0);
+    }
+    // `nombre\0tamaño\0nombre\0tamaño…`. NUL porque es el único byte que un
+    // nombre no puede contener, igual que `qyro_trust_list_peers`.
+    final fields = joined.split('\x00');
+    final names = <String>[];
+    var total = 0;
+    // Un campo suelto al final significaría que la codificación cambió de un
+    // lado y no del otro; se ignora en vez de emparejar un nombre con el tamaño
+    // del siguiente, que es como un tamaño acaba dibujado como nombre.
+    for (var i = 0; i + 1 < fields.length; i += 2) {
+      names.add(fields[i]);
+      total += int.tryParse(fields[i + 1]) ?? 0;
+    }
+    return QyroOffered(names: names, totalBytes: total);
   }
 
   /// Refuses the offered transfer, with a reason the sender will see.

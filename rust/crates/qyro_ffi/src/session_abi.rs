@@ -461,6 +461,90 @@ pub unsafe extern "C" fn qyro_session_step_blocking(handle: u64, out_state: *mut
     })
 }
 
+/// Steps until the offer and its manifest have arrived, and no further.
+///
+/// **ADR-0032 enmienda 6, y el defecto que la pidió:** `open_receiver` vuelve en
+/// cuanto termina el handshake, y la oferta llega **dos pasos** después. El
+/// worker de Dart daba uno y preguntaba, así que la tarjeta ofrecía «0 archivos,
+/// 0 B» — y 0 no es «no lo sé» para quien lo lee, es «nada», que es otra mentira.
+///
+/// Bloquea: lee el socket. Lleva `_blocking` por eso, y §7 prohíbe que corra
+/// donde se dibujan frames. El límite está en `Session::await_offer`, no aquí:
+/// un número del protocolo escrito en los dos lados es el defecto del puerto
+/// otra vez.
+///
+/// Un par que conecta y se calla **no** cuelga esto: el plazo de lectura de
+/// `qyro_net` lo termina, y entonces `qyro_session_offered_files` devuelve una
+/// lista vacía, que es un estado real y no un error.
+#[unsafe(no_mangle)]
+pub extern "C" fn qyro_session_await_offer_blocking(handle: u64) -> i32 {
+    guard(|| {
+        with_session(handle, |entry| match entry.session.await_offer() {
+            Ok(()) => QYRO_OK,
+            Err(error) => session_code(error),
+        })
+    })
+}
+
+/// What is being offered: `name`, `size`, `name`, `size` …, separated by NUL.
+///
+/// **El símbolo que faltaba para que la pregunta tuviera objeto.**
+/// `Session::offered_files()` existe desde QYR-0364, tenía un llamante en el CLI
+/// y **no cruzaba la frontera**, así que Dart llevaba `fileNames` escrito a mano
+/// como lista vacía. La tarjeta que las dibuja ya estaba hecha.
+///
+/// **NUL como separador**, igual que `qyro_trust_list_peers` y
+/// `qyro_session_open_sender_blocking`, y por la misma razón: es el único byte
+/// que un nombre no puede contener —`qyro_manifest` rechaza los de control—, así
+/// que partir por él es exacto y ningún nombre necesita escaparse.
+///
+/// El tamaño va en decimal detrás de cada nombre, así que la lista tiene siempre
+/// un número **par** de campos. Vacía cuando todavía no ha llegado el
+/// manifiesto, que es un estado real: llámese
+/// [`qyro_session_await_offer_blocking`] antes, desde un worker.
+///
+/// Los nombres salen **tal como el par los mandó**. Sanearlos aquí sería sanear
+/// para una pantalla dentro de una función que no sabe si hay una; ADR-0047 §6
+/// pone esa regla en el sitio donde se dibuja.
+///
+/// # Safety
+///
+/// As [`qyro_session_peer_fingerprint`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qyro_session_offered_files(
+    handle: u64,
+    out: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> i32 {
+    guard(|| {
+        with_session_entry(handle, |entry| {
+            let joined = join_offered(&entry.session.offered_files());
+            // SAFETY: the caller's contract, stated above.
+            unsafe { crate::trust_abi::emit_text(&joined, out, capacity, out_len) }
+        })
+    })
+}
+
+/// `name\0size\0name\0size…`, and nothing at all for an empty list.
+///
+/// Separated out so it can be tested without a socket: the encoding is what the
+/// Dart side has to reverse, and an off-by-one separator there produces a screen
+/// that lists a size as if it were a file name — which reads as a defect in the
+/// *sender*, three layers from its cause.
+pub(crate) fn join_offered(offered: &[(String, u64)]) -> String {
+    let mut joined = String::new();
+    for (name, size) in offered {
+        if !joined.is_empty() {
+            joined.push('\0');
+        }
+        joined.push_str(name);
+        joined.push('\0');
+        joined.push_str(&size.to_string());
+    }
+    joined
+}
+
 /// Reads how far the session has got. Does not block.
 ///
 /// # Safety
@@ -1283,5 +1367,38 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn lo_que_se_ofrece_cruza_como_nombre_tamano_nombre_tamano() {
+        use super::join_offered;
+
+        // El formato que Dart tiene que deshacer. Un separador de mas o de menos
+        // produce una pantalla que lista un tamano como si fuera un nombre de
+        // archivo, y eso se lee como un defecto del EMISOR, a tres capas de su
+        // causa.
+        let offered = vec![
+            ("informe.pdf".to_owned(), 200_000_u64),
+            ("foto.jpg".to_owned(), 50_000_u64),
+        ];
+        assert_eq!(
+            join_offered(&offered),
+            "informe.pdf\u{0}200000\u{0}foto.jpg\u{0}50000"
+        );
+
+        // Numero par de campos, siempre. Es la propiedad de la que depende el
+        // lado Dart para emparejar cada nombre con su tamano.
+        let joined = join_offered(&offered);
+        let fields: Vec<&str> = joined.split('\0').collect();
+        assert_eq!(fields.len() % 2, 0);
+        assert_eq!(fields.len(), 4);
+
+        // Vacia, y no un separador suelto. Una lista vacia es un estado real --
+        // el manifiesto todavia no ha llegado -- y "\0" se partiria en dos campos
+        // vacios, que Dart leeria como un archivo sin nombre y de tamano cero.
+        assert_eq!(join_offered(&[]), "");
+
+        // Y uno solo, que es el caso corriente: sin separador delante ni detras.
+        assert_eq!(join_offered(&[("a.txt".to_owned(), 0)]), "a.txt\u{0}0");
     }
 }

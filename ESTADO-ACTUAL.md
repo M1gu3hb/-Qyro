@@ -56,6 +56,23 @@ rama de Android era inalcanzable y la unica prueba sobre ese boton afirmaba que
 **no existe**. Ahora hay dos pruebas de widgets y una guarda en Rust que lee
 `home_screen.dart` y corre dentro de la puerta.
 
+**QYR-0372, arreglado, y lo encontro ejecutarlo.** `qyro recv` contra un emisor
+real imprimia «they have not said what they are sending yet» y preguntaba igual; y
+la tarjeta del telefono ofrecia «0 archivos, 0 B». QYR-0364 esta registrada como
+cerrada con la frase «una pregunta sin objeto es una formalidad, no una decision»:
+se cerro en el motor y en ningun consumidor.
+
+Medido: `open_receiver` vuelve al acabar el handshake y la oferta llega **dos**
+pasos despues. El CLI no daba ninguno; la GUI daba uno, con un comentario que
+decia que uno bastaba. Y `fileNames` estaba escrito a mano como lista vacia,
+porque `offered_files()` no cruzaba la frontera C.
+
+Ahora hay `Session::await_offer()` -- el numero en un solo sitio --, **ADR-0032
+enmienda 6** congelada antes del codigo, y dos simbolos, **treinta y tres**. Se
+mide en `two_process_pairing_test.dart`, que es la unica prueba que pone un
+receptor de Dart de verdad frente a un emisor de verdad: una prueba de widgets no
+habria visto nada, porque la tarjeta ya sabia dibujar nombres.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.
