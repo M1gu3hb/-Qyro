@@ -638,3 +638,57 @@ fn a_scanned_code_binds_the_session_to_a_key_and_not_only_to_an_address() {
          reading prose rather than code"
     );
 }
+
+/// Los tres objetivos de Android alinean el `.so` a 16 KB **desde el repositorio**.
+///
+/// **QYR-0394.** Android 15 corre con páginas de 16 KB en aparatos nuevos y una
+/// biblioteca alineada a 4 KB **no carga**. Hasta aquí eso dependía de dos cosas
+/// que no están en el repositorio: que quien construye tenga el NDK 28 o más
+/// nuevo —que alinea por omisión— y que se acuerde. CI lo pasaba a mano; la
+/// guía del propietario, no.
+///
+/// Puesto en `.cargo/config.toml`, lo lleva **cualquiera** que construya, y el
+/// inspector de APK deja de ser la primera vez que alguien se entera.
+#[test]
+fn every_android_target_asks_the_linker_for_sixteen_kilobyte_pages() {
+    let root = repo_root();
+    let path = root.join(".cargo/config.toml");
+    let config = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("the cargo config is at {}: {error}", path.display()));
+
+    for triple in [
+        "aarch64-linux-android",
+        "armv7-linux-androideabi",
+        "x86_64-linux-android",
+    ] {
+        let header = format!("[target.{triple}]");
+        let Some(at) = config.find(&header) else {
+            panic!(
+                "there is no `{header}` in .cargo/config.toml, so a build for \
+                 {triple} takes whatever the NDK happens to default to. On an \
+                 NDK older than 28 that is 4 KB, and a 4 KB-aligned .so does \
+                 not load on Android 15"
+            );
+        };
+        let section = config
+            .get(at..)
+            .and_then(|rest| rest.split_once("\n["))
+            .map_or_else(
+                || config.get(at..).unwrap_or_default().to_owned(),
+                |(head, _)| head.to_owned(),
+            );
+        assert!(
+            section.contains("max-page-size=16384"),
+            "`{header}` exists and does not ask for 16 KB pages:\n{section}"
+        );
+    }
+
+    // El control. Un lector que no encontrara nada haría pasar el bucle de
+    // arriba en cuanto alguien renombrara las tablas, así que se comprueba que
+    // este mismo lector ve la tabla que ya estaba.
+    assert!(
+        config.contains("[target.x86_64-pc-windows-msvc]"),
+        "the Windows table is gone from this file, so the reader above is \
+         looking at something else"
+    );
+}

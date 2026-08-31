@@ -238,6 +238,21 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0394, y trae una afirmacion falsa medida por el camino.** Android 15 corre
+con paginas de 16 KB y una biblioteca alineada a 4 KB **no carga** -- la
+aplicacion muere al abrirse sin mencionar la alineacion. Nada en el repositorio
+se lo pedia al enlazador: CI exportaba el flag a mano y la guia se apoyaba en
+«usa el NDK 28 o mas nuevo». Las dos dejan fuera a **quien construye el APK en su
+maquina hoy**. Ahora salen las tres tablas de Android de `.cargo/config.toml`.
+
+Y debajo estaba esto, en el comentario del propio archivo: «A per-table table is
+not overridden that way», del `RUSTFLAGS` del entorno. **Es falso**, y se midio
+aqui: con una tabla por objetivo pidiendo `debug-assertions=on` y
+`RUSTFLAGS="-C opt-level=1"` puesto, `cargo build -v` pasa `opt-level=1` y
+`debug-assertions=on` **desaparece entero**. Cargo usa la primera fuente que
+encuentra y no las suma. Lo que salvaba al enlazado estatico de Windows no era la
+tabla: era `verify_static.ps1`, que mira los imports y no se cree el comentario.
+
 **QYR-0393, y es el fallo que mas probablemente le pase a alguien la primera vez
 que use esto.** Una persona que tarda 65 segundos en decidir si acepta perdia la
 transferencia, y leia **«el otro aparato no responde»** justo cuando acababa de

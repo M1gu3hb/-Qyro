@@ -111,10 +111,17 @@ Ese `Test-Path` tiene que decir **True**. Si dice `False`, el NDK no está
 instalado: ábrelo desde Android Studio → SDK Manager → SDK Tools → marca
 **NDK (Side by side)**.
 
-> **Y usa el NDK 28 o más nuevo.** A partir de esa versión, el enlazador alinea
-> la biblioteca a 16 KB por omisión, que es lo que Android 15 exige. Con un NDK
-> más viejo hay que añadirlo a mano —`-Wl,-z,max-page-size=16384`— y el paso §2.3
-> te dirá que falta.
+> **Los 16 KB ya no dependen de tu NDK.** Android 15 corre con páginas de 16 KB
+> en los aparatos nuevos, y una biblioteca alineada a 4 KB **no carga**: la
+> aplicación muere al abrirse. El NDK 28 y posteriores alinean así por omisión;
+> los anteriores, no. Desde hoy el propio repositorio se lo pide al enlazador
+> —está en `.cargo/config.toml`— así que **no tienes que hacer nada** y el paso
+> §2.3 lo mide de todas formas (QYR-0394).
+>
+> **Lo que sí tienes que no hacer: no pongas `RUSTFLAGS` a mano** en esta
+> ventana. Cargo usa la primera fuente de flags que encuentra y no las suma, así
+> que un `RUSTFLAGS` puesto **borra** lo que el repositorio pide: los 16 KB aquí,
+> y el enlazado estático del `.exe` de Windows más abajo. Está medido.
 
 ```
 $env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "$bin\aarch64-linux-android21-clang.cmd"

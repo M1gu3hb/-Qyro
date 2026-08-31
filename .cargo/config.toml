@@ -5,7 +5,19 @@
 # 1. **`[target.<triple>] rustflags`, never `[build] rustflags`.** A `RUSTFLAGS`
 #    in the environment silently replaces the `[build]` table, so on a CI runner
 #    that sets it for any reason the static linking disappears without a word.
-#    A per-target table is not overridden that way.
+#
+#    **La frase que estuvo aqui hasta 2026-08-31 decia «A per-target table is
+#    not overridden that way». Es falsa, y se midio** (QYR-0394). Cargo toma los
+#    flags de la PRIMERA fuente que encuentra --`RUSTFLAGS` del entorno, luego
+#    `[target.<triple>]`, luego `[build]`-- y no los suma. Con una tabla
+#    `[target.<host>] rustflags = ["-C","debug-assertions=on"]` y
+#    `RUSTFLAGS="-C opt-level=1"` puesto, `cargo build -v` pasa `opt-level=1` y
+#    **`debug-assertions=on` desaparece entero**.
+#
+#    Asi que una tabla por objetivo se pierde igual. Lo que salva a este archivo
+#    no es la tabla: es que `verify_static.ps1` mira los imports del binario y
+#    falla, en vez de creerse esto. **No pongas `RUSTFLAGS` a mano** para
+#    construir nada de aqui: borra lo de abajo sin avisar.
 # 2. **Always pass `--target` explicitly.** Without it the flags also reach build
 #    scripts, which are compiled for the host and break.
 #
@@ -18,3 +30,29 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.i686-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# ---------------------------------------------------------------------------
+# Android: paginas de 16 KB, y no de 4 (QYR-0394).
+#
+# Android 15 corre con paginas de **16 KB** en aparatos nuevos, y una biblioteca
+# alineada a 4 KB **no carga**: la aplicacion muere al abrirse con un
+# `UnsatisfiedLinkError` que no menciona la alineacion por ninguna parte.
+#
+# El NDK 28 y posteriores alinean asi por omision, y CI pasaba el flag a mano.
+# Las dos cosas dejan fuera al caso que importa hoy: **quien construye el APK en
+# su maquina**, con el NDK que tenga y sin acordarse de nada. Puesto aqui, lo
+# lleva cualquiera que construya, y el inspector de APK deja de ser la primera
+# vez que alguien se entera.
+#
+# Es redundante con CI --que exporta el mismo flag en `RUSTFLAGS`-- y la
+# redundancia es el punto: si `RUSTFLAGS` esta puesto, esta tabla se pierde
+# (ver arriba), y si no lo esta, esta tabla es lo unico que hay.
+
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.armv7-linux-androideabi]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

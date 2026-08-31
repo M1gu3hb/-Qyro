@@ -12,6 +12,58 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0394 — Los 16 KB del `.so` dependían del NDK que tuviera quien construye, y el archivo que lo explica decía algo falso
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** para quien construya hoy con un NDK antiguo; el síntoma es
+  «se ha detenido la aplicación» y no menciona la alineación por ningún lado
+- Fecha: 2026-08-31
+
+**El defecto.** Android 15 corre con páginas de **16 KB** en los aparatos nuevos
+y una biblioteca alineada a 4 KB **no carga**. Nada en el repositorio se lo pedía
+al enlazador: CI exportaba `RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384"` a
+mano en dos workflows, y la guía del propietario se apoyaba en «usa el NDK 28 o
+más nuevo, que alinea por omisión».
+
+Las dos cosas dejan fuera al caso que importa hoy: **quien construye el APK en su
+máquina**, con el NDK que tenga instalado y sin acordarse de nada. El inspector
+de APK lo habría dicho —eso ya estaba— pero decirlo al final de la construcción
+es enterarse tarde.
+
+**Y debajo había una afirmación falsa, medida.** `.cargo/config.toml` existe para
+que el `.exe` de Windows salga enlazado estáticamente, y su comentario explicaba
+por qué usa `[target.<triple>]` y no `[build]`: *«A per-target table is not
+overridden that way»*. **No es cierto.** Cargo toma los flags de la **primera**
+fuente que encuentra —`RUSTFLAGS` del entorno, luego `[target.<triple>]`, luego
+`[build]`— y **no los suma**. Medido en este contenedor:
+
+```
+[target.x86_64-unknown-linux-gnu] rustflags = ["-C","debug-assertions=on"]
+
+  cargo build -v --target x86_64-unknown-linux-gnu
+    -> debug-assertions=on
+
+  RUSTFLAGS="-C opt-level=1" cargo build -v --target x86_64-unknown-linux-gnu
+    -> opt-level=1     (debug-assertions=on desaparece entero)
+```
+
+Así que una tabla por objetivo **se pierde igual**. Lo que salva a ese archivo no
+es la tabla: es que `verify_static.ps1` mira los imports del binario y falla en
+vez de creerse el comentario. La protección era real; la razón escrita, no.
+
+**La prueba, primero.** `every_android_target_asks_the_linker_for_sixteen_-`
+`kilobyte_pages`, en el contrato de repositorio que corre dentro del gate. Falló
+con «there is no `[target.aarch64-linux-android]` in .cargo/config.toml».
+
+**El arreglo.** Las tres tablas de Android en `.cargo/config.toml`, con el flag.
+Ahora lo lleva **cualquiera** que construya. Es redundante con CI, y la
+redundancia es el punto: si `RUSTFLAGS` está puesto esta tabla se pierde, y si no
+lo está esta tabla es lo único que hay.
+
+Y el comentario falso corregido con la medida, más una frase que faltaba en los
+dos documentos de construcción: **no pongas `RUSTFLAGS` a mano**, porque borra
+los 16 KB de Android y el enlazado estático de Windows sin decir nada.
+
 ## QYR-0393 — Tardar más de un minuto en aceptar mataba la transferencia, y culpaba a la red
 
 - Estado: **CERRADO**

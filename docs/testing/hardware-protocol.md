@@ -39,6 +39,10 @@ cd D:\Qyro\repo
 # Rust sabe compilar para Android y NO sabe con que enlazar. Sin estas dos
 # variables el cargo build de abajo falla con "linker `cc` not found".
 # La guia de prueba tiene la version de PowerShell que resuelve la ruta sola.
+#
+# La alineacion de 16 KB que Android 15 exige NO hace falta ponerla aqui: sale
+# de .cargo/config.toml (QYR-0394). Lo que no hay que hacer es poner RUSTFLAGS
+# a mano, porque eso la borra --y borra tambien el enlazado estatico del .exe.
 #   $bin = "$env:LOCALAPPDATA\Android\Sdk\ndk\<version>\toolchains\llvm\prebuilt\windows-x86_64\bin"
 #   $env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER  = "$bin\aarch64-linux-android21-clang.cmd"
 #   $env:CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER = "$bin\armv7a-linux-androideabi21-clang.cmd"
