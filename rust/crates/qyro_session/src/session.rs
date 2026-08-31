@@ -637,6 +637,55 @@ impl Session {
     /// would be sanitising for a screen inside a function that also feeds
     /// filesystem code; ADR-0047 §6 puts the terminal rule at the drawing site
     /// and ADR-0027 keeps the stricter filesystem rules where they belong.
+    /// Steps until the offer and its manifest have arrived, and no further.
+    ///
+    /// **QYR-0372, and the number is the finding: it takes two steps, not one.**
+    /// `open_receiver` returns the moment the handshake completes, and the offer
+    /// and the manifest come afterwards. Measured on the loopback, with
+    /// `session_behaviour::what_is_offered_is_unknown_until_await_offer_and_known_after_it`:
+    ///
+    /// | after | `offered_files()` | `progress().total` |
+    /// |---|---|---|
+    /// | step 1 | empty | **0** |
+    /// | step 2 | the manifest | the real total |
+    ///
+    /// Both consumers got that wrong, in the same direction and for the same
+    /// reason. The terminal asked «accept from this device? [y/N]» having called
+    /// [`Self::offered_files`] with no step at all, and printed «they have not
+    /// said what they are sending yet» — the question with no object that
+    /// QYR-0364 is recorded as having closed. The Dart worker took **one**
+    /// `stepBlocking()` and sent `progress().total` along with the offer, so the
+    /// dialog on the phone offered **0 bytes** — and 0 is not «unknown» to
+    /// somebody reading it, it is «nothing», which is a different lie.
+    ///
+    /// So the number lives here, once, and neither consumer has to know it.
+    ///
+    /// # Why a bound and not a loop
+    ///
+    /// A peer that connects and then says nothing must not turn this into a
+    /// hang: the read deadline inside `qyro_net` ends the wait, but a caller
+    /// spinning on «not yet» would restart it forever. Eight is far above the
+    /// two this needs and far below anything a stall could hide behind.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the underlying step returned. A session that ends before the
+    /// manifest arrives is **not** an error here — it returns `Ok` with nothing
+    /// offered, and the caller's own «nothing was offered» path is the right one
+    /// to take.
+    pub fn await_offer(&mut self) -> Result<(), SessionError> {
+        // Eight, and see the doc comment: two is what it takes.
+        for _ in 0..8 {
+            if !self.offered_files().is_empty() {
+                return Ok(());
+            }
+            if self.step()? != SessionState::InProgress {
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
     #[must_use]
     pub fn offered_files(&self) -> Vec<(String, u64)> {
         match &self.role {

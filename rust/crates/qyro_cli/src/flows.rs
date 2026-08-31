@@ -355,9 +355,27 @@ pub fn receive(out: Option<&str>, expect: Option<&str>, port: Option<u16>, vt: V
     // filename is attacker-controlled text and a terminal is an interpreter: a
     // carriage return in a name rewrites the line the person is reading, at the
     // exact moment they are deciding whether to accept it.
+    // **QYR-0372: ask a question with an object, or do not ask.**
+    //
+    // This used to call `offered_files()` straight after the handshake and get
+    // an empty list every time, then print «they have not said what they are
+    // sending yet» and ask anyway. `open_receiver` returns as soon as the
+    // handshake completes; the offer and the manifest arrive **two steps**
+    // later. So the terminal asked the person to accept without telling them
+    // what — which is the exact defect QYR-0364 is recorded as having closed.
+    //
+    // `await_offer` is where that number lives now. It is bounded, so a peer
+    // that connects and then goes quiet ends at the read deadline instead of
+    // here.
+    if let Err(error) = session.await_offer() {
+        eprintln!("\n  {error}");
+        return 1;
+    }
     let offered = session.offered_files();
     if offered.is_empty() {
-        println!("  they have not said what they are sending yet.");
+        // Still a real state: the peer connected and stopped. Saying so beats
+        // asking a question about nothing.
+        println!("  they connected but never said what they are sending.");
     } else {
         let total: u64 = offered.iter().map(|(_, size)| *size).sum();
         println!(

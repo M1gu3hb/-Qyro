@@ -1649,3 +1649,102 @@ fn but_an_address_this_machine_does_not_have_is_still_a_bad_argument() {
 
     assert_eq!(refusal, qyro_session::SessionError::BadArgument);
 }
+
+/// A receiver knows **what** it is being asked to accept before it is asked.
+///
+/// **ADR-0036 §1 and QYR-0364, measured instead of assumed.** QYR-0364 is
+/// recorded as closed with the words «una pregunta sin objeto es una formalidad,
+/// no una decisión»; running `qyro recv` against a real sender prints, verbatim:
+///
+/// ```text
+///   someone connected. They say they are:
+///     b76c0bb3-034672e9-4c9ab47b-632ddcc0
+///   they have not said what they are sending yet.
+///   accept from this device? [y/N]
+/// ```
+///
+/// The question with no object was still there. Not because `offered_files` is
+/// broken — it reads the manifest correctly — but because of **when** it is
+/// called: `open_receiver` returns as soon as the handshake completes, and the
+/// offer and the manifest arrive later.
+///
+/// **How much later, measured: two steps, not one.** After the first the
+/// manifest is not there and `progress().total` is **0**; after the second both
+/// are. That number is the whole finding, because the Dart side takes exactly
+/// one `stepBlocking()` and then asks the person to decide, passing
+/// `progress.total` along — so the dialog on the phone offered «0 bytes» and no
+/// names at all.
+///
+/// [`Session::await_offer`] is where that number now lives, once, so neither
+/// consumer has to know it. This test pins both halves: **nothing before it,
+/// everything after it.** Without the first half the fix would be unnecessary;
+/// without the second it would not work.
+#[test]
+fn what_is_offered_is_unknown_until_await_offer_and_known_after_it() {
+    ensure_identity();
+    let scratch = Scratch::new("offered-when");
+    let root = scratch.path("origen");
+    let destination = scratch.path("destino");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&destination).unwrap();
+
+    let names = ["foto.jpg", "informe.pdf"];
+    let files: Vec<PathBuf> = names
+        .iter()
+        .map(|name| {
+            let path = root.join(name);
+            write_pattern(&path, 4096);
+            path
+        })
+        .collect();
+
+    let address = loopback(a_free_port());
+    let seen = std::sync::Arc::new(std::sync::Mutex::new((Vec::new(), Vec::new(), 0_u64)));
+    let recorder = std::sync::Arc::clone(&seen);
+    let destination_for_thread = destination.clone();
+
+    let receiving = thread::spawn(move || {
+        let mut session =
+            Session::open_receiver(address, &destination_for_thread, None).expect("a receiver");
+
+        // Exactly where the CLI used to ask, and where it used to get nothing.
+        let before = session.offered_files();
+        let _ = session.await_offer();
+        let after = session.offered_files();
+        let total = session.progress().total;
+        *recorder.lock().unwrap() = (before, after, total);
+
+        let _ = drive(&mut session);
+        let _ = session.finish();
+    });
+
+    let mut sender = open_sender_when_ready(address, &root, &files).expect("a sender");
+    let _ = drive(&mut sender);
+    receiving.join().unwrap();
+
+    let (before, after, total) = seen.lock().unwrap().clone();
+
+    assert!(
+        before.is_empty(),
+        "the manifest was already there before await_offer, so «they have not \
+         said what they are sending yet» had a different cause than this test \
+         claims: {before:?}"
+    );
+
+    let offered: Vec<&str> = after.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(
+        offered, names,
+        "after await_offer the receiver still cannot say what it is being \
+         offered, so neither consumer can ask a question with an object"
+    );
+    for (name, size) in &after {
+        assert_eq!(*size, 4096, "{name} came back with the wrong size");
+    }
+    // The number the phone's dialog shows. It was 0, and 0 is not «unknown» to
+    // somebody reading it -- it is «nothing», which is a different lie.
+    assert_eq!(
+        total, 8192,
+        "progress().total is {total} at the moment of asking, so the dialog \
+         offers a number that is not the size of what is arriving"
+    );
+}

@@ -534,3 +534,71 @@ búfer que quien llama reservó y libera.
 **Que ningún teléfono haya leído un QR de Qyro.** Estos seis símbolos son el
 camino; que por él pasen píxeles de una cámara real es la fase 19, y el hueco
 sigue en blanco.
+
+---
+
+## Enmienda 6 (2026-08-31, fase 28) — dos símbolos, y la pregunta que se hacía sin objeto
+
+**El teléfono preguntaba «¿aceptas 0 archivos, 0 B?».** Literalmente eso: la
+tarjeta de oferta dibuja `receiveOfferFrom(fileCount, humanBytes(totalBytes))` y
+recibía cero y cero.
+
+**Medido, no razonado.** `Session::open_receiver` vuelve en cuanto el handshake
+termina, y la oferta y el manifiesto llegan después —**dos pasos después**, no
+uno—. Está medido en
+`session_behaviour::what_is_offered_is_unknown_until_await_offer_and_known_after_it`:
+
+| tras | `offered_files()` | `progress().total` |
+|---|---|---|
+| paso 1 | vacío | **0** |
+| paso 2 | el manifiesto | el total real |
+
+El worker de Dart daba **un** `stepBlocking()` y mandaba `progress().total` junto
+a la oferta, así que el número era 0. Y `fileNames` estaba **escrito a mano como
+lista vacía**, porque no había símbolo que la trajera: `Session::offered_files()`
+existía desde QYR-0364, tenía un llamante en el CLI y **no cruzaba la frontera**.
+
+QYR-0364 está registrada como cerrada con la frase «una pregunta sin objeto es una
+formalidad, no una decisión». Se cerró en el motor y en ningún consumidor.
+
+### Los dos símbolos
+
+```c
+/* Steps until the offer and its manifest have arrived, and no further.
+   Bounded: a peer that connects and says nothing ends at the read deadline. */
+int32_t qyro_session_await_offer_blocking(uint64_t handle);
+
+/* What is being offered: name, size, name, size ..., separated by NUL. */
+int32_t qyro_session_offered_files(uint64_t handle, uint8_t *out,
+                                   size_t capacity, size_t *out_len);
+```
+
+**Treinta y tres.** Ninguno cruza un tipo nuevo.
+
+- El primero lleva `_blocking` porque bloquea, y §7 prohíbe que un `_blocking`
+  corra donde se dibujan frames. Va en el worker, como los otros cuatro.
+- El segundo usa el contrato de texto de la enmienda 1 —`emit_text`, capacidad
+  cero para preguntar el tamaño— y el separador **NUL**, que es el mismo que
+  `qyro_trust_list_peers` y `qyro_session_open_sender_blocking` usan y por la
+  misma razón: es el único byte que un nombre no puede contener, así que partir
+  por él es exacto y ningún nombre necesita escaparse.
+
+### Por qué dos y no uno
+
+Meter la espera dentro del captador lo convertiría en una función que bloquea sin
+decirlo en su nombre, y **§7 es exactamente esa regla**. Un captador que a veces
+tarda tres segundos es un captador que alguien llamará desde el hilo que dibuja.
+
+### Por qué no se resolvió duplicando el bucle en Dart
+
+Era la alternativa barata: dar dos `stepBlocking()` en vez de uno. Se descarta
+porque el número **dos** es una propiedad del protocolo, y una propiedad del
+protocolo escrita en los dos lados es la forma exacta del defecto que este taller
+ya pagó con el puerto —tres copias y ningún original—. Vive en
+`Session::await_offer`, y `qyro_session_await_offer_blocking` es su puerta.
+
+### Lo que esta enmienda **no** promete
+
+**Que ningún teléfono haya enseñado esta tarjeta.** Los dos símbolos son el
+camino; que por él pase la oferta de un emisor real, en un aparato real, es la
+fase 19 y el hueco sigue en blanco.
