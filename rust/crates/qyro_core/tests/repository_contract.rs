@@ -345,3 +345,106 @@ fn citations_in(body: &str) -> Vec<(String, usize)> {
     }
     found
 }
+
+/// The front-page documents may not re-assert what the code disproved.
+///
+/// **Three documents described a Qyro from before phase 12, and one of them told
+/// agents it was canonical.** `AGENTS.md` said the scope «no incluye
+/// transferencia, transporte, LAN» and closed with «Qyro sigue sin transferir
+/// archivos». `PROTOCOL.md` said «nada pone todavía un frame en un socket».
+/// `README.md` said discovery «no existe para la aplicación» and that «no se
+/// escanea (no hay cámara)». All four were false, and `qyro_net`, `qyro_transfer`,
+/// `qyro_discovery.dart`, `ScanScreen` and the `CAMERA` permission are the
+/// files that say so.
+///
+/// A stale sentence in a document nobody reads is a nuisance. A stale sentence
+/// on the front page of a repository, in the file that calls itself the source
+/// of truth, is a person building on a project that does not exist. So the
+/// retired claims are named here, and re-asserting one turns the gate red.
+///
+/// **Narrow on purpose.** This forbids **five exact sentences** that were
+/// measured false against named files. It is not a style check and must never
+/// become one: a documentation guard that starts having opinions gets disabled,
+/// and then it is not there for the sentence that matters.
+#[test]
+fn the_front_page_does_not_reassert_what_the_code_disproved() {
+    let root = repo_root();
+    // Each: the document, the retired claim, and the file that disproves it.
+    let retired: [(&str, &str, &str); 5] = [
+        (
+            "AGENTS.md",
+            "Qyro sigue sin transferir archivos",
+            "rust/crates/qyro_net/src/stream.rs",
+        ),
+        (
+            "AGENTS.md",
+            "no** incluye transferencia",
+            "rust/crates/qyro_transfer/src/session.rs",
+        ),
+        (
+            "PROTOCOL.md",
+            "nada pone todavía un frame en un socket",
+            "rust/crates/qyro_net/src/listener.rs",
+        ),
+        (
+            "README.md",
+            "no existe para la aplicación",
+            "apps/qyro/lib/discovery/qyro_discovery.dart",
+        ),
+        (
+            "README.md",
+            "no se escanea",
+            "apps/qyro/lib/scanner/scan_screen.dart",
+        ),
+    ];
+
+    let mut resurrected = Vec::new();
+    for (document, claim, disproved_by) in retired {
+        let path = root.join(document);
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{document} must exist to be checked: {error}"));
+
+        // The blockquotes that *record* each retired sentence are the point of
+        // this being readable, so the sentence is allowed to appear inside one.
+        // Everything else is an assertion.
+        let asserted = text
+            .lines()
+            .filter(|line| !line.trim_start().starts_with('>'))
+            .any(|line| line.contains(claim));
+        if asserted {
+            resurrected.push(format!(
+                "{document} asserts «{claim}» again, and \
+                 {disproved_by} is the file that disproves it"
+            ));
+        }
+
+        // And the file that disproves it must still be there. If the code went,
+        // the claim might be true again and this guard would be the last thing
+        // standing between that and a document nobody re-read.
+        assert!(
+            root.join(disproved_by).exists(),
+            "{disproved_by} is gone. It is what made «{claim}» false in \
+             {document}; if the capability was removed, this guard is now \
+             wrong and the document may be right."
+        );
+    }
+
+    assert!(resurrected.is_empty(), "{}", resurrected.join("\n"));
+
+    // The control, and without it this test passes on an empty file. Each
+    // document must still carry the blockquote that records what it retired,
+    // which also proves the blockquote exemption above is exercised rather than
+    // theoretical.
+    for (document, claim) in [
+        ("AGENTS.md", "Qyro sigue sin transferir archivos"),
+        ("PROTOCOL.md", "nada pone todavía un frame en un socket"),
+    ] {
+        let text = std::fs::read_to_string(root.join(document)).expect("readable");
+        assert!(
+            text.contains(claim),
+            "{document} no longer records that it once said «{claim}», so the \
+             blockquote exemption above is checking nothing and the sentence \
+             could come back unremarked"
+        );
+    }
+}

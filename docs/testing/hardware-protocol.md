@@ -25,19 +25,34 @@ Lo demás está terminado. Esto está listo para ejecutarse.
 
 ## 1. Preparar, una vez
 
+> **Los pasos de abajo son el resumen.** Si es la primera vez, la página
+> completa —con lo que se ve en pantalla en cada paso y qué significa cada
+> error— es [`docs/GUIA-DE-PRUEBA.md`](../GUIA-DE-PRUEBA.md).
+
 ```bash
 # En el PC, desde la raíz del repositorio.
 cd D:\Qyro\repo
 
-# 1. La biblioteca nativa para el teléfono.
-rustup target add aarch64-linux-android
+# 1. La biblioteca nativa para el telefono. DOS arquitecturas de ARM, no una:
+#    arm64-v8a es casi todo telefono de hoy y armeabi-v7a es el de 32 bits, que
+#    instala el APK igual y muere con UnsatisfiedLinkError si no esta su .so.
+rustup target add aarch64-linux-android armv7-linux-androideabi
 cargo build --release --package qyro_ffi --target aarch64-linux-android
+cargo build --release --package qyro_ffi --target armv7-linux-androideabi
 mkdir apps\qyro\android\app\src\main\jniLibs\arm64-v8a
+mkdir apps\qyro\android\app\src\main\jniLibs\armeabi-v7a
 copy target\aarch64-linux-android\release\libqyro_ffi.so apps\qyro\android\app\src\main\jniLibs\arm64-v8a\
+copy target\armv7-linux-androideabi\release\libqyro_ffi.so apps\qyro\android\app\src\main\jniLibs\armeabi-v7a\
 
 # 2. El APK firmado.
 cd apps\qyro
 flutter build apk --release
+
+# 2b. Y lo que de verdad quedo dentro: las ABIs, y la alineacion de 16 KB que
+#     Android 15 exige. Se mide sobre el APK y no sobre lo que salio de cargo.
+python3 ..\..\tools\apk_inspector\inspect_apk.py ^
+  build\app\outputs\flutter-apk\app-release.apk ^
+  --require-abi arm64-v8a --require-abi armeabi-v7a
 
 # 3. El .exe de Windows.
 flutter build windows --release
@@ -84,12 +99,18 @@ adb logcat -d | findstr /C:"qyro_ffi" /C:"UnsatisfiedLink"
 Esperado: **ningún** `UnsatisfiedLinkError`.
 Resultado: `[ ]` ______________________
 
-**A3. El manifiesto instalado pide exactamente una permission.**
+**A3. El manifiesto instalado pide exactamente tres permissions.**
 ```bash
 adb shell dumpsys package dev.qyro.app | findstr /C:"permission"
 ```
-Esperado: `CHANGE_WIFI_MULTICAST_STATE` y **nada de almacenamiento**, y **nada de
-`ACCESS_LOCAL_NETWORK`**.
+Esperado: `INTERNET`, `CHANGE_WIFI_MULTICAST_STATE` y `CAMERA`. Y **nada de
+almacenamiento**, y **nada de `ACCESS_LOCAL_NETWORK`**.
+
+**`INTERNET` es el que faltaba, y su ausencia era un P0 (QYR-0368):** estaba
+declarado sólo en los sourceSets de debug y de profile, que **no llegan a una
+build de release**, así que el APK que se instala no podía abrir un socket. Si
+aquí no aparece, **nada de la sección D va a funcionar**, y el error que sale en
+el teléfono no menciona ni a Qyro ni a un permiso.
 Resultado: `[ ]` ______________________
 
 **A4. El `.exe` arranca en Windows.**
@@ -222,7 +243,7 @@ Resultado: `[ ]` ______________________
 
 ### F — Los otros tres canales
 
-**Los veinte escenarios de arriba prueban un canal: la red.** `R7` promete
+**Los veintiún escenarios de arriba prueban un canal: la red.** `R7` promete
 cuatro, y los otros tres no tienen ni una casilla. Éstas son.
 
 **Nada de esto está ejecutado.** Todos los huecos están en blanco a propósito:
@@ -351,7 +372,8 @@ Cuando termines, pega la tabla rellena en un archivo nuevo:
 
 - **el modelo del teléfono y su versión de Android**, y la versión de Windows;
 - **el hash del APK y del `.exe`** que instalaste;
-- **todos los huecos** —los veinte de A–E y los de F, los cuatro canales—,
+- **todos los huecos** —los veintiuno de A–E y los cinco de F, veintiséis en
+  total, los cuatro canales—,
   incluidos los que fallaron y **los que no ejecutaste**;
 - y para cada fallo: qué esperabas, qué pasó, y el `adb logcat` si lo hay.
 
