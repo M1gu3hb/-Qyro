@@ -180,3 +180,136 @@ fn the_two_consumers_agree_on_the_port() {
         crate::QYRO_PORT
     );
 }
+
+/// Android must declare `INTERNET`, or nothing in this crate can run there.
+///
+/// **QYR-0368, P0.** `android.permission.INTERNET` was declared **only** in
+/// `app/src/debug/AndroidManifest.xml` and `app/src/profile/`. Those two source
+/// sets do not reach a release build: Gradle merges `main` plus the source set
+/// of the variant being built, so `flutter build apk --release` produced an APK
+/// whose merged manifest had no `INTERNET` at all — and the comment at the top
+/// of the main manifest said «The only permission this application declares»,
+/// which made the absence look deliberate.
+///
+/// Everything Qyro does on a network is TCP, and it starts in this crate:
+/// `TcpListener::bind` in `listener.rs` and `TcpStream::connect` in `stream.rs`.
+/// Without the permission both throw, and what the person sees on the phone is
+/// `SocketException: Permission denied (errno = 13)` from a socket call inside
+/// the native library — a message that names neither Qyro nor a permission, on
+/// the one build type they would ever install.
+///
+/// The whole product worked in every test and could not have moved a byte on a
+/// real phone. Debug and profile builds have the permission, so an emulator run
+/// and a `flutter run` both pass: the only build that fails is the only build
+/// anybody installs.
+///
+/// This guard is here rather than beside the manifest because the failure is
+/// this crate's: it is the crate whose entire purpose becomes unreachable. It
+/// reads the source manifest, so it runs on every commit, on every platform,
+/// inside `cargo test --workspace` — which is what `scripts/gate.ps1` runs. The
+/// **merged** release manifest is checked separately, by
+/// `apps/qyro/test/android_manifest_test.dart`, because that file only exists
+/// after `flutter build apk` and a source-only check cannot see a permission a
+/// plugin removes or adds.
+#[test]
+fn the_android_manifest_declares_internet() {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../apps/qyro/android/app/src/main/AndroidManifest.xml");
+    let source = std::fs::read_to_string(&manifest).unwrap_or_else(|error| {
+        panic!("the Android manifest is at {}: {error}", manifest.display())
+    });
+
+    // Comments are stripped first. The manifest *names* permissions in prose to
+    // explain why they are absent, and a substring search over the raw file
+    // would read the explanation as the declaration. This is the same reason
+    // `android_manifest_test.dart` strips them.
+    let declared = declared_permissions(&source);
+
+    assert!(
+        declared
+            .iter()
+            .any(|name| name == "android.permission.INTERNET"),
+        "`android.permission.INTERNET` is not declared in the manifest that \
+         reaches a release build. It is declared in app/src/debug/ and \
+         app/src/profile/, and neither of those reaches release. Everything \
+         this crate does is TCP, so the release APK cannot open a socket: \
+         listener.rs fails at bind and stream.rs at connect, with errno 13 and \
+         no mention of Qyro. Declared here today: {declared:?}"
+    );
+}
+
+/// The control, and it is not decoration.
+///
+/// A guard that only asserts a presence passes the day somebody writes the
+/// permission into a **comment** while deleting the declaration — which is the
+/// exact shape of the defect above, where prose said one thing and the merged
+/// manifest another. So: the stripper must actually strip, proved on this very
+/// file's own comments, and the parser must actually parse.
+#[test]
+fn the_permission_parser_reads_declarations_and_not_prose() {
+    let commented = r#"
+        <manifest>
+          <!-- android.permission.INTERNET is explained here and not declared,
+               and a substring search would find it anyway. -->
+          <uses-permission android:name="android.permission.CAMERA" />
+        </manifest>
+    "#;
+    assert_eq!(
+        declared_permissions(commented),
+        vec!["android.permission.CAMERA".to_owned()],
+        "a permission named only inside a comment was read as declared"
+    );
+
+    let declaring = r#"
+        <manifest>
+          <uses-permission android:name="android.permission.INTERNET" />
+        </manifest>
+    "#;
+    assert_eq!(
+        declared_permissions(declaring),
+        vec!["android.permission.INTERNET".to_owned()],
+        "a real declaration was not read"
+    );
+}
+
+/// Every `<uses-permission>` name in an Android manifest, comments removed.
+///
+/// Deliberately not a regex crate: this workspace has no regex dependency and
+/// adding one so a guard can read XML would put a dependency in the shipped
+/// graph for a test. The scan is literal and its behaviour is pinned by
+/// `the_permission_parser_reads_declarations_and_not_prose`.
+fn declared_permissions(xml: &str) -> Vec<String> {
+    let mut stripped = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(open) = rest.find("<!--") {
+        stripped.push_str(&rest[..open]);
+        match rest[open..].find("-->") {
+            Some(close) => rest = &rest[open + close + 3..],
+            // An unterminated comment swallows the remainder, which is what an
+            // XML parser does too.
+            None => return collect_permissions(&stripped),
+        }
+    }
+    stripped.push_str(rest);
+    collect_permissions(&stripped)
+}
+
+fn collect_permissions(xml: &str) -> Vec<String> {
+    let needle = "<uses-permission";
+    let mut names = Vec::new();
+    let mut rest = xml;
+    while let Some(start) = rest.find(needle) {
+        rest = &rest[start + needle.len()..];
+        let Some(end) = rest.find('>') else { break };
+        let tag = &rest[..end];
+        let attribute = "android:name=\"";
+        if let Some(open) = tag.find(attribute) {
+            let value = &tag[open + attribute.len()..];
+            if let Some(close) = value.find('"') {
+                names.push(value[..close].to_owned());
+            }
+        }
+        rest = &rest[end..];
+    }
+    names
+}

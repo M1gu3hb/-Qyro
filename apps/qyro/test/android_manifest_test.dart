@@ -157,17 +157,18 @@ void main() {
     }
   });
 
-  test('the manifest declares exactly two permissions, and they are these two',
+  test('the manifest declares exactly three permissions, and they are these',
       () {
     // Not «no permissions»: discovery needs `CHANGE_WIFI_MULTICAST_STATE`,
     // which is a normal permission granted at install and is what stops the
-    // Wi-Fi stack filtering multicast beneath the socket. And since phase 24B,
+    // Wi-Fi stack filtering multicast beneath the socket. Since phase 24B,
     // `CAMERA`: the optical channel is the one that works with no network of
-    // any kind, and without a camera there is no optical channel.
+    // any kind, and without a camera there is no optical channel. And since
+    // QYR-0368, `INTERNET` — see the test below for why its absence was a P0.
     //
     // **The exact set, and the exact count.** Not «at least these» and not «not
     // these»: a list that only forbids is a list a new permission slips past,
-    // and «at least» would let a third arrive without anybody noticing. Two,
+    // and «at least» would let a fourth arrive without anybody noticing. Three,
     // named, in order.
     final source = File('android/app/src/main/AndroidManifest.xml');
     final text = _withoutComments(source.readAsStringSync());
@@ -179,9 +180,37 @@ void main() {
     expect(declared, <String>[
       'android.permission.CHANGE_WIFI_MULTICAST_STATE',
       'android.permission.CAMERA',
+      'android.permission.INTERNET',
     ]);
-    expect(declared.length, 2,
-        reason: 'a third permission arrived without an argument next to it');
+    expect(declared.length, 3,
+        reason: 'a fourth permission arrived without an argument next to it');
+  });
+
+  test('the source manifest declares INTERNET, because everything here is TCP',
+      () {
+    // QYR-0368, P0. `android.permission.INTERNET` lived **only** in
+    // `app/src/debug/AndroidManifest.xml` and `app/src/profile/`, and neither
+    // source set reaches a release build: Gradle merges `main` plus the source
+    // set of the variant being built. So `flutter build apk --release`
+    // produced an APK with no `INTERNET` at all, while `flutter run` and every
+    // emulator run had it — the only build that failed was the only build
+    // anybody installs.
+    //
+    // What the person would have seen on the phone: a socket call inside the
+    // native library failing with `Permission denied (errno = 13)`, a message
+    // that names neither Qyro nor a permission.
+    //
+    // Asserted separately from the exact-set test above so that a failure says
+    // *which* permission and *why*, rather than printing a list diff.
+    final source = File('android/app/src/main/AndroidManifest.xml');
+    final text = _withoutComments(source.readAsStringSync());
+    expect(
+      text,
+      contains('android.permission.INTERNET'),
+      reason: 'every channel Qyro has except the optical one is a TCP socket. '
+          'Without INTERNET the release APK cannot bind or connect, and the '
+          'error the user sees mentions neither Qyro nor a permission.',
+    );
   });
 
   test('the camera is declared optional, so a phone without one still runs',
@@ -312,6 +341,46 @@ void main() {
       isTrue,
       reason: 'the file found at ${merged.path} is not a manifest',
     );
+    // **The half this test did not have, and the half that mattered.** It only
+    // ever asserted that permissions were *absent*. A permission that has to be
+    // *present* could therefore disappear and every check stayed green — which
+    // is exactly what happened to `INTERNET` (QYR-0368): declared in the debug
+    // and profile source sets, absent from `main`, and so absent from every
+    // release APK this project has ever built. A measurement that cannot see
+    // the failure it is for is the defect this file was written to avoid, and
+    // it had it.
+    //
+    // Release only, when the path says so. The debug merged manifest *does*
+    // carry `INTERNET` from `app/src/debug/`, so asserting it there would pass
+    // while the release APK stayed broken.
+    final isRelease = merged.path.contains('release');
+    // And where the caller *says* it built a release APK, reading the debug
+    // manifest instead is a failure and not a pass. Without this, a moved
+    // intermediates path would send the release job to the debug manifest and
+    // the one assertion the release job exists to make would evaporate — the
+    // same way the whole INTERNET check evaporated in the first place.
+    if (Platform.environment['QYRO_REQUIRE_RELEASE_MANIFEST'] == '1') {
+      expect(
+        isRelease,
+        isTrue,
+        reason: 'QYRO_REQUIRE_RELEASE_MANIFEST is set, so a release APK was '
+            'built and its merged manifest must be the one read. What was '
+            'read instead: ${merged.path}',
+      );
+    }
+    if (isRelease) {
+      expect(
+        text.contains('android.permission.INTERNET'),
+        isTrue,
+        reason:
+            'the merged RELEASE manifest at ${merged.path} does not declare '
+            'android.permission.INTERNET. This is the manifest of the APK '
+            'people install, and every Qyro channel except the optical one is '
+            'a TCP socket. Check that app/src/main/AndroidManifest.xml still '
+            'declares it: app/src/debug/ and app/src/profile/ do not reach a '
+            'release build.',
+      );
+    }
     for (final permission in _forbidden) {
       expect(
         text.contains(permission),

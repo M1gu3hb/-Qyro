@@ -56,11 +56,21 @@ jobs:
       # The same assertion the debug job makes, on the artifact people install.
       # A permission a plugin adds appears in the merged manifest and nowhere
       # else, and this is the build that ships.
-      - name: The merged manifest declares no storage permission
+      #
+      # QYR-0368 turned this step around: it now also asserts that INTERNET is
+      # **present**. Until then this file only ever forbade permissions, so the
+      # one permission the product cannot run without disappeared from `main`
+      # and every check stayed green -- `app/src/debug/` and `app/src/profile/`
+      # carry it, and neither reaches a release build.
+      - name: The merged release manifest declares INTERNET and no storage
         working-directory: apps/qyro
         run: flutter test test/android_manifest_test.dart
         env:
           QYRO_REQUIRE_MERGED_MANIFEST: "1"
+          # And it must be the **release** manifest that was read. The debug one
+          # carries INTERNET from app/src/debug/, so reading it here would pass
+          # while the APK being published stayed broken.
+          QYRO_REQUIRE_RELEASE_MANIFEST: "1"
       - name: The APK carries qyro_ffi and not the crypto smoke harness
         shell: bash
         working-directory: apps/qyro
