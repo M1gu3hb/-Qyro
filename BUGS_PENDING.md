@@ -12,6 +12,60 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0371 — El canal óptico no tenía puerta en el teléfono
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (el único canal que funciona sin red, inalcanzable)
+- Fecha: 2026-08-31
+
+**La duodécima capacidad escrita, probada y sin llamante.** `PeersScreen` acepta
+un callback `onScan` desde la fase 24B, y junto al botón hay un comentario que se
+llama a sí mismo *«el llamante de producción del escáner»*. La única construcción
+de producción de esa pantalla —la de `TransferHome`, en
+`transfer_screens.dart`— era `PeersScreen(service: widget.service)`: **nunca
+pasaba `onScan`**. Con `onPressed: null`, Material dibuja el botón **apagado** y
+se niega a pulsarlo.
+
+Así que el escáner, `ScannerChannel.kt`, CameraX, `qyro_eye`, `qyro_fountain` y
+el permiso `CAMERA` estaban todos completos, y **no había forma de entrar**. El
+comentario describía un argumento que nadie pasaba.
+
+**Y por qué ninguna prueba lo vio, que es la mitad interesante.**
+`scannerAvailableOn()` ya aceptaba un sistema operativo inyectado —para esto
+exactamente— y la pantalla **no se lo pasaba**, así que leía
+`Platform.operatingSystem` directamente. Las pruebas corren en escritorio, donde
+eso es `linux`, así que la rama de Android era **inalcanzable desde cualquier
+prueba** y la única prueba sobre este botón afirmaba que **no existe**. Una rama
+en la que ninguna prueba puede entrar no está cubierta, por muchas pruebas que la
+rodeen.
+
+**El arreglo, y por qué en dos sitios.**
+
+- `TransferHome` acepta `onScan` y lo pasa; `HomeScreen` lo construye, porque
+  abrir el escáner necesita la biblioteca nativa cargada y `HomeScreen` es donde
+  se construye el motor. `NativeTransferService.nativeLibrary` la expone en vez
+  de abrirla otra vez: `DynamicLibrary.open` dos veces sobre la misma ruta son
+  dos manejadores sobre una imagen, y el motor tiene estado de proceso.
+- `PeersScreen` acepta `operatingSystem`, así que la rama de Android por fin se
+  puede probar desde el escritorio.
+- Dos pruebas de widgets: con `onScan` el botón existe **y se puede pulsar**; sin
+  motor cargado se apaga en vez de mentir. Y sobre una superficie alta a
+  propósito, porque la pantalla es una `ListView` y una `ListView` no monta lo
+  que queda fuera de la vista: un `findsNothing` por no haberse dibujado se lee
+  igual que uno por no existir.
+- Y **`qyro_core::repository_contract::the_optical_channel_has_a_door`**, en
+  Rust, que lee `home_screen.dart` y exige `onScan:` y `ScanScreen(`. Una prueba
+  de widgets puede demostrar que la pantalla honra el callback que le dan; **no
+  puede demostrar que producción se lo dé**, porque el llamante de producción
+  construye el motor de verdad. Es la misma forma que
+  `qyro_net::guards::the_two_consumers_agree_on_the_port`, y corre dentro de la
+  puerta.
+
+**La pregunta que cierra esta ficha:** desde el teléfono, ¿se puede llegar al
+escáner? **Sí, y hay una guarda en la puerta que se pone roja el día que el
+cableado se caiga otra vez** — comprobado quitando el arreglo: la guarda falla
+nombrando `onScan:`.
+
 ## QYR-0370 — Un puerto ocupado salía como «argumento no usable», y no había con qué elegir otro
 
 - Estado: **CERRADO**

@@ -30,12 +30,42 @@ String humanBytes(int bytes) {
 
 /// The shell: four destinations, and the transfer service they share.
 class TransferHome extends StatefulWidget {
-  const TransferHome({required this.service, this.initialTab = 0, super.key});
+  const TransferHome({
+    required this.service,
+    this.initialTab = 0,
+    this.onScan,
+    this.operatingSystem,
+    super.key,
+  });
 
   final QyroTransferService service;
 
   /// Which destination opens first. The home buttons land on send or receive.
   final int initialTab;
+
+  /// What to do when somebody wants to read codes. `null` disables the button.
+  ///
+  /// **QYR-0371: without this the optical channel had no door.** `PeersScreen`
+  /// has taken an `onScan` callback since phase 24B, and the one production
+  /// construction of it — the line below — never passed one, because
+  /// `TransferHome` had nowhere to take one from. So on a phone the «Scan
+  /// codes» button rendered with `onPressed: null`, which Material draws greyed
+  /// out and refuses to tap. The comment beside that button says «el llamante de
+  /// producción del escáner», and it was describing an argument nobody supplied.
+  ///
+  /// It is threaded from `HomeScreen` because opening the scanner needs the
+  /// loaded engine, and `HomeScreen` is where the engine is built. Which also
+  /// keeps this file free of `dart:ffi`, so the tests below need no library.
+  final VoidCallback? onScan;
+
+  /// Overridden by tests. Production reads `Platform.operatingSystem`.
+  ///
+  /// **The other half of why nobody saw this.** `scannerAvailableOn()` already
+  /// took this parameter and the widget did not pass it, so on the desktop
+  /// runner the whole Android branch was unreachable and the only test about
+  /// the button asserted it was *absent*. A branch no test can enter is a
+  /// branch no test covers, however many tests surround it.
+  final String? operatingSystem;
 
   @override
   State<TransferHome> createState() => _TransferHomeState();
@@ -59,7 +89,11 @@ class _TransferHomeState extends State<TransferHome> {
     // the screen comes back the day a symbol reads the file. Retiring it is
     // cheaper to undo than a fourth tab that lies is to explain.
     final pages = <Widget>[
-      PeersScreen(service: widget.service),
+      PeersScreen(
+        service: widget.service,
+        operatingSystem: widget.operatingSystem,
+        onScan: widget.onScan,
+      ),
       SendScreen(service: widget.service),
       ReceiveScreen(service: widget.service),
     ];
@@ -96,8 +130,18 @@ class PeersScreen extends StatefulWidget {
     required this.service,
     this.discovery,
     this.onScan,
+    this.operatingSystem,
     super.key,
   });
+
+  /// Overridden by tests; production reads `Platform.operatingSystem`.
+  ///
+  /// `scannerAvailableOn()` has taken this since phase 24B and this screen did
+  /// not pass it, so on the desktop test runner the Android branch below was
+  /// unreachable and the only test about the scan button asserted that it does
+  /// **not** exist. That is how a button wired to `null` survived: nothing
+  /// could render it to look.
+  final String? operatingSystem;
 
   /// Que hacer cuando alguien quiere leer codigos.
   ///
@@ -271,14 +315,15 @@ class _PeersScreenState extends State<PeersScreen> {
         // Solo en Android: en el escritorio quien DIBUJA los QR es el CLI
         // (ADR-0044 §6), y ofrecer aqui un escaner que no existe seria prometer
         // lo que no hay.
-        if (scannerAvailableOn())
+        if (scannerAvailableOn(operatingSystem: widget.operatingSystem))
           OutlinedButton.icon(
             key: const Key('scan-open'),
             onPressed: widget.onScan,
             icon: const Icon(Icons.qr_code_scanner),
             label: Text(strings.peersScanCodes),
           ),
-        if (scannerAvailableOn()) const Divider(height: 32),
+        if (scannerAvailableOn(operatingSystem: widget.operatingSystem))
+          const Divider(height: 32),
         Row(
           children: <Widget>[
             Expanded(

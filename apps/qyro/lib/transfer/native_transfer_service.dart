@@ -7,6 +7,7 @@
 // one isolate's view and means nothing in another's.
 
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -84,6 +85,19 @@ final class NativeTransferService implements QyroTransferService {
   }
 
   final QyroSessionBindings _bindings;
+
+  /// The loaded engine, for the one screen that needs the library itself.
+  ///
+  /// **QYR-0371.** `ScanScreen` takes a `DynamicLibrary` because the scanner
+  /// resolves its own symbols, and nothing in production could hand it one: this
+  /// class held the only loaded library and kept it private. The result was an
+  /// optical channel complete on both sides with no way into it from the phone.
+  ///
+  /// Exposed rather than opened a second time. `DynamicLibrary.open` twice on
+  /// the same path is two handles onto one image on Android, and the engine
+  /// holds process-wide state — the identity `OnceLock` among it — so a second
+  /// handle is a second chance to disagree about which one is current.
+  DynamicLibrary get nativeLibrary => _bindings.library;
   late final QyroTrustBindings _trust;
   late final QyroIdentityBindings _identity;
 

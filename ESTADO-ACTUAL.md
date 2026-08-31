@@ -43,6 +43,19 @@ Dart y su frase en dos idiomas, `qyro recv --port <n>`, y un mensaje que nombra 
 puerto, el comando de `netsh` y por que Qyro **no** se mueve solo. Lo forzaron dos
 guardas que ya existian y que se pusieron rojas solas.
 
+**QYR-0371, arreglado. La duodecima capacidad muerta.** `PeersScreen` acepta un
+callback `onScan` desde la fase 24B y la unica construccion de produccion no lo
+pasaba, asi que en el telefono el boton «Escanear codigos» se dibujaba **apagado**
+y el canal optico -- el unico que funciona sin red de ninguna clase -- no tenia
+puerta. El comentario junto al boton se llama a si mismo «el llamante de
+produccion del escaner» y describia un argumento que nadie daba.
+
+Y por que nadie lo vio: `scannerAvailableOn()` ya aceptaba un sistema operativo
+inyectado y la pantalla no se lo pasaba, asi que en el corredor de escritorio la
+rama de Android era inalcanzable y la unica prueba sobre ese boton afirmaba que
+**no existe**. Ahora hay dos pruebas de widgets y una guarda en Rust que lee
+`home_screen.dart` y corre dentro de la puerta.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

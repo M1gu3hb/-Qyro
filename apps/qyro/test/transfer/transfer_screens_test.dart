@@ -173,6 +173,91 @@ void main() {
       expect(find.byKey(const Key('pairing-field')), findsOneWidget);
     });
 
+    testWidgets('en Android el boton de escanear existe Y se puede pulsar',
+        (tester) async {
+      // **QYR-0371, y son dos defectos que se sostenian el uno al otro.**
+      //
+      // El primero: `TransferHome` construia `PeersScreen(service: ...)` y
+      // **nunca pasaba `onScan`**, asi que en un telefono el boton se dibujaba
+      // con `onPressed: null` -- que Material pinta apagado y se niega a pulsar.
+      // El canal optico, entero en las dos caras desde la fase 24B, no tenia
+      // puerta. El comentario junto al boton dice «el llamante de produccion del
+      // escaner» y estaba describiendo un argumento que nadie pasaba.
+      //
+      // El segundo, que es por que nadie lo vio: `scannerAvailableOn()` ya
+      // aceptaba un sistema operativo inyectado y la pantalla no se lo pasaba,
+      // asi que en el corredor de escritorio la rama de Android era
+      // **inalcanzable** y la unica prueba sobre este boton afirmaba que **no
+      // existe**. Una rama en la que ninguna prueba puede entrar no esta
+      // cubierta, por muchas pruebas que la rodeen.
+      //
+      // Por eso esto se monta sobre `TransferHome` y no sobre `PeersScreen`:
+      // pasarle `onScan` a mano a la pantalla probaria que la pantalla sabe
+      // usarlo, que ya se sabia. Lo que faltaba era que alguien se lo diera.
+      //
+      // Y la mitad que una prueba de widgets no puede ver -- que **produccion**
+      // se lo da -- la vigila
+      // `qyro_core::repository_contract::the_optical_channel_has_a_door`, que
+      // lee `home_screen.dart` y corre dentro de la puerta.
+      // Una superficie alta a proposito: la pantalla de peers es una `ListView`
+      // y una `ListView` **no monta** lo que queda fuera de la vista, asi que en
+      // los 800x600 por omision `find.byKey` no encontraria un boton que si
+      // existe. Un `findsNothing` por no haberse dibujado se lee igual que uno
+      // por no existir, y son cosas distintas.
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _wrap(
+          TransferHome(
+            service: FakeService(),
+            onScan: () {},
+            operatingSystem: 'android',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final button = find.byKey(const Key('scan-open'));
+      expect(button, findsOneWidget);
+      expect(
+        tester.widget<ButtonStyleButton>(button).onPressed,
+        isNotNull,
+        reason: 'el boton se dibuja apagado, asi que el canal optico no tiene '
+            'puerta en el telefono',
+      );
+    });
+
+    testWidgets('y sin motor cargado el boton se apaga en vez de mentir',
+        (tester) async {
+      // El control, y no es decoracion. Un `onScan` que se inventara un callback
+      // siempre pasaria la prueba de arriba y abriria una pantalla que no puede
+      // resolver un solo simbolo: la camara se enciende, nada se lee, y la
+      // persona concluye que su telefono no sirve. Sin motor cargado, el boton
+      // apagado es la verdad.
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _wrap(
+          TransferHome(
+            service: FakeService(),
+            operatingSystem: 'android',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<ButtonStyleButton>(find.byKey(const Key('scan-open')))
+            .onPressed,
+        isNull,
+      );
+    });
+
     testWidgets('a device found on the network is offered, not dialled',
         (tester) async {
       // ADR-0043: what a discovered device offers is a *code*. The person still

@@ -161,3 +161,86 @@ fn no_secret_is_tracked_today() {
          against"
     );
 }
+
+/// The optical channel must have a door on the phone.
+///
+/// **QYR-0371, and it is the twelfth capability this project has found written,
+/// tested and unreachable from the product.** `PeersScreen` has taken an
+/// `onScan` callback since phase 24B, with a comment beside the button calling
+/// itself «el llamante de producción del escáner». The one production
+/// construction of that screen —`TransferHome`'s— never passed one, so
+/// `onPressed` was `null`: Material draws such a button greyed out and refuses
+/// to tap it. The scanner, the Kotlin channel, CameraX, `qyro_eye` and
+/// `qyro_fountain` were all complete, and there was no way in.
+///
+/// **Why this is asserted from Rust.** A widget test can prove the screen
+/// honours the callback it is handed — and there is one, in
+/// `transfer_screens_test.dart`. What a widget test cannot prove is that
+/// *production* hands it one, because production's caller is `HomeScreen`
+/// building the real engine, which a test does not do. This is the same shape as
+/// `qyro_net::guards::the_two_consumers_agree_on_the_port`: reading another
+/// language's source from a Rust test is not elegant, and it is the only place
+/// the wiring can be checked without a running build of both. It runs inside
+/// `cargo test --workspace`, which is what the gate runs.
+#[test]
+fn the_optical_channel_has_a_door() {
+    let root = repo_root();
+    let home = root.join("apps/qyro/lib/home/home_screen.dart");
+    let source = std::fs::read_to_string(&home)
+        .unwrap_or_else(|error| panic!("the home screen is at {}: {error}", home.display()));
+
+    // Comments stripped: the file *explains* this wiring at length, and a
+    // substring search over the raw text would read the explanation as the
+    // thing it explains -- the same trap `android_manifest_test.dart` documents.
+    let code = strip_line_comments(&source);
+
+    assert!(
+        code.contains("TransferHome("),
+        "HomeScreen no longer builds TransferHome, so this guard is checking a \
+         wiring that has moved. Follow it rather than deleting this."
+    );
+    assert!(
+        code.contains("onScan:"),
+        "HomeScreen builds TransferHome without `onScan:`, so PeersScreen gets \
+         a null callback and the «Scan codes» button renders disabled. The \
+         optical channel -- the one that works with no network of any kind -- \
+         has no entrance on the phone."
+    );
+    assert!(
+        code.contains("ScanScreen("),
+        "nothing here opens ScanScreen, so `onScan` leads somewhere else or \
+         nowhere. The button being enabled is not the property; reaching the \
+         scanner is."
+    );
+
+    // The control. If the stripper ate the code as well as the comments, every
+    // assertion above would fail loudly rather than pass emptily -- but the
+    // reverse mistake is silent, so prove the stripper actually strips.
+    assert!(
+        source.contains("// **QYR-0371"),
+        "the explanation of this wiring is gone from home_screen.dart; if the \
+         wiring went with it, the assertions above should have said so first"
+    );
+    assert!(
+        !code.contains("QYR-0371"),
+        "the comment stripper did not strip, so the assertions above may be \
+         reading prose instead of code"
+    );
+}
+
+/// Dart line comments removed, string literals left alone.
+///
+/// Deliberately only `//`: this is not a Dart parser and does not need to be.
+/// The files it reads use line comments for prose, and a `//` inside a string
+/// literal in those files would at worst delete code and make the assertions
+/// fail loudly, which is the safe direction for a mistake to fall.
+fn strip_line_comments(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| match line.find("//") {
+            Some(at) => line.get(..at).unwrap_or(""),
+            None => line,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}

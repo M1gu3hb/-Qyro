@@ -1,6 +1,9 @@
+import 'dart:ffi';
+
 import 'package:flutter/material.dart';
 
 import '../generated/branding.g.dart';
+import '../scanner/scan_screen.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../transfer/native_transfer_service.dart';
 import '../transfer/transfer_screens.dart';
@@ -42,9 +45,32 @@ class HomeScreen extends StatelessWidget {
 
   void _open(BuildContext context, int tab) {
     final engine = service ?? _nativeEngine();
-    Navigator.of(context).push(
+    // **QYR-0371: the library is what opens the optical channel.**
+    //
+    // `ScanScreen` needs the loaded engine, and the only construction of
+    // `TransferHome` in this repository never handed it one — so on a phone the
+    // «Scan codes» button rendered greyed out and the optical channel, complete
+    // on both sides since phase 24B, had no entrance.
+    //
+    // Null when a test injected a fake service, and that is correct: a fake has
+    // no library and a scanner over a fake would be a screen nobody had run --
+    // the camera would come on and nothing would ever decode.
+    final library =
+        engine is NativeTransferService ? engine.nativeLibrary : null;
+    final navigator = Navigator.of(context);
+    navigator.push(
       MaterialPageRoute<void>(
-        builder: (_) => TransferHome(service: engine, initialTab: tab),
+        builder: (_) => TransferHome(
+          service: engine,
+          initialTab: tab,
+          onScan: library == null
+              ? null
+              : () => navigator.push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ScanScreen(library: library),
+                    ),
+                  ),
+        ),
       ),
     );
   }
