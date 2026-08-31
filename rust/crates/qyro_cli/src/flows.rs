@@ -1009,6 +1009,31 @@ pub fn beam(file: &str, vt: Vt) -> i32 {
     println!("  The stream never ends on purpose: the other side stops when it has enough.");
     println!();
 
+    // **QYR-0385: sin VT esto no es un canal degradado, es ninguno.**
+    //
+    // El bucle de abajo coloca el cursor arriba entre frames, y `vt.home()` con
+    // `Vt::Absent` es la cadena vacía: cada frame se **añade**, así que un QR de
+    // sesenta y tantas filas se va scrolleando cinco veces por segundo y no hay
+    // nada estable que enfocar.
+    //
+    // Se niega en vez de dibujarlo. Sesenta y siete filas subiendo por la
+    // pantalla parecen un programa que funciona y no lo es, y quien apunta el
+    // teléfono lo intentaría durante minutos antes de sospechar del terminal.
+    if vt == Vt::Absent {
+        eprintln!();
+        eprintln!("qyro: esta consola no sabe recolocar el cursor, y sin eso los");
+        eprintln!("  códigos se irían apilando en vez de dibujarse en el sitio.");
+        eprintln!("  No se puede enfocar algo que se mueve, así que no se dibuja.");
+        eprintln!();
+        eprintln!("  En Windows: abre Windows Terminal y repite ahí el comando.");
+        eprintln!("  La consola clásica (conhost) no lo permite.");
+        eprintln!();
+        eprintln!("  Y si no hay otra consola, el canal óptico no es el único:");
+        eprintln!("    qyro send <archivo> --to \"<código>\"    por la red");
+        eprintln!("    qyro serial                              por cable serie");
+        return 1;
+    }
+
     // El vuelo de comprobación, antes del primer frame de verdad.
     if !preflight(
         &qyro_fountain::encode_frame(&qyro_fountain::encode(&blocks, shape, 1)),

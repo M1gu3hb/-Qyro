@@ -12,6 +12,54 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0385 — `qyro beam` no dibujaba un QR en Windows, lo scrolleaba
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (el canal óptico, inutilizable en la única plataforma que dibuja)
+- Fecha: 2026-08-31
+
+**El defecto.** El bucle de `beam` coloca el cursor arriba entre frames:
+
+```rust
+print!("{}{drawing}", vt.home());
+```
+
+Y `detect_vt()` devolvía **`Vt::Absent` en Windows, siempre**, con lo que
+`home()` es la **cadena vacía**. Así que cada frame se **añadía**: un QR de unas
+sesenta y siete filas subiendo por la pantalla **cinco veces por segundo**.
+
+**No hay nada estable que enfocar**, así que el canal óptico no funcionaba en la
+única plataforma que dibuja los códigos — y la dirección está fijada en esa
+dirección por ADR-0044 §6, porque la máquina que necesita este canal es la que no
+tiene cámara.
+
+**Y el comentario que defendía la pesimismo pesaba mal la balanza.** Decía «una
+pantalla rota en una consola de Windows 7» contra «una pérdida cosmética de color
+en una de Windows 11», y para el color acertaba. Lo que no estaba escrito es que
+**la misma bandera decide si `beam` puede dibujar**, y ahí la pérdida no es
+cosmética.
+
+**El arreglo, en dos mitades.**
+
+1. **`WT_SESSION`.** Windows Terminal la pone en cada sesión que hospeda, y
+   Windows Terminal tiene VT. Es la **marca de un programa concreto**, no una
+   inferencia sobre un número de versión ni una heurística sobre `TERM` — que es
+   exactamente lo que el comentario viejo temía y con razón. Su ausencia sigue
+   dando `Absent`, así que `conhost` conserva la respuesta segura que tenía.
+   `decide_vt` toma el mundo por parámetro, así que las dos ramas tienen prueba
+   —y la de fuera de Windows también, porque cambiar una rama no puede haber
+   tocado la otra.
+2. **`beam` se niega si no hay VT**, en vez de dibujar. Sesenta y siete filas
+   subiendo parecen un programa que funciona y no lo son, y quien apunta el
+   teléfono lo intentaría durante minutos antes de sospechar del terminal. El
+   mensaje dice qué hacer —Windows Terminal— y recuerda que el óptico no es el
+   único canal.
+
+Comprobado ejecutándolo con `TERM=dumb`.
+
+**La pregunta que cierra esta ficha:** en una consola que no sabe recolocar el
+cursor, ¿dibuja Qyro algo que no se puede leer? **No; dice por qué y qué hacer.**
+
 ## QYR-0384 — Cuando fallaba antes de empezar, la pantalla no decía nada
 
 - Estado: **CERRADO**

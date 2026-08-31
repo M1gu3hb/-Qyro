@@ -186,6 +186,16 @@ emitir, y ninguno de los dos cubria a un worker que muere por algo que no es un
 `QyroSessionFailure`. El criterio, escrito una vez: un stream que la interfaz
 escucha nunca termina en error, termina en un estado, aunque sea «no se que paso».
 
+**QYR-0385.** `qyro beam` coloca el cursor arriba entre frames, y `detect_vt()`
+devolvia **`Vt::Absent` en Windows siempre**, con lo que `home()` es la cadena
+vacia: cada frame se **anadia**, y un QR de sesenta y siete filas subia por la
+pantalla cinco veces por segundo. El canal optico, inutilizable en la unica
+plataforma que dibuja. El comentario que defendia esa pesimismo pesaba color
+contra pantalla rota y acertaba para el color; lo que no estaba escrito es que la
+misma bandera decide si `beam` puede dibujar. Ahora `WT_SESSION` -- la marca de un
+programa concreto, no una heuristica -- promete VT, y `beam` **se niega** si no la
+hay en vez de dibujar algo que no se puede enfocar.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

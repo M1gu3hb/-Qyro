@@ -185,19 +185,44 @@ pub fn progress_bar(done: u64, total: u64) -> String {
 /// prints escape codes at somebody.
 #[must_use]
 pub fn detect_vt() -> Vt {
-    if cfg!(windows) {
-        // Deliberately pessimistic. Over-claiming prints `←[32m` on a Windows 7
-        // console; under-claiming loses colour on a Windows 11 one. The second
-        // is a cosmetic loss on a machine that has other options, and the first
-        // is a broken screen on the machine this face was built for.
-        return Vt::Absent;
+    decide_vt(cfg!(windows), |name| std::env::var(name).ok())
+}
+
+/// The decision, with the world passed in so it can be tested.
+///
+/// **QYR-0385, and the cost of the pessimism was bigger than «colour».** The
+/// comment here used to weigh «a broken screen on Windows 7» against «a
+/// cosmetic loss of colour on Windows 11», and picked correctly for that
+/// trade — but the trade had a third term nobody had written down: **`qyro beam`
+/// homes the cursor between frames**, and `Vt::Absent` makes `home()` the empty
+/// string. So on Windows every frame was **appended**: a 67-row QR scrolling
+/// five times a second, which is not a degraded optical channel, it is none at
+/// all. On the one platform that draws them.
+///
+/// # `WT_SESSION`, and why this is not the guess the old comment feared
+///
+/// Windows Terminal sets `WT_SESSION` in every session it hosts, and Windows
+/// Terminal enables VT processing. It is a **specific documented marker of a
+/// specific program**, not an inference from a version number or a heuristic
+/// over `TERM`. Its absence still means `Absent`, so `conhost` — the old console
+/// this face was built for — keeps the safe answer it had.
+///
+/// Over-claiming remains the worse mistake and this cannot over-claim: nothing
+/// but Windows Terminal sets that variable.
+#[must_use]
+pub fn decide_vt(windows: bool, env: impl Fn(&str) -> Option<String>) -> Vt {
+    if windows {
+        return match env("WT_SESSION") {
+            Some(session) if !session.is_empty() => Vt::Enabled,
+            _ => Vt::Absent,
+        };
     }
     // Unix consoles have accepted these since the seventies. `TERM=dumb` is the
     // one that says otherwise, and it says it explicitly.
-    match std::env::var("TERM") {
-        Ok(term) if term == "dumb" => Vt::Absent,
-        Ok(_) => Vt::Enabled,
-        Err(_) => Vt::Absent,
+    match env("TERM") {
+        Some(term) if term == "dumb" => Vt::Absent,
+        Some(_) => Vt::Enabled,
+        None => Vt::Absent,
     }
 }
 
@@ -211,7 +236,52 @@ mod tests {
         reason = "a test that cannot fail loudly is not a test"
     )]
 
-    use super::{Vt, menu, progress_bar};
+    use super::{Vt, decide_vt, menu, progress_bar};
+
+    #[test]
+    fn en_windows_solo_windows_terminal_promete_vt() {
+        // QYR-0385. `qyro beam` coloca el cursor arriba entre frames, y con
+        // `Vt::Absent` esa secuencia es la cadena vacia: cada frame se ANADE, y
+        // un QR de 67 filas se va scrolleando cinco veces por segundo. En la
+        // unica plataforma que dibuja.
+        //
+        // `WT_SESSION` lo pone Windows Terminal en cada sesion que hospeda, y
+        // Windows Terminal tiene VT. Es la marca de un programa concreto, no una
+        // inferencia sobre una version.
+        let con_terminal = |name: &str| (name == "WT_SESSION").then(|| "abc-123".to_owned());
+        assert_eq!(decide_vt(true, con_terminal), Vt::Enabled);
+
+        // Y el control, que es la mitad que el comentario viejo defendia con
+        // razon: sin esa marca, la respuesta segura sigue siendo la de antes.
+        // `conhost` -- la consola para la que se escribio esta cara -- no la pone.
+        assert_eq!(decide_vt(true, |_| None), Vt::Absent);
+        // Vacia es no puesta. Una variable a "" es lo que deja un `set WT_SESSION=`.
+        assert_eq!(
+            decide_vt(true, |name| (name == "WT_SESSION").then(String::new)),
+            Vt::Absent
+        );
+    }
+
+    #[test]
+    fn fuera_de_windows_manda_term_y_dumb_sigue_siendo_dumb() {
+        // El control del control: cambiar la rama de Windows no puede haber
+        // tocado la otra.
+        assert_eq!(
+            decide_vt(false, |name| (name == "TERM").then(|| "xterm".to_owned())),
+            Vt::Enabled
+        );
+        assert_eq!(
+            decide_vt(false, |name| (name == "TERM").then(|| "dumb".to_owned())),
+            Vt::Absent
+        );
+        assert_eq!(decide_vt(false, |_| None), Vt::Absent);
+        // Y `WT_SESSION` fuera de Windows no promete nada: la variable puede
+        // sobrevivir a un `ssh` desde Windows Terminal a una maquina Unix.
+        assert_eq!(
+            decide_vt(false, |name| (name == "WT_SESSION").then(|| "x".to_owned())),
+            Vt::Absent
+        );
+    }
 
     /// The escape byte. If any of these appear without VT, a Windows 7 console
     /// shows them as text.
