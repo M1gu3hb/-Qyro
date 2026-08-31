@@ -12,6 +12,57 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0386 — Ocho códigos del motor salían todos como «llegó algo que no verificó»
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** (acusaba al otro extremo de siete cosas que no había hecho)
+- Fecha: 2026-08-31
+
+**El defecto, en una línea.** El comodín de `_kindOf`:
+
+```dart
+_ => QyroFailureKind.integrity,
+```
+
+Ocho códigos de la frontera C caían ahí: mango inválido, tabla llena, pánico,
+puntero nulo, cerradura envenenada, **argumento**, desconocido e **identidad
+ilegible**. Los ocho se dibujaban como *«Llegó algo que no verificó. No se ha
+guardado nada.»*
+
+**Y esa frase es una acusación concreta contra el otro extremo.** Dice que los
+datos llegaron mal. Siete de los ocho no tienen nada que ver con el otro extremo,
+y uno de ellos ni siquiera es un fallo de transferencia.
+
+**El peor es `identityUnreadable`.** Es el estado de **este** aparato cuando no
+puede abrir su propia identidad — que es exactamente lo que pasaba en Android
+hasta QYR-0376 de esta misma tanda. Así que el síntoma de aquel P0, visto desde
+la pantalla, era **«los datos llegaron mal»** cuando no había llegado nada y no
+se había mandado nada. Un mensaje que manda a mirar la red por un fallo que está
+en el propio teléfono.
+
+**Y `badArgument` es el que más duele por lo contrario:** es el único de la lista
+que una persona corrige **escribiendo** —una dirección mal puesta— y llamarlo
+«los datos llegaron mal» le quita justo la acción que tenía a mano.
+
+**El arreglo.** Tres clases nuevas y sus frases en los dos idiomas:
+
+- `identityUnreadable` — este aparato no puede demostrar quién es; **no ha
+  llegado nada y no se ha mandado nada**; y Qyro no sustituye una identidad que
+  no puede leer, porque eso lo convertiría en un desconocido para todos los que
+  ya confían en él.
+- `badAddress` — con la forma de un código y la de una dirección, que es lo que
+  hace falta para corregirlo.
+- `internal` — «algo dentro de Qyro falló». Menos informativo y **verdad**, que
+  es la única propiedad que un mensaje de error tiene que tener.
+
+**La prueba que ya existía se amplía**, y su control es el que importa: cierra
+comprobando que las frases son **distintas entre sí**. Antes ocho códigos
+compartían una, y esa prueba pasaba — porque sólo miraba las que la lista
+nombraba.
+
+**La pregunta que cierra esta ficha:** ¿acusa Qyro al otro aparato de algo que no
+hizo? **Ya no.**
+
 ## QYR-0385 — `qyro beam` no dibujaba un QR en Windows, lo scrolleaba
 
 - Estado: **CERRADO**

@@ -507,7 +507,37 @@ void main() {
           'Something arrived that did not verify. Nothing was kept.'
         ),
         (QyroFailureKind.cancelled, 'Stopped.'),
-        (QyroFailureKind.noRoom, 'There is no room for this.'),
+        // QYR-0374: esta frase dejo de ser «no hay sitio» a secas. La causa que
+        // de verdad se va a dar es un nombre ya tomado, porque Qyro no
+        // sobrescribe nunca, y la frase nombra las dos.
+        (
+          QyroFailureKind.noRoom,
+          'The destination did not take it. Qyro never overwrites: if a file '
+              'with the same name is already there, move it and try again. It '
+              'can also be that there is no room left.'
+        ),
+        // QYR-0386. Estas tres salian todas como «integridad» por el comodin de
+        // `_kindOf`, y «llego algo que no verifico» es una acusacion concreta
+        // contra el otro extremo que ninguna de las tres merece. La de la
+        // identidad es la peor: describe este aparato, y no ha llegado nada.
+        (
+          QyroFailureKind.identityUnreadable,
+          'This device cannot open its own identity, so it cannot prove who it '
+              'is. Nothing arrived and nothing was sent. Qyro never replaces '
+              'an identity it cannot read: that would make this device a '
+              'stranger to every device that already trusts it.'
+        ),
+        (
+          QyroFailureKind.badAddress,
+          'That address or code is not usable. A code looks like '
+              'QYRO1|192.168.1.5:49517|<fingerprint>, and an address like '
+              '192.168.1.5:49517.'
+        ),
+        (
+          QyroFailureKind.internal,
+          'Something inside Qyro failed. Nothing was delivered. Try again, and '
+              'if it happens twice it is worth reporting.'
+        ),
       ];
 
       final seen = <String>{};
@@ -518,8 +548,9 @@ void main() {
         expect(find.text(expected), findsOneWidget, reason: '$kind');
         seen.add(expected);
       }
-      // Distinct, not merely present: six kinds sharing one sentence would
-      // satisfy every assertion above.
+      // Distinct, not merely present: varias clases compartiendo una frase
+      // satisfarian todas las afirmaciones de arriba. Es lo que pasaba antes de
+      // QYR-0386, cuando ocho codigos del motor salian por la misma.
       expect(seen.length, cases.length);
     });
 

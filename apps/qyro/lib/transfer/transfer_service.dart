@@ -164,6 +164,34 @@ enum QyroFailureKind {
   /// En Windows es el caso que de verdad pasa: los rangos reservados por
   /// Hyper-V, WSL2 y Docker rechazan la ligadura con el error 10013.
   portUnavailable,
+
+  /// Este aparato no tiene una identidad que abrir.
+  ///
+  /// **QYR-0386.** Antes salía como [integrity], o sea «llegó algo que no
+  /// verificó» — una frase sobre lo que mandó el otro, cuando el problema está
+  /// en casa y no ha llegado nada. ADR-0040: una identidad que no abre **no se
+  /// regenera**, así que esto no se arregla solo y hay que decirlo.
+  identityUnreadable,
+
+  /// La dirección o el código que se escribió no sirve.
+  ///
+  /// **QYR-0386.** También salía como [integrity]. Es el fallo que una persona
+  /// puede corregir sola —y el único de esta lista que se corrige escribiendo—
+  /// así que confundirlo con «los datos llegaron mal» le quita justo la acción
+  /// que tenía a mano.
+  badAddress,
+
+  /// Algo dentro de Qyro falló, y no es ninguna de las de arriba.
+  ///
+  /// **QYR-0386.** El comodín de `_kindOf` mandaba aquí ocho códigos del motor
+  /// —mango inválido, tabla llena, pánico, puntero nulo, cerradura envenenada,
+  /// argumento, desconocido, identidad— **todos como «integridad»**. «Llegó algo
+  /// que no verificó» es una acusación concreta contra el otro extremo, y siete
+  /// de esos ocho no tienen nada que ver con él.
+  ///
+  /// Decir «algo interno falló» es menos informativo y es **verdad**, que es la
+  /// única propiedad que un mensaje de error tiene que tener.
+  internal,
 }
 
 /// Everything a screen may ask of the engine.

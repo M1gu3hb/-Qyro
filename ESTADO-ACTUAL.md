@@ -196,6 +196,14 @@ misma bandera decide si `beam` puede dibujar. Ahora `WT_SESSION` -- la marca de 
 programa concreto, no una heuristica -- promete VT, y `beam` **se niega** si no la
 hay en vez de dibujar algo que no se puede enfocar.
 
+**QYR-0386.** El comodin de `_kindOf` mandaba **ocho** codigos de la frontera C a
+`integrity`, o sea a la frase «llego algo que no verifico» -- una acusacion
+concreta contra el otro extremo. Siete de los ocho no tienen nada que ver con el.
+El peor, `identityUnreadable`: es el estado de ESTE aparato, y era exactamente el
+sintoma del P0 de QYR-0376, asi que la pantalla decia «los datos llegaron mal»
+cuando no habia llegado nada. Y `badArgument`, que es el unico que se corrige
+escribiendo. Tres clases nuevas con sus frases en los dos idiomas.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

@@ -369,6 +369,18 @@
   "@sendAddressLabel": {
     "description": "Transfer interface string: sendAddressLabel."
   },
+  "failIdentity": "This device cannot open its own identity, so it cannot prove who it is. Nothing arrived and nothing was sent. Qyro never replaces an identity it cannot read: that would make this device a stranger to every device that already trusts it.",
+  "@failIdentity": {
+    "description": "Transfer interface string: failIdentity."
+  },
+  "failBadAddress": "That address or code is not usable. A code looks like QYRO1|192.168.1.5:49517|<fingerprint>, and an address like 192.168.1.5:49517.",
+  "@failBadAddress": {
+    "description": "Transfer interface string: failBadAddress."
+  },
+  "failInternal": "Something inside Qyro failed. Nothing was delivered. Try again, and if it happens twice it is worth reporting.",
+  "@failInternal": {
+    "description": "Transfer interface string: failInternal."
+  },
   "receiveNoRoom": "The destination did not take it. Qyro never overwrites: if a file with the same name is already there, move it and try again. It can also be that there is no room left.",
   "@receiveNoRoom": {
     "description": "Transfer interface string: receiveNoRoom."

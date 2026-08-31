@@ -681,7 +681,18 @@ final class NativeTransferService implements QyroTransferService {
         QyroCode.cancelled => QyroFailureKind.cancelled,
         QyroCode.tooManyFiles => QyroFailureKind.tooManyFiles,
         QyroCode.portUnavailable => QyroFailureKind.portUnavailable,
-        _ => QyroFailureKind.integrity,
+        // **QYR-0386: aquí el comodín mandaba ocho códigos a «integridad».**
+        //
+        // `integrity` dibuja «llegó algo que no verificó», que es una acusación
+        // concreta contra el otro extremo. Siete de esos ocho no tienen nada que
+        // ver con él, y uno —`identityUnreadable`— es el estado de **este**
+        // aparato cuando no puede abrir su propia identidad: la persona leía
+        // «los datos llegaron mal» mientras no había llegado nada.
+        QyroCode.identityUnreadable => QyroFailureKind.identityUnreadable,
+        QyroCode.badArgument => QyroFailureKind.badAddress,
+        // El resto son fallos internos y se dicen así. Menos informativo y
+        // verdad, que es la única propiedad que un mensaje de error necesita.
+        _ => QyroFailureKind.internal,
       };
 
   /// The deepest directory every path shares.

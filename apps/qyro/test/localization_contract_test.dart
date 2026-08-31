@@ -108,6 +108,9 @@ void main() {
       'receiveRefuse': (english.receiveRefuse, spanish.receiveRefuse),
       'receiveRefused': (english.receiveRefused, spanish.receiveRefused),
       'receiveNoRoom': (english.receiveNoRoom, spanish.receiveNoRoom),
+      'failIdentity': (english.failIdentity, spanish.failIdentity),
+      'failBadAddress': (english.failBadAddress, spanish.failBadAddress),
+      'failInternal': (english.failInternal, spanish.failInternal),
       'sendAddressLabel': (
         english.sendAddressLabel,
         spanish.sendAddressLabel
