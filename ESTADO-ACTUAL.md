@@ -238,6 +238,34 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0393, y es el fallo que mas probablemente le pase a alguien la primera vez
+que use esto.** Una persona que tarda 65 segundos en decidir si acepta perdia la
+transferencia, y leia **«el otro aparato no responde»** justo cuando acababa de
+contestar.
+
+`IDLE_TIMEOUT` son 60 s sin recibir un byte y entre la oferta y la respuesta no
+cruza ninguno: `MessageType::Heartbeat` existe en el formato desde el principio y
+**nadie lo emite** -- el decimotercer «escrito, probado y sin llamante» de este
+proyecto. ADR-0028 §4.2 elige el numero contra «una Wi-Fi que se reasocia» y
+contra «la paciencia de una persona delante de una barra de progreso parada»:
+falta la pausa mas larga de todas, la de una persona a la que se le acaba de
+preguntar algo.
+
+Con una traza durante esos 65 s, el emisor dio **227 pasos en `Transferring` sin
+producir un solo frame**. No estaba midiendo la red: esperaba a una persona.
+
+| 65 s pensando | Emisor | Receptor | Materializado |
+|---|---|---|---|
+| Antes | `Err(PeerUnreachable)` a los **60,11 s** | `Err(PeerUnreachable)` | nada |
+| Despues | `Ok(Completed)` a los **65,76 s** | `Ok(Completed)` | 1 archivo |
+
+El arreglo son dos reglas y **ninguna sube `IDLE_TIMEOUT`** (ADR-0028
+enmienda 1): un lado sin nada que poner en el cable espera al otro extremo y no a
+la red, asi que ahi el plazo son diez minutos; y el tiempo en que este lado no
+estuvo escuchando no cuenta, asi que al volver la ventana se reinicia en vez de
+alargarse. **Lo que cuesta, dicho:** un agujero negro de red se descubre ahora en
+diez minutos y antes en uno, en el lado donde hay una persona mirando.
+
 **QYR-0392, y es el que mas importa de los dos ultimos.** Un codigo de
 emparejamiento lleva direccion **y huella**. La pantalla de Enviar sacaba la
 direccion y **tiraba la huella**, y `NativeTransferService.send` aceptaba un

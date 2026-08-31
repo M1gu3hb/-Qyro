@@ -2040,3 +2040,173 @@ fn two_hundred_files_do_not_hold_two_hundred_descriptors() {
          the Windows CRT, commonly 1024 on Android"
     );
 }
+
+/// El reloj de silencio se ensancha mientras alguien decide, y se estrecha después.
+///
+/// **La mitad rápida de QYR-0393.** La que lo mide de verdad espera 65 s y está
+/// `#[ignore]`; ésta comprueba la **política** en milisegundos, porque una
+/// propiedad que sólo se verifica a mano es una propiedad que se rompe sin que
+/// nadie lo note.
+#[test]
+fn el_reloj_de_silencio_se_ensancha_mientras_alguien_decide() {
+    ensure_identity();
+    let scratch = Scratch::new("reloj");
+    let root = scratch.path("origen");
+    let destination = scratch.path("destino");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&destination).unwrap();
+    let file = root.join("carta.bin");
+    write_pattern(&file, CROSSES_THE_WINDOW);
+
+    let address = loopback(a_free_port());
+    let destino = destination.clone();
+    let (announce, deadlines) = std::sync::mpsc::channel();
+
+    let receiving = thread::spawn(move || {
+        let mut session = match Session::open_receiver(address, &destino, None) {
+            Ok(session) => session,
+            Err(error) => return Err(error),
+        };
+        session.await_offer()?;
+        // Justo aqui es donde la pantalla dibuja «¿aceptas?» y donde una
+        // persona se queda mirando.
+        let _ = announce.send(session.idle_deadline());
+        let (state, _) = drive(&mut session);
+        let _ = announce.send(session.idle_deadline());
+        state.map(|_| session.finish())?
+    });
+
+    let mut sender = open_sender_when_ready(address, &root, &[file.clone()]);
+    let sent = match sender.as_mut() {
+        Ok(session) => drive(session).0,
+        Err(error) => Err(*error),
+    };
+    let materialised = receiving.join().unwrap();
+
+    let deciding = deadlines.recv().expect("el receptor llego a la pregunta");
+    let moving = deadlines.recv().expect("el receptor llego al final");
+
+    assert_eq!(sent, Ok(SessionState::Completed), "el envio no termino");
+    assert_eq!(materialised, Ok(1), "no se materializo el archivo");
+
+    assert_eq!(
+        deciding,
+        qyro_net::DECISION_DEADLINE,
+        "mientras nadie ha contestado, el reloj es el de sesenta segundos. Un \
+         ser humano tarda mas que eso mas veces de las que parece, y el fallo \
+         que produce dice «el otro aparato no responde»"
+    );
+    assert!(
+        qyro_net::DECISION_DEADLINE > qyro_net::IDLE_TIMEOUT,
+        "la constante ancha no es mas ancha, asi que la afirmacion de arriba no \
+         prueba nada"
+    );
+    assert_eq!(
+        moving,
+        qyro_net::IDLE_TIMEOUT,
+        "el reloj se quedo ancho despues de que el contenido empezara a moverse. \
+         Ahi el silencio si significa «muerto», y diez minutos para descubrirlo \
+         convierten un fallo en una espera"
+    );
+
+    // Y el emisor termina **ancho**, que es lo correcto y no un descuido: al
+    // final ya lo ha puesto todo en el cable y lo unico que espera es que el
+    // otro lado conteste. Un emisor sin nada que mandar no esta midiendo la
+    // red. Lo que seria un fallo es que estuviera ancho **mientras empuja
+    // contenido**, y esa mitad la cubre `moving` del receptor.
+    if let Ok(session) = sender.as_ref() {
+        assert_eq!(
+            session.idle_deadline(),
+            qyro_net::DECISION_DEADLINE,
+            "el emisor acabo con el reloj estrecho aunque no le quedaba nada \
+             que mandar: eso es lo que lo mataba a los sesenta segundos"
+        );
+    }
+}
+
+/// Cuánto puede tardar una persona en decir que sí, medido y no razonado.
+///
+/// **La auditoría dice que el reloj de silencio de 60 s (ADR-0028 §4.2) corre
+/// mientras la persona decide, así que una decisión lenta mata al emisor con
+/// «el otro aparato no responde».** Es una lectura correcta del mecanismo:
+/// `FrameStream` sólo refresca `last_byte_at` cuando **llegan bytes**, y entre
+/// la oferta y la aceptación no llega ninguno.
+///
+/// Lo que no estaba era el número. Esta prueba lo mide sobre el camino de
+/// producción entero: dos sesiones de verdad, un socket de verdad, y una espera
+/// de sesenta y cinco segundos en el sitio exacto donde una persona mira la
+/// pantalla y piensa.
+///
+/// **`#[ignore]` porque tarda más de un minuto**, y una suite que tarda un
+/// minuto por una espera deliberada es una suite que la gente deja de correr.
+/// Se corre a mano:
+///
+/// ```text
+/// cargo test -p qyro_session --test session_behaviour -- --ignored --nocapture setenta
+/// ```
+#[test]
+#[ignore = "espera 65 s a proposito; es una medida, no una regresion"]
+fn setenta_y_cinco_segundos_pensando_no_deberian_matar_al_emisor() {
+    ensure_identity();
+    let scratch = Scratch::new("pensando");
+    let root = scratch.path("origen");
+    let destination = scratch.path("destino");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&destination).unwrap();
+    // **Mas de una ventana**, no cuatro kilobytes. Con un archivo diminuto el
+    // emisor lo manda todo de golpe y sólo espera el veredicto; con éste tiene
+    // que empujar contenido de verdad, y cuando el receptor deja de leer se
+    // queda con la ventana llena. Los dos casos terminan igual -- sin nada que
+    // poner en el cable -- y este los cubre a los dos.
+    let file = root.join("carta.bin");
+    write_pattern(&file, CROSSES_THE_WINDOW);
+
+    let address = loopback(a_free_port());
+    let destino = destination.clone();
+
+    // **Sesenta y cinco, no setenta y cinco.** El límite son sesenta: cinco de
+    // margen bastan para cruzarlo, y cada segundo de más es un segundo que
+    // alguien espera mirando esta prueba.
+    const PENSANDO: Duration = Duration::from_secs(65);
+
+    let receiving = thread::spawn(move || {
+        let mut session = match Session::open_receiver(address, &destino, None) {
+            Ok(session) => session,
+            Err(error) => return (Err(error), Err(error)),
+        };
+        // Hasta aquí llega lo que el receptor hace **antes** de preguntar: el
+        // apretón, la oferta y el manifiesto. Es el momento exacto en el que la
+        // pantalla dibuja «¿aceptas?» y deja de escribir en el cable.
+        if let Err(error) = session.await_offer() {
+            return (Err(error), Err(error));
+        }
+        thread::sleep(PENSANDO);
+        let (state, _) = drive(&mut session);
+        let materialised = session.finish();
+        (state, materialised)
+    });
+
+    let started = Instant::now();
+    let mut sender = open_sender_when_ready(address, &root, &[file.clone()]);
+    let sent = match sender.as_mut() {
+        Ok(session) => drive(session).0,
+        Err(error) => Err(*error),
+    };
+    let waited = started.elapsed();
+    let (received, materialised) = receiving.join().unwrap();
+
+    eprintln!(
+        "[measure] la persona tardo {PENSANDO:?} en decidir; el emisor termino \
+         en {waited:?} con {sent:?}, el receptor con {received:?}, \
+         materializados {materialised:?}"
+    );
+
+    assert_eq!(
+        sent,
+        Ok(SessionState::Completed),
+        "el emisor no sobrevivio a que alguien tardara {PENSANDO:?} en decidir. \
+         Eso es ADR-0028 §4.2 matando la transferencia por el unico silencio que \
+         el protocolo produce a proposito: el de una persona pensando"
+    );
+    assert_eq!(materialised, Ok(1), "no se materializo el archivo");
+}

@@ -12,6 +12,77 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0393 — Tardar más de un minuto en aceptar mataba la transferencia, y culpaba a la red
+
+- Estado: **CERRADO**
+- Severidad: **ALTA**, y es el fallo que más probablemente le pase a alguien la
+  primera vez que use esto
+- Fecha: 2026-08-31
+
+**El defecto, medido.** Una persona que tarda 65 segundos en decidir si acepta
+pierde la transferencia:
+
+```
+[measure] la persona tardo 65s en decidir; el emisor termino en 60.113591109s
+          con Err(PeerUnreachable), el receptor con Err(PeerUnreachable),
+          materializados Err(StorageRefused)
+```
+
+Y lo que ve en la pantalla es **«el otro aparato no responde»**, justo en el
+momento en que acaba de contestar. Una acusación falsa contra una red que
+funciona, que además manda a buscar el problema donde no está.
+
+**Por qué.** `IDLE_TIMEOUT` son 60 s sin recibir un byte (ADR-0028 §4.2), y entre
+la oferta y la respuesta **no cruza ninguno**: `MessageType::Heartbeat` existe en
+el formato desde el principio y **nadie lo emite** — es el decimotercer caso de
+«escrito, probado y sin llamante» de este proyecto.
+
+La ADR elige el número por dos razones y las dos son sobre la red o la
+impaciencia: mayor que «una Wi-Fi que se reasocia» y menor que «la paciencia de
+una persona delante de **una barra de progreso parada**». **Falta la pausa más
+larga de todas**, y es la de una persona a la que se le acaba de preguntar algo.
+
+**Dónde estaba cada lado.** Con una traza durante los 65 s: el emisor dio **227
+pasos en `Transferring` sin producir un solo frame**. Ya lo había mandado todo y
+esperaba acuses que no llegaban porque nadie leía. No estaba midiendo la red:
+estaba esperando a una persona.
+
+**La prueba, primero.** `setenta_y_cinco_segundos_pensando_no_deberian_matar_al_-`
+`emisor` en `session_behaviour.rs`, sobre el camino de producción entero — dos
+sesiones, un socket, un archivo mayor que una ventana — con la espera puesta en
+el sitio exacto donde la pantalla dibuja «¿aceptas?». Falló con los 60,11 s de
+arriba. Está `#[ignore]` porque tarda más de un minuto a propósito, así que la
+acompaña una rápida, `el_reloj_de_silencio_se_ensancha_mientras_alguien_decide`,
+que comprueba la **política** en un segundo: una propiedad que sólo se verifica a
+mano es una propiedad que se rompe sin que nadie lo note.
+
+**El arreglo: el reloj mide el silencio del otro, no la espera de éste.** Dos
+reglas, y **ninguna sube `IDLE_TIMEOUT`** (ADR-0028 enmienda 1):
+
+1. Un lado **sin nada que poner en el cable** espera al otro extremo, no a la
+   red. Ahí el plazo es `DECISION_DEADLINE`, diez minutos. Cubre a la vez la
+   pausa humana y un SHA-256 sobre cuatro gigas, que también pasa de sesenta
+   segundos sin que nada vaya mal. Con algo que mandar, vuelve a ser sesenta.
+2. El tiempo en que **este lado no estuvo escuchando no cuenta**. Un hueco de
+   más de 15 s entre dos pasos es un consumidor que se paró, no un par callado:
+   al volver, la ventana **se reinicia**, no se alarga.
+
+**Después, medido igual:**
+
+```
+[measure] la persona tardo 65s en decidir; el emisor termino en 65.759224545s
+          con Ok(Completed), el receptor con Ok(Completed), materializados Ok(1)
+```
+
+**Lo que cuesta, dicho.** Un emisor cuyo par desaparece por un agujero negro de
+red mientras no le queda nada que mandar tarda ahora diez minutos en decirlo, y
+antes tardaba uno. Se acepta: ahí hay una persona mirando y un Ctrl-C a mano, y
+el caso contrario le pasa a todo el mundo.
+
+**Lo que no arregla.** Sigue sin haber latido. Si una pausa humana pudiera durar
+más de diez minutos, la respuesta correcta seguiría siendo un latido y no un
+número más grande.
+
 ## QYR-0392 — Escanear un QR ataba la sesión a una dirección y a ninguna clave
 
 - Estado: **CERRADO**

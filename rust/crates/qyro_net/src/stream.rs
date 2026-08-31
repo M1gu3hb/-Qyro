@@ -173,6 +173,21 @@ impl FrameStream {
         self.idle_timeout = idle;
     }
 
+    /// Vuelve a empezar la ventana de silencio, sin declarar nada vivo.
+    ///
+    /// **QYR-0393.** El reloj de silencio mide **cuánto lleva callado el otro**,
+    /// y sólo significa «muerto» si este lado estuvo escuchando todo ese rato.
+    /// Cuando el consumidor deja de dar pasos —el receptor pregunta a una
+    /// persona y se queda esperando su respuesta— nadie estaba escuchando, así
+    /// que ese silencio no es prueba de nada.
+    ///
+    /// Esto **no** alarga el plazo ni afirma que el par esté vivo: lo reinicia.
+    /// Un par de verdad muerto se descubre igual, sesenta segundos después de
+    /// que este lado vuelva a escuchar de verdad.
+    pub fn mark_listening(&mut self) {
+        self.last_byte_at = Instant::now();
+    }
+
     /// The silence deadline in force.
     #[must_use]
     pub const fn idle_timeout(&self) -> Duration {

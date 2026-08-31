@@ -101,3 +101,30 @@ pub const READ_TIMEOUT: Duration = Duration::from_millis(250);
 /// Any byte resets it — not a whole frame. A peer delivering a frame slowly is
 /// alive; a peer delivering nothing is not.
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Cuánto silencio se tolera **mientras una persona decide**.
+///
+/// **QYR-0393, y el número de arriba estaba matando el único silencio que este
+/// protocolo produce a propósito.** Entre que el receptor recibe la oferta y
+/// que alguien toca «Aceptar» no cruza un solo byte: no hay latido —
+/// `MessageType::Heartbeat` existe en el formato y **nadie lo emite** — así que
+/// `IDLE_TIMEOUT` corre entero contra el tiempo que tarda un ser humano en leer
+/// una pantalla y decidir.
+///
+/// Medido, no razonado: con 65 s de espera el emisor muere a los **60,11 s** con
+/// `PeerUnreachable`, y el receptor también. La prueba está en
+/// `session_behaviour::setenta_y_cinco_segundos_pensando_no_deberian_matar_al_-`
+/// `emisor`, marcada `#[ignore]` porque tarda más de un minuto a propósito.
+///
+/// **Esto no es subir `IDLE_TIMEOUT`, y la diferencia importa.** Ese número
+/// separa «lento» de «muerto» **mientras el contenido se mueve**, y una sesión
+/// anterior lo subió para tapar un defecto de rendimiento y tuvo que revertirlo:
+/// esconder un fallo detrás de un reloj más largo convierte un error en veinte
+/// minutos de espera. Aquí no hay nada que esconder — no se ha movido un byte de
+/// contenido todavía — y lo que se espera **no es un aparato, es una persona**.
+///
+/// **Diez minutos.** Bastante para leer, mirar el otro aparato, comparar una
+/// huella y volver; poco para que alguien crea que se colgó. Y el que conecta y
+/// se calla para siempre ya está acotado antes de esto por
+/// [`HANDSHAKE_DEADLINE`]: llegar aquí exige haberse autenticado.
+pub const DECISION_DEADLINE: Duration = Duration::from_secs(600);

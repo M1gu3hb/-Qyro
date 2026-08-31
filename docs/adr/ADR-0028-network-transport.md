@@ -560,3 +560,74 @@ Android Keystore, iOS Keychain, historial, emparejamiento, release. Y los tres
 identificadores de cabecera de QYR-0068, que son de otro agente en este run: si este
 transporte los necesitara, eso sería un hallazgo del informe, no una excusa para
 tocar `header.rs`.
+
+---
+
+## Enmienda 1 (2026-08-31, fase 28) — la peor pausa legítima no era una Wi-Fi que se reasocia: era una persona
+
+La §4.2 elige 60 s por dos razones escritas, y las dos son sobre la red o sobre
+la impaciencia: «cómodamente mayor que la peor pausa legítima —una Wi-Fi que se
+reasocia, un móvil que cambia de celda, un disco que se atraganta— y cómodamente
+menor que la paciencia de una persona delante de **una barra de progreso
+parada**».
+
+**Falta una pausa legítima en esa lista, y es la más larga de todas: la de una
+persona a la que se le acaba de preguntar algo.** No está delante de una barra
+parada; está leyendo un nombre de archivo, mirando el otro aparato, comparando
+una huella. Y mientras lo hace **no cruza un solo byte**, porque
+`MessageType::Heartbeat` existe en el formato desde el principio y **nadie lo
+emite**.
+
+### Medido
+
+Sesenta y cinco segundos de espera humana, sobre el camino de producción entero,
+con dos sesiones y un socket de verdad:
+
+| | Emisor | Receptor | Materializado |
+|---|---|---|---|
+| Antes | `Err(PeerUnreachable)` a los **60,11 s** | `Err(PeerUnreachable)` | nada |
+| Después | `Ok(Completed)` a los **65,76 s** | `Ok(Completed)` | 1 archivo |
+
+Y el mensaje que veía la persona era **«el otro aparato no responde»**: una
+acusación falsa contra una red que funcionaba, en el momento exacto en que ella
+acababa de contestar.
+
+La traza dice dónde estaba cada lado durante esos 65 s: el emisor dio **227
+pasos en `Transferring` sin producir un solo frame**. Ya lo había mandado todo y
+esperaba acuses que no llegaban porque al otro lado nadie estaba leyendo.
+
+### Decisión: el reloj mide **el silencio del otro**, no la espera de éste
+
+Dos reglas, porque los dos lados se callan por razones distintas. **Ninguna de
+las dos sube `IDLE_TIMEOUT`**: ese número sigue siendo 60 s y sigue significando
+lo mismo mientras el contenido se mueve.
+
+1. **Un lado que no tiene nada que poner en el cable no está midiendo la red.**
+   Un emisor sin frames que producir —ventana llena, o todo mandado ya— espera
+   al otro extremo, y el otro extremo puede ser una persona o un SHA-256 sobre
+   cuatro gigas, que también pasa de sesenta segundos sin que nada vaya mal. En
+   ese estado el plazo es `DECISION_DEADLINE`, **diez minutos**. En cuanto vuelve
+   a haber algo que mandar, vuelve a ser sesenta.
+
+2. **El tiempo en que este lado no estuvo escuchando no cuenta.** Cuando el
+   consumidor deja de dar pasos —el receptor sale de `await_offer` y pregunta a
+   una persona— nadie estaba escuchando, así que ese silencio no es prueba de
+   nada, y contarlo es culpar al par de una pausa propia. Al volver, la ventana
+   **se reinicia**; no se alarga. Un par de verdad muerto se descubre igual,
+   sesenta segundos después de que este lado vuelva a escuchar.
+
+### Lo que esto cuesta, dicho
+
+Un emisor cuyo par desaparece **por un agujero negro de red** —sin RST, sin
+FIN— mientras no le queda nada que mandar tarda ahora diez minutos en decirlo, y
+antes tardaba uno. Se acepta: es el lado donde hay una persona mirando y un
+Ctrl-C a mano, y el caso contrario —matar una transferencia sana porque alguien
+tardó en contestar— le pasa a todo el mundo, no a un agujero negro.
+
+### Lo que no arregla
+
+**Sigue sin haber latido.** `MessageType::Heartbeat` sigue sin emisor, y esto es
+una política de plazos, no un mensaje en el cable. Si algún día una pausa humana
+puede durar más de diez minutos —una notificación que el sistema no entrega, un
+teléfono que se bloquea— la respuesta correcta seguirá siendo un latido y no un
+número más grande.

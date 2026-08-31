@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use qyro_crypto::PublicIdentity;
 use qyro_fs::{
@@ -202,6 +203,18 @@ pub struct Session {
     /// y no cambia una sola decisión: sólo se puede preguntar.
     steps: u64,
     expired_reads: u64,
+    /// Si el último paso del emisor no produjo un solo frame.
+    ///
+    /// QYR-0393. Un emisor sin nada que mandar no está midiendo la red: está
+    /// esperando a que el otro lado conteste, y el otro lado puede ser una
+    /// persona leyendo una pantalla.
+    nothing_left_to_send: bool,
+    /// Cuándo empezó el paso anterior, para saber si este lado estuvo ausente.
+    ///
+    /// QYR-0393. Un hueco grande entre dos pasos no es un par callado: es un
+    /// consumidor que dejó de escuchar, casi siempre porque está preguntando
+    /// algo a una persona.
+    last_step_at: Instant,
 }
 
 impl core::fmt::Debug for Session {
@@ -370,6 +383,15 @@ pub fn pairing_fingerprint(text: &str) -> Result<String, SessionError> {
 /// arrives before the first byte and says the number.
 pub const MAX_FILES_PER_TRANSFER: usize = 256;
 
+/// Cuánto hueco entre dos pasos cuenta como «este lado no estaba escuchando».
+///
+/// QYR-0393. Un bucle normal da un paso cada `READ_TIMEOUT` (250 ms) más lo que
+/// tarde el trabajo, así que quince segundos no es un bucle lento: es un
+/// consumidor que se paró. Elegido lejos de los dos extremos a propósito — no
+/// tan corto que un disco lento lo dispare, no tan largo que se coma la ventana
+/// de sesenta segundos que protege.
+const SELF_ABSENCE: Duration = Duration::from_secs(15);
+
 impl Session {
     /// Opens a sending session against `address`, naming files relative to
     /// `root`.
@@ -495,6 +517,8 @@ impl Session {
             observer,
             steps: 0,
             expired_reads: 0,
+            last_step_at: Instant::now(),
+            nothing_left_to_send: false,
         })
     }
 
@@ -579,6 +603,8 @@ impl Session {
             observer,
             steps: 0,
             expired_reads: 0,
+            last_step_at: Instant::now(),
+            nothing_left_to_send: false,
         })
     }
 
@@ -616,6 +642,8 @@ impl Session {
             observer: observer.map(Emitter::new),
             steps: 0,
             expired_reads: 0,
+            last_step_at: Instant::now(),
+            nothing_left_to_send: false,
         })
     }
 
@@ -860,6 +888,54 @@ impl Session {
         }
     }
 
+    /// Cuánto silencio del otro lado tolera esta sesión **en el estado en que
+    /// está ahora**.
+    fn silence_budget(&self) -> Duration {
+        let waiting_on_a_decision = match &self.role {
+            // Un emisor **que no tiene nada que poner en el cable** está
+            // esperando al otro lado, y no a la red. Medido: durante los 65 s
+            // que tarda una persona en contestar, el emisor da 227 pasos en
+            // `Transferring` sin producir un solo frame -- ya lo mandó todo y
+            // espera acuses que no llegan porque nadie está leyendo.
+            //
+            // Las otras dos fases son el mismo caso escrito por su nombre:
+            // `Negotiating` espera una aceptación, y `AwaitingIntegrity` espera
+            // un SHA-256 sobre todo lo recibido, que sobre cuatro gigas pasa de
+            // sesenta segundos **sin que nada vaya mal**.
+            //
+            // Mientras hay algo que mandar, el reloj vuelve a ser el de sesenta:
+            // ahí el silencio del otro sí es una medida de la red.
+            Role::Sending { engine, .. } => {
+                self.nothing_left_to_send
+                    || matches!(
+                        engine.phase(),
+                        Phase::Negotiating | Phase::AwaitingIntegrity
+                    )
+            }
+            // Un receptor que negocia todavía no tiene manifiesto: lo que espera
+            // es que el otro lado ofrezca. Su otra pausa -- la de preguntar a
+            // una persona -- la cubre `SELF_ABSENCE`, porque ahí el que no
+            // escucha es él.
+            Role::Receiving { engine, .. } => matches!(engine.phase(), Phase::Negotiating),
+        };
+        if waiting_on_a_decision {
+            qyro_net::DECISION_DEADLINE
+        } else {
+            qyro_net::IDLE_TIMEOUT
+        }
+    }
+
+    /// El reloj de silencio que esta sesión está usando ahora mismo.
+    ///
+    /// Público para que una prueba pueda comprobar la política de QYR-0393 sin
+    /// esperar un minuto: la prueba que la mide de verdad tarda 65 s y está
+    /// `#[ignore]`, y una propiedad que sólo se comprueba a mano es una
+    /// propiedad que se rompe sin que nadie lo note.
+    #[must_use]
+    pub const fn idle_deadline(&self) -> Duration {
+        self.stream.idle_timeout()
+    }
+
     fn fail(&mut self, error: SessionError) -> SessionError {
         self.failed = Some(error);
         error
@@ -886,6 +962,39 @@ impl Session {
     fn advance(&mut self) -> Result<SessionState, SessionError> {
         self.steps = self.steps.saturating_add(1);
         self.write_outbound()?;
+
+        // **El único silencio que este protocolo produce a propósito es el de
+        // una persona pensando** (QYR-0393).
+        //
+        // No hay latido: `MessageType::Heartbeat` existe en el formato y **nadie
+        // lo emite**, así que los sesenta segundos de ADR-0028 §4.2 corren
+        // enteros contra el tiempo que tarda alguien en leer una pantalla.
+        // Medido: con 65 s de espera el emisor moría a los **60,11 s** con «el
+        // otro aparato no responde», que es una acusación falsa contra una red
+        // que funciona.
+        //
+        // Son **dos** reglas, porque los dos lados se quedan callados por
+        // razones distintas.
+        //
+        // La primera: **este lado espera de verdad, y lo que espera no es un
+        // aparato**. Un emisor en `Negotiating` espera una aceptación y uno en
+        // `AwaitingIntegrity` ya lo ha puesto todo en el cable y espera un
+        // veredicto — que es un SHA-256 sobre todo lo recibido, y sobre cuatro
+        // gigas eso pasa de sesenta segundos **sin que nada vaya mal**. En esas
+        // dos fases el reloj es el de una decisión. Mientras el contenido se
+        // mueve vuelve a ser sesenta, porque ahí el silencio sí significa
+        // muerto. Esto **no** es subir `IDLE_TIMEOUT`.
+        self.stream.set_idle_timeout(self.silence_budget());
+
+        // La segunda: **el reloj mide el silencio del otro, no la espera de
+        // éste.** Cuando el consumidor deja de dar pasos —el receptor sale de
+        // `await_offer` y pregunta a una persona— nadie estaba escuchando, así
+        // que ese silencio no es prueba de nada y contarlo es culpar al par de
+        // una pausa propia. Se reinicia la ventana; no se alarga.
+        if self.last_step_at.elapsed() > SELF_ABSENCE {
+            self.stream.mark_listening();
+        }
+        self.last_step_at = Instant::now();
 
         let inbound = match self.stream.read_frame() {
             Ok(Some(frame)) => Some(
@@ -922,6 +1031,7 @@ impl Session {
                     .pump(source)
                     .map_err(|_| SessionError::TransferRefused)?;
                 self.outbound = produced;
+                self.nothing_left_to_send = self.outbound.is_empty();
                 self.progress.done = engine.bytes_sent();
                 self.progress.item = engine.item_in_flight();
                 finished = engine.phase() == Phase::Done;

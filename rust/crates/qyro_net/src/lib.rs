@@ -79,7 +79,7 @@ pub use discovery::{
 pub use error::{NetError, SocketOp};
 pub use handshake::{Session, initiate, initiate_within, respond, respond_within};
 pub use limits::{
-    CONNECT_TIMEOUT, HANDSHAKE_DEADLINE, IDLE_TIMEOUT, MAX_ESTABLISHED_SESSIONS,
+    CONNECT_TIMEOUT, DECISION_DEADLINE, HANDSHAKE_DEADLINE, IDLE_TIMEOUT, MAX_ESTABLISHED_SESSIONS,
     MAX_PENDING_HANDSHAKES, MAX_PREAUTH_BYTES, QYRO_PORT, READ_BUFFER_LEN, READ_TIMEOUT,
 };
 pub use listener::{Listener, PendingSlot, REFUSAL_TOO_MANY_PENDING, dial, refusal_of};

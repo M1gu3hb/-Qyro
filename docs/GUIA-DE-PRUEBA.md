@@ -517,6 +517,14 @@ Espera **un minuto entero**. Qyro tiene un reloj de 60 segundos: si el otro lado
 se calla, lo dice al vencer. Si a los dos minutos sigue igual, **Ctrl-C** en el
 PC, y empieza otra vez por el receptor.
 
+**Tómate el tiempo que quieras para aceptar.** Hasta hoy no podías: el reloj de
+60 segundos corría también mientras leías la pregunta, así que tardar más de un
+minuto en contestar mataba la transferencia y decía «el otro aparato no
+responde» — culpando a la red justo cuando acababas de contestar. Ahora, cuando
+un lado no tiene nada que mandar y sólo espera al otro, el plazo son **diez
+minutos** (QYR-0393). Medido: 65 segundos pensando pasaban de `PeerUnreachable`
+a los 60,11 s a entregado a los 65,76 s.
+
 ### «los archivos llegaron y no se guardó ninguno»
 
 O, en el teléfono: «El destino no lo aceptó».
