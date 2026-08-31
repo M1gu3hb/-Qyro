@@ -185,7 +185,29 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
         return 2;
     }
 
-    println!("\n  connecting to {address} ...");
+    // **Deliberately not «connecting to …» yet.** `open_sender` builds the
+    // manifest before it dials, so this line used to appear immediately above
+    // «the name itself was refused, before anything was sent» -- two sentences
+    // contradicting each other, one of them wrong.
+    //
+    // **And through `safe_terminal_name`, not `path.display()`.** The first
+    // draft of this line printed the path raw, and a file called
+    // `inocente.txt\rACEPTADO: ...` rewrote the line it was being printed on --
+    // in the one program that already knows a terminal is an interpreter
+    // (ADR-0047 §6). A name is attacker-controlled text wherever it came from:
+    // an archive somebody sent, a download, a peer. The rule lives at the
+    // drawing site, and this is a drawing site.
+    //
+    // The name and not the whole path: a diagnostic does not need the folders,
+    // and printing them is what the security notes call exposing full paths.
+    let shown = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(file);
+    println!(
+        "\n  preparing {} ...",
+        qyro_session::safe_terminal_name(shown)
+    );
     // **The full path, not the bare name.** `open_sender` derives each file's
     // name on the wire by `strip_prefix(root)`, so a bare `p.bin` against a root
     // of `C:\folder` cannot strip and every send returned `BadArgument`.
@@ -199,12 +221,14 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
     let mut session = match Session::open_sender(address, root, &[path.to_path_buf()], None) {
         Ok(session) => session,
         Err(error) => {
-            eprintln!("\nqyro: could not connect: {error}");
+            eprintln!();
+            eprintln!("qyro: {}", why_the_send_did_not_start(error));
             return 1;
         }
     };
 
     let peer = session.peer_fingerprint();
+    println!("  connected to {address}.");
     println!("  the other device says it is:");
     println!("    {}{peer}{}", vt.green(), vt.reset());
 
@@ -232,6 +256,56 @@ pub fn send(file: &str, to: &str, expect: Option<&str>, vt: Vt) -> i32 {
             1
         }
     }
+}
+
+/// Why a send never started, in words that point at the right place.
+///
+/// **QYR-0375: this used to be `could not connect: {error}` for every reason.**
+/// `open_sender` builds the manifest **before** it dials, so a name this wire
+/// cannot carry — a carriage return in it, say — comes back from a function that
+/// never touched a socket. Measured: a file called `inocente.txt\rACEPTADO: …`
+/// is refused, correctly, and the person was told «could not connect», so they
+/// went to look at the network, the router and the firewall for a problem that
+/// was in the file name.
+///
+/// One sentence per reason, and each names where to look.
+fn why_the_send_did_not_start(error: SessionError) -> String {
+    // Lines joined here rather than one long literal with `\n  ` in it:
+    // `cargo fmt` collapses a `\`-continued literal onto one source line and
+    // **bakes the indentation into the string**, so the first draft of this
+    // printed fifteen spaces before every continuation. A joined array cannot
+    // have that happen to it.
+    let lines: Vec<String> = match error {
+        SessionError::PeerUnreachable => vec![
+            format!("could not connect: {error}."),
+            "Check that the other device is running `qyro recv` right now,".to_owned(),
+            "that both are on the same network, and that the firewall let".to_owned(),
+            "Qyro in.".to_owned(),
+        ],
+        SessionError::StorageRefused => vec![
+            format!("that file cannot be put on this wire: {error}."),
+            "The name itself was refused, before anything was sent: a control".to_owned(),
+            "character in it, a reserved Windows name like CON or NUL, or a".to_owned(),
+            "name that would escape the destination folder. Rename it and try".to_owned(),
+            "again.".to_owned(),
+        ],
+        SessionError::NotAuthenticated => vec![
+            format!("the other device did not prove who it is: {error}."),
+            "Somebody answered on that address and it is not the device whose".to_owned(),
+            "code you used.".to_owned(),
+        ],
+        SessionError::IdentityUnreadable => vec![
+            format!("this device has no usable identity: {error}."),
+            "The file `qyro-identity.bin` next to this program cannot be read.".to_owned(),
+            "Qyro will not invent a new one: that would make this machine a".to_owned(),
+            "stranger to every device that already trusts it.".to_owned(),
+        ],
+        SessionError::TooManyFiles { given, limit } => vec![format!(
+            "{given} files is more than one transfer carries; the limit is {limit}."
+        )],
+        _ => vec![format!("the send did not start: {error}")],
+    };
+    lines.join("\n  ")
 }
 
 /// The menu's send: asks for the two values, then calls [`send`].
@@ -1002,7 +1076,87 @@ mod tests {
         reason = "a test that cannot fail loudly is not a test"
     )]
 
-    use super::{DEFAULT_PORT, address_of, fingerprint_matches, typeable};
+    use super::{
+        DEFAULT_PORT, address_of, fingerprint_matches, typeable, why_the_send_did_not_start,
+    };
+    use qyro_session::SessionError;
+
+    #[test]
+    fn un_envio_que_no_arranca_dice_donde_mirar_y_no_siempre_la_red() {
+        // **QYR-0375.** Esto decia `could not connect: {error}` para TODAS las
+        // razones. `open_sender` construye el manifiesto **antes** de marcar, asi
+        // que un nombre que este cable no puede llevar vuelve de una funcion que
+        // no ha tocado un socket. Medido: un archivo llamado
+        // `inocente.txt\rACEPTADO: ...` se rechaza -- correctamente -- y a la
+        // persona se le decia «could not connect», asi que se iba a mirar la red,
+        // el router y el cortafuegos por un problema que estaba en el nombre.
+        let refused = why_the_send_did_not_start(SessionError::StorageRefused);
+        assert!(
+            !refused.contains("could not connect"),
+            "un nombre rechazado sigue mandando a mirar la red:\n{refused}"
+        );
+        assert!(
+            refused.contains("name") && refused.contains("Rename"),
+            "el rechazo no dice que el problema es el nombre ni que hacer:\n{refused}"
+        );
+
+        // Y el que SI es la red la nombra, con las tres cosas que mirar.
+        let unreachable = why_the_send_did_not_start(SessionError::PeerUnreachable);
+        assert!(unreachable.contains("could not connect"));
+        assert!(
+            unreachable.contains("qyro recv")
+                && unreachable.contains("network")
+                && unreachable.contains("firewall"),
+            "el fallo de red no dice que comprobar:\n{unreachable}"
+        );
+
+        // El control: dos razones distintas no pueden dar la misma frase, o esto
+        // no distingue nada. Es el defecto entero, escrito como prueba.
+        assert_ne!(refused, unreachable);
+        assert_ne!(
+            why_the_send_did_not_start(SessionError::NotAuthenticated),
+            unreachable
+        );
+        assert_ne!(
+            why_the_send_did_not_start(SessionError::IdentityUnreadable),
+            refused
+        );
+
+        // Y ninguna sale con la sangria pegada dentro. `cargo fmt` colapsa un
+        // literal continuado con `\` en una sola linea de fuente y **mete la
+        // sangria dentro de la cadena**: el primer borrador imprimia quince
+        // espacios delante de cada linea de continuacion.
+        for line in refused.lines().skip(1) {
+            assert!(
+                line.starts_with("  ") && !line.starts_with("   "),
+                "una linea de continuacion sale sangrada de mas: {line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn un_nombre_con_un_retorno_de_carro_no_reescribe_la_linea_al_imprimirse() {
+        // ADR-0047 §6, y esta prueba existe porque el arreglo de QYR-0375
+        // **introdujo** el defecto: la linea nueva imprimia `path.display()` en
+        // crudo, y un archivo llamado `inocente.txt\rACEPTADO: ...` reescribia la
+        // linea que lo estaba anunciando. En el unico programa del proyecto que
+        // ya sabe que un terminal es un interprete.
+        let hostile = "inocente.txt\rACEPTADO: nada peligroso aqui";
+        let drawn = qyro_session::safe_terminal_name(hostile);
+        assert!(
+            !drawn.contains('\r'),
+            "el retorno de carro llega al terminal: {drawn:?}"
+        );
+        assert!(
+            drawn.contains('\u{FFFD}'),
+            "no se sustituyo por nada visible"
+        );
+        // Y el control: un nombre normal no se toca.
+        assert_eq!(
+            qyro_session::safe_terminal_name("informe.pdf"),
+            "informe.pdf"
+        );
+    }
 
     #[test]
     fn un_codigo_para_teclear_sale_ya_entrecomillado() {

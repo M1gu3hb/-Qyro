@@ -99,6 +99,15 @@ de QYR-0357 por otra puerta.
 
 El motor no tenia nada que arreglar, y eso es parte del hallazgo.
 
+**QYR-0375, arreglado, y el arreglo introdujo un defecto que tambien esta
+arreglado.** `qyro send` decia `could not connect` para toda razon, y
+`open_sender` construye el manifiesto **antes** de marcar: un nombre con un
+retorno de carro se rechaza sin tocar un socket, y a la persona se le mandaba a
+mirar la red. Ahora hay una frase por razon. Y la linea nueva imprimia
+`path.display()` en crudo, con lo que ese mismo nombre **reescribia la linea que
+lo anunciaba** -- en el unico programa que ya sabe que un terminal es un
+interprete. Pasa por `safe_terminal_name`, y se imprime el nombre y no la ruta.
+
 **`AGENTS.md` reescrito.** Se declaraba fuente canonica y decia que el alcance
 «no incluye transferencia, transporte, LAN» y que «Qyro sigue sin transferir
 archivos». Falso desde la fase 12.

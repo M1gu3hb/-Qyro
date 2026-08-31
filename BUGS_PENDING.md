@@ -12,6 +12,54 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0375 — Todo fallo de envío se anunciaba como un problema de red
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA** (manda a la persona a mirar donde no es)
+- Fecha: 2026-08-31
+
+**El defecto.** `qyro send` imprimía `could not connect: {error}` para **todas**
+las razones por las que un envío no arranca. Pero `Session::open_sender`
+construye el manifiesto **antes** de marcar, así que varias de esas razones
+vuelven de una función que no ha tocado un socket.
+
+**Medido.** Un archivo llamado `inocente.txt\rACEPTADO: nada peligroso aqui` se
+rechaza —correctamente, porque `qyro_manifest` no acepta caracteres de control en
+un nombre— y a la persona se le decía «could not connect». Se va a mirar la red,
+el router y el cortafuegos por un problema que estaba en el nombre del archivo.
+
+**El arreglo.** Una frase por razón, y cada una nombra dónde mirar: el nombre
+rechazado dice que es el nombre y qué clases de nombre se rechazan; el peer
+inalcanzable dice las tres cosas que comprobar; la identidad ilegible dice cuál
+es el archivo y por qué Qyro no se inventa otra. Con su control: dos razones
+distintas no pueden dar la misma frase.
+
+**Y un detalle de formato que era un defecto de verdad.** El primer borrador
+usaba un literal continuado con `\`. **`cargo fmt` lo colapsa en una sola línea
+de fuente y mete la sangría dentro de la cadena**, así que imprimía quince
+espacios delante de cada línea de continuación. Se construye juntando un array,
+que no puede sufrir eso, y hay una prueba que mide la sangría.
+
+### Y el arreglo introdujo un defecto, que también está aquí
+
+La línea nueva imprimía `path.display()` **en crudo**, y el mismo archivo de
+prueba —el del retorno de carro— **reescribió la línea que lo estaba
+anunciando**. En el único programa del proyecto que ya sabe que un terminal es un
+intérprete: ADR-0047 §6 pone esa regla en el sitio donde se dibuja, y esto era un
+sitio donde se dibuja.
+
+Pasa por `qyro_session::safe_terminal_name`, con su prueba en los dos sentidos, y
+se imprime **el nombre y no la ruta**: un diagnóstico no necesita las carpetas, y
+enseñarlas es lo que las notas de seguridad llaman exponer rutas completas.
+
+**Y el orden.** «connecting to …» se imprimía antes de construir el manifiesto,
+así que quedaba justo encima de «el nombre fue rechazado antes de mandar nada»:
+dos frases contradiciéndose, una de ellas falsa. Ahora dice «preparing …» antes y
+«connected to …» cuando de verdad hay conexión.
+
+**La pregunta que cierra esta ficha:** cuando un envío no arranca, ¿sabe la
+persona dónde mirar? **Sí, y no siempre es la red.**
+
 ## QYR-0374 — La barra llegaba al 100 % y no se guardaba nada, sin decir por qué
 
 - Estado: **CERRADO**
