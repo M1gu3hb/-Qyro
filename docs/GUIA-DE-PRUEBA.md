@@ -595,7 +595,7 @@ Anótalo.
 
 Los resultados van en
 [`docs/testing/hardware-protocol.md`](testing/hardware-protocol.md), que ya tiene
-**veintiséis escenarios numerados**, cada uno con un hueco en blanco:
+**treinta escenarios numerados**, cada uno con un hueco en blanco:
 
 ```
 Resultado: `[ ]` ______________________

@@ -15,7 +15,7 @@ serie— usan el mismo framing.
 >
 > **Y lo que sigue siendo cierto:** nada de esto ha cruzado nunca una red de
 > verdad. Está probado entre dos procesos y en CI. Ver
-> `docs/testing/hardware-protocol.md`, veintiséis huecos en blanco.
+> `docs/testing/hardware-protocol.md`, **treinta** escenarios en blanco.
 
 ## Dónde vive cada pieza
 

@@ -805,3 +805,101 @@ fn the_status_page_does_not_republish_the_withdrawn_hashes() {
          nothing -- which helps nobody verify a download"
     );
 }
+
+/// Cada escenario de hardware tiene un hueco donde escribir su resultado, y
+/// todos los documentos dicen el mismo número.
+///
+/// **QYR-0396.** El protocolo tiene **treinta** escenarios y siete documentos
+/// decían **veintiséis**. El número venía de contar los huecos de `Resultado:`
+/// —que eran veintiséis— y de una suma escrita en el propio protocolo: «los
+/// veintiuno de A–E y **los cinco de F**». F tiene **nueve**.
+///
+/// Y los cuatro que faltaban no eran un error de aritmética: **F2b, F2c, F3b y
+/// F4 no tenían dónde escribir el resultado**. F4 es «la máquina que no puede
+/// instalar nada», que es un escenario que alguien ejecuta de verdad. Un
+/// escenario sin hueco es un escenario que no se anota, y toda la disciplina de
+/// esta fase se apoya en que un hueco en blanco es la verdad.
+#[test]
+fn every_hardware_scenario_has_somewhere_to_write_its_result() {
+    let root = repo_root();
+    let path = root.join("docs/testing/hardware-protocol.md");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("the hardware protocol is at {}: {error}", path.display()));
+
+    // Un escenario es un encabezado con su identificador: `**A1.`, `#### F1 `,
+    // o `**F1b.`. Se leen los tres porque el documento usa los tres.
+    let mut scenarios: Vec<(usize, String)> = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        let name = if let Some(rest) = line.strip_prefix("**") {
+            rest.split('.').next().filter(|id| {
+                id.len() >= 2
+                    && id.starts_with(|c: char| ('A'..='F').contains(&c))
+                    && id.chars().nth(1).is_some_and(|c| c.is_ascii_digit())
+                    && id
+                        .chars()
+                        .skip(1)
+                        .all(|c| c.is_ascii_digit() || c.is_ascii_lowercase())
+            })
+        } else if let Some(rest) = line.strip_prefix("#### ") {
+            rest.split_whitespace().next().filter(|id| {
+                id.len() == 2 && id.starts_with('F') && id.ends_with(|c: char| c.is_ascii_digit())
+            })
+        } else {
+            None
+        };
+        if let Some(name) = name {
+            scenarios.push((number, name.to_owned()));
+        }
+    }
+
+    assert_eq!(
+        scenarios.len(),
+        30,
+        "the protocol now has {} scenarios and not 30. That is fine -- but the \
+         number is repeated in README.md, STATUS.md, PROTOCOL.md, SECURITY.md, \
+         ARCHITECTURE.md and docs/GUIA-DE-PRUEBA.md, so it has to change there \
+         too or those pages start lying. Found: {:?}",
+        scenarios.len(),
+        scenarios.iter().map(|(_, id)| id).collect::<Vec<_>>()
+    );
+
+    // Y cada uno con su hueco: se mira desde su encabezado hasta el siguiente.
+    let lines: Vec<&str> = text.lines().collect();
+    let mut homeless = Vec::new();
+    for (index, (start, name)) in scenarios.iter().enumerate() {
+        let end = scenarios
+            .get(index.saturating_add(1))
+            .map_or(lines.len(), |(next, _)| *next);
+        let block = lines.get(*start..end).unwrap_or_default();
+        if !block.iter().any(|line| line.contains("Resultado:")) {
+            homeless.push(name.clone());
+        }
+    }
+    assert!(
+        homeless.is_empty(),
+        "these scenarios have nowhere to write their result: {homeless:?}. A \
+         scenario with no blank is a scenario nobody records, and «un hueco en \
+         blanco es la verdad» only works if the blank exists."
+    );
+
+    // Y el número, dicho igual en todas partes.
+    for document in [
+        "README.md",
+        "STATUS.md",
+        "PROTOCOL.md",
+        "SECURITY.md",
+        "ARCHITECTURE.md",
+        "docs/GUIA-DE-PRUEBA.md",
+    ] {
+        let page = root.join(document);
+        let Ok(body) = std::fs::read_to_string(&page) else {
+            continue;
+        };
+        assert!(
+            !body.contains("veintiséis escenarios") && !body.contains("veintiséis huecos"),
+            "{document} still says «veintiséis», and the protocol has thirty \
+             scenarios. The old number counted the `Resultado:` blanks, and four \
+             scenarios had none."
+        );
+    }
+}

@@ -12,6 +12,48 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0396 — El protocolo de hardware tiene treinta escenarios y siete documentos decían veintiséis
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA**, y la consecuencia es que cuatro escenarios no se anotan
+- Fecha: 2026-09-01
+
+**El defecto.** `docs/testing/hardware-protocol.md` tiene **treinta** escenarios
+—veintiuno en A–E y **nueve** en F— y seis documentos más publicaban
+**veintiséis**. El número salía de una suma escrita en el propio protocolo: *«los
+veintiuno de A–E y **los cinco de F**, veintiséis en total»*. F tiene nueve:
+F1, F1b, F2, F2b, F2c, F3, F3b, F4 y F4b.
+
+**Y por qué se sostuvo.** Porque veintiséis era, a la vez, el número de líneas
+`Resultado:` del documento — así que cualquiera que contara «huecos» obtenía
+veintiséis y confirmaba la suma equivocada. **Cuatro escenarios anotaban su
+resultado bajo otra etiqueta**: `Respuesta:` (F2b), `¿Cambió algo?` (F2c),
+`¿Lo dice?` (F3b) y `¿Arrancó?` (F4). Nada podía contarlos.
+
+**Lo que eso cuesta el día de la prueba.** F4 es **«la máquina que no puede
+instalar nada»**, que el propio documento llama *«el escenario que da sentido a
+todo el producto»*. Quien siga §7 de la guía —«rellena los huecos `Resultado:`»—
+lo salta sin darse cuenta, porque el suyo no se llama así.
+
+**La prueba, primero.** `every_hardware_scenario_has_somewhere_to_write_its_-`
+`result`, en el contrato de repositorio que corre dentro del gate: cuenta los
+encabezados —los tres formatos que el documento usa—, exige treinta, exige que
+cada uno tenga una línea `Resultado:` entre su encabezado y el siguiente, y exige
+que los seis documentos que repiten el número no digan «veintiséis». Falló
+primero con `["F2b", "F2c", "F3b", "F4"]`, y después con `PROTOCOL.md still says
+«veintiséis»`.
+
+**El arreglo.** Una línea `Resultado:` en los cuatro, **conservando su pregunta
+específica** debajo: la pregunta era lo valioso y no estorba a la cuenta. La suma
+del protocolo corregida, con la nota de qué decía. Y el número puesto en los seis:
+`README.md`, `STATUS.md`, `PROTOCOL.md`, `SECURITY.md`, `ARCHITECTURE.md` y
+`docs/GUIA-DE-PRUEBA.md`.
+
+**De dónde salió.** Del recorte que la propia auditoría declaró: diecinueve
+hallazgos de severidad baja que no pasaron por refutación, nombrados uno a uno en
+su registro. Éste era `escenarios-veintiseis-son-treinta`, y decía el número
+correcto. **Un recorte declarado se puede recuperar; uno callado, no.**
+
 ## QYR-0395 — Seis documentos publicados decían cosas que el código desmiente, y uno mandaba a comprobar un binario que hay que borrar
 
 - Estado: **CERRADO**

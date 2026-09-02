@@ -238,6 +238,27 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0396, y lo encontro el recorte que la propia auditoria declaro.** El
+protocolo de hardware tiene **treinta** escenarios y siete documentos decian
+veintiseis. El numero salia de una suma escrita en el propio protocolo -- «los
+veintiuno de A-E y **los cinco de F**» -- y F tiene nueve. Se sostenia porque
+veintiseis era tambien el numero de lineas `Resultado:`: **cuatro escenarios
+anotaban el suyo bajo otra etiqueta** (`Respuesta:`, `¿Cambio algo?`,
+`¿Lo dice?`, `¿Arranco?`), asi que nada podia contarlos. Uno de esos cuatro es
+**F4, «la maquina que no puede instalar nada»**, que el propio documento llama
+«el escenario que da sentido a todo el producto»: quien siga la guia -- «rellena
+los huecos `Resultado:`» -- lo salta sin darse cuenta.
+
+**Y la cuenta mal hecha estaba en un documento de esta misma tanda.**
+`lo-que-no-se-ha-probado.md` listaba «F1b, F2b, F2c, F3b, F4b (5)»: las variantes
+sin las cuatro principales. De ahi se copiaba.
+
+Arreglado en los siete, con una guarda que cuenta encabezados, cuenta huecos y
+exige que los seis documentos digan el mismo numero. Salio del recorte que la
+auditoria **declaro por su nombre**: diecinueve hallazgos de severidad baja sin
+refutar, uno de ellos `escenarios-veintiseis-son-treinta`. **Un recorte declarado
+se puede recuperar; uno callado, no.**
+
 **La auditoria de nueve agentes termino despues de escribir el informe, y sus
 numeros son otros.** Lo que se sabia al escribirlo eran 19 hallazgos juzgados con
 53 veredictos. Los de verdad: **45 juzgados, 135 veredictos, 21 aguantan y 24

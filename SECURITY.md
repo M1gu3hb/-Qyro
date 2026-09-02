@@ -4,7 +4,7 @@
 cruza un socket TCP sellado frame a frame con ChaCha20-Poly1305 bajo una clave
 derivada de un handshake autenticado, y se verifica con SHA-256 antes de
 entregarse. Lo que sigue sin existir es la evidencia de aparato real: ver
-`docs/testing/hardware-protocol.md`, veintiséis huecos en blanco.
+`docs/testing/hardware-protocol.md`, **treinta** escenarios en blanco.
 
 > **Dos frases que estuvieron aquí hasta 2026-08-31, y las dos eran falsas.**
 > Se dejan escritas para que no vuelvan; este documento se verifica contra el

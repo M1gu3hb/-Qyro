@@ -78,7 +78,7 @@ la reanudación existe en el motor y no la llama nadie, el historial tampoco, y
 
 **Y lo que no existe es la evidencia de hardware.** Nada de esto ha corrido
 nunca en un teléfono ni en un PC con Windows: `docs/testing/hardware-protocol.md`,
-veintiséis huecos en blanco.
+**treinta** escenarios en blanco.
 
 > **La frase que estuvo aquí hasta 2026-08-31 decía que lo único implementado
 > era «qyro_core, ABI C mínima y ScrambleDecodeEngine», y que el resto era

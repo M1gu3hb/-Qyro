@@ -11,7 +11,7 @@ pide un Mac y una cuenta de desarrollador de Apple.
 > **Nada de esto se ha ejecutado nunca en hardware físico.** Está probado en
 > unidad, en integración, entre dos procesos reales y en CI sobre Linux y
 > Windows. Ningún teléfono ha ejecutado nunca esta aplicación y ninguna
-> transferencia ha cruzado una Wi-Fi de verdad. Los **veintiséis** escenarios que
+> transferencia ha cruzado una Wi-Fi de verdad. Los **treinta** escenarios que
 > cerrarían ese hueco están escritos y **sin marcar** en
 > [docs/testing/hardware-protocol.md](docs/testing/hardware-protocol.md).
 >

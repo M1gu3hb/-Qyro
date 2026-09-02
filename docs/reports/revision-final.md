@@ -8,7 +8,7 @@ método.
 **Qué NO es.** Evidencia de hardware. Nada de lo que hay aquí ha tocado nunca un
 teléfono ni un PC con Windows. La página que hay que leer antes de enchufar dos
 aparatos es [`lo-que-no-se-ha-probado.md`](lo-que-no-se-ha-probado.md), y sus
-veintiséis huecos siguen en blanco.
+treinta escenarios siguen en blanco.
 
 **La puerta, en el commit que este informe nombra.** `7e61b98`, medido en este
 contenedor Linux. Los commits posteriores de esta tanda cambian **sólo
@@ -555,13 +555,21 @@ QYR-0382, que es la que impide que «esta clave ha cambiado» pueda ocurrir.
 - Las carpetas del manifiesto **se crean antes de que la persona acepte**, y
   rechazar no las borra.
 
-**De los documentos, uno.** Los otros siete se arreglaron en QYR-0395, con tres
-guardas nuevas que corren en el gate. El que queda: **el número de escenarios de
-hardware es falso en cinco documentos**, y en un sexto sitio que no es un
-documento — las notas de la Release publicada dicen «los veinte escenarios» y el
-protocolo tiene veintiséis. Se deja abierto y no se toca hoy: cambiar un número
-en seis sitios el día antes de una prueba de hardware es exactamente el tipo de
-edición que rompe otra cosa.
+**De los documentos, ninguno.** Los siete de QYR-0395 y el que quedaba —el
+número de escenarios— están cerrados, con cuatro guardas nuevas en el gate.
+
+El último resultó ser peor de lo que decía y se cerró como **QYR-0396**: el
+protocolo tiene **treinta** escenarios, no veintiséis, y seis documentos
+repetían el número equivocado porque la suma del propio protocolo decía «los
+veintiuno de A–E y **los cinco de F**» — F tiene nueve. Y se sostenía porque
+veintiséis era también el número de líneas `Resultado:`: **cuatro escenarios
+anotaban su resultado bajo otra etiqueta**, así que nada podía contarlos. Uno de
+esos cuatro es F4, «la máquina que no puede instalar nada», que el propio
+documento llama *«el escenario que da sentido a todo el producto»*.
+
+**Queda una cifra fuera de este repositorio y no se toca:** las notas de la
+Release publicada dicen «los veinte escenarios». Editarlas es cambiar una
+publicación retractada, y eso es decisión del propietario, no de esta revisión.
 
 **Ninguno de estos bloquea la prueba de hoy.** Los tres que la bloqueaban —el
 linker de Android, la DLL que nadie construía y el permiso `INTERNET` que faltaba

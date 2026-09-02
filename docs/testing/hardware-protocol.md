@@ -259,7 +259,16 @@ Resultado: `[ ]` ______________________
 ### F — Los otros tres canales
 
 **Los veintiún escenarios de arriba prueban un canal: la red.** `R7` promete
-cuatro, y los otros tres no tienen ni una casilla. Éstas son.
+cuatro, y los otros tres no tienen ni una casilla. Éstas son: **nueve**, contando
+las variantes, que son escenarios y no notas al pie.
+
+> **Esta sección decía «los cinco de F» y son nueve** (QYR-0396). De ahí salía el
+> «veintiséis» que repetían seis documentos más: veintiuno y cinco. Y el error se
+> sostenía porque cuatro de estos nueve anotaban su resultado bajo otra etiqueta
+> —`Respuesta:`, `¿Cambió algo?`, `¿Lo dice?`, `¿Arrancó?`— así que **nada podía
+> contarlos**. Ahora los treinta tienen su línea `Resultado:`, y una guarda del
+> gate cuenta los encabezados, cuenta los huecos, y exige que los seis documentos
+> digan el mismo número.
 
 **Nada de esto está ejecutado.** Todos los huecos están en blanco a propósito:
 **un escenario sin marcar no es un aprobado**, y escribir un resultado que nadie
@@ -323,12 +332,14 @@ vista de Android y esta aplicación dibuja con Flutter. Quien sostiene el teléf
 se guía por las cifras. **¿Es suficiente, o hace falta un visor?** Es una
 pregunta de producto y la respuesta sale de sostener el teléfono, no de discutir.
 
-Respuesta: `[ ]` ______________________
+Resultado: `[ ]` ______________________
+¿Hace falta un visor? `[ ]` ______________________
 
 **F2c. El brillo.** `R10` §8 T4: la pantalla es una fuente de luz y el
 autoexposímetro la sobreexpone. Prueba al 100 % y al 60 %.
 
-¿Cambió algo? `[ ]` ______________________
+Resultado: `[ ]` ______________________
+¿Cambió algo entre el 100 % y el 60 %? `[ ]` ______________________
 
 #### F3 — El canal serie (fase 16)
 
@@ -354,7 +365,8 @@ Velocidad real observada: `[ ]` ______ · ¿Llegó el hash igual? `[ ]` ______
 amenazas. **Comprueba que la pantalla lo dice** antes de que alguien lo use para
 algo que le importe.
 
-¿Lo dice? `[ ]` ______________________
+Resultado: `[ ]` ______________________
+¿Lo dice la pantalla? `[ ]` ______________________
 
 #### F4 — La máquina que no puede instalar nada (`R7` §2)
 
@@ -370,6 +382,7 @@ simular: una máquina real, sin permisos de administrador, quizá sin Windows 10
   `verify_static.ps1` lleva señalando desde la fase 13 y que ADR-0049 dice que
   **no está confirmado en `msvc`**.
 
+Resultado: `[ ]` ______________________
 ¿Arrancó? `[ ]` ______ · ¿Salió SmartScreen? `[ ]` ______
 Versión de Windows: `[ ]` ______________________
 
@@ -387,7 +400,7 @@ Cuando termines, pega la tabla rellena en un archivo nuevo:
 
 - **el modelo del teléfono y su versión de Android**, y la versión de Windows;
 - **el hash del APK y del `.exe`** que instalaste;
-- **todos los huecos** —los veintiuno de A–E y los cinco de F, veintiséis en
+- **todos los huecos** —los veintiuno de A–E y los **nueve** de F, **treinta** en
   total, los cuatro canales—,
   incluidos los que fallaron y **los que no ejecutaste**;
 - y para cada fallo: qué esperabas, qué pasó, y el `adb logcat` si lo hay.

@@ -68,7 +68,7 @@ esas cifras dice nada sobre Windows ni sobre Android.
 
 ## 4. Los huecos, uno a uno
 
-**Veintiséis escenarios**, todos en blanco, en
+**Treinta escenarios**, todos en blanco, en
 [`docs/testing/hardware-protocol.md`](../testing/hardware-protocol.md):
 
 - **A1–A4** (4) — arranque y presencia: que la aplicación abra, que el `.so`
@@ -82,8 +82,15 @@ esas cifras dice nada sobre Windows ni sobre Android.
 - **D1–D5** (5) — la transferencia: foto teléfono→PC, 100 MB PC→teléfono, y las
   demás.
 - **E1–E3** (3) — lo que sale mal.
-- **F1b, F2b, F2c, F3b, F4b** (5) — los otros tres canales y la máquina que no
-  puede instalar nada.
+- **F1, F1b, F2, F2b, F2c, F3, F3b, F4, F4b** (9) — los otros tres canales y la
+  máquina que no puede instalar nada.
+
+> **Esta lista decía «F1b, F2b, F2c, F3b, F4b (5)» y sumaba veintiséis**
+> (QYR-0396). Se dejó fuera **F1, F2, F3 y F4** —las cuatro principales— y se
+> listaron sólo sus variantes, que es de donde salía «los cinco de F». El
+> protocolo tiene **nueve** en esa sección y **treinta** en total. Se deja
+> escrito porque este documento es de los que otros citan, y una cuenta mal
+> hecha aquí se copia sola.
 
 ---
 

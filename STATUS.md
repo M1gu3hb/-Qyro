@@ -22,7 +22,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
   evidencia**: ningún teléfono ha ejecutado nunca esta aplicación, ninguna
   transferencia ha cruzado una Wi-Fi de verdad, y `flutter build` no corre en
   esta máquina por el Modo Desarrollador (QYR-0324). Dos procesos en
-  `127.0.0.1` no son dos aparatos en una red. Los **veintiséis** escenarios que
+  `127.0.0.1` no son dos aparatos en una red. Los **treinta** escenarios que
   cierran ese hueco están escritos y **sin marcar** en
   `docs/testing/hardware-protocol.md`, y lo que falta por probar está reunido en
   `docs/reports/lo-que-no-se-ha-probado.md`. Para ejecutarlo:
@@ -1123,7 +1123,7 @@ permaneció invisible durante tres sprints.
 - **Nada se ha ejecutado en hardware físico.** Ni un teléfono, ni una Wi-Fi. Todo
   lo demás de esta lista es una limitación conocida y acotada; esto es un hueco
   de evidencia sobre el producto entero. `docs/testing/hardware-protocol.md`
-  tiene los **veintiséis** escenarios con su comando literal y **sus veintiséis
+  tiene los **treinta** escenarios con su comando literal y **sus treinta
   huecos en blanco**. La lista honesta de qué depende de un aparato físico está
   en `docs/reports/lo-que-no-se-ha-probado.md`; los pasos para ejecutarla, en
   `docs/GUIA-DE-PRUEBA.md`.
