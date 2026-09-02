@@ -238,6 +238,13 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0397, del mismo recorte.** Tras un fallo de arranque, SALTAR quedaba
+encendido y no hacia nada: `_maybeFinish` exige `startupReady`, que es falso
+justo ahi, asi que pulsarlo ponia la barra al 100 % y nada mas -- ni navegacion,
+ni mensaje. **Un control encendido que no responde ensena que el programa se
+colgo**, y manda a reinstalar en vez de a pulsar REINTENTAR, que si funciona.
+Los dos controles miran ahora `hasFailed`, que ya se calculaba tres lineas antes.
+
 **QYR-0396, y lo encontro el recorte que la propia auditoria declaro.** El
 protocolo de hardware tiene **treinta** escenarios y siete documentos decian
 veintiseis. El numero salia de una suma escrita en el propio protocolo -- «los

@@ -149,6 +149,57 @@ void main() {
     expect(finished, isTrue);
   });
 
+  testWidgets('tras un fallo, SALTAR se apaga y REINTENTAR es el unico vivo',
+      (tester) async {
+    // **QYR-0397.** `_skip()` pone el progreso visual a 1 y llama a
+    // `_maybeFinish`, que exige `canFinish` -- y eso exige `startupReady`, que
+    // es falso justo despues de un fallo. Asi que el boton quedaba **encendido
+    // y muerto**: pulsarlo no navegaba, no avisaba, no hacia nada. Un control
+    // encendido que no responde ensena que la aplicacion se colgo.
+    final coordinator = _coordinator(
+      verifyAssets: () async {
+        throw const StartupTaskFailure(
+          code: 'asset_invalid',
+          userMessageKey: 'startupAssetInvalid',
+          technicalSummary: 'Generated ASCII logo failed validation',
+        );
+      },
+    );
+    var finished = false;
+
+    await tester.pumpWidget(
+      _TestApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: BootScreen(
+            coordinator: coordinator,
+            logoModel: _logo(),
+            onFinished: () => finished = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('boot-retry')),
+      findsOneWidget,
+      reason: 'sin reintentar, apagar saltar dejaria la pantalla sin salida',
+    );
+    expect(
+      tester
+          .widget<ButtonStyleButton>(find.byKey(const Key('boot-skip')))
+          .onPressed,
+      isNull,
+      reason: 'SALTAR sigue encendido tras el fallo, y no puede hacer nada',
+    );
+
+    // Y el toque en cualquier parte de la pantalla tampoco finge que sirve.
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    expect(finished, isFalse);
+  });
+
   testWidgets('English locale renders the complete Home baseline',
       (tester) async {
     await tester.pumpWidget(

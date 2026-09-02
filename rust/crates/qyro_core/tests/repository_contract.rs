@@ -903,3 +903,52 @@ fn every_hardware_scenario_has_somewhere_to_write_its_result() {
         );
     }
 }
+
+/// Tras un fallo de arranque, SALTAR no finge que sirve.
+///
+/// **QYR-0397.** `_skip()` pone el progreso visual a 1 y llama a `_maybeFinish`,
+/// que exige `canFinish` — y eso exige `startupReady`, falso justo después de un
+/// fallo. El botón quedaba **encendido y muerto**: pulsarlo no navegaba, no
+/// avisaba, no hacía nada, y el gesto sobre la pantalla entera tampoco.
+///
+/// Un control encendido que no responde enseña que la aplicación se colgó. La
+/// prueba de verdad es la de Dart, en `qyro_app_test.dart`; ésta corre **en el
+/// gate**, que es donde este contenedor puede mirar.
+#[test]
+fn the_boot_skip_control_is_dead_when_startup_failed() {
+    let root = repo_root();
+    let path = root.join("apps/qyro/lib/boot/boot_screen.dart");
+    let source = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("the boot screen is at {}: {error}", path.display()));
+    let code = strip_line_comments(&source);
+
+    assert!(
+        code.contains("final hasFailed = status.isTerminalFailure || _assetLoadFailed;"),
+        "the failure flag this guard depends on is gone or renamed; follow it \
+         rather than deleting this"
+    );
+
+    let live = code.matches("_sequence.canSkip ? _skip : null").count();
+    assert_eq!(
+        live, 0,
+        "{live} skip control(s) still enable themselves on `canSkip` alone, so \
+         they stay lit after a startup failure and do nothing when pressed. \
+         Both the whole-screen `onTap` and the SALTAR button have to check \
+         `!hasFailed`."
+    );
+    let guarded = code
+        .matches("_sequence.canSkip && !hasFailed ? _skip : null")
+        .count();
+    assert_eq!(
+        guarded, 2,
+        "expected both skip controls -- the whole-screen gesture and the SALTAR \
+         button -- to be guarded, found {guarded}"
+    );
+
+    // El control: apagar SALTAR sólo es honesto si queda algo encendido.
+    assert!(
+        code.contains("onPressed: onRetry"),
+        "REINTENTAR is gone, so disabling SALTAR after a failure would leave the \
+         screen with no live control at all"
+    );
+}

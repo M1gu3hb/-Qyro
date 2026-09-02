@@ -12,6 +12,43 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0397 — Tras un fallo de arranque, SALTAR quedaba encendido y no hacía nada
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA**, y el síntoma es «se colgó» sobre una pantalla que
+  funciona
+- Fecha: 2026-09-01
+
+**El defecto.** `_skip()` llama a `_sequence.skip()`, que pone el progreso
+visual a 1, y después a `_maybeFinish()`. `_maybeFinish` exige `canFinish`, que
+es `isVisualComplete && _startupReady` — y `_startupReady` es **falso** justo
+después de un fallo de arranque. Así que pulsar SALTAR ponía una barra al 100 % y
+**no pasaba nada más**: ni navegación, ni mensaje, ni cambio visible. Igual el
+gesto sobre la pantalla entera, que tenía la misma condición.
+
+**Por qué importa el día de la prueba.** Si el arranque falla en el teléfono —y
+`asset_invalid` es un fallo real que esta pantalla ya sabe dibujar— la persona ve
+dos controles: SALTAR y REINTENTAR. Pulsa el primero, que es el que suena a
+«sigue de todos modos», y la aplicación no responde. **Un control encendido que
+no hace nada enseña que el programa se colgó**, y manda a reinstalar en vez de a
+pulsar el botón que sí funciona.
+
+**El arreglo.** Los dos controles miran `!hasFailed`, que ya se calculaba en el
+mismo `build` tres líneas antes y se usaba para quitar los adornos decorativos.
+SALTAR se apaga; REINTENTAR se queda encendido, que es la verdad: no hay adónde
+saltar, y sí hay algo que reintentar.
+
+**Las pruebas.** Una de Dart, que es la de verdad — pone el arranque en fallo con
+`StartupTaskFailure`, comprueba que REINTENTAR está y que el `onPressed` de
+SALTAR es `null`, y toca la pantalla para verificar que tampoco finge por ahí.
+Y una guarda de Rust que corre **en el gate**, porque este contenedor no tiene
+Flutter: cuenta los controles que se encienden sólo con `canSkip` y exige cero.
+Se comprobó que tiene dientes devolviendo uno de los dos a su estado anterior.
+
+**De dónde salió.** Del recorte declarado de la auditoría —
+`boot-skip-enabled-but-dead-after-failure`, uno de los diecinueve de severidad
+baja que no pasaron por refutación. Nadie lo comprobó entonces; se comprobó ahora.
+
 ## QYR-0396 — El protocolo de hardware tiene treinta escenarios y siete documentos decían veintiséis
 
 - Estado: **CERRADO**

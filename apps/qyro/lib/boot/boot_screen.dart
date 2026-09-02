@@ -262,7 +262,16 @@ class _BootScreenState extends State<BootScreen>
       onKeyEvent: _handleKey,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _sequence.canSkip ? _skip : null,
+        // **QYR-0397: saltar es saltar la animación, y tras un fallo no hay
+        // adónde saltar.** `_maybeFinish` exige `canFinish`, que exige
+        // `_startupReady`, que es falso justo aquí. Así que la pantalla entera
+        // aceptaba el toque, `_skip()` ponía el progreso visual a 1, y **no
+        // pasaba nada más** — ni navegación, ni mensaje.
+        //
+        // Un control encendido que no hace nada enseña que la aplicación se
+        // colgó. Apagado, al lado de REINTENTAR encendido, dice cuál es el que
+        // está vivo.
+        onTap: _sequence.canSkip && !hasFailed ? _skip : null,
         child: Scaffold(
           backgroundColor: const Color(
             GeneratedBranding.backgroundColorValue,
@@ -372,7 +381,9 @@ class _BootScreenState extends State<BootScreen>
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           key: const Key('boot-skip'),
-                          onPressed: _sequence.canSkip ? _skip : null,
+                          // QYR-0397. Ver el comentario de `onTap` arriba.
+                          onPressed:
+                              _sequence.canSkip && !hasFailed ? _skip : null,
                           child: Text(strings.bootSkip),
                         ),
                       ),
