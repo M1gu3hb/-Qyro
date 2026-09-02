@@ -58,6 +58,15 @@ hallazgo es falso**. Un hallazgo sobrevive si dos de tres no consiguen tumbarlo.
   **Números de la ejecución, no estimados:** 154 agentes lanzados, 145 con
   resultado, 9 muertos por la cuota, 12,2 M de tokens y 3 023 llamadas a
   herramientas en 4 h 02 min.
+- **Y un recorte más, que la auditoría declaró por su nombre:** **19 hallazgos de
+  severidad baja no pasaron por refutación**, listados uno a uno en su registro
+  —`gui-sin-cancelar`, `escenarios-veintiseis-son-treinta`,
+  `boot-skip-enabled-but-dead-after-failure`, `resolved-address-truncated-and-`
+  `uncopyable`… Sin refutar **no es sin valor**: tres de ellos se comprobaron
+  después y los tres eran ciertos (QYR-0396, QYR-0397 y QYR-0398), y uno de los
+  tres decía un número que siete documentos tenían mal. **Un recorte declarado se
+  puede recuperar; uno callado, no** — y ésa es toda la diferencia que hace
+  escribirlo.
 - **Un sesgo del método, medido y no supuesto.** Los agentes leyeron el árbol
   **mientras se arreglaba**, así que varias citas `archivo:línea` estaban
   desfasadas 25-35 líneas cuando el refutador las abrió, y **tres hallazgos
@@ -603,7 +612,7 @@ Lo que impide subir del 92: la ventana por entrada, `write_all` sin plazo, y que
 
 Las dos caras mandan y reciben archivos, con nombres validados, huellas
 comparadas, un puerto que se dice cuando está ocupado y mensajes que dicen qué
-pasó en vez de culpar a la red. **Veintiocho defectos cerrados en esta sesión** —QYR-0368 a QYR-0395—,
+pasó en vez de culpar a la red. **Treinta y un defectos cerrados en esta sesión** —QYR-0368 a QYR-0398—,
 de los cuales cinco eran P0 que impedían que la aplicación de Android hiciera
 nada en absoluto.
 

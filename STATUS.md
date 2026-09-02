@@ -33,7 +33,7 @@ especificaciones y ADR describen intención; no sustituyen evidencia.
 El propietario va a probar Qyro en una PC y un teléfono reales por primera vez.
 Esta tanda audita, arregla y deja escrito lo que hace falta para esa prueba.
 
-**Veintiocho fichas —QYR-0368 a QYR-0395— y cinco de ellas impedían que la
+**Treinta y una fichas —QYR-0368 a QYR-0398— y cinco de ellas impedían que la
 prueba funcionara en absoluto.** Las ocho primeras:
 
 | Ficha | Qué | Cara |
@@ -69,6 +69,14 @@ minuto en aceptar mataba la transferencia (QYR-0393), los 16 KB dependían del
 NDK de quien construyera (QYR-0394), y seis documentos publicados decían cosas
 que el código desmiente (QYR-0395).
 
+**Y las tres últimas salieron del recorte que la propia auditoría declaró**
+—diecinueve hallazgos de severidad baja que no pasaron por refutación, listados
+uno a uno en su registro—: el protocolo tiene **treinta** escenarios y siete
+documentos decían veintiséis (QYR-0396), SALTAR quedaba encendido y muerto tras
+un fallo de arranque (QYR-0397), y la dirección que sale de un código se
+recortaba con «…» y no se podía copiar (QYR-0398). **Un recorte declarado se
+puede recuperar; uno callado, no.**
+
 **Seis se encontraron ejecutándolo o midiéndolo**, no leyéndolo: QYR-0372,
 QYR-0374 y QYR-0375 salieron de correr `qyro send` y `qyro recv` uno contra otro
 y mirar la pantalla; QYR-0391 y QYR-0393 salieron de contar descriptores y
@@ -79,13 +87,15 @@ qué flags pasa `cargo` de verdad.
 puerta y de CI, en cada commit y en cada plataforma:
 
 - `qyro_net::guards::the_android_manifest_declares_internet`
-- `qyro_core::repository_contract`, **diez** contratos de repositorio: los
+- `qyro_core::repository_contract`, **trece** contratos de repositorio: los
   secretos de firma y que ninguno esté rastreado hoy, el canal óptico, la tabla
   de paridad, las frases retiradas de nueve documentos, la carpeta de destino de
   Android, que un código escaneado ate la sesión a una **clave** y no sólo a una
   dirección, que los tres objetivos de Android pidan páginas de 16 KB, que la
   nota de la v1.0 diga que describe la v1.0, y que esta página no republique los
-  hashes de la publicación retirada
+  hashes de la publicación retirada, que cada escenario de hardware tenga dónde
+  anotarse y que los seis documentos digan el mismo número, que SALTAR no siga
+  encendido tras un fallo, y que la dirección resuelta se pueda leer entera
 - `tools/apk_inspector/`, que mide sobre el APK las tres cosas que deciden si
   Qyro arranca en un teléfono: las ABIs, la alineación de 16 KB y la posición del
   `.so` dentro del zip. Once pruebas, con los ELF fabricados en Python
