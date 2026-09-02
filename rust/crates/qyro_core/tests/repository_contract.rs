@@ -952,3 +952,49 @@ fn the_boot_skip_control_is_dead_when_startup_failed() {
          screen with no live control at all"
     );
 }
+
+/// La dirección que sale de un código se puede leer entera y copiar.
+///
+/// **QYR-0398.** Era un `Text` con `overflow: TextOverflow.ellipsis` dentro de
+/// una fila compartida con un botón. Es el dato que hay que leer —la dirección a
+/// la que se va a marcar, sacada del código que alguien acaba de teclear— y
+/// sirve para comprobar que el código se entendió y para compararla con lo que
+/// el otro aparato enseña. Recortada con «…» no sirve para ninguna de las dos, y
+/// una IPv6 de enlace local no cabe en lo que queda de esa fila.
+#[test]
+fn the_address_a_pairing_code_resolves_to_can_be_read_whole() {
+    let root = repo_root();
+    let path = root.join("apps/qyro/lib/transfer/transfer_screens.dart");
+    let source = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("the screens are at {}: {error}", path.display()));
+    let code = strip_line_comments(&source);
+
+    let Some(at) = code.find("key: const Key('pairing-address')") else {
+        panic!(
+            "the resolved-address field is gone or renamed; follow it rather \
+             than deleting this guard"
+        );
+    };
+    // La ventana alrededor de la clave: el widget y su estilo viven juntos.
+    let start = at.saturating_sub(320);
+    let block = code.get(start..at.saturating_add(160)).unwrap_or_default();
+
+    assert!(
+        block.contains("SelectableText("),
+        "the resolved address is not selectable, so nobody can copy the one \
+         piece of text this screen exists to hand over"
+    );
+    assert!(
+        !block.contains("TextOverflow.ellipsis"),
+        "the resolved address is still elided. An IPv6 link-local address -- \
+         what a direct cable produces -- does not fit in what is left of that \
+         row, and «…» is not an address"
+    );
+
+    // El control: el código propio, tres líneas más abajo, ya se hacía así.
+    assert!(
+        code.contains("key: const Key('own-pairing-code')"),
+        "the own-code field is gone, so the pattern this guard points at as the \
+         precedent no longer exists"
+    );
+}

@@ -289,12 +289,25 @@ class _PeersScreenState extends State<PeersScreen> {
               label: Text(strings.peersUseCode),
             ),
             const SizedBox(width: 12),
+            // **QYR-0398: esto era un `Text` con `ellipsis`, y es el dato que
+            // hay que leer.** Es la dirección a la que se va a marcar, sacada
+            // del código que alguien acaba de teclear, y servía para dos cosas:
+            // comprobar que el código se entendió, y compararla con lo que el
+            // otro aparato enseña. Recortada con «…» no sirve para ninguna.
+            //
+            // Y una IPv6 de enlace local —`[fe80::1c2b:3d4e:5f60:7a8b]:49517`,
+            // que es lo que sale por un cable directo— **no cabe** en lo que
+            // queda de una fila después del botón.
+            //
+            // `SelectableText` y monoespaciada, igual que el código propio tres
+            // líneas más abajo: se lee entero, se puede copiar, y los dos sitios
+            // donde se muestra una dirección se parecen.
             if (_resolvedAddress != null)
               Expanded(
-                child: Text(
+                child: SelectableText(
                   _resolvedAddress!,
                   key: const Key('pairing-address'),
-                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontFamily: 'monospace'),
                 ),
               ),
           ],

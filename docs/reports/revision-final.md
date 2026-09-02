@@ -154,7 +154,7 @@ cuando el refutador los abrió, no por ser falsos. Dos no se juzgaron.
 | P1 | El botón Enviar no se reactiva al escribir la dirección | **Arreglado** — QYR-0380 |
 | P1 | Un fallo al abrir la conexión escapa del stream sin capturar | **Arreglado** — QYR-0384 |
 | P1 | `detect_vt()` fuerza `Vt::Absent` en Windows, así que `qyro beam` scrollea el QR | **Arreglado** — QYR-0385 |
-| P2 | La dirección resuelta del código se elipsa y no se puede copiar | Sin juzgar |
+| P2 | La dirección resuelta del código se elipsa y no se puede copiar | **Arreglado** — QYR-0398. Del recorte declarado, sin refutar |
 | P2 | Tras un fallo de arranque el botón SALTAR queda habilitado y no hace nada | **Arreglado** — QYR-0397. Salió del recorte declarado, sin refutar; se comprobó ahora |
 | P3 | La línea de versión del arranque queda en 4,09:1 sobre el degradado | Sin juzgar |
 

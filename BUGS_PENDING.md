@@ -12,6 +12,34 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0398 — La dirección que sale de un código se recortaba con «…» y no se podía copiar
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA**, y es el único dato que esa pantalla existe para entregar
+- Fecha: 2026-09-01
+
+**El defecto.** El campo que enseña la dirección resuelta de un código de
+emparejamiento era un `Text` con `overflow: TextOverflow.ellipsis`, dentro de un
+`Expanded` que comparte fila con un botón. Sirve para dos cosas —comprobar que el
+código se entendió, y compararla con lo que el otro aparato enseña— y **recortada
+no sirve para ninguna**.
+
+Y no es un caso raro: una IPv6 de enlace local, que es lo que sale por un cable
+directo, se escribe `[fe80::1c2b:3d4e:5f60:7a8b]:49517` y **no cabe** en lo que
+queda de esa fila en un teléfono.
+
+**El arreglo.** `SelectableText` y monoespaciada — exactamente lo que el código
+propio hace tres líneas más abajo en la misma pantalla. Se lee entero, se puede
+copiar, y los dos sitios donde se enseña una dirección se parecen entre sí.
+
+**La prueba.** Una guarda de Rust en el gate: lee la ventana de código alrededor
+de `Key('pairing-address')`, exige `SelectableText`, prohíbe `TextOverflow.`
+`ellipsis`, y comprueba que el campo del que copia el patrón sigue existiendo. Se
+comprobó teniendo dientes devolviendo el widget a su estado anterior.
+
+**De dónde salió.** Del recorte declarado de la auditoría —
+`resolved-address-truncated-and-uncopyable`, otro de los diecinueve sin refutar.
+
 ## QYR-0397 — Tras un fallo de arranque, SALTAR quedaba encendido y no hacía nada
 
 - Estado: **CERRADO**

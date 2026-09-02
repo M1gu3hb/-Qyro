@@ -238,6 +238,13 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0398, tambien del recorte.** La direccion que sale de un codigo de
+emparejamiento se recortaba con «…» y no se podia copiar, dentro de una fila
+compartida con un boton. Es el unico dato que esa pantalla existe para entregar,
+y una IPv6 de enlace local -- lo que sale por un cable directo -- no cabe ahi.
+Ahora es `SelectableText` monoespaciada, igual que el codigo propio tres lineas
+mas abajo.
+
 **QYR-0397, del mismo recorte.** Tras un fallo de arranque, SALTAR quedaba
 encendido y no hacia nada: `_maybeFinish` exige `startupReady`, que es falso
 justo ahi, asi que pulsarlo ponia la barra al 100 % y nada mas -- ni navegacion,
