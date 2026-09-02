@@ -238,6 +238,32 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**La auditoria de nueve agentes termino despues de escribir el informe, y sus
+numeros son otros.** Lo que se sabia al escribirlo eran 19 hallazgos juzgados con
+53 veredictos. Los de verdad: **45 juzgados, 135 veredictos, 21 aguantan y 24
+caen**, de 154 agentes lanzados (145 con resultado, 9 muertos por cuota, 12,2 M
+de tokens, 4 h 02 min). La ronda 2 **se lanzo y murio entera** con «You've hit
+your session limit», asi que la regla de «dos rondas seguidas sin nada nuevo» no
+se cumplio y la revision no puede declararse agotada.
+
+**Y la forma en que cayeron es el dato: 17 de las 24 refutaciones citan un
+arreglo ya aplicado.** No cayeron por falsos, cayeron porque el arbol se estaba
+arreglando mientras los refutadores lo leian.
+
+**Dos correcciones que salieron de leerlas, y las dos contra lo que yo habia
+escrito:**
+
+1. Este informe decia que los `.qyro-part` huerfanos no los borra nadie y que era
+   un hallazgo abierto. **Era falso.** ADR-0027 dice que un huerfano sin
+   metadatos «se borra al empezar la transferencia que reclamaria ese nombre», y
+   `io.rs:427-438` lo hace. Lo tumbo el refutador de ese hallazgo, citando la
+   ADR, y se comprobo antes de creerselo.
+2. Al reves: dos refutadores tumbaron «las carpetas se crean antes de aceptar»
+   diciendo que ningun emisor puede producir entradas de carpeta. **Es falso**:
+   `session.rs:432,461` planifica carpetas y `manifest_builder.rs:77-83` emite
+   `ItemKind::Directory`. El hallazgo aguanta aunque el voto diga que no. Un
+   refutador tambien se comprueba.
+
 **QYR-0395, y el peor de los seis no es una frase: es un hash.** `STATUS.md`
 --la pagina que este repositorio declara unica fuente de verdad-- publicaba como
 artefactos de la v1.0.0 los dos hashes de la publicacion **retirada**. Las notas

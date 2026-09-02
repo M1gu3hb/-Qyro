@@ -42,14 +42,22 @@ hallazgo es falso**. Un hallazgo sobrevive si dos de tres no consiguen tumbarlo.
 **Nada de topes callados**, que es §3 de la fase:
 
 - **La ronda 1 dio 64 hallazgos.** Están todos abajo.
-- **La refutación se quedó a medias.** De los 64, **19 llegaron a juicio** con
-  **53 veredictos** emitidos; el resto no se juzgó porque la ejecución se
-  interrumpió. Los 45 sin juicio **no son hallazgos descartados**: son hallazgos
-  sin refutar, y así se listan.
-- **No hubo ronda 2.** La fase pide repetir hasta que dos rondas seguidas no
-  traigan nada nuevo. Esto llegó a una. Lo que la sustituyó, parcialmente, fue
-  **medir**: tres de los defectos de este informe no los encontró ningún agente
-  leyendo, sino ejecutar los binarios y contar descriptores, segundos y bytes.
+- **El juicio llegó a 45 de los 64**, con **135 veredictos** — tres lentes por
+  hallazgo, como pide §3. **21 aguantaron y 24 cayeron.** Los **19 sin juzgar no
+  son hallazgos descartados**: son hallazgos sin refutar. Catorce de ellos se
+  arreglaron igual —la columna «hoy» de §2 dice cuál y con qué ficha— y los cinco
+  que ni se juzgaron ni se tocaron aparecen ahí como **«Sin juzgar»**, que es
+  todo lo que se puede decir de ellos.
+- **La ronda 2 se lanzó y murió entera.** Sus nueve agentes de dominio fallaron
+  con *«You've hit your session limit»* — una cuota, no un resultado. Así que la
+  regla de «dos rondas seguidas sin nada nuevo» **no se cumplió**, y este informe
+  no puede decir que la revisión esté agotada. Lo que la sustituyó en parte fue
+  **medir**: seis de los defectos de este informe no los encontró ningún agente
+  leyendo, sino ejecutar los binarios y contar descriptores, segundos y flags.
+
+  **Números de la ejecución, no estimados:** 154 agentes lanzados, 145 con
+  resultado, 9 muertos por la cuota, 12,2 M de tokens y 3 023 llamadas a
+  herramientas en 4 h 02 min.
 - **Un sesgo del método, medido y no supuesto.** Los agentes leyeron el árbol
   **mientras se arreglaba**, así que varias citas `archivo:línea` estaban
   desfasadas 25-35 líneas cuando el refutador las abrió, y **tres hallazgos
@@ -77,7 +85,7 @@ Sesenta y cuatro hallazgos. La columna «hoy» dice qué pasó con cada bloque.
 | Sev | Hallazgo | Hoy |
 |---|---|---|
 | P0 | El segundo envío en Android entrega a Rust descriptores que Rust ya cerró: `from_raw_fd` sobre números reasignados | **Arreglado** — QYR-0388 |
-| P1 | `qyro_session_finish` no puede ejecutarse tras un fallo: la regla pegajosa corta el cuerpo y los `.qyro-part` se quedan | **Abierto** — §5 |
+| P1 | `qyro_session_finish` no puede ejecutarse tras un fallo: la regla pegajosa corta el cuerpo y los `.qyro-part` se quedan | **Abierto** — §5. Aguantó **3/3** |
 | P1 | El comodín de `_kindOf` convierte ocho códigos del motor en «Llegó algo que no verifico» | **Arreglado** — QYR-0386 |
 | P2 | `CAMERA` se declara en el manifiesto y no se pide nunca en tiempo de ejecución | **Arreglado** — QYR-0378 |
 
@@ -90,15 +98,15 @@ Sesenta y cuatro hallazgos. La columna «hoy» dice qué pasó con cada bloque.
 | P1 | Una sesión bloqueada en `write_all` no tiene temporizador de escritura ni forma de cancelarse | **Abierto** — §5. Sobrevivió 2/3 |
 | P1 | Un `step` entrega un solo frame, así que «¿aceptas?» se hace sin lista y con total = 0 | **Arreglado antes del juicio** — QYR-0372. Refutado 3/3 por eso |
 | P1 | No hay latido: los 60 s de `IDLE_TIMEOUT` corren mientras la persona decide, y matan al emisor | **Arreglado y medido** — QYR-0393 |
-| P2 | Un `Cancel` del par no termina la sesión receptora | Sin juzgar |
+| P2 | Un `Cancel` del par no termina la sesión receptora | **Refutado 2/3**, severidad bajada — §3.4 |
 
 ### 2.4 EL NOMBRADOR — rutas y nombres (5)
 
 | Sev | Hallazgo | Hoy |
 |---|---|---|
 | P0 | Recibir en Android escribe en `//Qyro`, la raíz del sistema de archivos | **Arreglado antes del juicio** — QYR-0373. Refutado 3/3 por eso |
-| P2 | El sufijo `.qyro-part` se añade a un nombre que ya puede medir 255 bytes | Sin juzgar |
-| P2 | Las carpetas del manifiesto se crean antes de que la persona acepte, y rechazar no las borra | **Registrado, no arreglado** — §5 |
+| P2 | El sufijo `.qyro-part` se añade a un nombre que ya puede medir 255 bytes | **Aguantó 3/3**, abierto |
+| P2 | Las carpetas del manifiesto se crean antes de que la persona acepte, y rechazar no las borra | Refutado 2/3, **y la refutación no aguanta** — §3.5 |
 | P2 | Enviar un archivo de la raíz de una unidad (`D:\video.mp4`) falla | **Arreglado** — QYR-0390 |
 | P3 | Un manifiesto con «X» y «X.qyro-part» no lo detecta `PortableCollisionKey` | Sin juzgar |
 
@@ -106,7 +114,9 @@ Sesenta y cuatro hallazgos. La columna «hoy» dice qué pasó con cada bloque.
 
 Su pregunta es una sola: **por cada capacidad declarada, el llamante de
 producción con archivo y línea.** Si es una prueba, un arnés o nadie, la
-capacidad no existe. Encontró nueve, y **cinco eran ciertas**.
+capacidad no existe. Encontró nueve. **Siete llegaron a juicio: tres aguantaron
+y cuatro cayeron** — y tres de esos cuatro cayeron por estar ya arreglados
+cuando el refutador los abrió, no por ser falsos. Dos no se juzgaron.
 
 | Sev | Hallazgo | Hoy |
 |---|---|---|
@@ -114,9 +124,9 @@ capacidad no existe. Encontró nueve, y **cinco eran ciertas**.
 | P1 | El escáner de Android no tiene llamante de producción: `ScanScreen` no se construye | **Arreglado** — QYR-0371 |
 | P1 | Nadie recuerda un peer en producción | **Registrado** — QYR-0382 |
 | P2 | Diez de las trece citas CLI de la tabla de paridad apuntan a líneas que no son lo que dicen | **Arreglado**, y con guarda que corre en el gate |
-| P2 | El reanudado está documentado y `.qyro-resume` no lo escribe nadie | **Abierto** — §5 |
-| P2 | `qyro_fs::history` no tiene llamante de producción, y dos comentarios afirman que sí | **Abierto** — §5 |
-| P2 | El consejero de canal de la GUI sólo lo llaman las pruebas | **Abierto** — §5 |
+| P2 | El reanudado está documentado y `.qyro-resume` no lo escribe nadie | **Refutado 2/3** por impacto — §3.4 |
+| P2 | `qyro_fs::history` no tiene llamante de producción, y dos comentarios afirman que sí | **Aguantó 1/3**, abierto |
+| P2 | El consejero de canal de la GUI sólo lo llaman las pruebas | **Aguantó 3/3**, abierto |
 | P2 | «Cancelar a mitad» no tiene llamante en la GUI | **Abierto** — §5 |
 | P3 | `Pause`/`Resume`/`Retransmit` sólo los llaman las pruebas | **Abierto** — §5 |
 
@@ -125,11 +135,11 @@ capacidad no existe. Encontró nueve, y **cinco eran ciertas**.
 | Sev | Hallazgo | Hoy |
 |---|---|---|
 | P1 | Un nombre que ya existe: los dos extremos dicen «listo» y no se escribe nada | **Arreglado antes del juicio** — QYR-0374. Refutado 3/3 por eso |
-| P1 | La ventana de 16 trozos es por entrada, no global | **Abierto** — §5. Sobrevivió 2/2 |
+| P1 | La ventana de 16 trozos es por entrada, no global | **Abierto** — §5. Aguantó **3/3** |
 | P1 | El isolate que escucha no se puede cancelar y «Recibir» no tenía guarda | **Media arreglada** — QYR-0389 puso la guarda; cancelar sigue sin existir |
 | P1 | Un envío a un par que no escucha lanza fuera del stream: la pantalla no dice nada | **Arreglado** — QYR-0384 |
-| P2 | Los `.qyro-part` de un proceso muerto no los borra nadie nunca | **Abierto** — §5 |
-| P2 | `qyro beam` carga el archivo entero en RAM y sólo después comprueba el techo de 20 MB | Sin juzgar |
+| P2 | Los `.qyro-part` de un proceso muerto no los borra nadie nunca | **Refutado 2/3**: es la política de ADR-0027 y el código la cumple — §3.4 y §4.4 |
+| P2 | `qyro beam` carga el archivo entero en RAM y sólo después comprueba el techo de 20 MB | **Aguantó 1/3**, abierto |
 
 **Y el que no encontró, que apareció midiendo:** doscientos archivos abrían
 **402 descriptores a la vez** — dos por archivo. QYR-0391, §4.2.
@@ -155,7 +165,7 @@ capacidad no existe. Encontró nueve, y **cinco eran ciertas**.
 | P0 | El primer comando del protocolo de hardware no puede enlazar: no hay linker de Android en ninguna parte | **Arreglado** — QYR-0377 |
 | P0 | El bundle de Windows copia un `qyro_ffi.dll` que ningún paso construye | **Arreglado** — QYR-0377 |
 | P1 | El script de firma re-alinea el APK a 4 KB, deshaciendo los 16 KB | **Arreglado** — QYR-0387 |
-| P1 | El APK que el propietario construye hoy va firmado con la clave de depuración | Sin juzgar; `adb install` no lo impide |
+| P1 | El APK que el propietario construye hoy va firmado con la clave de depuración | **Refutado 3/3**: `adb install` no lo impide, que es el camino de hoy |
 | P1 | Ningún `cargo build` de Android pasa `-Wl,-z,max-page-size=16384` | **Arreglado** — QYR-0394 |
 | P2 | El APK no lleva `x86_64`, así que el emulador no es alternativa | **Arreglado** en CI |
 | P2 | El APK se instala como versión 0.0.1 con `versionCode` 1 en cada build | **Abierto** — §5 |
@@ -195,9 +205,18 @@ medido (QYR-0394, §4.9).
 ## 3. Los refutados, con su motivo
 
 **Es la mitad del valor de la revisión** y por eso está en su propia sección.
-Cinco hallazgos cayeron, entera o parcialmente, y ninguno cayó por opinión.
+De los 45 juzgados, **24 cayeron y 21 aguantaron**, y ninguno cayó por opinión.
 
-### 3.1 Refutados 3/3 — los tres, por estar ya arreglados
+**Y la forma en que cayeron es el dato.** Contando cuántas refutaciones citan un
+arreglo ya aplicado —una ficha QYR, «ya no existe», «describe el árbol anterior»—:
+**17 de las 24**. No cayeron por ser falsos: cayeron porque el árbol se estaba
+arreglando mientras los refutadores lo leían. Es una medida con un filtro de
+palabras, así que léela como un suelo y no como una cifra exacta.
+
+Las siete restantes cayeron por alcance, por impacto o por cita falsa, y **una de
+ésas la volví a comprobar y la refutación era la equivocada**: §3.5.
+
+### 3.1 Tres de los 3/3, y los tres por estar ya arreglados
 
 | Hallazgo | Motivo del refutador |
 |---|---|
@@ -225,7 +244,42 @@ SÍ tiene guarda: `transfer_screens.dart:743` es `onPressed: _listening ? null
 : …`»* — porque QYR-0389 ya la había puesto. **Lo que no tiene arreglo es la
 otra mitad:** el isolate sigue sin poder cancelarse.
 
-### 3.5 El que resultó ser peor de lo que decía, verificado contra la API
+### 3.4 Cuatro que caen, y por qué — los que este informe daba por abiertos
+
+Los cuatro estaban en §5 como «abiertos» cuando se escribió, antes de que su
+juicio llegara. Tres caen con argumento; el cuarto no.
+
+| Hallazgo | Voto | El motivo, y qué queda |
+|---|---|---|
+| «Los `.qyro-part` de un proceso muerto no los borra nadie nunca» | 2/3 refutado | *«No es un defecto: es exactamente la política congelada.»* **Comprobado y es cierto.** ADR-0027 dice que un `.qyro-part` huérfano *«no se puede verificar contra nada… se borra al empezar la transferencia que reclamaría ese nombre»*, y `io.rs:427-438` hace justo eso: si no hay `.qyro-resume` que lo describa, `remove_file` y se abre de cero. **Retirado de los abiertos** |
+| «El reanudado está documentado y `.qyro-resume` no lo escribe nadie» | 2/3 refutado | Por impacto, no por mecánica: el hecho base es cierto —único llamante en `tests.rs:891`— pero el daño reclamado («la diferencia entre reanudar y volver a empezar») no se produce, porque **nada reanuda de todos modos**. Queda como capacidad sin llamante, que ya está contada, y no como pérdida de datos |
+| «Un `Cancel` del par no termina la sesión receptora» | 2/3 refutado | Por alcanzabilidad y por cita falsa: las dos líneas citadas son un comentario y `step_tally`. El tercer refutador dice que **sólo cayó la cita**, no el defecto. **Se queda abierto con la severidad bajada**, no cerrado |
+| «Las carpetas se crean antes de que la persona acepte» | 2/3 refutado | **La refutación es falsa. Ver §3.5** |
+
+### 3.5 Una refutación que no aguanta la comprobación
+
+Dos de los tres refutadores tumbaron «las carpetas del manifiesto se crean antes
+de aceptar» con el mismo argumento: *«el disparador no existe — ningún emisor de
+Qyro puede producir un manifiesto con entradas `ItemKind::Directory`»*.
+
+**Es falso, y se comprueba en tres saltos:**
+
+1. `Session::open_sender` **acepta carpetas** en su lista: filtra `!source.is_dir()`
+   sólo para contar contra el techo de 256, y planifica **todas** las entradas
+   (`rust/crates/qyro_session/src/session.rs:432` y `:461`).
+2. `manifest_from_disk` **emite el tipo** cuando la fuente es una carpeta:
+   `if file.source.is_dir() { ManifestItem::directory(...) }`
+   (`rust/crates/qyro_fs/src/manifest_builder.rs:77-83`), con un comentario que
+   dice exactamente por qué se puso: *«ItemKind::Directory lleva en el formato de
+   cable desde siempre y nadie lo emitía»*.
+3. Ese es el camino de producción del emisor: `session.rs:471` lo llama.
+
+Así que el hallazgo **aguanta**, aunque el voto diga que no. Se apunta así —con
+el voto y con lo que lo revierte— porque el mismo escepticismo que se aplica a un
+hallazgo hay que aplicárselo a quien lo tumba: **un refutador también se
+comprueba**. Sigue abierto en §5.
+
+### 3.6 El que resultó ser peor de lo que decía, verificado contra la API
 
 «`STATUS.md` publica como artefactos de la v1.0.0 los dos hashes que
 `docs/release/v1.0.md` dice que se retiraron.» Cierto, y con dos agravantes que
@@ -242,14 +296,21 @@ equivocado no es un error de documentación: **es confirmarle a alguien un binar
 que este proyecto le pide borrar.** Arreglado en QYR-0395, con los digests que
 GitHub sirve hoy y una guarda que impide que los retirados vuelvan.
 
-### 3.4 Los trece que aguantaron el juicio completo
+### 3.7 Los veintiuno que aguantaron
 
-Sin refutar por 3/3, cada uno con su cadena verificada línea a línea por tres
-lentes distintas: la identidad en `/`, la huella tirada, los descriptores ya
-cerrados, el comodín de `_kindOf`, el permiso de cámara, el archivo óptico
-tirado, el latido que no existe, la ventana por entrada, la ventana sin ACK, el
-linker de Android, la DLL que nadie construye, `finish` bloqueado por la regla
-pegajosa, y el archivo de 0 bytes.
+Cada uno con su cadena verificada línea a línea por tres lentes distintas. Los
+que **ningún** refutador tumbó: la identidad en `/`, la huella tirada, los
+descriptores ya cerrados, el comodín de `_kindOf`, el permiso de cámara, el
+archivo óptico tirado, el latido que no existe, la ventana por entrada, la
+ventana sin ACK, el linker de Android, la DLL que nadie construye, `finish`
+bloqueado por la regla pegajosa, el archivo de 0 bytes, el sufijo `.qyro-part`
+sobre un nombre de 255 bytes, el consejero de la GUI que sólo llaman las pruebas,
+y las cuatro cifras de `docs/release/v1.0.md`.
+
+Y los que aguantaron **1/3** —uno los tumbó y dos no—: `remember_peer` sin
+llamante (dos veces, desde dos dominios distintos, que es la mejor señal que hay),
+`write_all` sin plazo ni cancelación, `qyro_fs::history` sin llamante, y `qyro
+beam` cargando el archivo entero antes de comprobar su techo.
 
 ---
 
@@ -321,10 +382,22 @@ cable**: ahí no está midiendo la red, está esperando al otro extremo. QYR-039
 y §4 de este informe lo mide: 65 segundos de espera humana pasaban de
 `PeerUnreachable` a los 60,11 s a entregado a los 65,76 s.
 
-**Quién limpia: nadie automáticamente, y es un hallazgo abierto.** `FileSink::
-abandon` (`io.rs:671`) borra todos los `.qyro-part` y el archivo de reanudación,
-pero su único llamante es `Session::reject` (`session.rs:1128`) — un «no» de una
-persona. Un peer que se calla deja las partes en el destino. §5.
+**Quién limpia: dos cosas distintas, y la segunda es política escrita.**
+
+`FileSink::abandon` (`io.rs:671`) borra todos los `.qyro-part` y el archivo de
+reanudación de golpe, y su único llamante es `Session::reject`
+(`session.rs:1128`) — un «no» de una persona. Así que un peer que se calla **sí**
+deja las partes en el destino.
+
+**Y eso no es un descuido, es ADR-0027.** *«Sin metadatos: un `.qyro-part`
+huérfano no se puede verificar contra nada, y quedarse con él sólo puede producir
+un archivo que nadie mandó. **Se borra al empezar la transferencia que reclamaría
+ese nombre**.»* Y el código lo hace: `part_for` (`io.rs:427-438`) mira si hay
+`.qyro-resume` que describa la parte; si no lo hay, `remove_file` y abre de cero.
+
+> **Este informe decía aquí «nadie limpia, y es un hallazgo abierto». Era
+> falso**, y lo tumbó el refutador de ese hallazgo citando la ADR. Comprobado
+> antes de creérselo, que es la misma regla que se le aplica a un hallazgo.
 
 ### 4.5 Si el disco se llena, ¿qué ve la persona y qué queda en el destino?
 
@@ -340,8 +413,12 @@ abandonarlo al primer fallo, cuenta los rechazados y devuelve el error al final.
 Antes, un solo ítem que fallara se llevaba por delante todo lo que viniera detrás
 — **medido: tres archivos, el primero vacío, llegan cero**.
 
-**Lo que también queda, y no debería:** los `.qyro-part` de los que fallaron.
-`finish_item` sólo borra la parte cuando el digest no cuadra. §5.
+**Y los `.qyro-part` de los que fallaron se quedan**: `finish_item` sólo borra la
+parte cuando el digest no cuadra. No se pierden ni se acumulan sin límite — la
+siguiente transferencia que reclame ese nombre los borra (§4.4) — pero entre una
+cosa y la otra están en la carpeta, y quien mire verá archivos con un sufijo raro
+junto a los que sí llegaron. Por eso la terminal lo dice con todas las letras:
+«Lo que sí se guardó está en esa carpeta: míralo antes de volver a mandar nada».
 
 ### 4.6 Si el nombre viene envenenado, ¿dónde se rechaza? Y la contraprueba
 
@@ -442,17 +519,28 @@ Sin adornos y sin «se hará»: cada uno con lo que se sabe hoy.
 
 - **`qyro_session_finish` no puede ejecutarse tras un fallo.** La regla pegajosa
   de la frontera C corta el cuerpo, así que los `.qyro-part` de una sesión que
-  falló se quedan para siempre. Aguantó el juicio.
-- **Los `.qyro-part` de un proceso muerto no los borra nadie.** `abandon` existe
-  y su único llamante es un «no» de una persona (§4.4).
+  falló esperan a la siguiente transferencia que reclame su nombre en vez de
+  irse al fallar. Aguantó el juicio **3/3**.
 - **La ventana de 16 trozos es por entrada, no global.** Un lote de archivos
-  pequeños se sella entero en RAM de una vez. Aguantó 2/2.
+  pequeños se sella entero en RAM de una vez. Aguantó **3/3**.
 - **`write_all` no tiene temporizador ni cancelación.** `FrameStream::shutdown`
   existe y nadie lo llama. Aguantó 2/3.
-- **Un `Cancel` del par no termina la sesión receptora.** Sin juzgar.
+- **Las carpetas se crean en el destino antes de que la persona acepte, y
+  rechazar no las borra.** El voto lo tumbó 2/3 y **la refutación no aguanta la
+  comprobación** (§3.5): el emisor sí puede producir entradas de carpeta, y las
+  produce.
+- **Un `Cancel` del par no termina la sesión receptora**, con la severidad
+  bajada: dos refutadores lo tumbaron por alcanzabilidad y el tercero dice que
+  sólo cayó la cita. Sigue aquí porque nadie demostró que el final llegue.
 - **Sigue sin haber latido.** QYR-0393 es una política de plazos, no un mensaje
   en el cable. Si una pausa humana pudiera pasar de diez minutos, la respuesta
   correcta sería un latido y no un número más grande.
+
+**Lo que salió de esta lista al llegar su juicio**, y por qué: «los `.qyro-part`
+de un proceso muerto no los borra nadie» —es la política de ADR-0027, y el código
+la cumple (§4.4)— y «el reanudado no persiste» —cierto, y sin daño observable,
+porque nada reanuda de todos modos: queda contado como capacidad sin llamante y
+no como pérdida de datos.
 
 **De las capacidades sin llamante** (la cuenta del FORENSE, que ya llevaba nueve
 cadáveres y sigue viva): el reanudado, el historial, el consejero de la GUI,
@@ -507,7 +595,7 @@ Lo que impide subir del 92: la ventana por entrada, `write_all` sin plazo, y que
 
 Las dos caras mandan y reciben archivos, con nombres validados, huellas
 comparadas, un puerto que se dice cuando está ocupado y mensajes que dicen qué
-pasó en vez de culpar a la red. **Veintisiete defectos cerrados en esta sesión**,
+pasó en vez de culpar a la red. **Veintiocho defectos cerrados en esta sesión** —QYR-0368 a QYR-0395—,
 de los cuales cinco eran P0 que impedían que la aplicación de Android hiciera
 nada en absoluto.
 
