@@ -2302,6 +2302,11 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
     // **Y pronto.** El receptor no cierra hasta los seis segundos, así que
     // enterarse antes de los tres sólo puede ser por haber mirado el cable en
     // vez de por haberse chocado con un socket cerrado.
+    //
+    // El número sale impreso además de aseverado: una aserción dice «cabe» y un
+    // número dice «cuánto», y el margen entre los dos es lo único que avisa
+    // antes de que un día deje de caber.
+    println!("el emisor tardo {elapsed:?} en enterarse del cancelar");
     assert!(
         elapsed < std::time::Duration::from_secs(3),
         "el emisor tardo {elapsed:?} en enterarse de un cancelar que llego al          principio: no miro el cable hasta que el otro cerro"
