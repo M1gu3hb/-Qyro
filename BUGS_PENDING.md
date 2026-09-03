@@ -763,6 +763,66 @@ que importa —que lo salvable quede salvado— está hecho; el CLI dice ahora
 **La pregunta que cierra esta ficha:** ¿puede un archivo hundir a los que vienen
 detrás? **No.**
 
+## QYR-0400 — Cancelar sobre un envío grande llegaba como «el otro aparato no responde» en Windows
+
+- Estado: **CERRADO** en el código; **la confirmación es de CI**, porque el fallo
+  sólo ocurre en Windows y aquí no hay Windows
+- Severidad: **MEDIA**, y es exactamente la confusión que la fase 25 §5 existe
+  para evitar
+- Fecha: 2026-09-03
+
+**El síntoma.** `cancelar_se_lo_dice_al_otro_lado` falla **sólo** en el trabajador
+`windows-latest`: *«el emisor leyó la cancelación como “el otro aparato no
+responde”: `Err(PeerUnreachable)`»*. En Linux pasa siempre.
+
+**El mecanismo.** Quien cancela deja de leer en el acto. Si el otro lado estaba
+empujando un archivo —4 MiB en esta prueba— su ventana se llena, el búfer de
+recepción de este lado se queda lleno con una aplicación que ya no lo vacía, y el
+sistema contesta con un **RST**. En Windows un RST **descarta lo que hubiera en el
+búfer del par**: el frame de cancelación recién escrito se pierde en tránsito.
+
+En Linux los búferes son mayores y el emisor suele alcanzar a leer el frame antes
+de que eso pase. **La diferencia no era del protocolo: era de cuánto aguanta un
+búfer** — y por eso una suite verde en Linux lo tapaba.
+
+**Por qué importa.** «Alguien lo paró» y «se cayó la conexión» son dos frases
+distintas, y ADR-0050 §4.2 con la fase 25 §5 existen porque confundirlas es el
+80 % de los «no funciona». La cancelación cruzaba el cable desde la fase 25 —y en
+Windows llegaba con el nombre equivocado.
+
+**El arreglo.** Después de escribir el adiós, la sesión **sigue vaciando el
+cable** un plazo corto y acotado (`GOODBYE_DRAIN`, 750 ms): no procesa nada —ya
+está cancelada— sólo consume, para que el emisor termine de escribir lo que tenía
+en vuelo y alcance a leer la despedida. **Un adiós que no se oye no es un adiós.**
+
+Acotado a propósito: si el emisor no se calla en ese plazo, se sale igual. Irse
+tarde es peor que irse sin que te oigan.
+
+**Lo que no puedo afirmar desde aquí.** Que esto arregla Windows. Este contenedor
+es Linux, donde la prueba ya pasaba; el mecanismo está diagnosticado y el arreglo
+ataca justo esa causa, y **quien lo confirma es CI**. Si CI sigue rojo, el
+diagnóstico estaba mal y hay que volver aquí — no subir el plazo.
+
+**Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
+Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
+segundos.
+
+## QYR-0401 — `chacha20 0.10.1`, que sella cada frame, fue retirado del registro
+
+- Estado: **CERRADO**
+- Severidad: **MEDIA** — `yanked` no es una vulnerabilidad, y sí es una
+  advertencia del autor sobre esa versión exacta
+- Fecha: 2026-09-03
+
+`cargo audit --deny warnings` en CI: *«1 denied warning found! Crate: chacha20,
+Version: 0.10.1, Warning: yanked»*. Nada que ver con este repositorio: pasó
+**aguas arriba**, y lo cazó la puerta que existe para eso.
+
+No es cualquier crate: **es el que sella cada frame de este protocolo**
+(ADR-0022). `cargo update -p chacha20` lleva a **0.10.2**, compatible y sin
+cambiar ninguna otra versión del lock. Comprobado con `--dry-run` antes de
+tocarlo, y después con la suite entera y con `qyro_crypto` aparte: 145 pruebas.
+
 ## QYR-0399 — CI llevaba días en rojo en `main`, y los tres guardianes tenían razón
 
 - Estado: **CERRADO**

@@ -238,6 +238,23 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0400 y QYR-0401, los otros dos rojos de CI que la puerta local no ve.**
+
+`chacha20 0.10.1` -- **el crate que sella cada frame de este protocolo** -- fue
+**retirado del registro** aguas arriba, y `cargo audit --deny warnings` lo cazo.
+`0.10.2` es compatible y no mueve ninguna otra version del lock.
+
+Y `cancelar_se_lo_dice_al_otro_lado` fallaba **solo en Windows**: el emisor leia
+la cancelacion como «el otro aparato no responde». Quien cancela deja de leer en
+el acto; si el otro estaba empujando un archivo, el bufer se llena, la aplicacion
+ya no lo vacia, y el sistema contesta con un **RST** -- que en Windows **descarta
+lo que hubiera en el bufer del par**, incluido el frame de cancelacion recien
+escrito. En Linux los buferes son mayores y el emisor alcanza a leerlo. **La
+diferencia no era del protocolo: era de cuanto aguanta un bufer.** Ahora la
+sesion sigue vaciando el cable 750 ms despues de decir adios: no procesa nada,
+solo consume, para que el otro alcance a oir la despedida. **Quien lo confirma es
+CI, no yo: aqui no hay Windows.**
+
 **QYR-0399: CI llevaba dias en rojo en `main` y la puerta local decia verde.**
 Tres workflows -- Documentation, CLI builds y Windows 7 -- fallaban desde antes
 de esta tanda, y los tres guardianes tenian razon:

@@ -392,6 +392,13 @@ pub const MAX_FILES_PER_TRANSFER: usize = 256;
 /// de sesenta segundos que protege.
 const SELF_ABSENCE: Duration = Duration::from_secs(15);
 
+/// Cuánto se sigue vaciando el cable después de decir «cancelo».
+///
+/// **QYR-0400.** Lo suficiente para que el emisor termine de escribir lo que
+/// tenía en vuelo y alcance a leer la despedida; lo bastante poco para que
+/// cancelar siga sintiéndose inmediato. Son unos pocos `READ_TIMEOUT`.
+const GOODBYE_DRAIN: Duration = Duration::from_millis(750);
+
 impl Session {
     /// Opens a sending session against `address`, naming files relative to
     /// `root`.
@@ -851,6 +858,41 @@ impl Session {
             if let Some(bytes) = farewell {
                 self.outbound = vec![bytes];
                 let _ = self.write_outbound();
+                // **Un adiós que no se oye no es un adiós** (QYR-0400).
+                //
+                // Quien cancela deja de leer inmediatamente. Si el otro lado
+                // estaba empujando un archivo, su ventana se llena, el búfer de
+                // recepción de aquí se queda lleno con una aplicación que ya no
+                // lo vacía, y el sistema contesta con un **RST**. En Windows un
+                // RST **descarta lo que hubiera en el búfer del par**: el frame
+                // de cancelación que se acaba de escribir se pierde en tránsito,
+                // y el emisor lee «el otro aparato no responde» — el nombre
+                // equivocado, que es justo lo que la fase 25 §5 existe para
+                // evitar.
+                //
+                // En Linux los búferes son mayores y el par suele alcanzar a
+                // leer el frame antes, así que esto se veía **sólo** en el
+                // trabajador de Windows. La diferencia no era del protocolo:
+                // era de cuánto aguanta un búfer.
+                //
+                // Así que se sigue vaciando el cable un momento después de
+                // decir adiós. No se procesa nada de lo que llegue —la sesión
+                // ya está cancelada— sólo se consume, para que el emisor pueda
+                // terminar de escribir y llegue a leer la despedida.
+                //
+                // **Acotado y corto**: es una cortesía de salida, no una espera.
+                // Si el emisor no se calla en este plazo, se sale igual: irse
+                // tarde es peor que irse sin que te oigan.
+                let until = Instant::now() + GOODBYE_DRAIN;
+                while Instant::now() < until {
+                    match self.stream.read_frame() {
+                        Ok(Some(_)) => {}
+                        // Venció la lectura y no llegó nada: el emisor ya se
+                        // calló, que es exactamente lo que se esperaba.
+                        Ok(None) => break,
+                        Err(_) => break,
+                    }
+                }
             }
             return Err(self.fail(SessionError::Cancelled));
         }

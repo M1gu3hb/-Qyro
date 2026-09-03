@@ -42,8 +42,8 @@ Future<String?> androidDestination({
 }) async {
   if (!(isAndroid ?? Platform.isAndroid)) return null;
   try {
-    final answer = await (channel ?? qyroPathsChannel)
-        .invokeMethod<String>('destination');
+    final answer =
+        await (channel ?? qyroPathsChannel).invokeMethod<String>('destination');
     if (answer == null || answer.isEmpty) return null;
     return answer;
   } on MissingPluginException {

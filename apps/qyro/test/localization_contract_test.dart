@@ -115,10 +115,7 @@ void main() {
         english.sendNotTheExpectedDevice,
         spanish.sendNotTheExpectedDevice
       ),
-      'sendAddressLabel': (
-        english.sendAddressLabel,
-        spanish.sendAddressLabel
-      ),
+      'sendAddressLabel': (english.sendAddressLabel, spanish.sendAddressLabel),
       'receivePortUnavailable': (
         english.receivePortUnavailable,
         spanish.receivePortUnavailable

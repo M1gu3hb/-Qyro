@@ -75,7 +75,8 @@ typedef _ResultLenNative = Int32 Function(Uint64, Pointer<IntPtr>);
 typedef _ResultLenDart = int Function(int, Pointer<IntPtr>);
 typedef _ResultNative = Int32 Function(Uint64, Pointer<Uint8>, IntPtr);
 typedef _ResultDart = int Function(int, Pointer<Uint8>, int);
-typedef _PairingNative = Int32 Function(Uint64, Pointer<Uint8>, IntPtr, Pointer<IntPtr>);
+typedef _PairingNative = Int32 Function(
+    Uint64, Pointer<Uint8>, IntPtr, Pointer<IntPtr>);
 typedef _PairingDart = int Function(int, Pointer<Uint8>, int, Pointer<IntPtr>);
 typedef _CloseNative = Void Function(Uint64);
 typedef _CloseDart = void Function(int);
