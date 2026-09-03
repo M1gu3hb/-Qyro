@@ -3,9 +3,9 @@
 Este archivo es la única fuente de verdad para el estado ejecutable actual. Las
 especificaciones y ADR describen intención; no sustituyen evidencia.
 
-- Updated UTC: 2026-09-03T17:10:00Z
+- Updated UTC: 2026-09-03T18:05:00Z
 - Branch: main (rama única desde 2026-08-18)
-- Verified commit: 881ae1ecf3b8c47cc04451824ed3b0bf94040be1
+- Verified commit: cdfd081dd75490ee5129e0d7975b176634e24cfb
 - Milestone: **v1.0. El producto está completo en código y no lo ha usado
   nadie.** Un archivo se elige con el selector del sistema, viaja por un socket
   TCP cifrado y autenticado entre dos procesos, se verifica con SHA-256 y se
@@ -168,9 +168,37 @@ en el título de la Release y arriba del todo en sus notas, que es donde tiene q
 estar. El certificado del APK se verificó con `apksigner verify --print-certs`:
 un solo firmante, `CN=Qyro`, RSA 4096, esquemas v2 y v3.
 
-**Nada de lo que se pruebe hoy sale de esa Release.** Los artefactos de la prueba
-de hardware se construyen del commit que nombra `docs/GUIA-DE-PRUEBA.md`, y esa
-guía explica cómo comprobar su SHA-256.
+**Nada de lo que se pruebe hoy sale de esa Release.** Y desde el 2026-09-03 hay
+otra de donde sí sale.
+
+### La v1.0.1, que es de donde se descarga hoy
+
+<https://github.com/M1gu3hb/-Qyro/releases/tag/v1.0.1> — prerelease, publicada
+por GitHub Actions sobre `7dfe378`, con los SHA-256 **medidos por la máquina que
+construyó los archivos**, sobre los archivos que subió:
+
+| Artefacto | SHA-256 |
+|---|---|
+| `qyro.exe` (terminal) | `42de97fa7c887427bd4d2bebbc7959452a558e41fb5cfeccd25901e60c8becc3` |
+| `app-release-debugkey.apk` | `bfa1d5f77e225f6648a5d328e8ad9e0c5f528181c2451c9e9cad6d55ab86c1f9` |
+| `qyro-windows-x64.zip` | `e26e2b771ac9f1678a2f80b19a279ad6414c021009d3423a996d78f82f307ce3` |
+
+Los tres coinciden con el `digest` que la API de GitHub devuelve para cada
+asset, comprobado tras publicar y no supuesto.
+
+**El APK va firmado con la clave de depuración**, que es pública y universal: se
+llama `app-release-debugkey.apk` para que no haya forma de confundirlo, y la
+firma **no dice quién lo construyó**. `key.properties`, `*.keystore` y `*.jks`
+siguen sin estar rastreados —comprobado con `git ls-files`; lo único que hay es
+`key.properties.example`— y este proyecto no mete una clave privada en un
+secreto de CI.
+
+**La retractación de la v1.0.0 no se toca**, y el propio workflow lo comprueba:
+se niega a publicar sobre `v1.0.0` y, al terminar, exige que esa página siga
+diciendo `RETRACTADO`.
+
+`docs/GUIA-DE-PRUEBA.md` §2.A manda a esa Release y §3 comprueba las descargas
+contra su `SHA256SUMS.txt`.
 
 ### Fase 11 — runs de cierre
 
