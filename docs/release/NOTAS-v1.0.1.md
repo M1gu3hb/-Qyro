@@ -48,6 +48,23 @@ carpeta entera. Se llaman igual y no son intercambiables.
 Para instalar y probar, `docs/GUIA-DE-PRUEBA.md` esta escrita para alguien que no
 ha leido nada de este repositorio.
 
+## De que commit salen estos archivos, y por que importa
+
+Del que se nombra al final, que es **el primero de este proyecto con CI entera en
+verde**: Rust en Linux, Windows y macOS, Dart, `cargo audit` y la documentacion.
+
+**Y hubo que llegar hasta ahi para que estos binarios sirvieran.** Los primeros
+que colgaron de esta pagina se construyeron unas horas antes y llevaban dentro un
+defecto que **impedia recibir**: `Isolate.run` serialisa el ambito lexico entero
+del closure que recibe, y en el ambito del receptor viajaba un `DynamicLibrary`
+que el isolate rechaza. Pulsar Recibir habria dado «algo interno fallo».
+
+Se reconstruyeron y se sustituyeron **antes de que nadie los descargara** —cero
+descargas en los cuatro archivos, comprobado en la API—, asi que no hay nada que
+retractar y esto se cuenta por completitud, no por aviso. Si hubiera habido una
+sola descarga, esta pagina llevaria una retractacion como la de la `v1.0.0` en
+vez de este parrafo.
+
 ## Que sustituye, y que no borra
 
 Sustituye a **`v1.0.0`, que sigue publicada y sigue retractada**. Sus notas dicen
