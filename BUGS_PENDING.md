@@ -848,8 +848,9 @@ detrás? **No.**
 
 ## QYR-0400 — Cancelar sobre un envío grande llegaba como «el otro aparato no responde» en Windows
 
-- Estado: **CERRADO** en el código; **la confirmación es de CI**, porque el fallo
-  sólo ocurre en Windows y aquí no hay Windows
+- Estado: **ABIERTO.** Dos arreglos, dos veces rojo en CI. La tercera vuelta no
+  arregla: **instrumenta**, para dejar de adivinar cuál de los cinco finales de
+  ADR-0028 §5 es el que `PeerUnreachable` está tapando
 - Severidad: **MEDIA**, y es exactamente la confusión que la fase 25 §5 existe
   para evitar
 - Fecha: 2026-09-03
@@ -940,6 +941,33 @@ Se le quitó el arreglo para verle los dientes y **siguió pasando en Linux**, p
 lo dicho arriba: aquí el emisor no se bloquea nunca. **Sus dientes están en
 Windows y no aquí, y se escribe así en vez de dejar creer que la suite verde de
 Linux la respalda.** Quien confirma sigue siendo CI.
+
+### Tercera vuelta, 2026-09-03: se deja de adivinar y se instrumenta
+
+CI volvió a fallar, ahora con **dos** pruebas y el mismo `PeerUnreachable`. Dos
+arreglos, dos diagnósticos, dos veces rojo. **El problema ya no es el defecto: es
+que se está adivinando.**
+
+`SessionError::PeerUnreachable` **junta cinco sucesos distintos** de ADR-0028 §5
+—el par cerró limpio, cerró a medio frame, hubo un reset, se hizo el silencio, o
+falló una llamada al socket— y su texto los tapa a los cinco: «the peer could not
+be reached, or the wire ended». Desde Linux, sobre un fallo que sólo ocurre en
+Windows, esa palabra es la diferencia entre medir y adivinar. Las dos vueltas
+anteriores adivinaron, y las dos eligieron mal.
+
+**Así que se instrumenta antes de tocar nada más.** `Session::wire_ending()`
+devuelve el nombre del último final del cable —un literal, no el error: la sesión
+cruza la frontera C y ADR-0032 §2 acota lo que puede nombrar— y las dos pruebas
+lo imprimen y lo meten en su mensaje de fallo. La próxima corrida de CI **dice
+cuál de los cinco es** en vez de dejarlo a una tercera hipótesis.
+
+**Y una cosa que la instrumentación ya deja clara sobre la vuelta anterior.**
+`poll_frame` **no arregló Windows**, y eso se dice: se queda porque es una mejora
+de producto medida —un emisor que empuja 32 MiB se entera de un cancelar en
+**281–292 ms** (cinco corridas en Linux) en vez de al terminar el empuje— pero
+**no** porque cierre esta ficha. La ficha sigue abierta.
+
+- Estado revisado: **ABIERTO**, esperando el dato de CI.
 
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro

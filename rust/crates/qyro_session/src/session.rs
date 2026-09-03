@@ -203,6 +203,13 @@ pub struct Session {
     /// y no cambia una sola decisión: sólo se puede preguntar.
     steps: u64,
     expired_reads: u64,
+    /// Cuál de los finales del cable fue el último, por su nombre.
+    ///
+    /// Sólo para diagnóstico: no cambia ninguna decisión ni cruza la frontera
+    /// C. Existe porque `PeerUnreachable` junta cinco sucesos y, cuando el
+    /// fallo ocurre en la plataforma que no se tiene delante, esa palabra es la
+    /// diferencia entre medir y adivinar.
+    wire_ending: Option<&'static str>,
     /// Si el último paso del emisor no produjo un solo frame.
     ///
     /// QYR-0393. Un emisor sin nada que mandar no está midiendo la red: está
@@ -250,6 +257,38 @@ fn bind_error(error: NetError) -> SessionError {
         } => SessionError::PortUnavailable,
         _ => SessionError::BadArgument,
     }
+}
+
+/// Cuál de los finales de ADR-0028 §5 fue, en una palabra.
+///
+/// **`PeerUnreachable` junta cinco sucesos distintos** —el par cerró limpio, el
+/// par cerró a medio frame, hubo un reset, se hizo el silencio, o una llamada al
+/// socket falló— y su texto, «the peer could not be reached, or the wire ended»,
+/// los tapa a los cinco. Para quien lo lee en una pantalla eso ya es poco; para
+/// quien intenta arreglar un fallo que **sólo ocurre en la plataforma que no
+/// tiene delante**, es la diferencia entre medir y adivinar.
+///
+/// Se guarda el nombre, no el error: `SessionError` es `Copy` y cruza la
+/// frontera C (ADR-0032 §2), así que lo que aquí se conserva es un literal.
+const fn wire_ending_name(error: &NetError) -> &'static str {
+    match error {
+        NetError::PeerClosedEarly => "PeerClosedEarly",
+        NetError::PeerClosedMidFrame { .. } => "PeerClosedMidFrame",
+        NetError::PeerVanished { .. } => "PeerVanished",
+        NetError::PeerSilent { .. } => "PeerSilent",
+        NetError::PreAuthByteLimitExceeded { .. } => "PreAuthByteLimitExceeded",
+        NetError::HandshakeDeadlineExceeded { .. } => "HandshakeDeadlineExceeded",
+        NetError::Framing(_) => "Framing",
+        NetError::SocketFailed { .. } => "SocketFailed",
+        _ => "Otro",
+    }
+}
+
+/// Mapea y **anota** cuál fue. Un hueco y no `&mut Session`, porque casi todas
+/// las llamadas ocurren mientras `self.stream` está prestado.
+fn noting(slot: &mut Option<&'static str>, error: &NetError) -> SessionError {
+    *slot = Some(wire_ending_name(error));
+    net_error(error)
 }
 
 const fn net_error(error: &NetError) -> SessionError {
@@ -524,6 +563,7 @@ impl Session {
             observer,
             steps: 0,
             expired_reads: 0,
+            wire_ending: None,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -610,6 +650,7 @@ impl Session {
             observer,
             steps: 0,
             expired_reads: 0,
+            wire_ending: None,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -649,6 +690,7 @@ impl Session {
             observer: observer.map(Emitter::new),
             steps: 0,
             expired_reads: 0,
+            wire_ending: None,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -675,6 +717,17 @@ impl Session {
         self.stream
             .local_addr()
             .map_err(|_| SessionError::PeerUnreachable)
+    }
+
+    /// Cuál fue el último final del cable, por su nombre, o `None`.
+    ///
+    /// **Para diagnóstico, y nació de no poder diagnosticar.** QYR-0400 falla
+    /// sólo en Windows y este taller es Linux: dos intentos de arreglo se
+    /// hicieron adivinando cuál de los cinco finales que `PeerUnreachable`
+    /// agrupa era el de verdad. Con esto, la próxima corrida de CI lo dice.
+    #[must_use]
+    pub const fn wire_ending(&self) -> Option<&'static str> {
+        self.wire_ending
     }
 
     /// How far the session has got.
@@ -996,9 +1049,11 @@ impl Session {
         for frame in core::mem::take(&mut self.outbound) {
             self.stream
                 .write_frame(&frame)
-                .map_err(|error| net_error(&error))?;
+                .map_err(|error| noting(&mut self.wire_ending, &error))?;
         }
-        self.stream.flush().map_err(|error| net_error(&error))
+        self.stream
+            .flush()
+            .map_err(|error| noting(&mut self.wire_ending, &error))
     }
 
     fn advance(&mut self) -> Result<SessionState, SessionError> {
@@ -1046,7 +1101,7 @@ impl Session {
                     if self.finished() {
                         return Ok(self.verdict());
                     }
-                    return Err(net_error(&error));
+                    return Err(noting(&mut self.wire_ending, &error));
                 }
             }
         }
@@ -1109,7 +1164,7 @@ impl Session {
                     if self.finished() {
                         return Ok(self.verdict());
                     }
-                    return Err(net_error(&error));
+                    return Err(noting(&mut self.wire_ending, &error));
                 }
             }
         };

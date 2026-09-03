@@ -301,9 +301,19 @@ fn cancelar_se_lo_dice_al_otro_lado() {
         !matches!(outcome, Ok(SessionState::InProgress)),
         "el emisor seguia en marcha cuatro segundos despues de que el receptor          cancelara: la cancelacion no llego al cable"
     );
+    // **Cuál de los cinco finales fue**, y no sólo que fue uno.
+    // `PeerUnreachable` junta «cerró limpio», «cerró a medio frame», «reset»,
+    // «silencio» y «falló una llamada al socket», y este fallo ocurre sólo en
+    // Windows: sin este dato, arreglarlo desde Linux es adivinar, que es lo que
+    // ya se hizo dos veces.
+    let ending = sender
+        .as_ref()
+        .ok()
+        .and_then(qyro_session::Session::wire_ending)
+        .unwrap_or("(ninguno)");
     assert!(
         !matches!(outcome, Err(SessionError::PeerUnreachable)),
-        "el emisor leyo la cancelacion como «el otro aparato no responde», que          es el nombre equivocado: {outcome:?}"
+        "el emisor leyo la cancelacion como «el otro aparato no responde», que          es el nombre equivocado: {outcome:?}, final del cable: {ending}"
     );
 
     // **Y con qué nombre se entera**, que es de lo que trata la §5. Se afirma el
@@ -2288,9 +2298,16 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
     let elapsed = started.elapsed();
     let _ = receiving.join();
 
+    let ending = sender
+        .as_ref()
+        .ok()
+        .and_then(qyro_session::Session::wire_ending)
+        .unwrap_or("(ninguno)");
+    println!("final del cable segun el emisor: {ending}");
     assert!(
         !matches!(outcome, Err(SessionError::PeerUnreachable)),
-        "el emisor leyo la cancelacion como «el otro aparato no responde»: {outcome:?}"
+        "el emisor leyo la cancelacion como «el otro aparato no responde»: \
+         {outcome:?}, final del cable: {ending}, tras {elapsed:?}"
     );
     assert!(
         matches!(
