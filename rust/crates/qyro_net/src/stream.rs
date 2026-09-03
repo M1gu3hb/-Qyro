@@ -366,8 +366,8 @@ impl FrameStream {
         /// byte es que no va a aceptarlo.
         const GRACIA_A_MEDIA_TRAMA: Duration = Duration::from_millis(250);
 
-        /// Cuánto se insiste con una escritura que **no avanza y no trae
-        /// noticias**, antes de soltarla y ponerse a escuchar de verdad.
+        /// Cuánto se insiste con una escritura **empezada** que no avanza ni
+        /// trae noticias, antes de soltarla.
         ///
         /// **QYR-0400, octava vuelta, y sale de una medida.** En Windows el
         /// emisor daba **2352 vueltas de este bucle en seis segundos y ninguna
@@ -378,6 +378,16 @@ impl FrameStream {
         /// atascado, y lo que le toca es soltar y escuchar por el camino
         /// normal.
         const SIN_PODER_ESCRIBIR: Duration = Duration::from_secs(2);
+
+        /// Y cuánto se insiste con una que **no ha empezado**.
+        ///
+        /// Mucho menos, porque **soltarla no cuesta nada**: el frame vuelve
+        /// entero a la cola y la sesión sigue. Los dos segundos de arriba están
+        /// para el otro caso, donde soltar **trunca una trama** y mata la
+        /// sesión; ahí conviene estar seguro, porque un enlace malo puede
+        /// atascarse medio segundo sin estar roto. Distinguirlos es la
+        /// diferencia entre esperar por prudencia y esperar por inercia.
+        const SIN_EMPEZAR: Duration = Duration::from_millis(300);
 
         let mut sent = 0_usize;
         let mut heard_at: Option<Instant> = None;
@@ -428,7 +438,12 @@ impl FrameStream {
                     // segundos dentro de esta función. Se sale por el camino que
                     // corresponda —el frame entero si no había empezado, la
                     // trama truncada si sí— y el paso se va a leer de verdad.
-                    if stuck_since.is_some_and(|at| at.elapsed() >= SIN_PODER_ESCRIBIR) {
+                    let patience = if sent == 0 {
+                        SIN_EMPEZAR
+                    } else {
+                        SIN_PODER_ESCRIBIR
+                    };
+                    if stuck_since.is_some_and(|at| at.elapsed() >= patience) {
                         return Ok(if sent == 0 {
                             Wrote::NothingPeerSpoke
                         } else {

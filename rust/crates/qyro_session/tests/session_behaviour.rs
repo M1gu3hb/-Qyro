@@ -2369,16 +2369,26 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
         ),
         "la cancelacion llego con un nombre inesperado: {outcome:?}"
     );
-    // **Y pronto.** El receptor no cierra hasta los seis segundos, así que
-    // enterarse antes de los tres sólo puede ser por haber mirado el cable en
-    // vez de por haberse chocado con un socket cerrado.
+    // **Y que se enteró por el protocolo, aseverado sobre la cosa misma.**
     //
-    // El número sale impreso además de aseverado: una aserción dice «cabe» y un
-    // número dice «cuánto», y el margen entre los dos es lo único que avisa
-    // antes de que un día deje de caber.
+    // Esto medía el tiempo y exigía menos de tres segundos, razonando que el
+    // receptor no cierra hasta los seis. Era un **sustituto**: el tiempo se usaba
+    // para deducir por dónde llegó la noticia. Y en Windows tardó 3,88 s **con
+    // el nombre correcto**, o sea que el sustituto suspendió a un emisor que
+    // había hecho exactamente lo que se le pedía.
+    //
+    // Lo que se quiere afirmar es que **el cable no se murió**: si la sesión
+    // terminó por el protocolo, no hay ningún final de cable anotado; si terminó
+    // porque el socket se rompió, `wire_ending` lo dice por su nombre. Se
+    // asevera eso, que es la propiedad, y el tiempo se queda como lo que de
+    // verdad es: una comprobación de que no se cuelga.
     println!("el emisor tardo {elapsed:?} en enterarse del cancelar");
+    assert_eq!(
+        ending, "(ninguno)",
+        "el emisor anoto un final de cable ({ending}), asi que se entero de que          lo cancelaron porque el socket se murio y no porque se lo dijeran.          {receiver_note}"
+    );
     assert!(
-        elapsed < std::time::Duration::from_secs(3),
-        "el emisor tardo {elapsed:?} en enterarse de un cancelar que llego al          principio: no miro el cable hasta que el otro cerro"
+        elapsed < std::time::Duration::from_secs(5),
+        "el emisor tardo {elapsed:?}, y el receptor no suelta el socket hasta          los seis segundos: esto ya no es «se entero tarde», es que no se          entero. {receiver_note}"
     );
 }
