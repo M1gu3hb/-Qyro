@@ -960,9 +960,9 @@ detrás? **No.**
 
 ## QYR-0400 — Cancelar sobre un envío grande llegaba como «el otro aparato no responde» en Windows
 
-- Estado: **ABIERTO.** Dos arreglos, dos veces rojo en CI. La tercera vuelta no
-  arregla: **instrumenta**, para dejar de adivinar cuál de los cinco finales de
-  ADR-0028 §5 es el que `PeerUnreachable` está tapando
+- Estado: **CERRADO**, y esta vez con la corrida que lo dice. Ocho vueltas,
+  cinco intentos de arreglo y **tres de instrumentación** — y los tres de
+  instrumentación son los que llevaron a la respuesta
 - Severidad: **MEDIA**, y es exactamente la confusión que la fase 25 §5 existe
   para evitar
 - Fecha: 2026-09-03
@@ -1276,6 +1276,50 @@ soltar es perder una trama de una sesión que ya no va a ninguna parte.
 acumular lecturas vencidas en `step_tally()`, y entonces lo que estará probado es
 que **tampoco la lectura bloqueante ve nada**, que es una afirmación mucho más
 fuerte y mucho más rara que cualquiera de las ocho que se han probado hasta aquí.
+
+### Cerrada: las dos pruebas pasan en `windows-latest`
+
+```
+test cancelar_se_lo_dice_al_otro_lado ... ok
+test un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final ... ok
+```
+
+**La causa, en una frase:** el emisor se quedaba dentro de su propia escritura y
+el bucle sólo sabía salir «cuando el par hable» — de modo que **su condición de
+salida daba por supuesto exactamente lo que estaba fallando**, porque en Windows
+la lectura no bloqueante nunca veía llegar nada.
+
+**El arreglo, en otra:** un plazo sobre lo único observable desde dentro —si no
+se coloca un byte en dos segundos, se suelta y se escucha por el camino normal.
+
+### Lo que costó, y la regla que deja
+
+| | |
+|---|---|
+| Vueltas | 8 |
+| Intentos de arreglo | 5 (los cuatro primeros, fallidos) |
+| Instrumentaciones | 3 |
+| Corridas de CI gastadas | ~10 |
+
+Los cuatro arreglos fallidos tienen algo en común: **los cuatro razonaban sobre
+dónde estaba el emisor, y ninguno sobre qué estaba observando desde ahí.** Esa
+pregunta sólo se pudo hacer cuando hubo un contador que la contestara.
+
+Y las tres instrumentaciones tienen algo en común todavía más incómodo: **las
+tres midieron algo que el código ya sabía y estaba tirando a la basura.**
+
+1. `wire_ending` — detrás del nombre único `PeerUnreachable`, que junta cinco
+   finales distintos de ADR-0028 §5.
+2. `farewell_note` — detrás de un `.ok()` y un `let _ =`, en las dos líneas que
+   deciden si el adiós sale.
+3. `write_tally` — nadie contaba las paradas de escritura, así que «atascado
+   escribiendo» y «dando vueltas sin enterarse» eran indistinguibles.
+
+**La regla, para la próxima:** en una plataforma que no se tiene delante, cada
+`.ok()`, cada `let _ =` y cada error colapsado en un nombre genérico **cuesta un
+ciclo de CI**. Aquí costaron cuatro. Instrumentar no es lo que se hace cuando el
+arreglo no sale: es lo primero que hay que hacer cuando el fallo está donde uno
+no puede mirar.
 
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
