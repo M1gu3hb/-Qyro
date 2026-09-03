@@ -210,6 +210,10 @@ pub struct Session {
     /// fallo ocurre en la plataforma que no se tiene delante, esa palabra es la
     /// diferencia entre medir y adivinar.
     wire_ending: Option<&'static str>,
+    /// Qué pasó con el adiós que manda `cancel()`, por su nombre.
+    ///
+    /// Sólo para diagnóstico, como [`Self::wire_ending`].
+    farewell_note: Option<&'static str>,
     /// Si el último paso del emisor no produjo un solo frame.
     ///
     /// QYR-0393. Un emisor sin nada que mandar no está midiendo la red: está
@@ -564,6 +568,7 @@ impl Session {
             steps: 0,
             expired_reads: 0,
             wire_ending: None,
+            farewell_note: None,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -651,6 +656,7 @@ impl Session {
             steps: 0,
             expired_reads: 0,
             wire_ending: None,
+            farewell_note: None,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -691,6 +697,7 @@ impl Session {
             steps: 0,
             expired_reads: 0,
             wire_ending: None,
+            farewell_note: None,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -717,6 +724,17 @@ impl Session {
         self.stream
             .local_addr()
             .map_err(|_| SessionError::PeerUnreachable)
+    }
+
+    /// Qué pasó con el adiós de `cancel()`, o `None` si no se ha cancelado.
+    ///
+    /// **Para diagnóstico.** Las dos maneras de que un adiós no llegue —que el
+    /// motor no lo produzca y que la escritura falle— se tiraban a la basura en
+    /// la misma línea, así que desde el otro extremo eran indistinguibles de
+    /// «llegó y se perdió».
+    #[must_use]
+    pub const fn farewell_note(&self) -> Option<&'static str> {
+        self.farewell_note
     }
 
     /// Cuál fue el último final del cable, por su nombre, o `None`.
@@ -904,13 +922,33 @@ impl Session {
             //
             // Si el frame no sale, no cambia nada: se falla igual. Un adiós que
             // no se pudo dar no es motivo para no irse.
+            //
+            // **Y las dos cosas que aquí se tiraban a la basura se anotan**
+            // (QYR-0400, quinta vuelta). `request_cancel().ok()` convierte «el
+            // motor se negó» en `None`, y `let _ = write_outbound()` convierte
+            // «no salió» en nada. Con las dos calladas, «el adiós no llegó» y
+            // «el adiós ni se intentó» son indistinguibles desde el otro lado —
+            // y desde una máquina que no es la que falla, indistinguible es
+            // igual a inarreglable.
             let farewell = match &mut self.role {
                 Role::Sending { engine, .. } => engine.request_cancel().ok(),
                 Role::Receiving { engine, .. } => engine.request_cancel().ok(),
             };
+            if farewell.is_none() {
+                self.farewell_note = Some("el motor no produjo un adios");
+            }
             if let Some(bytes) = farewell {
                 self.outbound = vec![bytes];
-                let _ = self.write_outbound();
+                self.farewell_note = Some(match self.write_outbound() {
+                    Ok(()) => {
+                        if self.outbound.is_empty() {
+                            "escrito"
+                        } else {
+                            "aplazado: el par hablo antes de que saliera"
+                        }
+                    }
+                    Err(_) => "la escritura del adios fallo",
+                });
                 // **Un adiós que no se oye no es un adiós** (QYR-0400).
                 //
                 // Quien cancela deja de leer inmediatamente. Si el otro lado

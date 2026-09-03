@@ -1090,6 +1090,48 @@ nada aquí. **Y quien confirma Windows sigue siendo CI**: si esta vuelta falla,
 el instrumento volverá a decir cuál de los cinco finales fue, que es para lo que
 se puso.
 
+### Quinta vuelta: el arreglo de la cuarta no movió el número, y eso también es un dato
+
+`write_frame_watching` entró y CI devolvió **exactamente lo mismo**:
+`PeerVanished`, **a los 6,280 s** contra los 6,2797 s de antes. No se movió una
+milésima.
+
+**Y eso descarta la hipótesis entera.** Si el emisor estuviera bloqueado
+escribiendo, el bucle nuevo —que mira el cable cada 2 ms mientras el socket no
+acepta— habría encontrado la cancelación en cuanto llegara, que es al principio.
+No la encontró. Y tampoco puede estar bloqueado leyendo: `READ_TIMEOUT` son
+**250 ms**, y el propio emisor tarda ~280 ms en Linux, que es esa misma cifra.
+
+Así que el emisor pasa seis segundos dando pasos **sin que le llegue nada**, y lo
+primero que recibe es el RST del cierre. La pregunta ya no es «¿por qué no lo
+oye?» sino **«¿sale el adiós siquiera?»**.
+
+**Y esa pregunta la tiraban a la basura dos líneas del propio `step()`:**
+
+```rust
+Role::Receiving { engine, .. } => engine.request_cancel().ok(),   // Err -> None
+...
+let _ = self.write_outbound();                                    // Err -> nada
+```
+
+Con las dos calladas, **«el adiós no llegó» y «el adiós ni se intentó» son la
+misma frase** vista desde el otro extremo. Desde una máquina que no es la que
+falla, indistinguible es igual a inarreglable.
+
+`Session::farewell_note()` las separa: `"el motor no produjo un adios"`,
+`"la escritura del adios fallo"`, `"aplazado: el par hablo antes de que saliera"`
+o `"escrito"`. Las dos pruebas hacen que **el hilo receptor devuelva su
+diagnóstico** y lo meten en el mensaje de fallo.
+
+**En Linux dice `Some("escrito")`.** Si en Windows dice otra cosa, ahí está el
+defecto y no hay que adivinarlo. Si dice `"escrito"` también, entonces el adiós
+sale y se pierde en el cable, y **ésa** es la línea de investigación — pero será
+la primera vez que se sepa cuál de las dos es.
+
+**La regla que esta ficha ha ido enseñando, por si sirve fuera de aquí:** cada
+vez que un arreglo a ciegas falló, lo que faltaba no era una idea mejor: era un
+dato. Y el dato estaba siempre detrás de un `.ok()` o un `let _ =`.
+
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
 segundos.

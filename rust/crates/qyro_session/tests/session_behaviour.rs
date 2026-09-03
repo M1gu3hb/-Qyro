@@ -266,9 +266,9 @@ fn cancelar_se_lo_dice_al_otro_lado() {
     let address = loopback(a_free_port());
     let target = destination.dir.clone();
 
-    let receiving = thread::spawn(move || {
+    let receiving = thread::spawn(move || -> String {
         let Ok(mut session) = Session::open_receiver(address, &target, None) else {
-            return;
+            return "el receptor no llego a abrirse".to_owned();
         };
         // Handshake, manifiesto, y algo de contenido en marcha.
         let _ = session.step();
@@ -276,10 +276,18 @@ fn cancelar_se_lo_dice_al_otro_lado() {
         session.cancel();
         // El paso que lleva la cancelación al cable.
         let _ = session.step();
+        // **Qué le pasó al adiós, dicho por el lado que lo manda.** Sin esto,
+        // «no llegó» y «ni se intentó» son la misma frase desde el otro lado.
+        let note = format!(
+            "receptor -- adios: {:?}, final del cable: {:?}",
+            session.farewell_note(),
+            session.wire_ending()
+        );
         // **Quieto, con el socket vivo.** Si el hilo terminara aquí, el emisor
         // vería un socket cerrado y esta prueba no mediría nada.
         thread::sleep(std::time::Duration::from_secs(5));
         drop(session);
+        note
     });
 
     let mut sender = open_sender_when_ready(address, &root.dir, &[file]);
@@ -292,7 +300,10 @@ fn cancelar_se_lo_dice_al_otro_lado() {
             outcome = session.step();
         }
     }
-    let _ = receiving.join();
+    let receiver_note = receiving
+        .join()
+        .unwrap_or_else(|_| "el hilo receptor se cayo".to_owned());
+    println!("{receiver_note}");
 
     // **Lo que se afirma:** el emisor se entera de que lo cancelaron, y se
     // entera **mientras el socket sigue abierto** — o sea, por el protocolo y no
@@ -313,7 +324,7 @@ fn cancelar_se_lo_dice_al_otro_lado() {
         .unwrap_or("(ninguno)");
     assert!(
         !matches!(outcome, Err(SessionError::PeerUnreachable)),
-        "el emisor leyo la cancelacion como «el otro aparato no responde», que          es el nombre equivocado: {outcome:?}, final del cable: {ending}"
+        "el emisor leyo la cancelacion como «el otro aparato no responde», que          es el nombre equivocado: {outcome:?}, final del cable: {ending}. {receiver_note}"
     );
 
     // **Y con qué nombre se entera**, que es de lo que trata la §5. Se afirma el
@@ -2268,21 +2279,27 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
     let address = loopback(a_free_port());
     let target = destination.dir.clone();
 
-    let receiving = thread::spawn(move || {
+    let receiving = thread::spawn(move || -> String {
         let Ok(mut session) = Session::open_receiver(address, &target, None) else {
-            return;
+            return "el receptor no llego a abrirse".to_owned();
         };
         let _ = session.step();
         let _ = session.step();
         session.cancel();
         // El paso que lleva la cancelación al cable.
         let _ = session.step();
+        let note = format!(
+            "receptor -- adios: {:?}, final del cable: {:?}",
+            session.farewell_note(),
+            session.wire_ending()
+        );
         // **Y a partir de aquí no lee ni un byte más**, con el socket abierto.
         // Seis segundos: mucho más de lo que el emisor debería tardar en
         // enterarse, para que «tardó lo que tardó el otro en cerrar» no pueda
         // pasar por «se enteró».
         thread::sleep(std::time::Duration::from_secs(6));
         drop(session);
+        note
     });
 
     let mut sender = open_sender_when_ready(address, &root.dir, &[file]);
@@ -2296,7 +2313,10 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
         }
     }
     let elapsed = started.elapsed();
-    let _ = receiving.join();
+    let receiver_note = receiving
+        .join()
+        .unwrap_or_else(|_| "el hilo receptor se cayo".to_owned());
+    println!("{receiver_note}");
 
     let ending = sender
         .as_ref()
@@ -2307,7 +2327,7 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
     assert!(
         !matches!(outcome, Err(SessionError::PeerUnreachable)),
         "el emisor leyo la cancelacion como «el otro aparato no responde»: \
-         {outcome:?}, final del cable: {ending}, tras {elapsed:?}"
+         {outcome:?}, final del cable: {ending}, tras {elapsed:?}. {receiver_note}"
     );
     assert!(
         matches!(
