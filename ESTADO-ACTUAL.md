@@ -1067,6 +1067,13 @@ corrida en `07278ff`, el commit que el informe nombra.
   máquinas. Que dos aparatos se encuentren por un cable **no está verificado**.
 - **`NsdManager` no está ejercitado.** Las pruebas Dart usan un `MethodChannel`
   falso: prueban el lado Dart, no Android.
+- **Y una cosa que hasta hoy no se sabía que no funcionaba: recibir no podía
+  arrancar.** `Isolate.run` serialisa el ámbito léxico entero del closure, y en
+  el del receptor viajaba la biblioteca nativa por el callback `decide` de quien
+  llama. Lo que salía era `QyroFailureKind.internal` — «algo interno falló».
+  Arreglado el 2026-09-03 (QYR-0403) y **comprobado por CI**, que es la primera
+  vez que `two_process_pairing_test` pasa. Lo que sigue sin comprobar es lo de
+  siempre: que funcione **entre dos aparatos**.
 - **El permiso de cámara no falta** (QYR-0378): `CAMERA` está en
   `app/src/main/AndroidManifest.xml` con `uses-feature required="false"` —un
   aparato sin cámara sigue siendo un aparato Qyro, le quedan la red, el cable
