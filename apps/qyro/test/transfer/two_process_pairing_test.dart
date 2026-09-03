@@ -133,10 +133,38 @@ void main() {
         final address = await service.addressOfPairingString(code!);
         expect(address, isNotNull, reason: 'our own code did not parse');
 
-        final sender = await Process.run(
+        // **Y aquí hay que esperar al SOCKET, no al código** (QYR-0403).
+        //
+        // El paso 2 de arriba celebra —con razón— que el código exista antes de
+        // que nadie conecte: el puerto es fijo (ADR-0041 §3), así que la
+        // dirección se puede componer sin haber abierto nada. Esa misma virtud
+        // lo inutiliza como señal de «ya puedes conectar», y esta prueba lo
+        // usaba como tal: en CI el segundo proceso llegaba antes que el `bind` y
+        // salía con `ConnectionRefused`.
+        //
+        // Y **no hay una señal mejor que pedir**, que es el hallazgo:
+        // `QyroConnecting` —cuya documentación dice «esperando a que un par
+        // conecte»— se emite **antes** de lanzar el isolate que abre el socket.
+        // El producto no dice nunca «ya estoy escuchando».
+        //
+        // Mientras eso no exista, se reintenta, y **sólo** ante un rechazo de
+        // conexión: eso significa que no había nadie escuchando, luego no se
+        // gastó ningún `accept` y no se está tapando un fallo de verdad.
+        var sender = await Process.run(
           smoke!,
           <String>['send', address!, original.path],
         );
+        for (var attempt = 0;
+            attempt < 20 &&
+                sender.exitCode != 0 &&
+                '${sender.stderr}'.contains('ConnectionRefused');
+            attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+          sender = await Process.run(
+            smoke!,
+            <String>['send', address, original.path],
+          );
+        }
         expect(
           sender.exitCode,
           0,

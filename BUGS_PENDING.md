@@ -12,6 +12,80 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0403 — El receptor nunca dice «ya estoy escuchando», y dos guardas nunca se habían ejecutado
+
+- Estado: **ABIERTO** el hallazgo de producto; **CERRADAS** las dos guardas
+- Severidad: **MEDIA** — no corrompe nada, pero produce un «conexión rechazada»
+  que manda a buscar donde no es
+- Fecha: 2026-09-03
+
+**Cómo apareció.** Arreglar el formato de Dart (QYR-0400, primera vuelta) y luego
+un `import` sin usar destapó una cosa que llevaba tiempo tapada: **`flutter test`
+no se estaba ejecutando**. `dart format` fallaba antes, y un paso rojo esconde
+todo lo que va detrás. En la primera corrida en que la suite de Dart corrió de
+verdad salieron **dos guardas que nunca habían pasado por una máquina**.
+
+### 1. El hallazgo de producto: no hay señal de «socket abierto»
+
+`two_process_pairing_test` esperaba a que `ownPairingString()` contestara y
+entonces lanzaba el segundo proceso. Falló con
+`dial: the peer's socket stopped existing (ConnectionRefused)`.
+
+**Y el motivo es una virtud usada como señal.** El paso 2 de esa misma prueba
+celebra —con razón— que el código exista **antes** de que nadie conecte: el
+puerto es fijo (ADR-0041 §3), así que la dirección se compone sin haber abierto
+nada, que es justo lo que permite leerle el código a alguien mientras el otro
+lado todavía arranca. Esa misma propiedad lo **inutiliza** como señal de «ya
+puedes conectar».
+
+**Lo grave es que no hay una señal mejor que pedir.** `QyroConnecting`, cuya
+documentación dice literalmente «esperando a que un par conecte», se emite en
+`native_transfer_service.dart` **antes** de lanzar el isolate que abre el socket:
+
+```dart
+yield const QyroConnecting();
+// ... y AQUÍ se lanza el worker que hace el bind
+```
+
+Así que la pantalla escribe «esperando» —`receiveWaiting`— en un momento en que
+puede no haber nadie escuchando. Para quien tiene el teléfono delante eso no es
+una carrera de laboratorio: lee el código en voz alta, el otro lo teclea deprisa,
+y lo que sale es «no se pudo conectar» sobre un aparato que está a medio segundo
+de estar listo. **Es la misma familia de defecto que este proyecto lleva doce
+fichas encontrando: un estado que afirma algo antes de que sea verdad.**
+
+**Qué haría falta y por qué no se hace hoy.** Que el isolate avise cuando el
+`bind` está hecho y que `QyroConnecting` se emita **entonces**. Es un mensaje
+nuevo a través del límite del isolate, y esta sesión **no tiene Flutter**: sería
+el tercer cambio a ciegas de una tanda en la que dos cambios a ciegas ya
+fallaron. Se deja la ficha con el diagnóstico entero y la prueba se sostiene con
+un reintento acotado **sólo ante un rechazo de conexión** —que significa que no
+había nadie escuchando, luego no se gastó ningún `accept` y no se está tapando
+ningún fallo de verdad.
+
+### 2. La guarda del botón de Recibir, que no podía ver lo que afirmaba
+
+`el boton de recibir se apaga mientras uno escucha` (QYR-0389) esperaba `null` y
+encontraba el callback. **El código está bien**: `onPressed: _listening ? null :
+_listen` y `_listen` pone la bandera antes de su primer `await`.
+
+La que estaba mal era la prueba. El doble devolvía
+`Stream.fromIterable(const [])`, que **se cierra en el mismo microtask en que se
+escucha**: `_listen` terminaba —y el botón volvía a encenderse— antes de que la
+aserción mirara. «Mientras escucha» duraba menos que un `pump`.
+
+Arreglado dándole al doble un `StreamController` que no se cierra solo, así que
+escuchar dura lo que la prueba quiera. **La propiedad no se tocó**: se arregló el
+instrumento, no la vara de medir.
+
+### Lo que las dos tienen en común, y vale más que las dos
+
+Las dos se escribieron, se leyeron y se dieron por buenas **sin haberse
+ejecutado nunca**, escondidas detrás de un paso de formato en rojo. Es la lección
+de esta tanda entera, ya escrita en QYR-0399 con otras palabras: **una puerta
+local verde no es la puerta**, y un paso rojo tapa a todos los de detrás. El
+orden de los pasos de CI decide qué defectos se pueden ver.
+
 ## QYR-0402 — Un segmento absoluto de Windows se llevaba la raíz de destino por delante
 
 - Estado: **CERRADO**

@@ -4,6 +4,8 @@
 // a product or a demo. Each one is reachable here through a fake service, which
 // is the reason the screens talk to an interface and not to the FFI.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +57,15 @@ final class FakeService implements QyroTransferService {
   List<QyroListenAddress> candidates;
   List<QyroPicked> picked;
   List<QyroTransferState> states;
+
+  /// Un `receive` que **no se cierra solo**, para poder mirar «mientras
+  /// escucha».
+  ///
+  /// `Stream.fromIterable(const [])` se cierra en el mismo microtask en que se
+  /// escucha, así que «escuchando» dura menos que un `pump` y la pantalla ya ha
+  /// vuelto a su estado de reposo cuando la aserción llega. Con esto, escuchar
+  /// dura lo que la prueba quiera.
+  StreamController<QyroTransferState>? receiveHold;
   List<QyroHistoryEntry> entries;
   final forgotten = <String>[];
 
@@ -101,7 +112,7 @@ final class FakeService implements QyroTransferService {
     required String destination,
     required Future<bool> Function(QyroAwaitingDecision offer) decide,
   }) =>
-      Stream<QyroTransferState>.fromIterable(states);
+      receiveHold?.stream ?? Stream<QyroTransferState>.fromIterable(states);
 
   @override
   Future<List<QyroHistoryEntry>> history() async => entries;
@@ -201,7 +212,17 @@ void main() {
       //
       // Un servicio que no emite nada es exactamente un receptor esperando: es
       // el estado que dura, y el que hay que poder ver.
-      final service = FakeService(states: const <QyroTransferState>[]);
+      // **Y hay que hacer que escuchar DURE.** Con
+      // `Stream.fromIterable(const [])` el stream se cierra en el mismo
+      // microtask en que se escucha, así que `_listen` termina —y el botón
+      // vuelve a encenderse— antes de que la aserción mire. Esta prueba se
+      // escribió así y **nunca llegó a ejecutarse**: `dart format` fallaba
+      // antes que `flutter test`, y el paso rojo tapaba al de detrás. Aprobaba
+      // en la cabeza de quien la escribió y no en ninguna máquina.
+      final hold = StreamController<QyroTransferState>();
+      addTearDown(hold.close);
+      final service = FakeService(states: const <QyroTransferState>[])
+        ..receiveHold = hold;
       await tester.pumpWidget(_wrap(ReceiveScreen(service: service)));
       await tester.pumpAndSettle();
 
