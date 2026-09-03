@@ -86,4 +86,4 @@ pub use listener::{Listener, PendingSlot, REFUSAL_TOO_MANY_PENDING, dial, refusa
 pub use pairing::{
     PAIRING_FINGERPRINT_LEN, PAIRING_PREFIX, PAIRING_SEPARATOR, PairingEndpoint, PairingError,
 };
-pub use stream::FrameStream;
+pub use stream::{FrameStream, Wrote};

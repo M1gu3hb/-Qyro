@@ -109,6 +109,25 @@ pub struct FrameStream {
     read_calls: usize,
 }
 
+/// Cómo terminó [`FrameStream::write_frame_watching`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Wrote {
+    /// El frame entero salió.
+    Whole,
+    /// **No salió ni un byte** y el par ha hablado. El frame está intacto y el
+    /// llamante puede devolverlo a la cola.
+    NothingPeerSpoke,
+    /// Salió **parte** del frame y el par ha hablado, y el otro lado lleva un
+    /// cuarto de segundo sin aceptar un byte más.
+    ///
+    /// **El flujo de salida queda truncado a media trama**, así que la sesión no
+    /// puede continuar: ADR-0018 prohíbe resincronizar porque resincronizar es
+    /// adivinar. Se para igualmente porque la alternativa —seguir empujando
+    /// contra alguien que ya ha dicho algo y no lee— es lo que dejaba a un
+    /// emisor sordo a un cancelar hasta que el otro cerraba.
+    PartialPeerSpoke,
+}
+
 impl FrameStream {
     /// Wraps a connected socket.
     ///
@@ -281,11 +300,12 @@ impl FrameStream {
 
     /// Escribe un frame **sin quedarse sordo mientras lo hace**.
     ///
-    /// `Ok(true)` — el frame entero salió. `Ok(false)` — **no salió ni un byte
-    /// de él** porque el otro lado no acepta más y, mientras tanto, ha mandado
-    /// algo: el frame **está intacto**, el llamante puede devolverlo a la cola y
-    /// leer. Nunca se para a medio frame, así que no hay nada que
-    /// resincronizar (ADR-0018).
+    /// Devuelve [`Wrote`]: entero, parado antes del primer byte, o parado a
+    /// media trama. Los tres son distintos para el llamante y por eso son tres
+    /// y no un `bool` — la primera versión de esto devolvía `bool`, no
+    /// distinguía «parado a medias» de «sigue intentándolo», y **se quedaba
+    /// girando con la cancelación ya leída en el buffer**: la absorbía, veía que
+    /// llevaba bytes escritos, y volvía a intentar la escritura para siempre.
     ///
     /// **QYR-0400, y la tercera vuelta de una ficha que se arregló dos veces
     /// mal.** [`Self::write_frame`] usa `write_all` sobre un socket bloqueante:
@@ -308,7 +328,7 @@ impl FrameStream {
     ///
     /// Las mismas que [`Self::write_frame`], más las de lectura si el socket
     /// falla al absorber lo que llega.
-    pub fn write_frame_watching(&mut self, encoded: &[u8]) -> Result<bool, NetError> {
+    pub fn write_frame_watching(&mut self, encoded: &[u8]) -> Result<Wrote, NetError> {
         self.socket
             .set_nonblocking(true)
             .map_err(|error| NetError::SocketFailed {
@@ -333,8 +353,15 @@ impl FrameStream {
 
     /// El bucle de [`Self::write_frame_watching`], con el socket ya no
     /// bloqueante.
-    fn push_watching(&mut self, encoded: &[u8]) -> Result<bool, NetError> {
+    fn push_watching(&mut self, encoded: &[u8]) -> Result<Wrote, NetError> {
+        /// Cuánto se sigue intentando terminar un frame ya empezado después de
+        /// oír al par. Corto: lo que se está protegiendo es no truncar una
+        /// trama, y si en un cuarto de segundo el otro no ha aceptado un solo
+        /// byte es que no va a aceptarlo.
+        const GRACIA_A_MEDIA_TRAMA: Duration = Duration::from_millis(250);
+
         let mut sent = 0_usize;
+        let mut heard_at: Option<Instant> = None;
         loop {
             let Some(rest) = encoded.get(sent..) else {
                 return Err(NetError::SocketFailed {
@@ -343,7 +370,7 @@ impl FrameStream {
                 });
             };
             if rest.is_empty() {
-                return Ok(true);
+                return Ok(Wrote::Whole);
             }
             match self.socket.write(rest) {
                 // Cero escritos sobre un buffer no vacío no es un error del
@@ -361,7 +388,17 @@ impl FrameStream {
                     // cable**, que es lo que no se hacía.
                     let arrived = self.absorb_once()?;
                     if arrived && sent == 0 {
-                        return Ok(false);
+                        return Ok(Wrote::NothingPeerSpoke);
+                    }
+                    if arrived {
+                        heard_at.get_or_insert_with(Instant::now);
+                    }
+                    // Ya empezado el frame, se le da un plazo corto a terminarlo
+                    // antes de admitir que no va a salir. Sin esto el bucle
+                    // giraba para siempre **con la cancelación ya en el
+                    // decodificador**, que es peor que no haberla leído.
+                    if heard_at.is_some_and(|at| at.elapsed() >= GRACIA_A_MEDIA_TRAMA) {
+                        return Ok(Wrote::PartialPeerSpoke);
                     }
                     // Se duerme **siempre** que no se vuelve, y no sólo cuando
                     // no llegó nada. Con la siesta dentro de un `if !arrived`,

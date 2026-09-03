@@ -214,6 +214,11 @@ pub struct Session {
     ///
     /// Sólo para diagnóstico, como [`Self::wire_ending`].
     farewell_note: Option<&'static str>,
+    /// Si una trama propia se quedó a medias porque el par habló y dejó de leer.
+    ///
+    /// Cuando esto es cierto la sesión **no puede continuar**, diga lo que diga
+    /// el motor: lo que quedó en el cable no se completa nunca.
+    stream_truncated: bool,
     /// Si el último paso del emisor no produjo un solo frame.
     ///
     /// QYR-0393. Un emisor sin nada que mandar no está midiendo la red: está
@@ -569,6 +574,7 @@ impl Session {
             expired_reads: 0,
             wire_ending: None,
             farewell_note: None,
+            stream_truncated: false,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -657,6 +663,7 @@ impl Session {
             expired_reads: 0,
             wire_ending: None,
             farewell_note: None,
+            stream_truncated: false,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -698,6 +705,7 @@ impl Session {
             expired_reads: 0,
             wire_ending: None,
             farewell_note: None,
+            stream_truncated: false,
             last_step_at: Instant::now(),
             nothing_left_to_send: false,
         })
@@ -1087,15 +1095,25 @@ impl Session {
         let mut queue = core::mem::take(&mut self.outbound).into_iter();
         while let Some(frame) = queue.next() {
             match self.stream.write_frame_watching(&frame) {
-                Ok(true) => {}
+                Ok(qyro_net::Wrote::Whole) => {}
                 // **El par no acepta más y ha dicho algo** (QYR-0400). No entró
                 // ni un byte de este frame, así que vuelve entero a la cola y el
                 // paso se va a leer. Escribir más contra alguien que ya ha
                 // hablado es lo que dejaba al emisor sordo hasta que el otro
                 // cerraba.
-                Ok(false) => {
+                Ok(qyro_net::Wrote::NothingPeerSpoke) => {
                     self.outbound.push(frame);
                     self.outbound.extend(queue);
+                    return Ok(());
+                }
+                // Lo mismo, pero el frame salió **a medias**: no vuelve a la
+                // cola, porque media trama en el cable no se completa después
+                // (ADR-0018 prohíbe resincronizar). Se lee lo que el par ha
+                // dicho —que es lo que da el nombre correcto al final— y la
+                // sesión termina aquí en cualquier caso.
+                Ok(qyro_net::Wrote::PartialPeerSpoke) => {
+                    self.outbound.extend(queue);
+                    self.stream_truncated = true;
                     return Ok(());
                 }
                 Err(error) => return Err(noting(&mut self.wire_ending, &error)),
@@ -1281,6 +1299,15 @@ impl Session {
                 self.progress.item = engine.item_in_flight();
                 finished = engine.phase() == Phase::Done;
             }
+        }
+        // Una trama propia quedó a medias (QYR-0400). Lo de arriba ya entregó
+        // lo que el par dijo, así que si eso terminaba la sesión el nombre
+        // correcto ya salió por su camino. Si no la terminaba, la sesión termina
+        // igual y con la verdad: el cable de salida está roto por nuestra
+        // propia mano, y seguir escribiendo en él sería mandar bytes que nadie
+        // puede volver a alinear.
+        if self.stream_truncated && !finished {
+            return Err(self.fail(SessionError::PeerUnreachable));
         }
         if finished {
             // The step that ends the transfer is the last one a caller makes, so

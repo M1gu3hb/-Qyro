@@ -1132,6 +1132,38 @@ la primera vez que se sepa cuál de las dos es.
 vez que un arreglo a ciegas falló, lo que faltaba no era una idea mejor: era un
 dato. Y el dato estaba siempre detrás de un `.ok()` o un `let _ =`.
 
+### Sexta vuelta: el arreglo de la cuarta tenía un agujero, y era el mismo pecado
+
+Releyendo `write_frame_watching` a la contra apareció el motivo por el que no
+movió una milésima el número de CI.
+
+El bucle sólo devolvía «para, que el par ha hablado» cuando **no había escrito ni
+un byte** de ese frame. Si el atasco pillaba el frame **a medias** —que es lo
+normal: el buffer del otro se llena en mitad de una trama de 64 KiB— entonces
+absorbía la cancelación, veía `sent > 0`, y **volvía a intentar la escritura para
+siempre**, con la cancelación ya dentro del decodificador.
+
+**Leer una cancelación y no actuar sobre ella es peor que no haberla leído.** Es
+literalmente el mismo pecado que esta ficha lleva cinco vueltas persiguiendo —un
+dato que se tiene y se tira— cometido esta vez por el arreglo.
+
+**El arreglo del arreglo.** `write_frame_watching` deja de devolver un `bool`,
+que no distinguía «parado a medias» de «sigue intentándolo», y devuelve
+[`Wrote`]: `Whole`, `NothingPeerSpoke` (frame intacto, vuelve a la cola) o
+`PartialPeerSpoke` (media trama en el cable). Para el tercero hay un plazo corto
+—**250 ms** desde que se oye al par— antes de admitir que el frame no va a
+salir: lo que se protege es no truncar una trama, y si en un cuarto de segundo el
+otro no ha aceptado un solo byte, no va a aceptarlo.
+
+Y `PartialPeerSpoke` **termina la sesión sin excepción**: lo que quedó en el
+cable no se completa nunca (ADR-0018 prohíbe resincronizar porque resincronizar
+es adivinar). Se entrega primero lo que el par dijo —para que el nombre del final
+sea el suyo, `Cancelled` o `TransferRefused`— y sólo si eso no terminaba la
+sesión se sale con un error, porque seguir escribiendo sería mandar bytes que
+nadie puede volver a alinear.
+
+Medido en Linux tras el cambio: **275, 280, 284 ms**. El rango no se mueve.
+
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
 segundos.
