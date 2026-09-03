@@ -65,56 +65,81 @@ fn no_rust_source_carries_a_raw_nul_byte() {
     }
 }
 
-/// The QR decoder must never become a normal dependency.
+/// El decodificador de QR **sí** viaja en el producto, y su aviso sigue argumentado.
 ///
-/// **This guard is the other half of an entry in `.cargo/audit.toml`.** Two
-/// unsoundness advisories against `lru` 0.12.5 are ignored there, and the whole
-/// argument for ignoring them is that `lru` arrives through `rqrr`, which is a
-/// **dev**-dependency and reaches no artefact Qyro distributes.
+/// **Esta guarda decía lo contrario y pasaba mirando el sitio equivocado**
+/// (QYR-0399). Se llamaba `the_qr_decoder_never_becomes_a_shipped_dependency` y
+/// leía **sólo** `qyro_cli/Cargo.toml`, buscando `rqrr` en la mitad normal. Ahí
+/// no está, así que pasaba — mientras `rqrr` llegaba igual, por
+/// `qyro_eye`, que este crate nombra directamente **y** vuelve a llegar por
+/// `qyro_session`. El decodificador lleva fases dentro del binario.
 ///
-/// An argument in a comment is a promise nobody checks. If somebody ever moves
-/// `rqrr` into `[dependencies]` — to add a scanner, say — the audit exception
-/// becomes false and silently stays. This fails instead.
+/// Y la decisión no fue un descuido: `qyro qr` **comprueba que su propio código
+/// se lee** antes de decirle a nadie que lo escanee, y ése es el llamante de
+/// producción de `qyro_eye` en esta cara (`flows.rs`). ADR-0048 lo eligió.
 ///
-/// It also enforces ADR-0044 §6 in the direction that matters: the CLI draws and
-/// the phone reads, so a decoder in the shipped binary would be hundreds of
-/// kilobytes of camera plumbing for a machine with no camera.
+/// Así que lo que hay que guardar no es la ausencia del decodificador: es que
+/// **su aviso siga siendo una alarma con argumento y no una silenciada.**
+/// `.cargo/audit.toml` lo dice en su primera línea — «un ignore sin argumento es
+/// una alarma silenciada, y una alarma silenciada es peor que ninguna porque se
+/// lee como *limpio*» — y esta guarda es quien lo comprueba.
 #[test]
-fn the_qr_decoder_never_becomes_a_shipped_dependency() {
-    let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
-        .expect("this crate's manifest is readable");
+fn the_shipped_qr_decoder_keeps_its_advisory_argued() {
+    fn normal_dependencies(manifest: &str) -> String {
+        let declared: String = manifest
+            .lines()
+            .filter(|line| !line.trim_start().starts_with('#'))
+            .collect::<Vec<&str>>()
+            .join("\n");
+        declared
+            .split("[dev-dependencies]")
+            .next()
+            .unwrap_or_default()
+            .to_owned()
+    }
 
-    // Comments stripped first, exactly as `production_source` does for Rust:
-    // the prose explaining *why* rqrr is dev-only sits above the section header,
-    // so a naive split finds the word in the normal half and this guard failed
-    // on itself the first time it ran. It was right to -- it was reading a
-    // comment as a dependency -- and the fix is to read what the manifest
-    // declares rather than what it says.
-    let declared: String = manifest
-        .lines()
-        .filter(|line| !line.trim_start().starts_with('#'))
-        .collect::<Vec<&str>>()
-        .join(
-            "
-",
-        );
-    let normal = declared
-        .split("[dev-dependencies]")
-        .next()
-        .expect("a manifest has a first section")
-        .to_owned();
+    let read = |path: &str| -> String {
+        let full = concat!(env!("CARGO_MANIFEST_DIR"), "/../../..").to_owned() + "/" + path;
+        std::fs::read_to_string(&full).unwrap_or_else(|error| panic!("{path}: {error}"))
+    };
 
+    // **El camino real, en dos saltos declarados.** Preguntarlo así y no por el
+    // manifiesto de este crate es lo que arregla el defecto: `rqrr` no aparece
+    // aquí y llega igual.
+    let cli = normal_dependencies(&read("rust/crates/qyro_cli/Cargo.toml"));
     assert!(
-        !normal.contains("rqrr"),
-        "rqrr moved into the normal dependencies. Two `lru` advisories are \
-         ignored in .cargo/audit.toml on the grounds that it is dev-only, and \
-         that argument is now false -- delete the ignores and deal with them, \
-         or put rqrr back."
+        cli.contains("qyro_eye"),
+        "qyro_cli ya no nombra qyro_eye. Si el decodificador dejo de viajar, \
+         esta guarda sobra y el ignore de .cargo/audit.toml tambien: borralos \
+         los dos en el mismo commit."
     );
-    // And the control: the guard is looking at a manifest that really does
-    // mention rqrr somewhere, or it would pass on a file it failed to read.
+    let eye = normal_dependencies(&read("rust/crates/qyro_eye/Cargo.toml"));
     assert!(
-        declared.contains("rqrr"),
-        "this guard stopped finding rqrr at all, so it is passing vacuously"
+        eye.contains("rqrr"),
+        "qyro_eye ya no depende de rqrr en su mitad normal, asi que el argumento \
+         de .cargo/audit.toml -- que el decodificador viaja -- dejo de ser cierto"
+    );
+
+    // Y el aviso, con su argumento y su condición de caducidad escritas.
+    let audit = read(".cargo/audit.toml");
+    assert!(
+        audit.contains("RUSTSEC-2026-0253"),
+        "el aviso del decodificador que SI viaja desaparecio de .cargo/audit.toml \
+         sin que este guardian se enterara"
+    );
+    assert!(
+        audit.contains("Borrala cuando") || audit.contains("Bórrala cuando"),
+        "el ignore de RUSTSEC-2026-0253 perdio su condicion de caducidad, asi \
+         que es una alarma silenciada -- que es lo que la primera linea de ese \
+         archivo prohibe"
+    );
+
+    // El control: sin él, un `read` que devolviera cadenas vacías haría pasar
+    // las dos primeras afirmaciones al revés y ésta al derecho.
+    assert!(
+        !cli.contains("rqrr"),
+        "rqrr aparece ahora como dependencia DIRECTA de qyro_cli. No es un \
+         fallo, pero esta guarda mide el camino de dos saltos: reescribela para \
+         el camino nuevo en vez de dejarla midiendo otro."
     );
 }

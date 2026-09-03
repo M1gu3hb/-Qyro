@@ -238,6 +238,35 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0399: CI llevaba dias en rojo en `main` y la puerta local decia verde.**
+Tres workflows -- Documentation, CLI builds y Windows 7 -- fallaban desde antes
+de esta tanda, y los tres guardianes tenian razon:
+
+1. **El binario de Windows 7 no arrancaba en Windows 7.** Importaba
+   `vcruntime140.dll`. La causa es un nombre: `.cargo/config.toml` da
+   `+crt-static` a `*-pc-windows-msvc`, y los objetivos de la fase 17 se llaman
+   `*-win7-windows-msvc` -- otro triple, y Cargo empareja por nombre exacto. Se
+   construian sin enlazado estatico, que es lo unico que esa fase existe para
+   conseguir.
+2. **Un guardian que fallaba PORQUE el binario estaba bien.** `pipefail` mas
+   `ldd`, que sale distinto de cero sobre un estatico: el `grep` encontraba «not
+   a dynamic executable» y la tuberia salia en fallo igual. Imprimia como prueba
+   de culpabilidad la frase que lo absolvia.
+3. **Un techo de tamano escrito para otro binario.** 1649 KB contra 1500, con un
+   comentario que decia que este binario «no lleva ni QR ni serie todavia».
+   Lleva las dos, y ademas el decodificador de QR, porque `qyro qr` comprueba que
+   su propio codigo se lee. 57 crates externos, todos elegidos.
+
+Y de propina, el guardian que **pasaba mirando el sitio equivocado**:
+`the_qr_decoder_never_becomes_a_shipped_dependency` leia solo el manifiesto del
+CLI. `rqrr` no esta ahi y llega igual, por `qyro_eye`. El archivo de auditoria ya
+lo documentaba honestamente; el guardian no. Sustituido por el que si es cierto.
+
+**Lo que deja escrito: una puerta local verde no es la puerta.** `cargo test
+--workspace` no construye para Windows ni para musl, y el chequeo de commit
+verificado **se salta** en un clon superficial y **bloquea** en CI. Los cuatro
+fallos vivian en ese hueco.
+
 **QYR-0381 CERRADA, y lo que estaba abierto no era lo que la ficha decia.** La
 ficha decia «CERRADO en el CLI, abierto en la GUI», y predijo bien la forma del
 arreglo: otro simbolo y una segunda enmienda de ADR-0032. Lo que no vio es que

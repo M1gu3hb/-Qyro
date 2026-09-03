@@ -763,6 +763,90 @@ que importa —que lo salvable quede salvado— está hecho; el CLI dice ahora
 **La pregunta que cierra esta ficha:** ¿puede un archivo hundir a los que vienen
 detrás? **No.**
 
+## QYR-0399 — CI llevaba días en rojo en `main`, y los tres guardianes tenían razón
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** — uno de los tres decía que el binario de Windows 7 no
+  arranca en Windows 7, y llevaba días diciéndolo
+- Fecha: 2026-09-03
+
+**Lo primero, porque cambia cómo se lee todo lo demás:** `cargo test --workspace`
+en Linux estaba verde y **CI estaba rojo**. Tres workflows —`Documentation`,
+`CLI builds` y `Windows 7 and 32-bit`— fallaban en `main` desde al menos dos
+commits antes de esta tanda. La puerta local y la puerta de verdad decían cosas
+distintas, y la de verdad tenía razón las tres veces.
+
+### 1. El binario de Windows 7 no arrancaba en Windows 7
+
+`check_win7_imports.ps1`: *«[BLOCKER] `i686-win7-windows-msvc/release/qyro.exe`
+importa `vcruntime140.dll`, que Windows 7 no tiene. No arranca allí.»*
+
+**La causa es un nombre.** `.cargo/config.toml` da `+crt-static` a
+`x86_64-pc-windows-msvc` y a `i686-pc-windows-msvc`. Los objetivos de la fase 17
+se llaman **`*-win7-windows-msvc`** — otro triple — y Cargo empareja la tabla por
+nombre exacto. Así que esos dos se construían **sin enlazado estático**, con la
+dependencia del runtime de C que toda la fase 17 existe para evitar.
+
+El guardián no estaba roto: estaba haciendo su trabajo, y lo que faltaba eran
+cuatro líneas de configuración.
+
+### 2. Un guardián que fallaba **porque** el binario estaba bien
+
+`CLI builds`, i686 musl: *«[BLOCKER] … is dynamically linked:»* seguido de, como
+prueba, la frase **«not a dynamic executable»** — que es exactamente lo que dice
+un binario estático.
+
+`set -o pipefail` arriba del paso, y `ldd` sale con código distinto de cero sobre
+un estático en algunas plataformas. Así que `ldd … | grep -q 'not a dynamic
+executable'` tenía un `grep` que **sí** encontraba la frase y una tubería que
+salía en fallo igualmente. La salida se captura ahora antes de mirarla.
+
+### 3. Un techo de tamaño escrito para otro binario
+
+`CLI builds`, Windows: 1649 KB contra un techo de 1500. El comentario que lo
+defendía decía que este binario *«no lleva ni QR ni serie todavía»*. Lleva las
+dos desde hace fases, más una tercera cosa: **el decodificador de QR**, porque
+`qyro qr` comprueba que su propio código se lee antes de pedirle a nadie que lo
+escanee.
+
+Preguntado al resolutor y no estimado —`cargo tree -p qyro_cli --depth 1`—: 57
+crates externos y **todos elegidos**. El techo pasa a 2000 KB con el inventario
+escrito al lado; sigue existiendo para lo que existía, que es cazar una
+dependencia que nadie eligió.
+
+### Y el guardián que pasaba mirando el sitio equivocado
+
+`the_qr_decoder_never_becomes_a_shipped_dependency` exigía que `rqrr` no fuera
+dependencia normal. Leía **sólo** `qyro_cli/Cargo.toml`. Ahí no está — y llega
+igual, por `qyro_eye`, que este crate nombra directamente **y** vuelve a llegar
+por `qyro_session`:
+
+```
+rqrr v0.10.1
+└── qyro_eye
+    ├── qyro_cli
+    └── qyro_session
+        └── qyro_cli
+```
+
+Y con él `lru`, cuyo aviso `.cargo/audit.toml` ya documenta honestamente como
+*«la primera vez que este proyecto acepta un aviso en código que sí viaja en el
+producto»*. O sea: **el archivo de auditoría estaba al día y el guardián no.**
+
+No se «arregla» para que falle: la decisión de que el decodificador viaje es de
+ADR-0048 y es deliberada. Se sustituye por la que sí es cierta hoy —
+`the_shipped_qr_decoder_keeps_its_advisory_argued` — que recorre el camino de dos
+saltos declarado y exige que el aviso conserve **su argumento y su condición de
+caducidad**, que es lo que la primera línea de `audit.toml` prohíbe perder.
+Comprobado con dientes quitándole esa condición.
+
+### Lo que esto deja escrito
+
+**Una puerta local verde no es la puerta.** `cargo test --workspace` no construye
+para Windows, ni para musl, ni corre `check_docs_consistency.sh` con la historia
+completa — el chequeo de commit verificado se **salta** en un clon superficial y
+**bloquea** en CI. Los cuatro fallos vivían justo en ese hueco.
+
 ## QYR-0381 — La huella del código de emparejamiento se validaba y se tiraba
 
 - Estado: **CERRADO.** CLI el 2026-08-31, GUI tecleada en QYR-0392, **GUI

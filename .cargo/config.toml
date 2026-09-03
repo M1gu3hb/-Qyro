@@ -31,6 +31,23 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [target.i686-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
 
+# **Los triples de Windows 7, que son OTROS** (QYR-0399).
+#
+# Los objetivos de la fase 17 se llaman `*-win7-windows-msvc`, no
+# `*-pc-windows-msvc`. Cargo empareja la tabla por el nombre exacto del triple,
+# asi que las dos de arriba **no los cubren**: se construian sin `crt-static`,
+# importaban `vcruntime140.dll` -- que Windows 7 no trae -- y
+# `check_win7_imports.ps1` lo decia en cada corrida.
+#
+# El guardian tenia razon y llevaba dias diciendolo: el binario de Windows 7 no
+# arrancaba en Windows 7. Lo que faltaba no era el aviso, eran estas cuatro
+# lineas.
+[target.x86_64-win7-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-win7-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
 # ---------------------------------------------------------------------------
 # Android: paginas de 16 KB, y no de 4 (QYR-0394).
 #

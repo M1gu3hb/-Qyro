@@ -53,11 +53,24 @@ jobs:
           $kb = [math]::Round((Get-Item $exe).Length / 1KB)
           $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
           Write-Host "${{ matrix.target }}  $kb KB  $hash"
-          # R8 §6 expects 750-950 KB for a binary carrying QR and serial. This
-          # one carries neither yet, so a smaller number is correct; a much
-          # larger one means a dependency arrived that nobody chose.
-          if ($kb -gt 1500) {
-            Write-Error "[BLOCKER] $kb KB. R8 §6 puts the ceiling around 950 KB for a fuller binary; something was pulled in."
+          # **El techo se movio a 2000 KB el 2026-09-03, y aqui esta por que**
+          # (QYR-0399). El comentario anterior decia que este binario "no lleva
+          # ni QR ni serie todavia, asi que un numero mas pequeno es correcto".
+          # Dejo de ser verdad hace fases: hoy lleva las dos, y una tercera cosa
+          # que R8 §6 no previo.
+          #
+          # Lo que hay dentro, preguntado al resolutor y no estimado
+          # (`cargo tree -p qyro_cli --depth 1`): qrcode (dibuja), qyro_eye
+          # (DECODIFICA -- `qyro qr` comprueba que su propio codigo se lee, y ese
+          # es su llamante de produccion), qyro_fountain, qyro_serial +
+          # serialport, y qyro_session con la pila de cifrado entera. 57 crates
+          # externos, todos elegidos.
+          #
+          # Medido: 1649 KB en x86_64-msvc. El techo sigue existiendo para lo que
+          # existia -- "llego una dependencia que nadie eligio" -- y 2000 KB deja
+          # margen sin dejar de morder.
+          if ($kb -gt 2000) {
+            Write-Error "[BLOCKER] $kb KB, y el techo son 2000. Mira `cargo tree -p qyro_cli --depth 1`: si hay una dependencia que nadie eligio, esta ahi."
             exit 1
           }
           "### ${{ matrix.target }}`n`n$kb KB`n`n$hash" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
@@ -134,11 +147,20 @@ jobs:
           file "$exe"
           # `ldd` on a static binary says so; on a dynamic one it lists the
           # interpreter. Both outcomes are asserted rather than eyeballed.
-          if ldd "$exe" 2>&1 | grep -qiE 'not a dynamic executable|statically linked'; then
+          #
+          # **La salida se captura antes de mirarla, y no es cosmetica**
+          # (QYR-0399). `ldd` sale con codigo distinto de cero sobre un binario
+          # estatico en algunas plataformas -- i686 musl entre ellas -- y con
+          # `set -o pipefail` arriba, eso convertia una tuberia cuyo `grep` SI
+          # encontraba "not a dynamic executable" en un estado de fallo. El
+          # guardian fallaba EXACTAMENTE cuando el binario estaba bien, e
+          # imprimia como prueba de culpabilidad la frase que lo absolvia.
+          report="$(ldd "$exe" 2>&1 || true)"
+          if grep -qiE 'not a dynamic executable|statically linked' <<<"$report"; then
             echo "[PASS] $exe is static"
           else
             echo "[BLOCKER] $exe is dynamically linked:" >&2
-            ldd "$exe" >&2
+            echo "$report" >&2
             exit 1
           fi
           echo "$(du -k "$exe" | cut -f1) KB  $(sha256sum "$exe" | cut -d' ' -f1)"
