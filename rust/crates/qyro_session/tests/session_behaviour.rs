@@ -271,15 +271,23 @@ fn cancelar_se_lo_dice_al_otro_lado() {
             return "el receptor no llego a abrirse".to_owned();
         };
         // Handshake, manifiesto, y algo de contenido en marcha.
-        let _ = session.step();
-        let _ = session.step();
+        //
+        // **Y se anota cómo fueron.** `step()` empieza con
+        // `if let Some(failure) = self.failed { return Err(failure) }`, así que
+        // **un paso que falló antes deja el cancelar sin efecto**: el tercer
+        // `step()` vuelve por esa línea y no llega nunca a la rama que escribe
+        // el adiós. Tirar estos dos resultados —que es lo que hacía `let _ =`—
+        // borra justo la explicación de por qué no salió nada.
+        let first = session.step();
+        let second = session.step();
         session.cancel();
         // El paso que lleva la cancelación al cable.
-        let _ = session.step();
+        let third = session.step();
         // **Qué le pasó al adiós, dicho por el lado que lo manda.** Sin esto,
         // «no llegó» y «ni se intentó» son la misma frase desde el otro lado.
         let note = format!(
-            "receptor -- adios: {:?}, final del cable: {:?}",
+            "receptor -- pasos: {first:?} / {second:?} / {third:?}, adios: {:?}, \
+             final del cable: {:?}",
             session.farewell_note(),
             session.wire_ending()
         );
@@ -2283,13 +2291,14 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
         let Ok(mut session) = Session::open_receiver(address, &target, None) else {
             return "el receptor no llego a abrirse".to_owned();
         };
-        let _ = session.step();
-        let _ = session.step();
+        let first = session.step();
+        let second = session.step();
         session.cancel();
         // El paso que lleva la cancelación al cable.
-        let _ = session.step();
+        let third = session.step();
         let note = format!(
-            "receptor -- adios: {:?}, final del cable: {:?}",
+            "receptor -- pasos: {first:?} / {second:?} / {third:?}, adios: {:?}, \
+             final del cable: {:?}",
             session.farewell_note(),
             session.wire_ending()
         );
