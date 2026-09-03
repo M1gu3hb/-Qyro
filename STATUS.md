@@ -174,17 +174,22 @@ otra de donde sí sale.
 ### La v1.0.1, que es de donde se descarga hoy
 
 <https://github.com/M1gu3hb/-Qyro/releases/tag/v1.0.1> — prerelease, publicada
-por GitHub Actions sobre `7dfe378`, con los SHA-256 **medidos por la máquina que
+por GitHub Actions sobre `27832cc`, con los SHA-256 **medidos por la máquina que
 construyó los archivos**, sobre los archivos que subió:
 
 | Artefacto | SHA-256 |
 |---|---|
-| `qyro.exe` (terminal) | `42de97fa7c887427bd4d2bebbc7959452a558e41fb5cfeccd25901e60c8becc3` |
-| `app-release-debugkey.apk` | `bfa1d5f77e225f6648a5d328e8ad9e0c5f528181c2451c9e9cad6d55ab86c1f9` |
-| `qyro-windows-x64.zip` | `e26e2b771ac9f1678a2f80b19a279ad6414c021009d3423a996d78f82f307ce3` |
+| `qyro.exe` (terminal) | `22663b6b814fb112d826a3d84256182c4241d7ade2b270dcf53cb4eca6b10f5c` |
+| `app-release-debugkey.apk` | `8979d1602d287f78d8f60c68d433e6b8ce42c50111dc383ce886cfbf9cc456b4` |
+| `qyro-windows-x64.zip` | `05f318183ec96d2b92f5ae49064e5677540d0ef4d144be977968bf3ad5c906f3` |
 
 Los tres coinciden con el `digest` que la API de GitHub devuelve para cada
 asset, comprobado tras publicar y no supuesto.
+
+**Y son la segunda tanda.** La primera se construyó sobre `bb07410` y llevaba
+dentro el defecto de QYR-0403 que **impedía recibir**. Se sustituyó **con cero
+descargas en los cuatro archivos**, comprobado en la API antes de tocar nada: no
+había nadie a quien avisar, y por eso esto es una nota y no una retractación.
 
 **El APK va firmado con la clave de depuración**, que es pública y universal: se
 llama `app-release-debugkey.apk` para que no haya forma de confundirlo, y la

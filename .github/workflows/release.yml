@@ -341,7 +341,7 @@ jobs:
           {
             cat docs/release/NOTAS-v1.0.1.md
             echo
-            echo "## Los dos SHA-256, medidos por la maquina que los construyo"
+            echo "## Los SHA-256, medidos por la maquina que los construyo"
             echo
             echo '```'
             cat dist/upload/SHA256SUMS.txt
