@@ -266,12 +266,22 @@ pub unsafe extern "C" fn qyro_scanner_pairing(
         let Ok(scanner) = table.get_mut(handle) else {
             return QYRO_ERR_BAD_ARGUMENT;
         };
+        // **La longitud se escribe SIEMPRE, y `0` cuando no hay código.**
+        //
+        // El primer borrador volvía por `NOT_READY` sin tocar `out_len`, y quien
+        // llama con capacidad cero para preguntar el tamaño leía entonces lo que
+        // hubiera en un búfer recién reservado — que nadie pone a cero. Un
+        // tamaño de basura es, en el mejor caso, una reserva absurda; en el
+        // peor, un `length` que pasa las comprobaciones del llamante.
+        //
+        // Se descubrió releyendo el lado Dart contra este símbolo, no
+        // ejecutándolo: aquí no hay Flutter. Por eso `out_len` va primero.
         let Some(code) = scanner.pairing() else {
+            // SAFETY: comprobado no nulo al entrar.
+            unsafe { out_len.write(0) };
             return QYRO_ERR_NOT_READY;
         };
         let bytes = code.as_bytes();
-        // La longitud siempre, quepa o no: preguntar con `capacity == 0` es la
-        // forma documentada de saber cuánto reservar.
         // SAFETY: comprobado no nulo al entrar.
         unsafe { out_len.write(bytes.len()) };
 

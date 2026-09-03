@@ -69,11 +69,21 @@ fn un_codigo_leido_cruza_entero_y_con_su_huella() {
     let handle = open();
 
     // Antes de mirar nada no hay código, y eso no es un error de llamada.
-    let mut needed = 0_usize;
+    //
+    // **Y la longitud queda en cero, no sin tocar.** Quien pregunta con
+    // capacidad cero lee `out_len` para saber cuánto reservar; si este camino no
+    // la escribiera, leería lo que hubiera en un búfer recién reservado, que
+    // nadie pone a cero. El centinela de abajo es lo que lo comprueba.
+    let mut needed = 0xDEAD_BEEF_usize;
     assert_eq!(
         unsafe { qyro_scanner_pairing(handle, std::ptr::null_mut(), 0, &raw mut needed) },
         QYRO_ERR_NOT_READY,
         "un escaner recien abierto dijo tener un codigo"
+    );
+    assert_eq!(
+        needed, 0,
+        "«todavia no hay codigo» dejo la longitud sin escribir, asi que quien \
+         pregunte leera basura y reservara sobre ella"
     );
 
     // `ScanState::Pairing` es 4 (ADR-0032 enmienda 8).
@@ -124,12 +134,13 @@ fn un_cartel_de_la_pared_no_produce_un_codigo() {
         "un cartel salio como algo distinto de `Nothing`"
     );
 
-    let mut needed = 0_usize;
+    let mut needed = 0xDEAD_BEEF_usize;
     assert_eq!(
         unsafe { qyro_scanner_pairing(handle, std::ptr::null_mut(), 0, &raw mut needed) },
         QYRO_ERR_NOT_READY,
         "un cartel de la pared se guardo como codigo de emparejamiento"
     );
+    assert_eq!(needed, 0, "la longitud quedo sin escribir");
     qyro_scanner_close(handle);
 }
 
