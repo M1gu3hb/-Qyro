@@ -93,13 +93,46 @@ que se veía tres capas más allá era al segundo proceso saliendo con
 decisión, y es correcta. Es una prueba que daba por supuesto lo que la decisión
 niega.
 
-**El arreglo:** `test/transfer/fixed_port_lock.dart`, un cerrojo de archivo —el
-mecanismo que sí cruza procesos— que las dos toman antes de ligar y sueltan al
-terminar. El sistema lo suelta solo si la prueba se cae, así que no hay forma de
-dejarlo tomado. Una definición y dos importadores, no dos copias.
+**Se probó un cerrojo de archivo**, que las dos tomaran antes de ligar. Y el
+mensaje de fallo pasó a imprimir el `kind` del `QyroFailed`, no la dirección del
+objeto.
 
-Y el mensaje de fallo ahora imprime **el `kind`** del `QyroFailed`, no la
-dirección del objeto: si vuelve a fallar por otra razón, la dirá.
+### 1.c El cerrojo era un arreglo sobre una hipótesis sin confirmar, y rompió otra cosa
+
+**La hipótesis del puerto era falsa.** Con el cerrojo puesto, el `kind` que salió
+no fue `portUnavailable`: fue `internal`. Y con `internal` no se puede hacer nada,
+así que `QyroFailed` pasó a llevar el **código crudo** — salió **-12**,
+`QyroCode.unknown`, que es «el motor no dijo cuál». Y `unknown` sale de dos
+sitios que hacían, otra vez, lo mismo:
+
+```dart
+} on Object {
+  code = QyroCode.unknown;   // y la excepción, a la basura
+}
+```
+
+Con la excepción guardada en `detail`, la respuesta fue completa —**y acusaba al
+propio cerrojo**:
+
+```
+Illegal argument in isolate message: object is unsendable -
+Library:'dart:io' Class: _RandomAccessFileOpsImpl
+```
+
+El `RandomAccessFile` del cerrojo vive en el cuerpo de la prueba, y ahí vive
+también el callback `decide` que se le pasa a `receive`. **Un closure de Dart
+captura su contexto entero**, no sólo lo que usa, así que el manejador de archivo
+viajaba en el grafo del mensaje al isolate y el isolate lo rechazaba.
+
+**El cerrojo se retira**, y con él la lección: fue **un arreglo sobre una
+hipótesis sin confirmar** —exactamente lo que QYR-0400 estaba enseñando a no
+hacer, cometido en la ficha de al lado y mientras se escribía la otra—. Rompió
+algo distinto de lo que pretendía arreglar, y **sólo se pudo ver porque el
+instrumento ya estaba puesto**.
+
+Lo que se queda es lo que mide: el código crudo y `detail` en `QyroFailed`, y la
+prueba imprimiendo el estado entero. El `ConnectionRefused` original vuelve a ser
+el hallazgo abierto, ahora con con qué mirarlo.
 
 ### 2. La guarda del botón de Recibir, que no podía ver lo que afirmaba
 
