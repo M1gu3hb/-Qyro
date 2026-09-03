@@ -21,6 +21,8 @@ import 'package:qyro/ffi/qyro_identity_api.dart';
 import 'package:qyro/transfer/native_transfer_service.dart';
 import 'package:qyro/transfer/transfer_service.dart';
 
+import 'fixed_port_lock.dart';
+
 String? get _libraryPath {
   final value = Platform.environment['QYRO_FFI_LIBRARY_PATH'];
   return (value == null || value.isEmpty) ? null : value;
@@ -199,6 +201,14 @@ void main() {
         reason: 'nothing is listening yet, and a code naming no listener is a '
             'code that does not work (ADR-0035 §2)',
       );
+
+      // Mismo cerrojo que `two_process_pairing_test`: el puerto fijo es de uno
+      // solo a la vez, y `flutter test` corre los archivos en paralelo.
+      final gate = lockTheFixedPort();
+      addTearDown(() {
+        gate.unlockSync();
+        gate.closeSync();
+      });
 
       final destination = Directory('${scratch.path}/in')..createSync();
       final subscription = service

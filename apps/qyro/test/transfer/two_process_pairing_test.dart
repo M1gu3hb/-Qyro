@@ -32,6 +32,8 @@ import 'package:qyro/ffi/qyro_session_api.dart';
 import 'package:qyro/transfer/native_transfer_service.dart';
 import 'package:qyro/transfer/transfer_service.dart';
 
+import 'fixed_port_lock.dart';
+
 String? _env(String name) {
   final value = Platform.environment[name];
   return (value == null || value.isEmpty) ? null : value;
@@ -84,6 +86,14 @@ void main() {
 
     test('the_code_this_device_publishes_is_enough_for_another_process',
         () async {
+      // El puerto es de uno solo a la vez. Se toma antes de nada y se suelta
+      // al terminar la prueba, pase lo que pase.
+      final gate = lockTheFixedPort();
+      addTearDown(() {
+        gate.unlockSync();
+        gate.closeSync();
+      });
+
       final source = Directory('${scratch.path}/out')..createSync();
       final destination = Directory('${scratch.path}/in')..createSync();
       final payload = _pattern(256 * 1024);
@@ -177,7 +187,8 @@ void main() {
           0,
           reason: 'the second process could not use the code: '
               '${sender.stdout}\n${sender.stderr}\n'
-              'estados vistos por el receptor: $seen\n'
+              'estados vistos por el receptor: '
+              '${seen.map((s) => s is QyroFailed ? "QyroFailed(${s.kind})" : s.runtimeType).toList()}\n'
               'errores del receptor: $failures',
         );
 

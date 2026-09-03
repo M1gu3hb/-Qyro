@@ -63,6 +63,44 @@ un reintento acotado **sólo ante un rechazo de conexión** —que significa que
 había nadie escuchando, luego no se gastó ningún `accept` y no se está tapando
 ningún fallo de verdad.
 
+### 1.b Y el `ConnectionRefused` era un síntoma a dos saltos de su causa
+
+El reintento acotado no bastó: **veinte intentos, cinco segundos, y seguía
+rechazando**. Eso ya no es una carrera de arranque.
+
+La prueba recogía la respuesta y no la enseñaba. Guarda `seen` —los estados que
+emite el receptor— y `failures` —los errores del stream, con un comentario que
+presume de no tragárselos— y **el mensaje de fallo no mencionaba ninguno**.
+Puesto en el mensaje, Windows y Linux contestaron lo mismo:
+
+```
+errores del receptor: []
+estados vistos por el receptor: [QyroConnecting, QyroFailed]
+```
+
+**El receptor sí arrancó y falló.** No hubo error de stream: hubo un estado de
+fallo que nadie miraba.
+
+**La causa: el puerto fijo tiene dueño único, y dos pruebas lo querían a la vez.**
+`two_process_pairing_test` y `native_transfer_service_test` ligan **las dos** el
+49517 —que ADR-0041 §3 fija a propósito, porque un puerto que se mueve pierde el
+permiso del cortafuegos y la predicción del código— y `flutter test` corre los
+archivos **en paralelo**. Quien perdía emitía `QyroFailed(portUnavailable)`, y lo
+que se veía tres capas más allá era al segundo proceso saliendo con
+`ConnectionRefused`.
+
+**Y esto no es un defecto del producto**: que el puerto sea de uno solo es la
+decisión, y es correcta. Es una prueba que daba por supuesto lo que la decisión
+niega.
+
+**El arreglo:** `test/transfer/fixed_port_lock.dart`, un cerrojo de archivo —el
+mecanismo que sí cruza procesos— que las dos toman antes de ligar y sueltan al
+terminar. El sistema lo suelta solo si la prueba se cae, así que no hay forma de
+dejarlo tomado. Una definición y dos importadores, no dos copias.
+
+Y el mensaje de fallo ahora imprime **el `kind`** del `QyroFailed`, no la
+dirección del objeto: si vuelve a fallar por otra razón, la dirá.
+
 ### 2. La guarda del botón de Recibir, que no podía ver lo que afirmaba
 
 `el boton de recibir se apaga mientras uno escucha` (QYR-0389) esperaba `null` y
