@@ -57,7 +57,12 @@ class TransferHome extends StatefulWidget {
   /// It is threaded from `HomeScreen` because opening the scanner needs the
   /// loaded engine, and `HomeScreen` is where the engine is built. Which also
   /// keeps this file free of `dart:ffi`, so the tests below need no library.
-  final VoidCallback? onScan;
+  ///
+  /// **QYR-0381: devuelve lo que se leyó.** Era un `VoidCallback`, así que el
+  /// escáner podía reconocer un código de emparejamiento y no tenía por dónde
+  /// entregarlo — la pantalla se abría, leía, y se cerraba sin dejar nada. El
+  /// tipo de vuelta es lo que hace que ese camino exista.
+  final Future<String?> Function()? onScan;
 
   /// Overridden by tests. Production reads `Platform.operatingSystem`.
   ///
@@ -74,6 +79,30 @@ class TransferHome extends StatefulWidget {
 
 class _TransferHomeState extends State<TransferHome> {
   late int _index = widget.initialTab;
+
+  /// El código que acaba de leerse por la cámara, si se leyó alguno.
+  ///
+  /// **QYR-0381.** Vive aquí y no en la pantalla de Aparatos porque lo que hay
+  /// que hacer con un código es **marcarlo**, y quien marca es Enviar. Dejarlo
+  /// en Aparatos obligaría a la persona a leerlo de una pantalla y teclearlo en
+  /// otra, que es exactamente el trabajo que escanear existe para ahorrar.
+  String? _scanned;
+
+  /// Abre el escáner y, si vuelve con un código, lo lleva a Enviar.
+  ///
+  /// Cambiar de pestaña es parte del arreglo y no un adorno: quien escanea ya
+  /// dijo lo que quiere hacer, y dejarlo en Aparatos con un código invisible
+  /// sería pedirle que lo diga otra vez.
+  Future<void> _scan() async {
+    final open = widget.onScan;
+    if (open == null) return;
+    final code = await open();
+    if (!mounted || code == null || code.isEmpty) return;
+    setState(() {
+      _scanned = code;
+      _index = 1;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,9 +122,20 @@ class _TransferHomeState extends State<TransferHome> {
       PeersScreen(
         service: widget.service,
         operatingSystem: widget.operatingSystem,
-        onScan: widget.onScan,
+        // `PeersScreen` sigue tomando un `VoidCallback`: lo que hace con el
+        // resultado no es asunto suyo, y cambiarle el tipo obligaría a que lo
+        // fuera.
+        onScan: widget.onScan == null ? null : () => unawaited(_scan()),
       ),
-      SendScreen(service: widget.service),
+      SendScreen(
+        service: widget.service,
+        initialAddress: _scanned,
+        // **La clave lleva el código dentro, y es lo que fuerza el rellenado.**
+        // Sin ella Flutter reutiliza el `State` de la pantalla anterior, con su
+        // `TextEditingController` ya construido, y el código escaneado se
+        // quedaría en un campo que nadie vuelve a inicializar.
+        key: ValueKey<String?>(_scanned),
+      ),
       ReceiveScreen(service: widget.service),
     ];
 
@@ -488,16 +528,26 @@ class PeerTile extends StatelessWidget {
 // ------------------------------------------------------------------- send
 
 class SendScreen extends StatefulWidget {
-  const SendScreen({required this.service, super.key});
+  const SendScreen({required this.service, this.initialAddress, super.key});
 
   final QyroTransferService service;
+
+  /// Con qué llega el campo de la dirección ya escrito.
+  ///
+  /// **QYR-0381:** es por donde entra un código recién escaneado. Y entra por el
+  /// **mismo campo** que uno tecleado a propósito: así pasa por el mismo
+  /// `fingerprintOfPairingString` y el mismo `expectedFingerprint`, y no hay una
+  /// segunda ruta que alguien pueda olvidarse de proteger. Si la hubiera, sería
+  /// la que falla.
+  final String? initialAddress;
 
   @override
   State<SendScreen> createState() => _SendScreenState();
 }
 
 class _SendScreenState extends State<SendScreen> {
-  final TextEditingController _address = TextEditingController();
+  late final TextEditingController _address =
+      TextEditingController(text: widget.initialAddress ?? '');
   List<QyroPicked> _chosen = const <QyroPicked>[];
   QyroTransferState _state = const QyroIdle();
 

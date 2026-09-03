@@ -296,6 +296,71 @@ void main() {
       );
     });
 
+    testWidgets('escanear lleva el codigo a Enviar, ya escrito',
+        (tester) async {
+      // **QYR-0381.** `qyro qr` dibuja el codigo y dice «Point the other
+      // device's camera at this». El escaner lo leia y lo tiraba, y aunque no lo
+      // hubiera tirado, `onScan` era un `VoidCallback`: no habia por donde
+      // entregarlo. Esto fija el camino de vuelta entero.
+      const codigo = 'QYRO1|192.168.1.5:49517|00112233445566778899aabbccddeeff';
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _wrap(
+          TransferHome(
+            service: FakeService(),
+            operatingSystem: 'android',
+            onScan: () async => codigo,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('scan-open')));
+      await tester.pumpAndSettle();
+
+      // Aterriza en Enviar, no en Aparatos: quien escanea ya dijo lo que
+      // quiere hacer.
+      final campo = find.byKey(const Key('send-address'));
+      expect(campo, findsOneWidget, reason: 'no se cambio a la pestana Enviar');
+      expect(
+        tester.widget<TextField>(campo).controller?.text,
+        codigo,
+        reason: 'el codigo escaneado no llego escrito al campo de la direccion',
+      );
+    });
+
+    testWidgets('un escaneo cancelado no toca nada', (tester) async {
+      // El control. Cerrar el escaner sin leer nada -- que es lo que pasa cuando
+      // alguien se arrepiente -- no puede mover a la persona de pestana ni
+      // escribir en un campo.
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _wrap(
+          TransferHome(
+            service: FakeService(),
+            operatingSystem: 'android',
+            onScan: () async => null,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('scan-open')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('send-address')),
+        findsNothing,
+        reason: 'un escaneo cancelado cambio de pestana',
+      );
+    });
+
     testWidgets('un codigo escaneado llega a enviar con su huella',
         (tester) async {
       // **QYR-0392.** La pantalla sacaba la direccion del codigo y **tiraba la
@@ -436,7 +501,7 @@ void main() {
         _wrap(
           TransferHome(
             service: FakeService(),
-            onScan: () {},
+            onScan: () async => null,
             operatingSystem: 'android',
           ),
         ),

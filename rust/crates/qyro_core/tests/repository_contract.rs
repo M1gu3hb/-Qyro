@@ -998,3 +998,99 @@ fn the_address_a_pairing_code_resolves_to_can_be_read_whole() {
          precedent no longer exists"
     );
 }
+
+/// Un código leído por la cámara llega a marcarse, y por el camino protegido.
+///
+/// **QYR-0381, la mitad de interfaz.** El motor ya reconoce el código
+/// (ADR-0032 enmienda 8); esto comprueba que llega hasta donde se usa. Son cinco
+/// eslabones y basta que falte uno para que la cámara vuelva a leer un código y
+/// tirarlo:
+///
+/// 1. las ataduras de Dart saben pedir el símbolo 35;
+/// 2. la pantalla del escáner devuelve lo leído en vez de cerrarse sin nada;
+/// 3. `HomeScreen` abre esa ruta con un tipo de vuelta;
+/// 4. `TransferHome` acepta un callback que devuelve algo, y lo lleva a Enviar;
+/// 5. **y entra por el mismo campo que un código tecleado**, que es lo que hace
+///    que la huella se compare sin que nadie tenga que acordarse.
+///
+/// Guardado desde Rust porque este contenedor no tiene Flutter: las pruebas de
+/// Dart cubren lo mismo y las corre CI, y ésta corre en la puerta.
+#[test]
+fn a_code_read_by_the_camera_reaches_the_screen_that_checks_it() {
+    let root = repo_root();
+    let read = |path: &str| -> String {
+        let full = root.join(path);
+        std::fs::read_to_string(&full)
+            .unwrap_or_else(|error| panic!("{path} must exist to be checked: {error}"))
+    };
+
+    let bindings = strip_line_comments(&read("apps/qyro/lib/scanner/qyro_scanner.dart"));
+    assert!(
+        bindings.contains("pairing(4)"),
+        "QyroScanState has no `pairing(4)`, so `fromCode` answers null for the \
+         one state that means «stop, you already have what you came for»"
+    );
+    assert!(
+        bindings.contains("'qyro_scanner_pairing'"),
+        "nothing looks up the symbol that carries the code across, so the \
+         engine recognises a pairing code and Dart cannot ask for it"
+    );
+
+    let screen = strip_line_comments(&read("apps/qyro/lib/scanner/scan_screen.dart"));
+    assert!(
+        screen.contains("QyroScanState.pairing"),
+        "the scanner screen never reacts to a pairing code: it keeps hunting \
+         for blocks of a file nobody is sending"
+    );
+    assert!(
+        screen.contains("Navigator.of(context).pop(code)"),
+        "the scanner screen reads the code and closes without handing it back, \
+         which is the same as throwing it away with extra steps"
+    );
+
+    let home = strip_line_comments(&read("apps/qyro/lib/home/home_screen.dart"));
+    assert!(
+        home.contains("navigator.push<String>") && home.contains("MaterialPageRoute<String>"),
+        "HomeScreen still opens the scanner on a route typed `void`, so there \
+         is nowhere for a code to come back through"
+    );
+
+    let shell = strip_line_comments(&read("apps/qyro/lib/transfer/transfer_screens.dart"));
+    assert!(
+        shell.contains("final Future<String?> Function()? onScan;"),
+        "TransferHome still takes a `VoidCallback`, so the scanner can \
+         recognise a code and has no way to deliver it"
+    );
+    assert!(
+        shell.contains("initialAddress: _scanned"),
+        "the scanned code does not reach the send screen. grep -n '_scanned' \
+         apps/qyro/lib/transfer/transfer_screens.dart"
+    );
+    assert!(
+        shell.contains("TextEditingController(text: widget.initialAddress ?? '')"),
+        "`initialAddress` does not reach the address field, so a scanned code \
+         arrives at the right screen and stays invisible"
+    );
+
+    // **El eslabón que hace que esto sea seguro y no sólo cómodo.** El código
+    // escaneado entra por el mismo campo que uno tecleado, así que pasa por el
+    // mismo `expectedFingerprint`. Una segunda ruta sería la que falla.
+    assert!(
+        shell.contains("expectedFingerprint: expected"),
+        "the send screen no longer hands the expectation down, so a scanned \
+         code would dial an address and bind to no key at all -- which is \
+         QYR-0381 with a camera in front of it"
+    );
+
+    // El control del despojador, como el resto de guardas de este archivo.
+    let raw = read("apps/qyro/lib/transfer/transfer_screens.dart");
+    assert!(
+        raw.contains("QYR-0381"),
+        "the explanation of this wiring is gone from transfer_screens.dart"
+    );
+    assert!(
+        !shell.contains("QYR-0381"),
+        "the comment stripper did not strip, so the assertions above may be \
+         reading prose rather than code"
+    );
+}

@@ -16,6 +16,7 @@
 // existe para escribir ese número.
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -33,7 +34,14 @@ enum QyroScanState {
   progress(2),
 
   /// Con éste ya está.
-  complete(3);
+  complete(3),
+
+  /// Lo leído no era un archivo: era un **código de emparejamiento**.
+  ///
+  /// **QYR-0381.** Una rama distinta y no un grado de progreso: las cuatro de
+  /// arriba dicen «sigue mirando», y ésta dice «para, ya tienes lo que hacía
+  /// falta». El código se saca con [QyroScanner.pairing].
+  pairing(4);
 
   const QyroScanState(this.code);
   final int code;
@@ -67,6 +75,8 @@ typedef _ResultLenNative = Int32 Function(Uint64, Pointer<IntPtr>);
 typedef _ResultLenDart = int Function(int, Pointer<IntPtr>);
 typedef _ResultNative = Int32 Function(Uint64, Pointer<Uint8>, IntPtr);
 typedef _ResultDart = int Function(int, Pointer<Uint8>, int);
+typedef _PairingNative = Int32 Function(Uint64, Pointer<Uint8>, IntPtr, Pointer<IntPtr>);
+typedef _PairingDart = int Function(int, Pointer<Uint8>, int, Pointer<IntPtr>);
 typedef _CloseNative = Void Function(Uint64);
 typedef _CloseDart = void Function(int);
 typedef _AllocNative = Pointer<Uint8> Function(IntPtr);
@@ -292,6 +302,44 @@ final class QyroScanner {
       try {
         if (resultInto(_handle, buffer, length) != 0) return null;
         return Uint8List.fromList(buffer.asTypedList(length));
+      } finally {
+        _free(buffer, length);
+      }
+    } finally {
+      _free(lengthRaw, 8);
+    }
+  }
+
+  /// El código de emparejamiento leído, entero, o `null` si no hubo ninguno.
+  ///
+  /// **QYR-0381, y sale entero con su huella.** Devolver sólo la dirección sería
+  /// repetir el defecto que QYR-0392 arregló en la otra cara: la huella es lo
+  /// que hace que escanear valga más que teclear, y quien la recibe la compara
+  /// con la del apretón y se niega si no coincide (ADR-0035 §2.1).
+  ///
+  /// El contrato de dos llamadas del símbolo 35: se pregunta el tamaño con
+  /// capacidad cero, se reserva, se pide.
+  String? pairing() {
+    final read = _library.lookupFunction<_PairingNative, _PairingDart>(
+      'qyro_scanner_pairing',
+    );
+    final lengthRaw = _alloc(8);
+    if (lengthRaw == nullptr) return null;
+    try {
+      final lengthOut = lengthRaw.cast<IntPtr>();
+      // Preguntar. Un código que no existe contesta «todavía no», que aquí
+      // significa «no se ha leído ninguno» y no es un error de llamada.
+      read(_handle, nullptr, 0, lengthOut);
+      final length = lengthOut.value;
+      if (length <= 0) return null;
+
+      final buffer = _alloc(length);
+      if (buffer == nullptr) return null;
+      try {
+        if (read(_handle, buffer, length, lengthOut) != 0) return null;
+        final wrote = lengthOut.value;
+        if (wrote <= 0 || wrote > length) return null;
+        return utf8.decode(buffer.asTypedList(wrote));
       } finally {
         _free(buffer, length);
       }

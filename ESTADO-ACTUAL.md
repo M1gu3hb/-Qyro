@@ -238,6 +238,31 @@ asi que mandar cualquier archivo de la raiz de una unidad salia como
 `BadArgument` -- y desde QYR-0375 eso se explica como «el nombre fue rechazado»,
 una acusacion falsa contra un `video.mp4` perfectamente normal.
 
+**QYR-0381 CERRADA, y lo que estaba abierto no era lo que la ficha decia.** La
+ficha decia «CERRADO en el CLI, abierto en la GUI», y predijo bien la forma del
+arreglo: otro simbolo y una segunda enmienda de ADR-0032. Lo que no vio es que
+habia **dos** cosas abiertas y la segunda era la grave.
+
+La mitad tecleada se cerro en QYR-0392 el mismo dia. **La mitad escaneada no
+estaba abierta: no existia.** `qyro qr` dibuja un codigo y escribe debajo «Point
+the other device's camera at this»; el telefono apuntaba la camara, leia el QR, y
+lo tiraba -- `Eye::look` lo descartaba en la rama comentada «un QR que no es de
+Qyro», porque un codigo es texto y no un frame de fuente. **El unico QR que este
+producto pide escanear era el que el escaner descartaba**, una linea antes de
+poder usarlo. Asi que «hoy teclear es mas seguro que escanear» era optimista: no
+se podia escanear.
+
+Arreglado por capas (ADR-0032 enmienda 8, congelada antes del codigo): el ojo
+gana `Look::Foreign` y entrega bytes sin juzgarlos; `qyro_session::Scanner`
+decide con el analizador de verdad y gana `ScanState::Pairing`;
+`qyro_scanner_pairing` es el **simbolo 35**; y la cadena de interfaz lleva el
+codigo hasta Enviar.
+
+**La seguridad viene por construccion:** el codigo escaneado entra por el mismo
+campo que uno tecleado, asi que pasa por el mismo `expectedFingerprint`. No hay
+una segunda ruta que olvidarse de proteger. La contraprueba cambia un caracter de
+la huella y exige que deje de coincidir.
+
 **QYR-0398, tambien del recorte.** La direccion que sale de un codigo de
 emparejamiento se recortaba con «…» y no se podia copiar, dentro de una fila
 compartida con un boton. Es el unico dato que esa pantalla existe para entregar,

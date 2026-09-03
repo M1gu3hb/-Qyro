@@ -69,12 +69,13 @@ la puerta puesta, la celda cita el sitio que la abre.
 | Recibir y enseñar su código | `apps/qyro/lib/transfer/native_transfer_service.dart:393` | `rust/crates/qyro_cli/src/flows.rs:425` |
 | Enseñar la propia huella | `apps/qyro/lib/transfer/native_transfer_service.dart:150` | `rust/crates/qyro_cli/src/flows.rs:106` |
 | Ver la huella antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:658` | `rust/crates/qyro_cli/src/flows.rs:444` |
-| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:687` | `rust/crates/qyro_cli/src/flows.rs:501` |
+| Rechazar con motivo | `apps/qyro/lib/transfer/transfer_screens.dart:737` | `rust/crates/qyro_cli/src/flows.rs:501` |
 | Peer con clave cambiada, rechazado por nombre | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `rust/crates/qyro_cli/src/flows.rs:657` |
 | Cancelar a mitad | `apps/qyro/lib/transfer/native_transfer_service.dart:255` | `NO -- una terminal cancela con Ctrl-C, que el sistema operativo ya entrega y el proceso ya honra. Un boton de cancelar en una terminal seria una segunda forma de hacer lo que el teclado hace, y ADR-0042 dice que no se unifican las formas, solo las decisiones` |
-| Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:232` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
+| Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:205` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
 | Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:256` | `rust/crates/qyro_cli/src/flows.rs:696` |
-| Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:85` | `rust/crates/qyro_cli/src/flows.rs:794` |
+| Leer un codigo de emparejamiento por la camara | `apps/qyro/lib/scanner/scan_screen.dart:29` | `NO -- la terminal DIBUJA y no lee (ADR-0044 §6). La maquina que necesita este canal es la que no tiene camara, asi que pedirle que escanee seria pedirle justo lo que no puede. Su mitad es qyro qr` |
+| Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:88` | `rust/crates/qyro_cli/src/flows.rs:794` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
 | Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:658` | `rust/crates/qyro_cli/src/flows.rs:473` |
 | Comprobar la huella que promete el codigo | `apps/qyro/lib/transfer/transfer_screens.dart:516` | `rust/crates/qyro_cli/src/flows.rs:250` |

@@ -78,10 +78,15 @@ class HomeScreen extends StatelessWidget {
         builder: (_) => TransferHome(
           service: engine,
           initialTab: tab,
+          // **QYR-0381: devuelve lo que se leyó.** Era `MaterialPageRoute<void>`
+          // y un `VoidCallback`, así que la pantalla del escáner no tenía por
+          // dónde entregar un código de emparejamiento aunque lo reconociera.
+          // Ahora el tipo del `push` es el del dato, que es lo que obliga a que
+          // exista un camino de vuelta.
           onScan: library == null
               ? null
-              : () => navigator.push(
-                    MaterialPageRoute<void>(
+              : () => navigator.push<String>(
+                    MaterialPageRoute<String>(
                       builder: (_) => ScanScreen(library: library),
                     ),
                   ),

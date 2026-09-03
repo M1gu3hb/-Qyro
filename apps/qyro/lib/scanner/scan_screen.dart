@@ -104,6 +104,26 @@ class _ScanScreenState extends State<ScanScreen> {
         _tally = scanner.tally();
         if (state != null) _last = state;
       });
+      // **QYR-0381: lo leído era un código, no un archivo.**
+      //
+      // Es el QR que `qyro qr` dibuja bajo «Point the other device's camera at
+      // this», y hasta ahora la cámara lo leía y lo tiraba. Se devuelve a quien
+      // abrió esta pantalla **entero, con su huella**: la comparación con la
+      // huella del apretón la hace la pantalla de Enviar, por el mismo camino
+      // que un código tecleado (ADR-0035 §2.1, ADR-0032 enmienda 8).
+      //
+      // Se para el bombeo antes de salir: seguir mirando una cámara sobre una
+      // pantalla que ya no está es lo que deja la linterna encendida.
+      if (state == QyroScanState.pairing) {
+        final code = scanner.pairing();
+        if (code != null) {
+          _pump?.cancel();
+          await scanner.close();
+          if (!mounted) return;
+          Navigator.of(context).pop(code);
+          return;
+        }
+      }
       if (state == QyroScanState.complete) {
         _pump?.cancel();
         final bytes = scanner.result();

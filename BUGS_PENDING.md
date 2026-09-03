@@ -765,9 +765,10 @@ detrás? **No.**
 
 ## QYR-0381 — La huella del código de emparejamiento se validaba y se tiraba
 
-- Estado: **CERRADO en el CLI. Abierto en la GUI, y aquí está el argumento.**
+- Estado: **CERRADO.** CLI el 2026-08-31, GUI tecleada en QYR-0392, **GUI
+  escaneada el 2026-09-03** — ver «Lo que faltaba de verdad», al final.
 - Severidad: **ALTA** (la mitad cara del emparejamiento no compraba nada)
-- Fecha: 2026-08-31
+- Fecha: 2026-08-31, cerrada 2026-09-03
 
 **ADR-0035 §2.1, literal:**
 
@@ -823,6 +824,61 @@ lo compensa. Queda escrito aquí con su forma completa para quien lo tome.
 **Lo que sí protege a la GUI hoy:** la huella que enseña la tarjeta de oferta es
 la **autenticada**, y una persona puede compararla. Es la comprobación que
 siempre ha sido de la persona.
+
+### Lo que faltaba de verdad (2026-09-03)
+
+El párrafo de arriba predijo la forma del arreglo y acertó: **otro símbolo y una
+segunda enmienda de ADR-0032.** Lo que no vio es que había **dos** cosas abiertas
+y no una, y que la segunda era la grave.
+
+**La mitad tecleada se cerró en QYR-0392**, el mismo día: `qyro_pairing_-`
+`fingerprint` (símbolo 34, enmienda 7), la pantalla de Enviar saca la huella del
+código y los dos caminos de envío la comparan antes del primer byte.
+
+**La mitad escaneada no estaba abierta: no existía.** Y eso no se veía leyendo
+esta ficha, porque la ficha habla de una comparación que no se hacía — no de una
+cámara que no llegaba.
+
+`qyro qr` dibuja un código de emparejamiento y escribe debajo, literal, **«Point
+the other device's camera at this»**. El teléfono apuntaba la cámara, leía el QR,
+y lo tiraba: `Eye::look` decodifica, intenta leerlo como frame de fuente y, como
+un código es texto y no un frame, cae en la rama comentada *«un QR que no es de
+Qyro»* y devuelve `Nothing`. **El único QR que este producto pide escanear era
+exactamente el que el escáner descartaba**, una línea antes de poder usarlo.
+
+Así que la frase «hoy teclear es más seguro que escanear» era optimista: **no se
+podía escanear**.
+
+**El arreglo (ADR-0032 enmienda 8):**
+
+- `qyro_eye` gana `Look::Foreign` y `Eye::foreign()`. El ojo **no** aprende el
+  formato: dice «decodifiqué un QR y no es un frame mío» y entrega los bytes.
+- `qyro_session::Scanner` decide, con `parse_pairing` — el analizador de verdad —
+  y gana `ScanState::Pairing` y `pairing()`. El formato sigue en un solo sitio.
+- `qyro_scanner_pairing`, **símbolo 35**.
+- La cadena de interfaz: las ataduras piden el símbolo, la pantalla del escáner
+  devuelve el código en vez de cerrarse sin nada, `HomeScreen` abre esa ruta con
+  un tipo de vuelta, y `TransferHome` lo lleva a **Enviar**.
+
+**Y la propiedad de seguridad viene por construcción, no por disciplina:** el
+código escaneado entra por **el mismo campo** que uno tecleado, así que pasa por
+el mismo `fingerprintOfPairingString` y el mismo `expectedFingerprint` que cerró
+QYR-0392. No hay una segunda ruta que alguien pueda olvidarse de proteger. Si la
+hubiera, sería la que falla.
+
+**La contraprueba.** `la_huella_del_codigo_leido_es_la_que_se_va_a_comparar`
+rasteriza el QR, lo lee por el ojo, saca la huella y exige que **cambiar un solo
+carácter deje de coincidir**. Sin esa mitad, la afirmación de arriba la pasaría
+una comparación que siempre dice que sí.
+
+**Un defecto que introduje y corregí antes de commitear:** la primera versión del
+símbolo 35 llamaba a `emit_text`, que devuelve `-6` para «no cabe», mientras el
+resto del escáner dice `-2` para eso mismo. Un símbolo con dos valores para
+«argumento inservible» obliga a quien lo usa a saber cuál de las dos familias le
+tocó.
+
+**Lo que sigue sin probarse:** que una cámara de verdad lea un QR dibujado por una
+terminal de verdad. Es la fase 19 y su hueco sigue en blanco.
 
 ## QYR-0382 — Nada recuerda un aparato, así que «esta clave ha cambiado» no puede ocurrir
 
