@@ -131,8 +131,41 @@ algo distinto de lo que pretendía arreglar, y **sólo se pudo ver porque el
 instrumento ya estaba puesto**.
 
 Lo que se queda es lo que mide: el código crudo y `detail` en `QyroFailed`, y la
-prueba imprimiendo el estado entero. El `ConnectionRefused` original vuelve a ser
-el hallazgo abierto, ahora con con qué mirarlo.
+prueba imprimiendo el estado entero.
+
+### 1.d Y con el cerrojo fuera, el instrumento dio la causa de verdad
+
+```
+QyroFailed(kind: internal, reason: null, code: -12,
+           detail: Illegal argument in isolate message: (object is a DynamicLibrary))
+```
+
+**`Isolate.run` serialisa todo el contexto léxico del closure que recibe**, no
+sólo lo que ese closure usa. El closure del trabajador vivía dentro de
+`receive()`, y en ese mismo ámbito viven **`decide`** —el callback que trae quien
+llama— y **`states`**, un `StreamController`. Los dos viajaban en el grafo del
+mensaje.
+
+Y el `DynamicLibrary` entra por `decide`: ese callback lo escribe **quien llama a
+`receive`**, así que su contexto es el de quien llama —una pantalla, una
+prueba— donde vive el propio `NativeTransferService`, que lleva la biblioteca
+dentro.
+
+**Esto no es un defecto de la prueba: es que recibir no podía arrancar.** Lo que
+salía era `QyroFailureKind.internal`, «algo interno falló», que es exactamente lo
+que vería alguien pulsando Recibir. Y la forma que usa la prueba —la clase de
+producción con un `decide` escrito por el llamante— **es la misma que usa la
+pantalla**. Nadie ha recibido nunca un archivo con la GUI, así que nada
+contradice que allí pasara lo mismo.
+
+**El arreglo es el que `send` ya llevaba escrito tres pantallas más arriba**, para
+el `ReceivePort`, aplicado al ámbito entero: el closure se crea dentro de
+`_receiveInIsolate(library, bind, where, sink)`, un método estático donde lo
+único que existe son esos cuatro valores — y los cuatro cruzan sin problema.
+
+El comentario que había en `send` decía la regla entera: «`Isolate.run` serialisa
+**lo que el closure captura**». Lo que faltaba era darse cuenta de que un closure
+captura **su ámbito**, no sus variables.
 
 ### 2. La guarda del botón de Recibir, que no podía ver lo que afirmaba
 

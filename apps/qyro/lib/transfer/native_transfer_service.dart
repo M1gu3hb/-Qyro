@@ -563,7 +563,44 @@ final class NativeTransferService implements QyroTransferService {
       }
     });
 
-    final outcome = Isolate.run<int>(() async {
+    final outcome = _receiveInIsolate(library, bind, where, sink);
+
+    yield* _drainReceive(states.stream, outcome, where);
+    await states.close();
+    events.close();
+  }
+
+  /// Lanza el trabajador del receptor **desde un ámbito que no contiene nada
+  /// más**.
+  ///
+  /// **QYR-0403, y es un defecto de producto, no de la prueba.** `Isolate.run`
+  /// serialisa **todo el contexto léxico** del closure que recibe, no sólo lo
+  /// que ese closure usa. El closure vivía dentro de `receive()`, y en ese
+  /// mismo ámbito viven `decide` —el callback que trae quien llama— y
+  /// `states`, un `StreamController`. Los dos viajaban en el grafo del mensaje,
+  /// y el isolate los rechaza:
+  ///
+  /// ```text
+  /// Illegal argument in isolate message: (object is a DynamicLibrary)
+  /// ```
+  ///
+  /// El `DynamicLibrary` entra por `decide`: el callback lo escribe quien llama
+  /// a `receive`, y su contexto es el de **quien llama** — una pantalla, una
+  /// prueba— donde vive el propio servicio, que tiene la biblioteca dentro.
+  /// **Recibir no podía arrancar**, y lo que salía era
+  /// `QyroFailureKind.internal`: «algo interno falló».
+  ///
+  /// El arreglo es el mismo que `send` ya llevaba escrito para el `ReceivePort`
+  /// tres pantallas más arriba, aplicado al ámbito entero: el closure se crea
+  /// **aquí**, donde lo único que hay son estos cuatro valores, y los cuatro
+  /// cruzan sin problema.
+  static Future<int> _receiveInIsolate(
+    String? library,
+    String bind,
+    String where,
+    SendPort sink,
+  ) async {
+    return Isolate.run<int>(() async {
       final bindings = library == null
           ? QyroSessionBindings.openDefault()
           : QyroSessionBindings.open(library);
@@ -690,10 +727,6 @@ final class NativeTransferService implements QyroTransferService {
         session.dispose();
       }
     });
-
-    yield* _drainReceive(states.stream, outcome, where);
-    await states.close();
-    events.close();
   }
 
   /// Interleaves the worker's states with its ending.
