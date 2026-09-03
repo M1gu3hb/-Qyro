@@ -55,10 +55,11 @@ pub fn resolve_under(root: &Path, relative: &str) -> Result<Resolved, FsError> {
         });
     };
 
-    // A manifest path has no `.` or `..` — `RelativePath` refuses them — but
-    // this does not take that on trust. What arrives here has crossed a wire.
+    // A manifest path has no `.`, no `..`, no backslash and no colon —
+    // `RelativePath` refuses all four — but this does not take that on trust.
+    // What arrives here has crossed a wire.
     for segment in &segments {
-        if *segment == "." || *segment == ".." {
+        if !is_a_plain_name(segment) {
             return Err(FsError::EscapesRoot {
                 resolved: relative.to_owned(),
             });
@@ -91,6 +92,25 @@ pub fn resolve_under(root: &Path, relative: &str) -> Result<Resolved, FsError> {
         part_path: part_name(&final_path),
         final_path,
     })
+}
+
+/// Whether `segment` is one plain name and nothing else.
+///
+/// Judged **before** it is pushed, because `PathBuf::push` does not concatenate
+/// what is absolute: it replaces. On Windows `C:\\evil` and `\\\\server\\share` are
+/// absolute without carrying a single forward slash, so they survive
+/// `split('/')` whole and, pushed one at a time, take the root with them.
+///
+/// The backslash and the colon are refused by name and not by [`Path`], because
+/// on Linux `Path` sees them as ordinary characters: the same string that here
+/// would only make an oddly named folder is, on the Windows receiver at the
+/// other end of the same transfer, a path to the root of a drive.
+fn is_a_plain_name(segment: &str) -> bool {
+    if segment == "." || segment == ".." || segment.contains('\\') || segment.contains(':') {
+        return false;
+    }
+    let mut components = Path::new(segment).components();
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
 }
 
 /// Refuses a path that exists and is a symbolic link.

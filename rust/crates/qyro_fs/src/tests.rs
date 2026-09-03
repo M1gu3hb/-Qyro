@@ -1155,3 +1155,73 @@ fn a_completed_item_stops_holding_its_part_file_open() {
         );
     }
 }
+
+/// Un segmento que en Windows **es una ruta absoluta** no puede convertirse en
+/// la ruta entera.
+///
+/// `PathBuf::push` no concatena cuando lo que se empuja es absoluto: lo
+/// **reemplaza**. En Windows `C:\evil` y `\\servidor\recurso` son absolutos sin
+/// llevar una sola barra hacia delante, asi que sobreviven al `split('/')` de
+/// `resolve_under` intactos y, empujados uno a uno, se llevan la raiz por
+/// delante. `RelativePath` los rechaza; este nivel no da eso por sentado --
+/// dice, en su propio comentario, que lo que llega ha cruzado un cable.
+///
+/// Se comprueba en Linux tambien, y con la misma exigencia: lo que se pide no
+/// es "que no escape en esta plataforma", es **que se rechace**. Una carpeta
+/// llamada `C:\evil` dentro de la raiz no es un escape en Linux, pero es un
+/// nombre que el manifiesto nunca autorizo, y el dia que ese mismo string llega
+/// a un receptor Windows si lo es.
+#[test]
+fn un_segmento_absoluto_de_windows_no_se_lleva_la_raiz_por_delante() {
+    let root = Scratch::new("winabs");
+    for attempt in [
+        r"C:\evil/robado.bin",
+        r"\\servidor\recurso/robado.bin",
+        r"C:/robado.bin",
+        r"carpeta\..\..\robado.bin",
+    ] {
+        let outcome = resolve_under(&root.dir, attempt);
+        assert!(
+            matches!(outcome, Err(FsError::EscapesRoot { .. })),
+            "{attempt} no fue rechazado: {outcome:?}"
+        );
+    }
+
+    // El control: un nombre normal sigue resolviendo, para que el rechazo de
+    // arriba no sea "todo falla".
+    let good = resolve_under(&root.dir, "carpeta/normal.bin").expect("un nombre normal resuelve");
+    assert!(
+        good.final_path
+            .starts_with(fs::canonicalize(&root.dir).unwrap())
+    );
+}
+
+/// Una raiz a la que se llega **atravesando un enlace** sigue resolviendo.
+///
+/// Es la contraprueba de `fs::canonicalize(root)`: si la raiz se compara tal y
+/// como llego, el padre canonico -- que si esta resuelto -- nunca empieza por
+/// ella, y **toda** ruta legitima se rechaza. No es hipotetico: en macOS
+/// `env::temp_dir()` vive bajo `/var`, que es un enlace a `/private/var`, y en
+/// Android la carpeta de descargas se alcanza por `/storage/emulated/0`.
+#[cfg(unix)]
+#[test]
+fn una_raiz_alcanzada_por_un_enlace_sigue_resolviendo() {
+    let real = Scratch::new("linkroot-real");
+    let holder = Scratch::new("linkroot-holder");
+    let link = holder.path("raiz");
+    std::os::unix::fs::symlink(&real.dir, &link).unwrap();
+
+    let resolved = resolve_under(&link, "a/dentro.bin")
+        .expect("una raiz alcanzada por un enlace tiene que resolver");
+    assert!(
+        resolved
+            .final_path
+            .starts_with(fs::canonicalize(&real.dir).unwrap()),
+        "resolvio fuera del destino real: {:?}",
+        resolved.final_path
+    );
+    assert!(
+        real.dir.join("a").is_dir(),
+        "no creo el padre en el destino real"
+    );
+}

@@ -12,6 +12,89 @@ alguien la lee de verdad.
 
 Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
+## QYR-0402 — Un segmento absoluto de Windows se llevaba la raíz de destino por delante
+
+- Estado: **CERRADO**
+- Severidad: **ALTA** — es aislamiento de destino, y el sector se ha llevado más
+  de un CVE de 7,5 por exactamente esto
+- Fecha: 2026-09-03
+
+**El defecto.** `resolve_under` parte la ruta del manifiesto por `/` y empuja los
+segmentos uno a uno con `PathBuf::push`. **`push` no concatena lo que es
+absoluto: lo reemplaza.** En Windows, `C:\evil` y `\\servidor\recurso` son
+absolutos **sin llevar una sola barra hacia delante**, así que sobreviven al
+`split('/')` enteros, y el primer `push` deja `here` fuera de la raíz.
+
+`RelativePath::parse` los rechaza —barra invertida y `:` están en su lista—, pero
+`resolve_under` dice en su propio comentario que *no da eso por sentado*, «lo que
+llega ha cruzado un cable», y acto seguido sólo comprobaba `.` y `..`. La segunda
+opinión cubría la mitad de la primera.
+
+En Linux el resultado era una carpeta llamada literalmente `C:\evil` dentro de la
+raíz —feo, no un escape—. En un receptor Windows, con la comprobación de
+contención quitada o esquivada, es una escritura en la raíz de una unidad.
+
+**El arreglo.** `is_a_plain_name`, aplicado a **todos** los segmentos antes de
+empujar ninguno: rechaza `.`, `..`, cualquier `\`, cualquier `:`, y todo lo que
+no sea exactamente un `Component::Normal`. Se juzga **por cadena** y no por
+`Path`, a propósito: en Linux `Path` ve `C:\evil` como un nombre corriente y lo
+dejaría pasar hacia el receptor Windows del otro extremo de la misma
+transferencia.
+
+**La prueba, y su contraprueba.**
+`un_segmento_absoluto_de_windows_no_se_lleva_la_raiz_por_delante` exige `Err` para
+`C:\evil/robado.bin`, `\\servidor\recurso/robado.bin`, `C:/robado.bin` y
+`carpeta\..\..\robado.bin`, y de control exige que `carpeta/normal.bin` siga
+resolviendo. Se escribió **en rojo**: antes del arreglo devolvía
+`Ok(".../C:\evil/robado.bin")`.
+
+### La tabla de mutantes, medida
+
+El encargo pedía contraprueba: «quitar la canonicalización tiene que romper la
+suite». Se midió, borrando una defensa cada vez y corriendo `cargo test -p
+qyro_fs` (48 pruebas). **Antes** del arreglo:
+
+| Mutante | Qué se borró | Resultado |
+|---|---|---|
+| A | la contención `canonical_parent.starts_with(canonical_root)` | **sobrevive** |
+| B | `fs::canonicalize(root)` | **sobrevive** |
+| C | el rechazo de `.` y `..` | muere |
+| D | `assert_not_a_symlink` por componente | muere |
+
+Dos defensas de cuatro no tenían dientes. **Después**, con las dos pruebas nuevas:
+
+| Mutante | Resultado |
+|---|---|
+| A — contención por canonicalización del padre | **sobrevive todavía** |
+| B — `fs::canonicalize(root)` | muere: `una_raiz_alcanzada_por_un_enlace_sigue_resolviendo` |
+| C — `.` y `..` | muere: dos pruebas |
+| D — enlaces por componente | muere: `a_symlink_in_the_destination_cannot_redirect_a_write` |
+| E — `\` y `:` en `is_a_plain_name` | muere: la prueba nueva |
+
+**Y el mutante A se declara, no se disimula.** Con C, D y E en pie, en Linux y en
+un solo hilo **no queda ningún caso que sólo la contención cace**: `..` lo para C,
+un enlace lo para D, un absoluto de Windows lo para E. Lo que la contención cubre
+es lo que queda: **la carrera** —que alguien cambie un directorio por un enlace
+entre el `lstat` y el `canonicalize`— y la plataforma que aquí no se puede
+ejecutar. Se queda por eso, y no porque una prueba la sostenga. Escribir una
+prueba de carrera que la matase «casi siempre» habría dado una contraprueba
+falsa; un hueco declarado vale más.
+
+**Lo que B protegía, y no es hipotético.** Comparar contra la raíz *tal como
+llegó* hace que el padre canónico —que sí está resuelto— no empiece nunca por
+ella, y entonces **toda ruta legítima se rechaza**. En macOS `env::temp_dir()`
+vive bajo `/var`, que es un enlace a `/private/var`; en Android las descargas se
+alcanzan por `/storage/emulated/0`. La prueba nueva monta el enlace a mano, así
+que muerde en Linux también.
+
+**Lo que ya estaba bien, comprobado y no tocado.** Nombres reservados
+(`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`LPT9`), punto o espacio final, caracteres de
+control, `Cf` de Unicode, UNC, prefijo de unidad, 1024 de longitud máxima y NUL
+incrustado: todo en `RelativePath::parse`. Y **dos nombres que normalizan igual**
+los para `PortableCollisionKey` —NFC más minúsculas, segmentos unidos por NUL— con
+su regla de prefijo, que también impide que `a` llegue como archivo y como
+carpeta en el mismo manifiesto.
+
 ## QYR-0398 — La dirección que sale de un código se recortaba con «…» y no se podía copiar
 
 - Estado: **CERRADO**
@@ -1076,6 +1159,44 @@ final de una tanda de auditoría.
 
 **La pregunta que cierra esta ficha:** ¿promete Qyro una defensa que no tiene?
 **Ya no.**
+
+### Revisado el 2026-09-03, y el argumento de arriba se queda cortísimo
+
+Se volvió a mirar con el encargo de **conectarlo**. No se conecta, y la razón es
+mejor —y peor— que «falta una pantalla».
+
+**1. Tal como está llamado hoy, `Changed` es estructuralmente inalcanzable.** No
+es que nadie llame a `rememberPeer`: es que el consumidor que consulta la libreta
+lo hace **por huella**, no por nombre —
+`native_transfer_service.dart`, `trust.peerTrust(session, fingerprint)` — con un
+comentario que lo explica: «la pantalla de aparatos no tiene otro nombre para un
+aparato que nadie ha nombrado».
+
+Si la clave del libro **es** la huella, un aparato con clave nueva es un nombre
+nuevo. `verdict` contesta `New`, siempre, por construcción. **Cablear
+`rememberPeer` bajo esa clave llenaría la lista y no produciría jamás el aviso**
+— que es exactamente la forma de defecto que este proyecto lleva doce fichas
+encontrando: una capacidad conectada a una pantalla que no da la propiedad que
+promete.
+
+**2. Y la defensa, cuando se haga, no va en el lado que se piensa.** Un receptor
+sólo puede preguntar «¿conozco esta clave?». No puede preguntar «¿es ésta la
+clave que esperaba **de Fulano**?», porque quién dice ser el que llama es
+justamente lo que no se puede creer del cable. La comparación con memoria sólo
+tiene sentido en **el lado que marca**: se compara contra la entrada de aquel a
+quien uno **eligió** llamar. Es el modelo de `known_hosts`, y la diferencia no es
+de gusto, es de quién elige.
+
+**3. Y la mitad que sí existe conviene decirla.** Desde QYR-0392 un código de
+emparejamiento —tecleado o escaneado— **fija una expectativa de huella y la
+sesión se niega si no coincide**. Eso ya es «este aparato presenta otra clave, me
+niego», para el caso en que uno tiene un código. Lo que falta es la **memoria
+entre sesiones sin código**.
+
+**Así que la retirada se queda**, y con un argumento más afilado: no falta una
+llamada, falta decidir por qué clave se busca y en qué lado se compara. Eso es
+una ADR — y hasta que exista, el `README` sigue diciendo la verdad, que es que
+esta defensa no ocurre.
 
 ## QYR-0380 — Mandar desde el teléfono no funcionaba, por dos motivos a la vez
 
