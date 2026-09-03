@@ -363,12 +363,14 @@ impl FrameStream {
                     if arrived && sent == 0 {
                         return Ok(false);
                     }
-                    if !arrived {
-                        // Ni escribe ni habla: se espera, como antes, pero
-                        // volviendo a mirar. Dos milisegundos son invisibles al
-                        // lado de lo que se está esperando y no queman una CPU.
-                        std::thread::sleep(Duration::from_millis(2));
-                    }
+                    // Se duerme **siempre** que no se vuelve, y no sólo cuando
+                    // no llegó nada. Con la siesta dentro de un `if !arrived`,
+                    // un par que manda mientras no lee —que es el caso normal
+                    // de un receptor ocupado— dejaba este bucle girando a plena
+                    // CPU: escribir da `WouldBlock`, absorber da `true`, y
+                    // vuelta a empezar sin pausa. Dos milisegundos son
+                    // invisibles al lado de lo que se está esperando.
+                    std::thread::sleep(Duration::from_millis(2));
                 }
                 Err(error) if is_peer_gone(error.kind()) => {
                     return Err(NetError::PeerVanished { kind: error.kind() });
