@@ -1236,6 +1236,47 @@ nadie puede volver a alinear.
 
 Medido en Linux tras el cambio: **275, 280, 284 ms**. El rango no se mueve.
 
+### Séptima y octava vueltas: 2352 vueltas sin una sola noticia
+
+La séptima volvió a medir en vez de arreglar, con dos contadores —`step_tally()`,
+que ya existía por QYR-0365, y `write_tally()`, nuevo— y los bytes movidos.
+**Windows contestó lo que ninguna hipótesis había previsto:**
+
+```
+emisor -- pasos/vencidas: (2, 0), paradas/noticias: (2352, 0),
+          bytes movidos: 1048576
+```
+
+Dos pasos. **Dos mil trescientas cincuenta y dos paradas de escritura en seis
+segundos, y ninguna trajo un solo byte.** Con el receptor diciendo, en la misma
+línea, `adios: Some("escrito")`.
+
+Así que el emisor **no estaba sordo por no mirar**: miraba, cada dos
+milisegundos, y no veía nada. Miraba con una lectura **no bloqueante** —un `recv`
+distinto del que hace `read_frame`— y con esa no aparecía nada. Y el bucle sólo
+sabía salir **«cuando el par habla»**: **la condición de salida daba por supuesto
+exactamente lo que estaba fallando.**
+
+Eso es lo que ninguna de las cuatro hipótesis anteriores podía ver, porque las
+cuatro razonaban sobre *dónde* estaba el emisor y ninguna sobre *qué estaba
+observando desde ahí*.
+
+**La octava vuelta pone un plazo sobre lo único observable desde dentro del
+bucle: si no se coloca un byte en dos segundos, se suelta.** Sale por el camino
+que corresponda —el frame entero si no había empezado, la trama truncada si sí— y
+el paso se va a leer **por el camino normal**, que es una lectura bloqueante con
+su propio plazo. Cualquier avance reinicia el reloj: lo que se mide es «sin poder
+escribir», no «desde que empezó».
+
+Dos segundos es holgado a propósito. Un emisor que lleva dos segundos sin colocar
+un byte no está transfiriendo: está atascado, y lo peor que puede pasarle por
+soltar es perder una trama de una sesión que ya no va a ninguna parte.
+
+**Y si esto tampoco basta, el propio arreglo lo dirá**: el emisor pasará a
+acumular lecturas vencidas en `step_tally()`, y entonces lo que estará probado es
+que **tampoco la lectura bloqueante ve nada**, que es una afirmación mucho más
+fuerte y mucho más rara que cualquiera de las ocho que se han probado hasta aquí.
+
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
 segundos.
