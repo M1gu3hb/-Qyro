@@ -14,7 +14,9 @@ Estados: `cerrado`, `descartado`, `abierto`. No hay más.
 
 ## QYR-0403 — El receptor nunca dice «ya estoy escuchando», y dos guardas nunca se habían ejecutado
 
-- Estado: **ABIERTO** el hallazgo de producto; **CERRADAS** las dos guardas
+- Estado: **CERRADO** el defecto que impedía recibir, con CI en verde que lo
+  dice; **CERRADAS** las dos guardas; y **ABIERTO** lo de la señal de «ya estoy
+  escuchando», que es otra cosa y se explica en §1
 - Severidad: **MEDIA** — no corrompe nada, pero produce un «conexión rechazada»
   que manda a buscar donde no es
 - Fecha: 2026-09-03
