@@ -137,8 +137,7 @@ final class QyroFailed extends QyroTransferState {
   final int? code;
 
   @override
-  String toString() =>
-      'QyroFailed(kind: $kind, reason: $reason, code: $code)';
+  String toString() => 'QyroFailed(kind: $kind, reason: $reason, code: $code)';
 }
 
 /// Why a transfer did not deliver.
