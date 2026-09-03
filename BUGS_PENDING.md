@@ -886,6 +886,61 @@ es Linux, donde la prueba ya pasaba; el mecanismo está diagnosticado y el arreg
 ataca justo esa causa, y **quien lo confirma es CI**. Si CI sigue rojo, el
 diagnóstico estaba mal y hay que volver aquí — no subir el plazo.
 
+### Segunda vuelta, 2026-09-03: CI siguió rojo, y el diagnóstico estaba mal
+
+El párrafo de arriba decía qué hacer si CI seguía rojo, y **siguió rojo en el
+mismo commit**. Así que se vuelve aquí y no se sube ningún plazo.
+
+**Lo que el diagnóstico erraba.** No es que el RST se coma un adiós ya escrito:
+es que **el emisor nunca llega a leerlo**. La prueba deja al receptor cancelando
+y luego **quieto cinco segundos con el socket vivo**, sin leer. El emisor empuja;
+el buffer de recepción del par se llena; y `advance()` **escribe antes de leer** —
+`write_outbound()` es la primera línea— así que el emisor se queda **bloqueado
+dentro de `write`**, que no tiene plazo (ADR-0028 §4.3, a propósito). Sigue
+bloqueado hasta que el receptor suelta la sesión a los cinco segundos; ese cierre
+manda el RST; **y el RST descarta el buffer de recepción del emisor**, con la
+cancelación dentro. El emisor despierta con un reset y lo nombra
+`PeerUnreachable`.
+
+`GOODBYE_DRAIN` no podía arreglarlo: vacía el cable **750 ms** y luego el receptor
+se queda quieto los cinco segundos restantes. Se queda igualmente, porque hacer
+que un adiós se oiga sigue siendo lo correcto, pero **no era esto**.
+
+**Por qué Linux lo tapaba, medido y no supuesto.** Un paso escribe la ventana del
+motor —16 × 64 KiB, **1 MiB**— y el `rmem` que Linux autoajusta en loopback se la
+traga entera: el emisor nunca se bloquea. En Windows el buffer de recepción por
+omisión son **64 KB** y ese mega no cabe. La diferencia sigue siendo de buffers;
+lo que cambia es dónde muerde.
+
+**Y el defecto es peor que el nombre.** Un emisor que sólo mira el cable después
+de escribir **no atiende un cancelar hasta haber empujado el archivo entero**.
+Sobre cuatro gigas eso son minutos u horas de «Cancelar» pulsado y nada
+ocurriendo, que es lo contrario de lo que pide ADR-0050 §4.2. El nombre en
+Windows era el síntoma visible de eso.
+
+**El arreglo de verdad: mirar el cable antes de empujar.** `Stream::poll_frame()`
+—no bloqueante, sin plazo, sin tocar el reloj de inactividad ni la cuenta de
+lecturas vencidas— y `advance()` lo llama **antes** de `write_outbound()`, sólo en
+el emisor, que es el único que empuja volumen. Si lo que hay es una cancelación,
+el motor la recibe y la sesión termina con su nombre sin haber escrito un byte
+más. Si es un frame normal, el paso sigue igual y no se lee dos veces.
+
+El socket vuelve a modo bloqueante **por todos los caminos**, incluidos los que
+fallan: uno que se quedara en no bloqueante convertiría cada lectura posterior en
+un `WouldBlock`, que este crate lee como latido, que convertiría una conexión
+sana en una silenciosa.
+
+**La prueba, y lo que NO demuestra.**
+`un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final` manda **32 MiB**,
+deja al receptor mudo con el socket vivo, y exige dos cosas: el nombre correcto
+**y** que llegue en menos de tres segundos, cuando el receptor no cierra hasta los
+seis. Enterarse pronto sólo puede ser por haber mirado el cable.
+
+Se le quitó el arreglo para verle los dientes y **siguió pasando en Linux**, por
+lo dicho arriba: aquí el emisor no se bloquea nunca. **Sus dientes están en
+Windows y no aquí, y se escribe así en vez de dejar creer que la suite verde de
+Linux la respalda.** Quien confirma sigue siendo CI.
+
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
 segundos.

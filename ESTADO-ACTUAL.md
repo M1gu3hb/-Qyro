@@ -769,9 +769,11 @@ de forma que en la fase 15, esta vez detenido por la puerta y no por CI.
    QYR-0089, **QYR-0089 duplicada entera** al principio del archivo, y ninguna
    cabecera. **167 fichas, 1 abierta** — antes decía «155, 0».
 5. **`STATUS.md` daba un número de pruebas y son dos.** Windows **753**, medido
-   hoy aquí; Linux, lo que diga CI — esta máquina compila y lintea para Linux
-   pero **no ejecuta sus binarios**, y el último publicado (750) es anterior a
-   los cambios de hoy. Se cita como la medida anterior, no como la actual.
+   hoy aquí; Linux, lo que diga CI — esa máquina compila y lintea para Linux pero
+   **no ejecuta sus binarios**. *(Al día 2026-09-03: el 750 que se citaba era la
+   medida **vieja** —`c2d9a80`, 2026-08-18— y el 766 de `03-EL-CAMINO-AL-99.md`
+   la nueva; parecía una regresión y era una cita mal elegida. Ya no se cita: se
+   mide. **830 pasadas, 0 fallos**, ejecutadas en Linux el 2026-09-03.)*
 
 **De regalo:** la prueba del enlace simbólico fallaba en cualquier consola sin
 `SeCreateSymbolicLinkPrivilege` (error 1314) — indistinguible de «el resolvedor
@@ -903,7 +905,7 @@ se suelte— así que cada uno es una casilla más:
 
 ---
 
-## 0. LA RELEASE — retractada en público, y a medio rehacer
+## 0. LA RELEASE — retractada en público, y ahora con una sucesora que sí se publica
 
 **Hecho hoy, y está vivo en
 <https://github.com/M1gu3hb/-Qyro/releases/tag/v1.0.0>:**
@@ -917,24 +919,42 @@ se suelte— así que cada uno es una casilla más:
 
 **Lo que falta, y está dicho también en las notas públicas:**
 
-1. **El APK — y hay un bloqueo con nombre.** `app-release.apk` sigue siendo el de
-   antes y **no lleva el arreglo de QYR-0362**: la aplicación sigue sin poder
-   enviar.
+1. **El APK — y el bloqueo tenía fecha de caducidad, que ya pasó.** El
+   `app-release.apk` que cuelga de la `v1.0.0` sigue siendo el de antes y **no
+   lleva el arreglo de QYR-0362**: aquella aplicación sigue sin poder enviar, y
+   por eso la retractación se queda donde está.
 
-   **No se puede reconstruir en esta máquina y no es falta de tiempo:**
-   `flutter doctor` encuentra el SDK de Android 36.0.0 pero **las licencias no
-   están aceptadas** (`Android license status unknown`). Aceptarlas es aceptar un
-   acuerdo legal en nombre del dueño, y eso no lo hace el implementador —
-   **lo tiene que hacer una persona**, con `flutter doctor --android-licenses`, o
-   hacerlo el CI con sus propias credenciales.
+   Lo que ha caducado es el motivo por el que no se rehacía. Decía: «no se puede
+   reconstruir en esta máquina, `flutter doctor` encuentra el SDK de Android
+   36.0.0 pero **las licencias no están aceptadas**, y aceptarlas es aceptar un
+   acuerdo legal en nombre del dueño». Eso sigue siendo verdad **de la máquina
+   del propietario**, y sigue siendo la razón correcta para no aceptarlas ahí.
 
-   Hasta entonces el hueco se queda en blanco y **está dicho en las notas
-   públicas de la Release**, no sólo aquí.
-2. **`qyro-windows-x64.zip`**, el paquete completo con la GUI de escritorio,
-   tampoco está rehecho.
+   Pero **la última frase de aquel párrafo ya decía la salida** — «o hacerlo el
+   CI con sus propias credenciales»— y el CI lleva desde entonces haciéndolo: los
+   runners de `ubuntu-latest` traen el SDK con las licencias ya aceptadas por
+   GitHub, y `release.yml` construye el APK **release** de las tres ABIs en cada
+   `workflow_dispatch`. El bloqueo no era del proyecto: era de una máquina, y
+   había otra.
 
-No se borró nada ni se despublicó: la nota se queda aunque el fallo esté
-corregido, porque quien descargó aquello merece saber qué tenía en las manos.
+   Lo que sí sigue en pie, y no es un trámite: **ese APK va firmado con la clave
+   de depuración**, que es pública y universal. Se llama
+   `app-release-debugkey.apk` para que no se confunda, y las notas lo dicen en
+   mayúsculas.
+2. **`qyro-windows-x64.zip`** lo construye el mismo `release.yml`, en
+   `windows-latest`, con `verify_windows_package.ps1` comprobando el paquete
+   antes de comprimirlo.
+3. **Y ninguno de los dos estaba publicado.** Hasta el 2026-09-03 `release.yml`
+   sólo subía *artefactos de corrida*, que caducan a los 90 días y que hay que
+   estar registrado en GitHub para descargar. **Nadie fuera del repositorio podía
+   coger un binario.** Ahora tiene un trabajo `publish` que crea la Release con
+   el `GITHUB_TOKEN` automático —no hace falta ningún secreto del propietario— y
+   sube los dos archivos con sus SHA-256 medidos sobre lo que sube.
+
+No se borró nada ni se despublicó: la `v1.0.0` retractada se queda con su título
+y sus tres archivos, porque quien descargó aquello merece saber qué tenía en las
+manos. La publicación nueva lleva **otra etiqueta**, y `release.yml` se niega a
+correr si le piden `v1.0.0`.
 
 ---
 

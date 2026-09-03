@@ -385,6 +385,119 @@ impl FrameStream {
         }
     }
 
+    /// Looks for a frame **without waiting a single millisecond**.
+    ///
+    /// `Ok(None)` means "nothing is ready right now", which is a different
+    /// sentence from [`Self::read_frame`]'s `Ok(None)`: that one has waited
+    /// [`READ_TIMEOUT`] first and counts against the idle clock. This one has
+    /// waited for nothing and counts against nothing.
+    ///
+    /// **QYR-0400, and it exists for the caller that is about to write.** A
+    /// sender pushing a file writes until the peer's buffer is full and then
+    /// **blocks inside `write`**, where it cannot see that the peer has already
+    /// cancelled — and it stays blocked until the peer closes. On Windows that
+    /// close arrives as an RST, and an RST **discards whatever was sitting in
+    /// this side's receive buffer**, cancellation included: the sender wakes up
+    /// to a reset and reports «the other device is not responding» about a peer
+    /// that told it, politely and in time, that it had stopped.
+    ///
+    /// Looking before pushing costs one non-blocking `read` per step.
+    ///
+    /// The socket is put back into blocking mode before returning **on every
+    /// path**, including the failing ones: a socket left non-blocking turns
+    /// every later read into a spurious `WouldBlock`, which this crate reads as
+    /// a heartbeat, which would turn a working connection into a silent one.
+    ///
+    /// # Errors
+    ///
+    /// The same endings as [`Self::read_frame`], minus the ones that need
+    /// waiting: [`NetError::PeerSilent`] cannot come from here.
+    pub fn poll_frame(&mut self) -> Result<Option<DecodedFrame>, NetError> {
+        // What is already decoded needs no socket at all.
+        match self.decoder.next_frame() {
+            Ok(Some(frame)) => return Ok(Some(frame)),
+            Ok(None) => {}
+            Err(error) => return Err(NetError::Framing(error)),
+        }
+
+        self.socket
+            .set_nonblocking(true)
+            .map_err(|error| NetError::SocketFailed {
+                operation: SocketOp::Configure,
+                kind: error.kind(),
+            })?;
+        let absorbed = self.absorb_once();
+        let restored = self
+            .socket
+            .set_nonblocking(false)
+            .map_err(|error| NetError::SocketFailed {
+                operation: SocketOp::Configure,
+                kind: error.kind(),
+            });
+        // Restoring comes first even when the read failed, and its own failure
+        // wins: a socket stuck in non-blocking mode is worse than any single
+        // read's outcome.
+        restored?;
+        if !absorbed? {
+            return Ok(None);
+        }
+        self.decoder.next_frame().map_err(NetError::Framing)
+    }
+
+    /// One read into the decoder. `Ok(false)` means nothing was ready.
+    ///
+    /// Shared by nobody on purpose: [`Self::read_frame`]'s loop exists to
+    /// *wait*, and its timeout arm consults the idle clock. This one exists not
+    /// to wait, so the same arm would be answering a question nobody asked.
+    fn absorb_once(&mut self) -> Result<bool, NetError> {
+        let window = self.read_window();
+        if window == 0 {
+            return Err(NetError::PreAuthByteLimitExceeded {
+                attempted: self.preauth_taken,
+                limit: MAX_PREAUTH_BYTES,
+            });
+        }
+        let Some(slice) = self.buffer.get_mut(..window) else {
+            return Err(NetError::SocketFailed {
+                operation: SocketOp::Read,
+                kind: io::ErrorKind::InvalidInput,
+            });
+        };
+        match self.socket.read(slice) {
+            Ok(0) => Err(self.orderly_close()),
+            Ok(count) => {
+                self.last_byte_at = Instant::now();
+                if !self.authenticated {
+                    self.preauth_taken = self.preauth_taken.saturating_add(count);
+                }
+                #[cfg(test)]
+                {
+                    self.bytes_read = self.bytes_read.saturating_add(count);
+                    self.read_calls = self.read_calls.saturating_add(1);
+                }
+                let Some(fresh) = self.buffer.get(..count) else {
+                    return Err(NetError::SocketFailed {
+                        operation: SocketOp::Read,
+                        kind: io::ErrorKind::InvalidData,
+                    });
+                };
+                self.decoder.push(fresh).map_err(NetError::Framing)?;
+                Ok(true)
+            }
+            // Nothing ready, and in non-blocking mode that is the ordinary
+            // answer rather than an expiry.
+            Err(error) if is_read_timeout(error.kind()) => Ok(false),
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => Ok(false),
+            Err(error) if is_peer_gone(error.kind()) => {
+                Err(NetError::PeerVanished { kind: error.kind() })
+            }
+            Err(error) => Err(NetError::SocketFailed {
+                operation: SocketOp::Read,
+                kind: error.kind(),
+            }),
+        }
+    }
+
     /// Produces the next frame, waiting through heartbeats.
     ///
     /// For callers with nothing to check between wakeups — tests, and the

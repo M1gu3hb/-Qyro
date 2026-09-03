@@ -2210,3 +2210,100 @@ fn setenta_y_cinco_segundos_pensando_no_deberian_matar_al_emisor() {
     );
     assert_eq!(materialised, Ok(1), "no se materializo el archivo");
 }
+
+/// Un cancelar llega **mientras el emisor empuja**, y no cuando ha terminado.
+///
+/// La hermana de arriba manda 4 MiB, que en Linux **caben en los buffers**: la
+/// escritura termina sola, el paso siguiente lee la cancelación, y el nombre
+/// sale bien sin que nadie haya mirado el cable a tiempo. Por eso aquélla pasaba
+/// aquí y fallaba en Windows, donde los buffers son menores.
+///
+/// Ésta manda 32 MiB, que **no caben en ningún buffer de ninguna plataforma**.
+/// El receptor cancela y luego **deja de leer del todo**, con el socket vivo, que
+/// es exactamente lo que hace una persona que le da a «Cancelar» y suelta el
+/// teléfono. Sin mirar el cable antes de escribir, el emisor se bloquea dentro
+/// de `write` hasta que el otro cierre —y entonces el nombre que da es el del
+/// cierre, no el del cancelar.
+///
+/// Lo que se afirma son **dos** cosas, y la segunda es la que importa para una
+/// transferencia de verdad: que se entera **por el protocolo**, y que se entera
+/// **pronto** — antes de haber empujado el archivo entero. Un cancelar que sólo
+/// se atiende cuando ya no queda nada que cancelar no es un cancelar.
+///
+/// **Y hay que decir lo que esta prueba NO demuestra aquí.** Se le quitó el
+/// arreglo a propósito para verle los dientes, y **siguió pasando en Linux**: un
+/// paso escribe la ventana del motor —16 × 64 KiB, 1 MiB— y el `rmem` que Linux
+/// autoajusta en loopback se la traga entera, así que el emisor nunca llega a
+/// bloquearse y lee la cancelación en el paso siguiente de todos modos. En
+/// Windows el buffer de recepción por omisión son 64 KB y ese mismo mega **no
+/// cabe**: ahí es donde el bloqueo ocurre y donde esta prueba muerde.
+///
+/// Así que sus dientes están **medidos en Windows y no aquí**, y eso se escribe
+/// en vez de dejar creer que una suite verde en Linux la respalda. Para
+/// enseñarlos en Linux habría que encoger `SO_RCVBUF`, que no se alcanza desde
+/// la API pública de este crate; forzarlo hablando el protocolo a mano contra un
+/// socket crudo sería una prueba de otra cosa.
+#[test]
+fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
+    ensure_identity();
+    let root = Scratch::new("pushcancelsrc");
+    let destination = Scratch::new("pushcanceldst");
+    let file = root.path("grande.bin");
+    // 32 MiB. Por encima de cualquier `wmem`/`rmem` que un núcleo autoajuste en
+    // loopback, así que el emisor **tiene** que bloquearse escribiendo si nadie
+    // lee al otro lado. Ésa es la condición que esta prueba necesita montar.
+    const NO_CABE_EN_NINGUN_BUFFER: usize = 32 * 1024 * 1024;
+    std::fs::write(&file, vec![b'q'; NO_CABE_EN_NINGUN_BUFFER]).expect("se escribe");
+
+    let address = loopback(a_free_port());
+    let target = destination.dir.clone();
+
+    let receiving = thread::spawn(move || {
+        let Ok(mut session) = Session::open_receiver(address, &target, None) else {
+            return;
+        };
+        let _ = session.step();
+        let _ = session.step();
+        session.cancel();
+        // El paso que lleva la cancelación al cable.
+        let _ = session.step();
+        // **Y a partir de aquí no lee ni un byte más**, con el socket abierto.
+        // Seis segundos: mucho más de lo que el emisor debería tardar en
+        // enterarse, para que «tardó lo que tardó el otro en cerrar» no pueda
+        // pasar por «se enteró».
+        thread::sleep(std::time::Duration::from_secs(6));
+        drop(session);
+    });
+
+    let mut sender = open_sender_when_ready(address, &root.dir, &[file]);
+    let mut outcome = Ok(SessionState::InProgress);
+    let started = std::time::Instant::now();
+    if let Ok(session) = sender.as_mut() {
+        while matches!(outcome, Ok(SessionState::InProgress))
+            && started.elapsed() < std::time::Duration::from_secs(5)
+        {
+            outcome = session.step();
+        }
+    }
+    let elapsed = started.elapsed();
+    let _ = receiving.join();
+
+    assert!(
+        !matches!(outcome, Err(SessionError::PeerUnreachable)),
+        "el emisor leyo la cancelacion como «el otro aparato no responde»: {outcome:?}"
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(SessionError::Cancelled) | Err(SessionError::TransferRefused)
+        ),
+        "la cancelacion llego con un nombre inesperado: {outcome:?}"
+    );
+    // **Y pronto.** El receptor no cierra hasta los seis segundos, así que
+    // enterarse antes de los tres sólo puede ser por haber mirado el cable en
+    // vez de por haberse chocado con un socket cerrado.
+    assert!(
+        elapsed < std::time::Duration::from_secs(3),
+        "el emisor tardo {elapsed:?} en enterarse de un cancelar que llego al          principio: no miro el cable hasta que el otro cerro"
+    );
+}

@@ -1003,6 +1003,54 @@ impl Session {
 
     fn advance(&mut self) -> Result<SessionState, SessionError> {
         self.steps = self.steps.saturating_add(1);
+
+        // **Mirar el cable antes de empujar** (QYR-0400), y sólo el emisor.
+        //
+        // Un emisor escribe hasta llenar el buffer del par y entonces **se
+        // bloquea dentro de `write`**, donde no puede enterarse de nada. Si lo
+        // que el par hizo fue cancelar, ese bloqueo dura hasta que el par
+        // cierra — y en Windows un cierre con datos sin leer manda un RST, que
+        // **descarta lo que hubiera en el buffer de recepción de este lado**.
+        // La cancelación estaba ahí, entregada y a tiempo, y se pierde: el
+        // emisor despierta con un reset y dice «el otro aparato no responde»
+        // de alguien que se lo había dicho.
+        //
+        // En Linux no se veía porque 4 MiB caben en los buffers: la escritura
+        // termina, el paso siguiente lee la cancelación, y el nombre sale bien.
+        // **Una suite verde en Linux no prueba nada sobre esto.**
+        //
+        // Y no es sólo el nombre. Sin esto, un cancelar contra una transferencia
+        // grande no se atiende hasta que el archivo entero está en el cable, que
+        // es lo contrario de lo que pide ADR-0050 §4.2.
+        //
+        // Sólo el emisor: es el único que empuja volumen. Y va antes de
+        // `write_outbound` porque después ya sería tarde — el bloqueo ocurre
+        // ahí. Cuando esto entrega un frame que **no** termina la sesión, el
+        // paso continúa normal: se escribe lo pendiente y no se lee dos veces.
+        let mut delivered_early = false;
+        if matches!(self.role, Role::Sending { .. }) {
+            match self.stream.poll_frame() {
+                Ok(Some(frame)) => {
+                    let bytes = frame
+                        .try_encode()
+                        .map_err(|_| SessionError::TransferRefused)?;
+                    if let Role::Sending { engine, .. } = &mut self.role {
+                        engine
+                            .deliver(&bytes)
+                            .map_err(|_| SessionError::TransferRefused)?;
+                    }
+                    delivered_early = true;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    if self.finished() {
+                        return Ok(self.verdict());
+                    }
+                    return Err(net_error(&error));
+                }
+            }
+        }
+
         self.write_outbound()?;
 
         // **El único silencio que este protocolo produce a propósito es el de
@@ -1038,23 +1086,31 @@ impl Session {
         }
         self.last_step_at = Instant::now();
 
-        let inbound = match self.stream.read_frame() {
-            Ok(Some(frame)) => Some(
-                frame
-                    .try_encode()
-                    .map_err(|_| SessionError::TransferRefused)?,
-            ),
-            Ok(None) => {
-                // Venció el reloj de lectura sin un frame. **Es el suceso que
-                // QYR-0365 mide.**
-                self.expired_reads = self.expired_reads.saturating_add(1);
-                None
-            }
-            Err(error) => {
-                if self.finished() {
-                    return Ok(self.verdict());
+        // Ya se entregó lo que había arriba: leer otra vez aquí sería esperar
+        // `READ_TIMEOUT` por noticias que ya se tienen. Y **no cuenta como una
+        // lectura vencida**: no venció nada, llegó antes. Sumarla ahí falsearía
+        // la única cifra con la que QYR-0365 mide si este bucle espera de más.
+        let inbound = if delivered_early {
+            None
+        } else {
+            match self.stream.read_frame() {
+                Ok(Some(frame)) => Some(
+                    frame
+                        .try_encode()
+                        .map_err(|_| SessionError::TransferRefused)?,
+                ),
+                Ok(None) => {
+                    // Venció el reloj de lectura sin un frame. **Es el suceso
+                    // que QYR-0365 mide.**
+                    self.expired_reads = self.expired_reads.saturating_add(1);
+                    None
                 }
-                return Err(net_error(&error));
+                Err(error) => {
+                    if self.finished() {
+                        return Ok(self.verdict());
+                    }
+                    return Err(net_error(&error));
+                }
             }
         };
 

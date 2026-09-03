@@ -279,13 +279,20 @@ contra el código que existe: `THREAT_MODEL.md`.
 
   | Plataforma | Pruebas | De dónde sale |
   |---|---|---|
-  | **Windows** | **769 pasadas, 0 fallos** | medido en esta máquina el 2026-08-19, tras la fase 24 |
-  | **Linux** | lo que diga el trabajo `rust` de `ci.yml` | **de CI, no de aquí**: esta máquina no ejecuta binarios de Linux, sólo los compila y los lintea con `--target` |
+  | **Windows** | **769 pasadas, 0 fallos** | medido en la máquina del propietario el 2026-08-19, tras la fase 24 |
+  | **Linux** | **831 pasadas, 0 fallos** | medido el 2026-09-03 **ejecutando**, con `cargo test --workspace --all-features` — la misma orden que corre el trabajo `rust` de `ci.yml`, para que los dos números sean comparables |
 
-  El último recuento de Linux publicado fue **750**, y es **anterior** a los
-  cambios de hoy —el arreglo de `ptr_arg` y el salto del enlace simbólico—, así
-  que se cita como lo que es: la medida anterior, no la actual. **Inventar la
-  actual sería inventar evidencia.**
+  **Sobre el «766 → 750» que parecía una regresión: no lo es, y se comprueba en
+  las cabeceras de los propios documentos.** El 750 se midió sobre `c2d9a80` el
+  2026-08-18 (`docs/fase-implementacion-2/02-ORDEN-FINAL.md`, 506 commits) y el
+  766 sobre `c4252a5` el 2026-08-19 (`03-EL-CAMINO-AL-99.md`, 513 commits): **el
+  750 es el número viejo**, y este archivo lo citaba como «el último publicado»
+  un día después de que otro documento ya llevara el 766. No se retiró ninguna
+  prueba; se citó la medida equivocada. La cura no es elegir mejor entre dos
+  citas, es **medir**, que es lo que hace ahora la fila de Linux.
+
+  Las dos plataformas siguen ejecutando conjuntos distintos por construcción, así
+  que los dos números no tienen por qué coincidir nunca.
 
   `flutter test`: **122 pasadas** (eran 92; la 14 sumó el cliente de
   descubrimiento y su pantalla). Las saltadas de Dart siguen saltando sin la
