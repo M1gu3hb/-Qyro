@@ -86,6 +86,9 @@ prefiera construirlos.
 
 **Salta esto si ya has descargado los archivos de §2.A**, y ve a §3.
 
+*(Los pasos de esta parte son §2.0 a §2.4. Se dejan con esos números porque el
+resto de la guía los cita así.)*
+
 Todo lo de aquí se hace **una vez**, en el PC, con una ventana de **PowerShell**
 abierta en la carpeta del repositorio.
 
