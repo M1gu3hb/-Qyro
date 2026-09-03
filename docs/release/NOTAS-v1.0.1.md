@@ -1,6 +1,6 @@
 <!-- Las notas de la Release v1.0.1, revisables en git antes de publicarse.
-     `release.yml` las publica tal cual y les pega debajo los dos SHA-256 que
-     mide sobre los archivos que sube. La prosa se revisa aqui; los numeros no
+     `release.yml` las publica tal cual y les pega debajo los SHA-256 que mide
+     sobre los archivos que sube. La prosa se revisa aqui; los numeros no
      los escribe una persona. -->
 
 ## Lo primero, porque es lo que decide si esto sirve para algo
@@ -29,14 +29,21 @@ esta decidido y escrito. **Los dos avisos tienen razon.**
 
 ## Que es esto
 
-Los dos artefactos de Qyro, construidos por GitHub Actions en la corrida que se
-nombra al final, con sus SHA-256 medidos por la misma maquina que los construyo.
+Los **tres** artefactos de Qyro, construidos por GitHub Actions en la corrida que
+se nombra al final, con sus SHA-256 medidos por la misma maquina que los
+construyo.
 
 | Archivo | Que es |
 |---|---|
+| `qyro.exe` | **El de terminal, y el que usa la guia de prueba.** Un solo archivo: se copia donde sea y funciona. |
 | `app-release-debugkey.apk` | La aplicacion de Android. Tres ABIs (`arm64-v8a`, `armeabi-v7a`, `x86_64`), alineada a 16 KB y medido sobre el APK, no sobre lo que salio del enlazador. |
-| `qyro-windows-x64.zip` | La aplicacion de escritorio de Windows x64, portable. **Hace falta la carpeta entera**: el `.exe` solo no arranca. |
-| `SHA256SUMS.txt` | Los dos hashes. |
+| `qyro-windows-x64.zip` | La aplicacion de escritorio de Windows x64, portable. **Hace falta la carpeta entera**: el `.exe` de dentro, solo, no arranca. |
+| `SHA256SUMS.txt` | Los tres hashes. |
+
+**Ojo con los dos `qyro.exe`, que es el aviso que mas tiempo hace perder.** El
+`qyro.exe` suelto de esta pagina es el de **terminal**. El `qyro.exe` que hay
+dentro de `qyro-windows-x64.zip` es la aplicacion **con ventanas** y necesita la
+carpeta entera. Se llaman igual y no son intercambiables.
 
 Para instalar y probar, `docs/GUIA-DE-PRUEBA.md` esta escrita para alguien que no
 ha leido nada de este repositorio.
@@ -55,7 +62,7 @@ QYR-0362. Estos binarios llevan esos arreglos.
 
 | Que | Por que |
 |---|---|
-| **Windows 7 y Windows 8** | El `.exe` de esta ZIP necesita Windows 10 u 11. Hay un binario de terminal aparte para Windows 7 y no va en esta Release. |
+| **Windows 7 y Windows 8** | Los dos `.exe` de esta pagina necesitan Windows 10 u 11. Hay un binario aparte para Windows 7 —lo construye `win7-builds.yml`— y **no va en esta Release**: nadie lo ha arrancado nunca en un Windows 7 de verdad, solo se ha medido que su tabla de imports esta limpia. |
 | **iPhone** | No hay version de iOS. Construirla necesita un Mac, y este proyecto no tiene ninguno. |
 | **Mandar por QR desde el telefono** | La direccion esta fijada: **el PC dibuja los codigos y el telefono los lee** (ADR-0044 §6). Al reves no existe, porque el PC no tiene camara. |
 | **El canal por cable serie** | Solo esta en el binario de terminal, y no tiene interfaz. Telefono ↔ PC por serie no es una prueba posible. |

@@ -357,7 +357,7 @@ jobs:
         run: |
           set -euo pipefail
           tag='${{ inputs.tag }}'
-          title="Qyro $tag - los dos artefactos, y lo que no se ha probado"
+          title="Qyro $tag - los tres artefactos, y lo que no se ha probado"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release edit "$tag" --title "$title" --notes-file dist/NOTAS.md --prerelease
             gh release upload "$tag" \
