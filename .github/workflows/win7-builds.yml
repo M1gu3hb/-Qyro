@@ -72,11 +72,27 @@ jobs:
       # `dumpbin /imports` completo, guardado. ADR-0049 §3 deja escrito que la
       # confirmacion sobre `msvc` estaba PENDIENTE porque `R8` §10 midio sobre
       # `-gnu`; esta salida es lo que la convierte en una medida.
+      #
+      # **`shell: pwsh` y no `pwsh -Command` dentro de otro shell** (QYR-0399).
+      # El runner de Windows ya ejecuta PowerShell, asi que el `$d` de la cadena
+      # interior lo expandia **el shell de fuera** -- a vacio -- antes de que
+      # pwsh lo viera. Lo que llegaba a ejecutarse era `= (...)` y `& /imports`,
+      # y eso es exactamente lo que el registro decia: «The term '=' is not
+      # recognized» y «The term '/imports' is not recognized».
+      #
+      # Este paso no fallaba antes porque nunca se llegaba a el: el chequeo de
+      # imports moria primero.
       - name: La tabla de imports, para el informe
-        run: >
-          pwsh -NoProfile -Command
-          "$d = (Get-ChildItem '${env:ProgramFiles}\Microsoft Visual Studio' -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
-           & $d /imports target/${{ matrix.win7 }}/release/qyro.exe | Out-File -Encoding utf8 imports-${{ matrix.win7 }}.txt"
+        shell: pwsh
+        run: |
+          $dumpbin = (Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $dumpbin) {
+            Write-Error "[BLOCKER] no se encontro dumpbin.exe, asi que no hay tabla de imports que guardar"
+            exit 1
+          }
+          & $dumpbin /imports "target/${{ matrix.win7 }}/release/qyro.exe" |
+            Out-File -Encoding utf8 "imports-${{ matrix.win7 }}.txt"
+          Write-Host "[PASS] tabla de imports guardada en imports-${{ matrix.win7 }}.txt"
 
       - uses: actions/upload-artifact@v4
         with:

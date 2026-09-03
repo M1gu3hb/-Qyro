@@ -900,6 +900,22 @@ saltos declarado y exige que el aviso conserve **su argumento y su condición de
 caducidad**, que es lo que la primera línea de `audit.toml` prohíbe perder.
 Comprobado con dientes quitándole esa condición.
 
+### Y dos más que sólo aparecieron al arreglar los primeros
+
+**El paso que guarda la tabla de imports de Windows 7 nunca se había ejecutado.**
+Moría el chequeo de imports antes de llegar a él, así que su defecto estaba
+escondido detrás de otro: `run: >` con `pwsh -NoProfile -Command "…$d…"` dentro
+de un runner que **ya es PowerShell**, de modo que `$d` lo expandía el shell de
+fuera —a vacío— antes de que pwsh lo viera. Lo que se ejecutaba era `= (...)` y
+`& /imports`, y eso es literalmente lo que el registro decía. Reescrito con
+`shell: pwsh` y un bloque, más un mensaje si no aparece `dumpbin.exe`.
+
+**Y la confirmación de que el arreglo del triple funcionó:** en la corrida
+siguiente, `check_win7_imports.ps1` **pasa** — ya no aparece `vcruntime140.dll`.
+ADR-0049 §3 dejó escrito que la confirmación sobre `msvc` estaba PENDIENTE
+porque `R8` §10 midió sobre `-gnu`; esa tabla de imports es lo que la convierte
+en una medida, y ahora se puede guardar.
+
 ### Lo que esto deja escrito
 
 **Una puerta local verde no es la puerta.** `cargo test --workspace` no construye
