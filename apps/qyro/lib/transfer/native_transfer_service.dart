@@ -435,7 +435,7 @@ final class NativeTransferService implements QyroTransferService {
         session.dispose();
       }
     } on QyroSessionFailure catch (failure) {
-      yield QyroFailed(kind: _kindOf(failure.code));
+      yield QyroFailed(kind: _kindOf(failure.code), code: failure.code);
     }
   }
 
@@ -475,7 +475,7 @@ final class NativeTransferService implements QyroTransferService {
       return;
     }
     yield QyroMoving(done: last.done, total: last.total, fingerprint: '');
-    yield QyroFailed(kind: _kindOf(code));
+    yield QyroFailed(kind: _kindOf(code), code: code);
   }
 
   @override
@@ -725,7 +725,7 @@ final class NativeTransferService implements QyroTransferService {
         _receiveRefusedByMe =>
           const QyroFailed(kind: QyroFailureKind.refusedByMe),
         _receiveIntegrity => const QyroFailed(kind: QyroFailureKind.integrity),
-        _ => QyroFailed(kind: _kindOf(code)),
+        _ => QyroFailed(kind: _kindOf(code), code: code),
       };
     } finally {
       await subscription.cancel();

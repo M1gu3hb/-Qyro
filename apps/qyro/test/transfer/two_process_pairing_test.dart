@@ -188,7 +188,7 @@ void main() {
           reason: 'the second process could not use the code: '
               '${sender.stdout}\n${sender.stderr}\n'
               'estados vistos por el receptor: '
-              '${seen.map((s) => s is QyroFailed ? "QyroFailed(${s.kind})" : s.runtimeType).toList()}\n'
+              '$seen\n'
               'errores del receptor: $failures',
         );
 

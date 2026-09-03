@@ -117,12 +117,28 @@ final class QyroDelivered extends QyroTransferState {
 
 /// It ended without delivering, and the reason is carried, not summarised.
 final class QyroFailed extends QyroTransferState {
-  const QyroFailed({required this.kind, this.reason});
+  const QyroFailed({required this.kind, this.reason, this.code});
 
   final QyroFailureKind kind;
 
   /// Set only when the far end said why (ADR-0035, QYR-0089).
   final QyroRejectReason? reason;
+
+  /// El código crudo del motor, cuando vino de él.
+  ///
+  /// **QYR-0403.** [QyroFailureKind.internal] es el comodín de **ocho** códigos
+  /// distintos —mango inválido, tabla llena, pánico, puntero nulo, cerradura
+  /// envenenada, argumento, desconocido, identidad— y decir «algo interno
+  /// falló» sin el número no lo puede accionar nadie: ni quien lee la pantalla,
+  /// que al menos podría dictarlo, ni quien lo investiga desde otra máquina.
+  ///
+  /// No cambia ninguna decisión: la pantalla sigue enseñando la frase de
+  /// [kind]. Esto es para el que pregunta «¿cuál?».
+  final int? code;
+
+  @override
+  String toString() =>
+      'QyroFailed(kind: $kind, reason: $reason, code: $code)';
 }
 
 /// Why a transfer did not deliver.
