@@ -160,8 +160,10 @@ void main() {
                 '${sender.stderr}'.contains('ConnectionRefused');
             attempt++) {
           await Future<void>.delayed(const Duration(milliseconds: 250));
+          // `smoke` sin `!`: el de arriba ya lo promovio a no nulo, y repetirlo
+          // es lo que `unnecessary_non_null_assertion` marca.
           sender = await Process.run(
-            smoke!,
+            smoke,
             <String>['send', address, original.path],
           );
         }
