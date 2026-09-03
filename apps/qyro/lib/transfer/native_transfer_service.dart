@@ -458,11 +458,13 @@ final class NativeTransferService implements QyroTransferService {
     //
     // `_drainReceive` ya lo capturaba. Esta mitad no.
     var code = QyroCode.unknown;
+    String? detail;
     try {
       code = await outcome;
     } on QyroSessionFailure catch (failure) {
       code = failure.code;
-    } on Object {
+    } on Object catch (error) {
+      detail = '$error';
       // Un worker puede morir por cosas que no son un `QyroSessionFailure`, y
       // ninguna de ellas debe salir por el stream sin un estado: «no pasó nada»
       // no es un final que alguien pueda leer. `unknown` llega a la pantalla
@@ -475,7 +477,7 @@ final class NativeTransferService implements QyroTransferService {
       return;
     }
     yield QyroMoving(done: last.done, total: last.total, fingerprint: '');
-    yield QyroFailed(kind: _kindOf(code), code: code);
+    yield QyroFailed(kind: _kindOf(code), code: code, detail: detail);
   }
 
   @override
@@ -706,15 +708,21 @@ final class NativeTransferService implements QyroTransferService {
       final pending = <QyroTransferState>[];
       final reader = buffered.stream.listen(pending.add);
       var code = 0;
+      String? detail;
       try {
         code = await outcome;
       } on QyroSessionFailure catch (failure) {
         code = failure.code;
-      } on Object {
+      } on Object catch (error) {
         // QYR-0384, la misma razón que en `_drain`: un worker puede morir por
         // algo que no es un `QyroSessionFailure`, y salir por el stream sin un
         // estado deja la pantalla en blanco.
+        //
+        // **Y QYR-0403: la excepción se guarda.** Antes se tiraba aquí mismo, y
+        // lo que llegaba al otro extremo era `internal` a secas: ni número ni
+        // frase, o sea nada sobre lo que actuar.
         code = QyroCode.unknown;
+        detail = '$error';
       }
       await reader.cancel();
       for (final state in pending) {
@@ -725,7 +733,7 @@ final class NativeTransferService implements QyroTransferService {
         _receiveRefusedByMe =>
           const QyroFailed(kind: QyroFailureKind.refusedByMe),
         _receiveIntegrity => const QyroFailed(kind: QyroFailureKind.integrity),
-        _ => QyroFailed(kind: _kindOf(code), code: code),
+        _ => QyroFailed(kind: _kindOf(code), code: code, detail: detail),
       };
     } finally {
       await subscription.cancel();

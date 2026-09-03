@@ -117,7 +117,12 @@ final class QyroDelivered extends QyroTransferState {
 
 /// It ended without delivering, and the reason is carried, not summarised.
 final class QyroFailed extends QyroTransferState {
-  const QyroFailed({required this.kind, this.reason, this.code});
+  const QyroFailed({
+    required this.kind,
+    this.reason,
+    this.code,
+    this.detail,
+  });
 
   final QyroFailureKind kind;
 
@@ -136,8 +141,19 @@ final class QyroFailed extends QyroTransferState {
   /// [kind]. Esto es para el que pregunta «¿cuál?».
   final int? code;
 
+  /// Lo que dijo la excepción que mató al trabajador, cuando la hubo.
+  ///
+  /// **QYR-0403.** Los dos sitios que atrapan «algo que no es un
+  /// `QyroSessionFailure`» ponían el código en `unknown` y **tiraban la
+  /// excepción**. `QyroFailureKind.internal` sin número ya era poco; sin número
+  /// y sin frase no lo puede accionar nadie.
+  ///
+  /// No se enseña en la pantalla: es para el registro y para quien pregunte.
+  final String? detail;
+
   @override
-  String toString() => 'QyroFailed(kind: $kind, reason: $reason, code: $code)';
+  String toString() =>
+      'QyroFailed(kind: $kind, reason: $reason, code: $code, detail: $detail)';
 }
 
 /// Why a transfer did not deliver.
