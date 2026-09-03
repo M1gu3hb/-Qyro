@@ -1043,6 +1043,53 @@ de producto medida —un emisor que empuja 32 MiB se entera de un cancelar en
 
 - Estado revisado: **ABIERTO**, esperando el dato de CI.
 
+### Cuarta vuelta, 2026-09-03: el instrumento contestó, y con el dato el arreglo es otro
+
+**Lo que dijo CI**, que es lo que las tres vueltas anteriores no tenían:
+
+```
+el emisor leyo la cancelacion como «el otro aparato no responde»:
+Err(PeerUnreachable), final del cable: PeerVanished, tras 6.2797509s
+```
+
+**`PeerVanished` a los 6,28 s**, y el receptor de esa prueba suelta el socket a
+los **6,0 s**. Los dos números juntos cierran la pregunta: el emisor no se enteró
+de nada **hasta que el otro cerró**, y lo que le llegó fue el RST de ese cierre.
+La segunda vuelta tenía razón sobre el mecanismo —el emisor se bloquea
+escribiendo— y **el arreglo estaba en el sitio equivocado**: `poll_frame` se
+llama al principio de `advance()`, y el emisor no vuelve a llegar ahí nunca,
+porque se queda dentro de `write_outbound()`, en la primera línea del paso.
+Mirar el cable **antes** de empujar no sirve cuando el empuje dura seis
+segundos.
+
+**El arreglo, ahora sí donde ocurre.** `Stream::write_frame_watching()`: la
+escritura se hace en modo no bloqueante y, **cuando el socket deja de aceptar
+bytes**, en vez de dormir a ciegas se absorbe lo que haya llegado. Si el par ha
+hablado y de este frame no ha entrado ni un byte, devuelve `Ok(false)`: el frame
+vuelve **entero** a la cola y el paso se va a leer.
+
+**Nunca se para a medio frame**, que es la única razón por la que ADR-0028 §4.3
+prohíbe un plazo de escritura —«deja un frame a medias y de eso no se
+resincroniza» (ADR-0018)—. Aquí no hay plazo, no hay frame a medias, y la
+vivacidad no cambia: donde antes se bloqueaba, ahora espera igual, **pero
+oyendo**.
+
+Y lo aplazado no se pierde: `self.outbound` pasa de `= producido` a
+`.extend(producido)`, porque una asignación borraría los frames que
+`write_outbound` acaba de devolver a la cola. En el caso normal la cola está
+vacía y las dos cosas son la misma.
+
+**Por qué no hay livelock.** Sólo se aplaza cuando la escritura **no podía
+progresar de todas formas**. Si el socket acepta bytes, no se mira nada y se
+escribe. «No puedo escribir y el otro ha hablado» tiene una sola respuesta
+sensata, y es leer.
+
+**Medido en Linux tras el cambio:** 274, 279, 285 ms para enterarse de un
+cancelar con 32 MiB en vuelo — el mismo rango que antes, así que oír no cuesta
+nada aquí. **Y quien confirma Windows sigue siendo CI**: si esta vuelta falla,
+el instrumento volverá a decir cuál de los cinco finales fue, que es para lo que
+se puso.
+
 **Y una nota sobre el reloj:** el cambio de QYR-0393 no puede haber causado esto.
 Sólo mueve el plazo de silencio entre 60 s y 600 s, y esta prueba falla en cuatro
 segundos.

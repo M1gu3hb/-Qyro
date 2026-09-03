@@ -279,6 +279,110 @@ impl FrameStream {
         }
     }
 
+    /// Escribe un frame **sin quedarse sordo mientras lo hace**.
+    ///
+    /// `Ok(true)` — el frame entero salió. `Ok(false)` — **no salió ni un byte
+    /// de él** porque el otro lado no acepta más y, mientras tanto, ha mandado
+    /// algo: el frame **está intacto**, el llamante puede devolverlo a la cola y
+    /// leer. Nunca se para a medio frame, así que no hay nada que
+    /// resincronizar (ADR-0018).
+    ///
+    /// **QYR-0400, y la tercera vuelta de una ficha que se arregló dos veces
+    /// mal.** [`Self::write_frame`] usa `write_all` sobre un socket bloqueante:
+    /// cuando el par deja de leer —que es exactamente lo que hace quien
+    /// cancela— el emisor se queda **dentro de `write`** y no vuelve a mirar el
+    /// cable. Sigue ahí hasta que el par cierra, y en Windows ese cierre es un
+    /// RST que **borra el buffer de recepción de este lado**, con la
+    /// cancelación dentro. Medido en CI: el final que le llegaba al emisor era
+    /// `PeerVanished`, **a los 6,28 s**, que es justo cuando el receptor
+    /// soltaba el socket. No era el protocolo: era que nadie estaba mirando.
+    ///
+    /// **Y esto no contradice a ADR-0028 §4.3**, que prohíbe un plazo de
+    /// escritura porque «una escritura que vence a medio frame deja un frame a
+    /// medias y de eso no se resincroniza». Aquí no hay plazo y no se abandona
+    /// nada a medias: sólo se para **entre** frames, y sólo cuando la
+    /// alternativa era no escribir igualmente. La vivacidad no cambia — donde
+    /// antes se bloqueaba, ahora espera igual, pero oyendo.
+    ///
+    /// # Errors
+    ///
+    /// Las mismas que [`Self::write_frame`], más las de lectura si el socket
+    /// falla al absorber lo que llega.
+    pub fn write_frame_watching(&mut self, encoded: &[u8]) -> Result<bool, NetError> {
+        self.socket
+            .set_nonblocking(true)
+            .map_err(|error| NetError::SocketFailed {
+                operation: SocketOp::Configure,
+                kind: error.kind(),
+            })?;
+        let outcome = self.push_watching(encoded);
+        let restored = self
+            .socket
+            .set_nonblocking(false)
+            .map_err(|error| NetError::SocketFailed {
+                operation: SocketOp::Configure,
+                kind: error.kind(),
+            });
+        // Restaurar gana al resultado: un socket que se quedara en no
+        // bloqueante convertiría cada lectura posterior en un `WouldBlock`, que
+        // este crate lee como latido, que convertiría una conexión sana en una
+        // silenciosa.
+        restored?;
+        outcome
+    }
+
+    /// El bucle de [`Self::write_frame_watching`], con el socket ya no
+    /// bloqueante.
+    fn push_watching(&mut self, encoded: &[u8]) -> Result<bool, NetError> {
+        let mut sent = 0_usize;
+        loop {
+            let Some(rest) = encoded.get(sent..) else {
+                return Err(NetError::SocketFailed {
+                    operation: SocketOp::Write,
+                    kind: io::ErrorKind::InvalidInput,
+                });
+            };
+            if rest.is_empty() {
+                return Ok(true);
+            }
+            match self.socket.write(rest) {
+                // Cero escritos sobre un buffer no vacío no es un error del
+                // sistema y no es progreso: se trata como el par que se fue,
+                // porque seguir pidiendo lo mismo es girar en el sitio.
+                Ok(0) => {
+                    return Err(NetError::PeerVanished {
+                        kind: io::ErrorKind::WriteZero,
+                    });
+                }
+                Ok(count) => sent = sent.saturating_add(count),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) if is_read_timeout(error.kind()) => {
+                    // El otro lado no acepta más. **Aquí es donde se mira el
+                    // cable**, que es lo que no se hacía.
+                    let arrived = self.absorb_once()?;
+                    if arrived && sent == 0 {
+                        return Ok(false);
+                    }
+                    if !arrived {
+                        // Ni escribe ni habla: se espera, como antes, pero
+                        // volviendo a mirar. Dos milisegundos son invisibles al
+                        // lado de lo que se está esperando y no queman una CPU.
+                        std::thread::sleep(Duration::from_millis(2));
+                    }
+                }
+                Err(error) if is_peer_gone(error.kind()) => {
+                    return Err(NetError::PeerVanished { kind: error.kind() });
+                }
+                Err(error) => {
+                    return Err(NetError::SocketFailed {
+                        operation: SocketOp::Write,
+                        kind: error.kind(),
+                    });
+                }
+            }
+        }
+    }
+
     /// Flushes anything the socket is holding.
     ///
     /// # Errors

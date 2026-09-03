@@ -1046,10 +1046,22 @@ impl Session {
     /// leaving them in `outbound` makes a successful transfer end as
     /// `PeerUnreachable` on the sending side (QYR-0316).
     fn write_outbound(&mut self) -> Result<(), SessionError> {
-        for frame in core::mem::take(&mut self.outbound) {
-            self.stream
-                .write_frame(&frame)
-                .map_err(|error| noting(&mut self.wire_ending, &error))?;
+        let mut queue = core::mem::take(&mut self.outbound).into_iter();
+        while let Some(frame) = queue.next() {
+            match self.stream.write_frame_watching(&frame) {
+                Ok(true) => {}
+                // **El par no acepta más y ha dicho algo** (QYR-0400). No entró
+                // ni un byte de este frame, así que vuelve entero a la cola y el
+                // paso se va a leer. Escribir más contra alguien que ya ha
+                // hablado es lo que dejaba al emisor sordo hasta que el otro
+                // cerraba.
+                Ok(false) => {
+                    self.outbound.push(frame);
+                    self.outbound.extend(queue);
+                    return Ok(());
+                }
+                Err(error) => return Err(noting(&mut self.wire_ending, &error)),
+            }
         }
         self.stream
             .flush()
@@ -1183,7 +1195,10 @@ impl Session {
                 let produced = engine
                     .pump(source)
                     .map_err(|_| SessionError::TransferRefused)?;
-                self.outbound = produced;
+                // `extend` y no `=`: `write_outbound` puede haber devuelto
+                // frames a la cola al oír al par, y una asignación los borraría.
+                // En el caso normal la cola está vacía y esto es lo mismo.
+                self.outbound.extend(produced);
                 self.nothing_left_to_send = self.outbound.is_empty();
                 self.progress.done = engine.bytes_sent();
                 self.progress.item = engine.item_in_flight();
@@ -1217,7 +1232,8 @@ impl Session {
                                 .map_err(|_| SessionError::StorageRefused)?,
                         );
                     }
-                    self.outbound = answers;
+                    // `extend` y no `=`, por lo mismo que en el emisor.
+                    self.outbound.extend(answers);
                 }
                 // Lo que faltaba para que la barra del receptor no fuera un cero
                 // fijo. Va fuera del `if let Some(bytes)` a proposito: un paso
