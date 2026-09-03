@@ -167,11 +167,18 @@ void main() {
             <String>['send', address, original.path],
           );
         }
+        // **Y si falla, que lo diga TODO.** `seen` y `failures` se recogen
+        // arriba y no se enseñaban nunca: un receptor que no llegó a abrir el
+        // socket —el puerto ocupado, el isolate caído— sale exactamente igual
+        // que uno que abrió tarde, y desde fuera son la misma frase. Es el
+        // mismo `let _ =` de siempre, escrito en Dart.
         expect(
           sender.exitCode,
           0,
           reason: 'the second process could not use the code: '
-              '${sender.stdout}\n${sender.stderr}',
+              '${sender.stdout}\n${sender.stderr}\n'
+              'estados vistos por el receptor: $seen\n'
+              'errores del receptor: $failures',
         );
 
         // 4. **La pregunta tenía objeto.** ADR-0036 §1 dice que nada se acepta
