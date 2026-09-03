@@ -667,3 +667,87 @@ Es la misma razón por la que existe la enmienda 6.
 existe, la GUI lo llama y hay una guarda que lo comprueba desde el gate. Que un
 teléfono lea un QR dibujado por una terminal es la fase 19 y el hueco sigue en
 blanco.
+
+---
+
+## Enmienda 8 (2026-09-03, QYR-0381) — un símbolo, porque el teléfono leía el código de emparejamiento y lo tiraba
+
+`qyro qr` dibuja un código de emparejamiento —`QYRO1|ip:puerto|huella`— y lo
+acompaña de una frase literal: **«Point the other device's camera at this.»**
+
+**El teléfono apuntaba la cámara, leía el QR, y lo tiraba.** No por un fallo:
+por una línea escrita a propósito. `Eye::look` decodifica el QR, intenta leerlo
+como frame de fuente, y cuando no lo es hace esto:
+
+```rust
+let Ok(frame) = decode_frame(&bytes) else {
+    // Un QR que no es de Qyro. En una habitación con carteles, esto es
+    // lo normal, no un ataque.
+    return Look::Nothing;
+};
+```
+
+El comentario es correcto para un cartel de la pared. **Y el código de
+emparejamiento de Qyro cae en esa misma rama**, porque no es un frame de fuente:
+es texto. Así que el único QR que este producto pide a alguien que escanee es
+exactamente el que el escáner descarta, una línea antes de poder usarlo.
+
+### Lo que eso significa para QYR-0381
+
+QYR-0381 dice «CERRADO en el CLI, abierto en la GUI». La mitad tecleada se cerró
+en QYR-0392: la pantalla de Enviar saca la huella del código con
+`qyro_pairing_fingerprint` (enmienda 7) y la compara con la del apretón. **La
+mitad escaneada no estaba abierta: no existía.** No había forma de que un código
+llegara a esa pantalla desde una cámara.
+
+Y la consecuencia no es «falta una comodidad». ADR-0044 §6 fija la dirección —**la
+terminal dibuja y el teléfono lee**— porque la máquina que necesita el canal
+óptico es la que no tiene cámara. Sin esto, esa decisión no tiene la mitad que le
+toca al teléfono.
+
+### El símbolo
+
+```c
+/* El código de emparejamiento que acaba de leerse por la cámara, si lo hubo.
+   Texto, contrato de la enmienda 1: capacidad cero para preguntar el tamaño. */
+int32_t qyro_scanner_pairing(uint64_t handle, uint8_t *out,
+                             size_t capacity, size_t *out_len);
+```
+
+**Treinta y cinco.** No cruza ningún tipo nuevo.
+
+Y un estado más en el entero que ya devuelve `qyro_scanner_look`:
+`ScanState::Pairing = 4`. Los cuatro anteriores describen un archivo en camino;
+éste dice que lo leído **no** era un archivo y sí un código, que es una rama
+distinta de la pantalla y no un grado de progreso.
+
+### Dónde vive la decisión de qué es un código, y por qué no en el ojo
+
+`qyro_eye` **no** aprende el formato. Gana una variante honesta —`Look::Foreign`,
+«un QR que decodifiqué y no es un frame mío»— y guarda esos bytes. Quien decide
+si eso es un emparejamiento es `qyro_session::Scanner`, que ya puede nombrar a
+`qyro_net` y por tanto usa **el analizador de verdad**, `PairingEndpoint::parse`.
+
+El formato sigue viviendo en un solo sitio. Es la misma razón de la enmienda 7,
+que descartó partir la cadena en Dart: una versión futura del formato tendría que
+arreglarse en dos sitios, o peor, en uno.
+
+### Lo que esta enmienda compra en seguridad, y lo que no
+
+**No compra confianza.** Un código escaneado sigue siendo lo que ADR-0035 §2.1
+dice: una **expectativa**. Lo que compra es que la expectativa llegue a donde ya
+se comprueba — la pantalla de Enviar, por el camino que QYR-0392 cableó — en vez
+de perderse en la cámara.
+
+Y lo compra **por construcción, no por disciplina**: el código escaneado entra
+por el mismo campo que un código tecleado, así que pasa por el mismo
+`fingerprintOfPairingString` y el mismo `expectedFingerprint`. No hay una segunda
+ruta que alguien pueda olvidarse de proteger. Si la hubiera, sería la que falla.
+
+### Lo que esta enmienda **no** promete
+
+**Que ninguna cámara haya leído nunca uno de estos códigos.** El símbolo existe,
+el ojo lo reconoce, la pantalla lo dial y hay pruebas que lo fijan — incluida una
+contraprueba que cambia un carácter de la huella y exige que el envío se niegue.
+Que un teléfono de verdad lea un QR dibujado por una terminal de verdad es la
+fase 19, y su hueco sigue en blanco.
