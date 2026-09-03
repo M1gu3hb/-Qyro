@@ -366,8 +366,22 @@ impl FrameStream {
         /// byte es que no va a aceptarlo.
         const GRACIA_A_MEDIA_TRAMA: Duration = Duration::from_millis(250);
 
+        /// Cuánto se insiste con una escritura que **no avanza y no trae
+        /// noticias**, antes de soltarla y ponerse a escuchar de verdad.
+        ///
+        /// **QYR-0400, octava vuelta, y sale de una medida.** En Windows el
+        /// emisor daba **2352 vueltas de este bucle en seis segundos y ninguna
+        /// trajo un solo byte**: miraba el cable con una lectura **no
+        /// bloqueante** —que es un `recv` distinto del que hace `read_frame`— y
+        /// se quedaba ahí hasta que el otro cerraba. Un emisor que lleva dos
+        /// segundos sin poder colocar un byte no está transfiriendo: está
+        /// atascado, y lo que le toca es soltar y escuchar por el camino
+        /// normal.
+        const SIN_PODER_ESCRIBIR: Duration = Duration::from_secs(2);
+
         let mut sent = 0_usize;
         let mut heard_at: Option<Instant> = None;
+        let mut stuck_since: Option<Instant> = None;
         loop {
             let Some(rest) = encoded.get(sent..) else {
                 return Err(NetError::SocketFailed {
@@ -387,12 +401,18 @@ impl FrameStream {
                         kind: io::ErrorKind::WriteZero,
                     });
                 }
-                Ok(count) => sent = sent.saturating_add(count),
+                Ok(count) => {
+                    sent = sent.saturating_add(count);
+                    // Cualquier avance reinicia el reloj: el plazo es «sin poder
+                    // escribir», no «desde que empezó».
+                    stuck_since = None;
+                }
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
                 Err(error) if is_read_timeout(error.kind()) => {
                     // El otro lado no acepta más. **Aquí es donde se mira el
                     // cable**, que es lo que no se hacía.
                     self.write_stalls = self.write_stalls.saturating_add(1);
+                    stuck_since.get_or_insert_with(Instant::now);
                     let arrived = self.absorb_once()?;
                     if arrived {
                         self.write_absorbs = self.write_absorbs.saturating_add(1);
@@ -402,6 +422,18 @@ impl FrameStream {
                     }
                     if arrived {
                         heard_at.get_or_insert_with(Instant::now);
+                    }
+                    // **Y se suelta también cuando no se oye nada.** Insistir
+                    // sin avanzar y sin noticias es lo que dejaba al emisor seis
+                    // segundos dentro de esta función. Se sale por el camino que
+                    // corresponda —el frame entero si no había empezado, la
+                    // trama truncada si sí— y el paso se va a leer de verdad.
+                    if stuck_since.is_some_and(|at| at.elapsed() >= SIN_PODER_ESCRIBIR) {
+                        return Ok(if sent == 0 {
+                            Wrote::NothingPeerSpoke
+                        } else {
+                            Wrote::PartialPeerSpoke
+                        });
                     }
                     // Ya empezado el frame, se le da un plazo corto a terminarlo
                     // antes de admitir que no va a salir. Sin esto el bucle
