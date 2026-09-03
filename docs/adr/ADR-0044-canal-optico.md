@@ -147,3 +147,40 @@ airgap de carteras no es un requisito de este producto.
 
 **v40 para ir más rápido.** El techo teórico sube y la tasa real **baja**, porque
 los frames ilegibles se descartan enteros. Optimizar el número equivocado.
+
+---
+
+## Enmienda 1 (2026-09-03) — `--force` no existe, y la regla de §5 es absoluta
+
+**§5 dice literalmente: «`--force` existe y avisa». No existe.** `qyro beam`
+rechaza por encima de 20 MB y no hay bandera que lo salte: se comprobó sobre
+`qyro_cli` y no hay un solo `force` en el crate.
+
+Un ADR que promete una bandera que nadie escribió es la misma forma de defecto
+que este proyecto lleva doce fichas encontrando —una capacidad que existe en un
+documento y no en el producto—, así que se cierra por uno de los dos lados. Se
+cierra **quitando la promesa**, no añadiendo la bandera, y el argumento está en la
+propia §5.
+
+**Por qué no se implementa.** §5 dice, tres líneas por encima, que *«una sesión
+desatendida de 3 h falla con probabilidad cercana a 1»* y que *«checkpoint y
+reanudación no son opcionales»*. **La reanudación no existe** (D11): no hay
+checkpoint, no hay reanudación, y un canal sin ellas no puede sobrevivir a un
+salvapantallas.
+
+Así que `--force` no sería «el usuario asume el riesgo». Sería un interruptor con
+**un solo desenlace conocido**: horas de teléfono sostenido en alto para terminar
+sin nada y sin poder continuar por donde iba. Eso no es dar una opción; es poner
+una trampa con una advertencia al lado, que es exactamente lo que §5 se propuso
+evitar cuando escribió *«un canal que acepta en silencio un vídeo de 2 horas no es
+generoso: es una trampa»*.
+
+**El techo de 20 MB no es una limitación pendiente de levantar: es la defensa
+entera**, y es lo que hace que la falta de reanudación no se note. Levantarlo con
+una bandera antes de que exista la reanudación invierte el orden.
+
+**Cuándo se revisa esta enmienda.** Cuando ADR-0044 §5 tenga checkpoint y
+reanudación de verdad. Entonces `--force` deja de ser una trampa y pasa a ser una
+opción, porque una sesión que se puede continuar es otra conversación. Hasta
+entonces la regla es absoluta y el mensaje de rechazo —que dice cuántos minutos
+habría tardado— es la respuesta completa.
