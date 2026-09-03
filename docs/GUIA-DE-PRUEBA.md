@@ -52,9 +52,39 @@ En el teléfono, activa antes la **depuración por USB**:
 
 ---
 
-## 2. Construir los dos archivos
+## 2. Conseguir los tres archivos
 
-**Salta esta sección si ya te han dado el `qyro.exe` y el `.apk`**, y ve a §3.
+### 2.A — Descargarlos ya construidos. **Es el camino corto y es el recomendado.**
+
+**No hace falta construir nada.** Los archivos están publicados, construidos por
+los servidores de GitHub, con sus SHA-256:
+
+**<https://github.com/M1gu3hb/-Qyro/releases/tag/v1.0.1>**
+
+| Archivo | Para qué |
+|---|---|
+| `qyro.exe` | **El de terminal, y el que usa esta guía.** Un solo archivo: se copia donde sea y funciona. |
+| `app-release-debugkey.apk` | La aplicación del teléfono. |
+| `qyro-windows-x64.zip` | La aplicación **con ventanas** para el PC. Opcional, §8. **Hace falta la carpeta entera**: el `.exe` de dentro, solo, no arranca. |
+| `SHA256SUMS.txt` | Los tres hashes, para §3. |
+
+> **El APK está firmado con la clave de depuración, y por eso se llama así.** Esa
+> clave es pública: la tiene todo el que instale el SDK de Android, así que la
+> firma **no dice quién construyó ese archivo**. Sirve para instalar y probar. La
+> clave de firma real no está en el repositorio y no va a estar.
+>
+> Android avisará de que la aplicación viene de fuera de la tienda, y Windows
+> avisará de que el `.exe` no está firmado con certificado. **Los dos avisos
+> tienen razón**; en §6 está qué hacer con ellos.
+
+Con esos archivos en el PC, **ve a §3**. El resto de esta sección es para quien
+prefiera construirlos.
+
+---
+
+### 2.B — Construirlos uno mismo
+
+**Salta esto si ya has descargado los archivos de §2.A**, y ve a §3.
 
 Todo lo de aquí se hace **una vez**, en el PC, con una ventana de **PowerShell**
 abierta en la carpeta del repositorio.

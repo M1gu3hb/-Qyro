@@ -1094,3 +1094,56 @@ fn a_code_read_by_the_camera_reaches_the_screen_that_checks_it() {
          reading prose rather than code"
     );
 }
+
+/// La tabla de paridad y la frase que la resume dicen el mismo número.
+///
+/// **Decía «cinco» cuando había cuatro.** La fila del consejero de canal se
+/// cerró llenándola y el número de abajo se quedó como estaba, así que el
+/// documento cuya tesis es «una prosa que nadie comprueba se desincroniza en la
+/// primera semana» llevaba semanas desincronizado consigo mismo.
+///
+/// Se cuenta lo que hay entre los marcadores, no en el archivo entero: la
+/// cabecera explica qué significa `NO --` y esa mención no es una celda.
+#[test]
+fn the_parity_table_agrees_with_its_own_count() {
+    let root = repo_root();
+    let table = root.join("docs/PARIDAD-GUI-CLI.md");
+    let source = std::fs::read_to_string(&table)
+        .unwrap_or_else(|error| panic!("the parity table is at {}: {error}", table.display()));
+
+    let body = source
+        .split_once("<!-- PARIDAD-INICIO -->")
+        .and_then(|(_, rest)| rest.split_once("<!-- PARIDAD-FIN -->"))
+        .map(|(rows, _)| rows)
+        .expect("the table must keep its PARIDAD-INICIO / PARIDAD-FIN markers");
+
+    let refusals = body
+        .lines()
+        .filter(|line| line.starts_with('|') && line.contains("NO --"))
+        .count();
+    // El control: si el lector deja de ver celdas, esto tiene que gritar en vez
+    // de comparar dos ceros y aplaudir.
+    assert!(
+        refusals > 0,
+        "no se vio una sola celda `NO --` entre los marcadores: el lector se \
+         rompio, no la tabla"
+    );
+
+    let claimed = source
+        .split_once("que quedan en `NO` son decisiones")
+        .map(|(before, _)| before)
+        .and_then(|before| before.rsplit_once("Las "))
+        .map(|(_, tail)| tail.trim().trim_matches('*').to_owned())
+        .and_then(|text| text.parse::<usize>().ok())
+        .expect(
+            "la frase de cierre tiene que decir un numero: «Las **N** que quedan \
+             en `NO` son decisiones»",
+        );
+
+    assert_eq!(
+        claimed, refusals,
+        "la tabla tiene {refusals} celdas `NO --` y la frase de cierre dice \
+         {claimed}. Es exactamente el defecto que esta pagina describe en su \
+         cabecera, cometido dentro de ella: cambia el numero o cambia la tabla"
+    );
+}

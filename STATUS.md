@@ -280,7 +280,7 @@ contra el código que existe: `THREAT_MODEL.md`.
   | Plataforma | Pruebas | De dónde sale |
   |---|---|---|
   | **Windows** | **769 pasadas, 0 fallos** | medido en la máquina del propietario el 2026-08-19, tras la fase 24 |
-  | **Linux** | **831 pasadas, 0 fallos** | medido el 2026-09-03 **ejecutando**, con `cargo test --workspace --all-features` — la misma orden que corre el trabajo `rust` de `ci.yml`, para que los dos números sean comparables |
+  | **Linux** | **832 pasadas, 0 fallos** | medido el 2026-09-03 **ejecutando**, con `cargo test --workspace --all-features` — la misma orden que corre el trabajo `rust` de `ci.yml`, para que los dos números sean comparables |
 
   **Sobre el «766 → 750» que parecía una regresión: no lo es, y se comprueba en
   las cabeceras de los propios documentos.** El 750 se midió sobre `c2d9a80` el

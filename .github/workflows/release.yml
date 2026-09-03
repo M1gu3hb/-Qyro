@@ -177,6 +177,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Build qyro_ffi for Windows, release
         run: cargo build --locked --release --package qyro_ffi
+      # **Y el binario de terminal, que es el que la guia usa de verdad.**
+      # `docs/GUIA-DE-PRUEBA.md` conduce por `qyro.exe` -- un solo archivo, se
+      # copia y funciona -- y hasta hoy ese archivo solo existia como artefacto
+      # de corrida de `cli-builds.yml`, que caduca y que hay que estar
+      # registrado en GitHub para bajar. Una guia que manda a una Release donde
+      # su archivo principal no esta es peor que no mandar a ninguna.
+      #
+      # Con el triple explicito y no por omision: es la ruta que la guia nombra,
+      # y `.cargo/config.toml` cuelga de ese nombre el `+crt-static` sin el cual
+      # el .exe pide vcruntime140.dll en la maquina de al lado.
+      - name: Build the terminal binary, release
+        run: cargo build --locked --release --package qyro_cli --target x86_64-pc-windows-msvc
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.8
@@ -234,9 +246,20 @@ jobs:
           $zip = Join-Path $artifacts 'qyro-windows-x64.zip'
           Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip -Force
 
+          # El binario de terminal va suelto, sin comprimir: es UN archivo, y
+          # pedirle a alguien que descomprima un ZIP de un solo `.exe` para
+          # copiarlo a un pendrive es trabajo inventado.
+          $cli = Join-Path $env:GITHUB_WORKSPACE 'target\x86_64-pc-windows-msvc\release\qyro.exe'
+          Copy-Item -LiteralPath $cli -Destination (Join-Path $artifacts 'qyro.exe')
+
           $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-          "$hash  qyro-windows-x64.zip" | Out-File -FilePath (Join-Path $artifacts 'SHA256SUMS.txt') -Encoding utf8
+          $cliHash = (Get-FileHash -Algorithm SHA256 (Join-Path $artifacts 'qyro.exe')).Hash.ToLower()
+          @(
+              "$hash  qyro-windows-x64.zip"
+              "$cliHash  qyro.exe"
+          ) | Out-File -FilePath (Join-Path $artifacts 'SHA256SUMS.txt') -Encoding utf8
           Write-Host "qyro-windows-x64.zip  $hash"
+          Write-Host "qyro.exe  $cliHash"
           # One string per line rather than embedded escapes: `\n` in a
           # PowerShell double-quoted string is a literal backslash-n, not a
           # newline, and a summary full of `\n` is a summary nobody can copy a
@@ -304,13 +327,15 @@ jobs:
           mkdir -p dist/upload
           apk=dist/android/app-release-debugkey.apk
           zip=dist/windows/qyro-windows-x64.zip
+          cli=dist/windows/qyro.exe
           test -f "$apk"
           test -f "$zip"
-          cp "$apk" "$zip" dist/upload/
+          test -f "$cli"
+          cp "$apk" "$zip" "$cli" dist/upload/
           cd dist/upload
           # Medidos aqui, sobre los archivos que se van a subir. Un hash que
           # viene de un .txt de otro trabajo verifica ese .txt, no el archivo.
-          sha256sum app-release-debugkey.apk qyro-windows-x64.zip > SHA256SUMS.txt
+          sha256sum app-release-debugkey.apk qyro-windows-x64.zip qyro.exe > SHA256SUMS.txt
           cat SHA256SUMS.txt
           cd "$GITHUB_WORKSPACE"
           {
@@ -338,6 +363,7 @@ jobs:
             gh release upload "$tag" \
               dist/upload/app-release-debugkey.apk \
               dist/upload/qyro-windows-x64.zip \
+              dist/upload/qyro.exe \
               dist/upload/SHA256SUMS.txt --clobber
           else
             gh release create "$tag" \
@@ -347,6 +373,7 @@ jobs:
               --prerelease \
               dist/upload/app-release-debugkey.apk \
               dist/upload/qyro-windows-x64.zip \
+              dist/upload/qyro.exe \
               dist/upload/SHA256SUMS.txt
           fi
           # Y la retractada sigue ahi: se comprueba, no se supone.

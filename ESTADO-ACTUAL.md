@@ -1067,23 +1067,53 @@ corrida en `07278ff`, el commit que el informe nombra.
   máquinas. Que dos aparatos se encuentren por un cable **no está verificado**.
 - **`NsdManager` no está ejercitado.** Las pruebas Dart usan un `MethodChannel`
   falso: prueban el lado Dart, no Android.
+- **El permiso de cámara no falta** (QYR-0378): `CAMERA` está en
+  `app/src/main/AndroidManifest.xml` con `uses-feature required="false"` —un
+  aparato sin cámara sigue siendo un aparato Qyro, le quedan la red, el cable
+  directo y el serie— y **se pide en tiempo de ejecución** desde
+  `ScannerChannel.kt`, que es lo que declararlo no hace. Lo que falta es la línea
+  siguiente, y es de hardware.
 - **Ninguna cámara ha leído un QR de Qyro.** La vuelta completa la hace un
   decodificador sobre píxeles perfectos. Desenfoque, obturador rodante, moiré,
   brillo y pantalla en ángulo son fase 19.
-- **El teléfono no acumula frames todavía.** El motor los produce y son legibles;
-  el lado Android que los junta no existe.
-- **La GUI y el CLI no se han hablado nunca.** Es la fase 21 y está a medias.
+- ~~**El teléfono no acumula frames todavía.**~~ **Caducada el 2026-09-03.** El
+  lado Android existe desde la fase 24B: `ScanScreen`, `QyroScanner`,
+  `ScannerChannel.kt` y `qyro_eye`, con su puerta puesta en QYR-0371 y, desde
+  QYR-0381, con el código de emparejamiento que `qyro qr` dibuja llegando hasta
+  el campo de Enviar. Lo que sigue en blanco es la línea de abajo —**ninguna
+  cámara de verdad**—, que es otra cosa.
+- ~~**La GUI y el CLI no se han hablado nunca.**~~ **Caducada.** La fase 21 está
+  HECHA (informe en `docs/reports/fase-21-las-dos-caras.md`): las cuatro casillas
+  de la matriz pasan con el binario `qyro` de verdad al otro lado y comparación
+  byte a byte. Lo que no se ha hecho es en **dos máquinas**, que es la primera
+  línea de esta lista y sigue en blanco.
 - **Ningún cable serie ha llevado un byte de Qyro.** El protocolo se probó
   sobre una cola en proceso y `certutil` sobre bytes reales; los dos puertos de
   esta máquina son endpoints Bluetooth, no un par enlazado. Fase 19.
-- **El canal serie no llega a la GUI.** No hay símbolo en la frontera C, y
-  ninguna pantalla lo menciona.
-- **La reanudación del canal óptico no existe** (D11). ADR-0044 §5 la exige para
-  sesiones largas; el límite de 20 MB es lo que hoy impide llegar a una.
-- **La GUI de escritorio no tiene descubrimiento.** No hay símbolo en la
-  frontera C. Lo dice con una frase, no con una lista vacía.
-- El binario **no arranca en Windows 7** (`api-ms-win-core-synch-l1-2-0.dll`,
-  fase 17).
+- **El canal serie no llega a la GUI**, y ya no es un hueco: es una decisión con
+  su argumento, en la fila «Canal serie (fase 16)» de `docs/PARIDAD-GUI-CLI.md`.
+  Un canal de terminal para una máquina de terminal; no hay símbolo en la
+  frontera C y **ninguna pantalla lo menciona**, que es la única forma honesta de
+  no tenerlo.
+- **La reanudación del canal óptico no existe** (D11), y el techo de 20 MB deja
+  de ser «lo que hoy impide llegar a una sesión larga» para ser **la defensa
+  entera**: ADR-0044 **Enmienda 1** retira la bandera `--force` que la §5
+  prometía y nadie escribió, porque sin checkpoint sería un interruptor con un
+  solo desenlace conocido. Se revisa cuando haya reanudación de verdad.
+- **La GUI de escritorio no tiene descubrimiento**, y ya es una fila `NO --` con
+  su argumento en `docs/PARIDAD-GUI-CLI.md`: la frontera C es la **misma
+  biblioteca que viaja dentro del APK**, y `mdns-sd` casi dobló el binario de
+  terminal (666 624 → 1 295 872 bytes, D9), así que sacarlo por un símbolo nuevo
+  metería ese peso en `libqyro_ffi.so` por tres ABIs y en cada teléfono, para
+  servir algo que Android no necesita. Y **lo dice con una frase, no con una
+  lista vacía**: sin respondedor, `QyroDiscoveryUnavailable` hace que la pantalla
+  diga que **no puede mirar**, que no es «no hay nadie».
+- **Nadie ha arrancado el binario en un Windows 7 de verdad.** Lo que sí hay
+  ahora es una medida: `check_win7_imports.ps1` **pasa** sobre el `.exe` de
+  `x86_64-win7-windows-msvc` —ya no aparece `vcruntime140.dll`—, y eso convierte
+  en medida la confirmación que ADR-0049 §3 dejó escrita como pendiente. Una
+  tabla de imports limpia no es un arranque: **no hay ninguna máquina con
+  Windows 7 en este proyecto**, y ese hueco se queda en blanco.
 
 ---
 

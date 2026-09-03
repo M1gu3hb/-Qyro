@@ -75,6 +75,7 @@ la puerta puesta, la celda cita el sitio que la abre.
 | Peers recordados | `apps/qyro/lib/transfer/transfer_screens.dart:205` | `NO -- el CLI no tiene libreta. Recuerda las claves igual (el motor es el mismo) pero no las lista: una lista que no se puede tocar es una pantalla, y una terminal ya tiene qyro whoami para lo unico accionable` |
 | Descubrimiento sin router (fase 14) | `apps/qyro/lib/transfer/native_transfer_service.dart:256` | `rust/crates/qyro_cli/src/flows.rs:696` |
 | Leer un codigo de emparejamiento por la camara | `apps/qyro/lib/scanner/scan_screen.dart:29` | `NO -- la terminal DIBUJA y no lee (ADR-0044 §6). La maquina que necesita este canal es la que no tiene camara, asi que pedirle que escanee seria pedirle justo lo que no puede. Su mitad es qyro qr` |
+| Descubrimiento en la GUI **de escritorio** | `NO -- la frontera C es la MISMA biblioteca que viaja dentro del APK. mdns-sd casi doblo el binario de terminal (666 624 -> 1 295 872 bytes, D9), y sacarlo por un simbolo nuevo meteria ese peso en libqyro_ffi.so por TRES ABIs, en cada telefono, para servir una capacidad que Android no necesita: alli se descubre por NsdManager, donde la eleccion de la persona ES el permiso (ADR-0035 §7). Y la pantalla no lo disimula: sin responder de la plataforma lanza QyroDiscoveryUnavailable y dice que NO PUEDE MIRAR, que no es lo mismo que «no hay nadie». La maquina que tiene esta ventana tiene tambien qyro discover en su terminal` | `rust/crates/qyro_cli/src/flows.rs:696` |
 | Canal optico (fase 15) | `apps/qyro/lib/home/home_screen.dart:88` | `rust/crates/qyro_cli/src/flows.rs:794` |
 | Canal serie (fase 16) | `NO -- un canal de terminal para una maquina de terminal. La GUI no lo menciona en ninguna pantalla, que es la unica forma honesta de no tenerlo` | `rust/crates/qyro_cli/src/serial.rs:165` |
 | Ver QUE se ofrece antes de aceptar | `apps/qyro/lib/transfer/transfer_screens.dart:658` | `rust/crates/qyro_cli/src/flows.rs:473` |
@@ -115,5 +116,13 @@ decisión habría sido convertir un pendiente en una frase que se lee como cerra
 —la superficie pasa de 24 a 25 símbolos, con su enmienda en ADR-0032— y
 `qyro_advice_test.dart` la ejerce contra la biblioteca de verdad.
 
-Las cinco que quedan en `NO` son decisiones, cada una con su argumento en la
+Las **5** que quedan en `NO` son decisiones, cada una con su argumento en la
 celda.
+
+**Y ese número lo cuenta una guarda, porque ya se había desincronizado.** Decía
+«cinco» cuando en la tabla había **cuatro**: la fila del consejero de canal se
+cerró llenándola y nadie bajó el número. Es el defecto que este documento
+describe en su propia cabecera, cometido dentro de él.
+`qyro_core::repository_contract::the_parity_table_agrees_with_its_own_count`
+compara la cifra de esta frase con las celdas `NO --` de la tabla, dentro de
+`cargo test --workspace`.
