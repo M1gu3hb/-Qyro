@@ -527,6 +527,7 @@ dependencies = [
 name = "qyro_ffi"
 version = "0.0.1"
 dependencies = [
+ "qrcode",
  "qyro_core",
  "qyro_session",
  "serde_json",
@@ -595,6 +596,7 @@ version = "0.0.1"
 name = "qyro_session"
 version = "0.0.1"
 dependencies = [
+ "qrcode",
  "qyro_crypto",
  "qyro_eye",
  "qyro_fs",

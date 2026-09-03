@@ -33,4 +33,21 @@ pub enum Look {
     Progress { solved: usize, total: usize },
     /// Con éste ya está: el archivo se puede sacar con [`crate::Eye::finish`].
     Complete,
+    /// Un QR legible que **no** es un frame de este producto.
+    ///
+    /// **QYR-0381.** Antes esto era `Nothing`, y con razón mientras lo único que
+    /// el ojo podía recibir fuera un archivo: un cartel de la pared y un frame
+    /// ilegible piden lo mismo a la pantalla, que es esperar al siguiente.
+    ///
+    /// Dejó de ser cierto cuando se descubrió **cuál** es el QR que más veces
+    /// cae aquí: el código de emparejamiento que dibuja `qyro qr`, debajo de la
+    /// frase «Point the other device's camera at this». El único QR que este
+    /// producto pide escanear era el que el escáner descartaba.
+    ///
+    /// **El ojo no dice qué es.** Dice que decodificó un QR y que no es suyo, y
+    /// entrega los bytes por [`crate::Eye::foreign`]. Quien decide si eso es un
+    /// emparejamiento es `qyro_session::Scanner`, que puede nombrar el
+    /// analizador de verdad — así el formato sigue viviendo en un solo sitio
+    /// (ADR-0032 enmienda 8).
+    Foreign,
 }

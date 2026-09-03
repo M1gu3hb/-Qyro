@@ -15,7 +15,7 @@
     clippy::indexing_slicing
 )]
 
-/// En qué quedó un frame. **Ninguna de las cuatro es un error.**
+/// En qué quedó un frame. **Ninguna de las cinco es un error.**
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScanState {
     /// No había código legible. El caso más común de todos.
@@ -27,6 +27,17 @@ pub enum ScanState {
     Progress { solved: u32, total: u32 },
     /// Con éste ya está.
     Complete,
+    /// Lo leído no era un archivo: era un **código de emparejamiento**.
+    ///
+    /// **QYR-0381.** Una rama distinta de la pantalla y no un grado de progreso:
+    /// las cuatro de arriba dicen «sigue mirando, falta tanto», y ésta dice
+    /// «para, ya tienes lo que hacía falta». Confundirlas dejaría al escáner
+    /// buscando bloques de un archivo que nadie está mandando.
+    ///
+    /// El código se saca con [`crate::Scanner::pairing`]. **No establece
+    /// confianza**: es la expectativa que hay que comparar con la huella del
+    /// apretón, y quien la compara es la pantalla de Enviar (ADR-0035 §2.1).
+    Pairing,
 }
 
 impl ScanState {
@@ -41,6 +52,7 @@ impl ScanState {
             Self::Repeat => 1,
             Self::Progress { .. } => 2,
             Self::Complete => 3,
+            Self::Pairing => 4,
         }
     }
 }

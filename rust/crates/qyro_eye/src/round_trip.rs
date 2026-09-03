@@ -134,10 +134,47 @@ fn un_qr_que_no_es_de_qyro_no_entra() {
     // Una habitación con carteles. No es un ataque, es una pared.
     let (luma, width, height) = draw_as_luma(b"https://example.invalid/no-soy-qyro", 4);
     let mut eye = Eye::new();
-    assert_eq!(eye.look(&luma, width, height), Look::Nothing);
+
+    // **Esta prueba decía `Look::Nothing` hasta QYR-0381**, y la propiedad que
+    // le importa no era ésa: era que un QR ajeno **no entre en la sesión**. Eso
+    // se sigue afirmando abajo, y es lo que hay que proteger.
+    //
+    // Lo que cambia es que ahora se dice en voz alta que se leyó algo ajeno, en
+    // vez de confundirlo con «no veo nada». El ojo no juzga qué es: sólo dice
+    // que decodificó un QR que no es un frame suyo, y entrega los bytes para que
+    // otro decida. Ese «otro» es `qyro_session::Scanner`.
+    assert_eq!(eye.look(&luma, width, height), Look::Foreign);
+    assert_eq!(
+        eye.foreign(),
+        Some(b"https://example.invalid/no-soy-qyro".as_slice()),
+        "el ojo no entrego los bytes del QR ajeno"
+    );
+
     assert_eq!(eye.shape(), None, "un QR ajeno fijo la forma de la sesion");
+    assert_eq!(eye.finish(), None, "un QR ajeno produjo un archivo");
     // Y se contó como leído: el ojo SÍ vio un código, sólo que no era nuestro.
     // La distinción importa para la pantalla: «no veo nada» y «veo códigos que
     // no son de Qyro» piden acciones distintas.
     assert_eq!(eye.tally(), (1, 1));
+}
+
+#[test]
+fn el_codigo_de_emparejamiento_que_dibuja_qyro_qr_se_lee() {
+    // **QYR-0381, y es el QR que este producto pide escanear.** `qyro qr` lo
+    // dibuja y escribe debajo «Point the other device's camera at this»; hasta
+    // aquí, la cámara lo leía y lo tiraba en la misma rama que un cartel.
+    //
+    // El ojo sigue sin saber qué es: devuelve los bytes. Quien los reconoce es
+    // la fachada, con el analizador de verdad.
+    const CODE: &[u8] = b"QYRO1|192.168.1.7:49517|00112233445566778899aabbccddeeff";
+    let (luma, width, height) = draw_as_luma(CODE, 4);
+    let mut eye = Eye::new();
+
+    assert_eq!(eye.look(&luma, width, height), Look::Foreign);
+    assert_eq!(eye.foreign(), Some(CODE));
+    assert_eq!(
+        eye.shape(),
+        None,
+        "un codigo de emparejamiento abrio una sesion de archivo"
+    );
 }

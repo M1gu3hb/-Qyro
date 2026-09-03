@@ -47,3 +47,8 @@ qyro_win_dpapi = { path = "../qyro_win_dpapi" }
 # already depends on `qyro_crypto`.
 [dev-dependencies]
 qyro_crypto = { path = "../qyro_crypto" }
+# Sólo para dibujar el QR que la prueba del escáner le da a leer. **Dev, no
+# normal**: el producto lee QR y no los dibuja en esta cara -- quien los dibuja
+# es la terminal. Ya estaba en el lock como dev-dependency de `qyro_eye`, así que
+# esto añade una arista y no un paquete.
+qrcode = { version = "0.14", default-features = false }

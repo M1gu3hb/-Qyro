@@ -36,6 +36,13 @@ pub use trust_abi::{
     qyro_trust_list_peers,
 };
 
+// Los del ojo que la enmienda 8 necesita probar, por la misma razón que los de
+// arriba: llamarlos como Rust en vez de por `dlopen` quita la única forma de que
+// la prueba mire una biblioteca vieja.
+pub use scanner_abi::{
+    qyro_scanner_close, qyro_scanner_look, qyro_scanner_open, qyro_scanner_pairing,
+};
+
 use crate::abi::guard;
 
 #[cfg(test)]

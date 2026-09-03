@@ -34,5 +34,5 @@ fn every_production_file_is_listed() {
 /// aparece con un `match` que aparenta cubrirla.
 #[test]
 fn every_look_has_a_construction_site() {
-    assert_every_variant_has_a_construction_site(&PRODUCTION_FILES, "look.rs", "Look", 4, &[]);
+    assert_every_variant_has_a_construction_site(&PRODUCTION_FILES, "look.rs", "Look", 5, &[]);
 }

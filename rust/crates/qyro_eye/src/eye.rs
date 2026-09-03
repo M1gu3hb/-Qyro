@@ -19,6 +19,12 @@ pub struct Eye {
     shape: Option<Shape>,
     seen_frames: u64,
     read_frames: u64,
+    /// Los bytes del último QR legible que no era un frame de este producto.
+    ///
+    /// QYR-0381. Se guarda el último y no una lista: la pantalla reacciona al
+    /// que acaba de leerse, y acumular carteles de una pared sería memoria que
+    /// crece con el tiempo que alguien sostenga el teléfono.
+    foreign: Option<Vec<u8>>,
 }
 
 impl Default for Eye {
@@ -36,6 +42,7 @@ impl Eye {
             shape: None,
             seen_frames: 0,
             read_frames: 0,
+            foreign: None,
         }
     }
 
@@ -49,6 +56,16 @@ impl Eye {
     #[must_use]
     pub const fn tally(&self) -> (u64, u64) {
         (self.seen_frames, self.read_frames)
+    }
+
+    /// Los bytes del último QR legible que no era un frame de este producto.
+    ///
+    /// QYR-0381. `None` hasta que se lea uno. No se interpreta aquí: son los
+    /// bytes tal cual salieron del QR, y el ojo no sabe si son un código de
+    /// emparejamiento, una URL o la carta de un restaurante.
+    #[must_use]
+    pub fn foreign(&self) -> Option<&[u8]> {
+        self.foreign.as_deref()
     }
 
     /// La forma del archivo que se está recibiendo, si ya se ha visto un frame.
@@ -94,9 +111,18 @@ impl Eye {
         self.read_frames = self.read_frames.saturating_add(1);
 
         let Ok(frame) = decode_frame(&bytes) else {
-            // Un QR que no es de Qyro. En una habitación con carteles, esto es
-            // lo normal, no un ataque.
-            return Look::Nothing;
+            // Un QR que no es de Qyro **como frame de archivo**. En una
+            // habitación con carteles esto es lo normal, no un ataque.
+            //
+            // **Y aquí caía también el código de emparejamiento** (QYR-0381):
+            // `qyro qr` lo dibuja, dice «Point the other device's camera at
+            // this», y el ojo lo tiraba en esta línea. El único QR que este
+            // producto pide escanear era el que el escáner descartaba.
+            //
+            // El ojo sigue sin saber qué es. Guarda los bytes y lo dice; quien
+            // los reconoce es la fachada (ADR-0032 enmienda 8).
+            self.foreign = Some(bytes);
+            return Look::Foreign;
         };
 
         let decoder = match &mut self.decoder {

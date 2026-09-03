@@ -25,3 +25,6 @@ qyro_session = { path = "../qyro_session" }
 # and it was already in this workspace's lock file as a dev-dependency of
 # qyro_crypto, so no crate is added to the audited graph.
 serde_json = "1.0.145"
+# Dibuja el QR que la prueba del símbolo 35 le da a leer al ojo. Dev-only, y ya
+# estaba en el lock como dev-dependency de `qyro_eye`: una arista, no un paquete.
+qrcode = { version = "0.14", default-features = false }

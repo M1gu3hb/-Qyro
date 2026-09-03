@@ -219,6 +219,78 @@ pub unsafe extern "C" fn qyro_scanner_result(handle: u64, out: *mut u8, cap: usi
     })
 }
 
+/// El código de emparejamiento que acaba de leerse por la cámara, si lo hubo.
+///
+/// **QYR-0381, y es el símbolo 35** (ADR-0032 enmienda 8). `qyro qr` dibuja un
+/// código y escribe debajo «Point the other device's camera at this». La cámara
+/// del teléfono lo leía y lo tiraba: el ojo lo descartaba en la misma rama que
+/// un cartel de la pared, una línea antes de poder usarlo.
+///
+/// Usa el contrato de texto de la enmienda 1 —**capacidad cero para preguntar el
+/// tamaño**— y no el par `_len`/`_result` que usa el archivo de este mismo
+/// módulo. La diferencia no es capricho: aquél tiene que poder decir «todavía
+/// no» sobre un archivo que llegará, y éste responde sobre algo que ya está o no
+/// está. Un código es corto y cabe en una llamada.
+///
+/// **Con los códigos de este módulo, no con los de `emit_text`.** El primer
+/// borrador llamaba a `emit_text`, que devuelve `-6` para «no cabe» — y todos
+/// los demás símbolos de aquí dicen `-2` para eso mismo. Un solo símbolo
+/// devolviendo dos valores distintos para «argumento inservible» es una
+/// frontera que obliga a quien la usa a saber cuál de las dos familias le tocó.
+/// La forma es la misma; los números, los de casa.
+///
+/// **Sale entero, con su huella.** Devolver sólo la dirección sería repetir el
+/// defecto que QYR-0392 arregló en la otra cara: la huella es lo que hace que
+/// escanear valga más que teclear, y quien recibe esto la compara con la del
+/// apretón (ADR-0035 §2.1).
+///
+/// # Safety
+///
+/// `out`/`out_len` como en el resto del contrato de texto: `out` direcciona
+/// `capacity` bytes escribibles, o es nulo con `capacity` a cero para preguntar;
+/// `out_len` direcciona un `usize` escribible.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qyro_scanner_pairing(
+    handle: u64,
+    out: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> i32 {
+    guard(|| {
+        if out_len.is_null() {
+            return QYRO_ERR_NULL_OUT;
+        }
+        let Ok(mut table) = table().lock() else {
+            return QYRO_ERR_BAD_ARGUMENT;
+        };
+        let Ok(scanner) = table.get_mut(handle) else {
+            return QYRO_ERR_BAD_ARGUMENT;
+        };
+        let Some(code) = scanner.pairing() else {
+            return QYRO_ERR_NOT_READY;
+        };
+        let bytes = code.as_bytes();
+        // La longitud siempre, quepa o no: preguntar con `capacity == 0` es la
+        // forma documentada de saber cuánto reservar.
+        // SAFETY: comprobado no nulo al entrar.
+        unsafe { out_len.write(bytes.len()) };
+
+        // **Nada se escribe cuando no cabe.** Medio código escrito junto a un
+        // error es cómo media huella acaba comparándose en voz alta, y media
+        // huella que coincide no prueba nada.
+        if bytes.len() > capacity {
+            return QYRO_ERR_BAD_ARGUMENT;
+        }
+        if out.is_null() {
+            return QYRO_ERR_NULL_OUT;
+        }
+        // SAFETY: quien llama promete `capacity` bytes escribibles, y la
+        // longitud se comprobó contra `capacity` justo arriba.
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
+        0
+    })
+}
+
 /// Cierra el escaneo. Un identificador que no existe es un no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn qyro_scanner_close(handle: u64) {
