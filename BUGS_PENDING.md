@@ -1132,6 +1132,40 @@ la primera vez que se sepa cuál de las dos es.
 vez que un arreglo a ciegas falló, lo que faltaba no era una idea mejor: era un
 dato. Y el dato estaba siempre detrás de un `.ok()` o un `let _ =`.
 
+### El dato que faltaba, y confirma la sexta vuelta antes de que CI la juzgue
+
+La quinta vuelta preguntaba «¿sale el adiós siquiera?». **Windows contestó:**
+
+```
+receptor -- adios: Some("escrito"), final del cable: None
+```
+
+**Sale.** El receptor lo escribe, su propio cable no da ningún error, y aun así
+el emisor pasa seis segundos sin verlo y muere con el RST del cierre. Con eso se
+cae la última alternativa —«el receptor no llegó a decirlo»— y sólo queda una
+explicación: **el emisor no está leyendo**, porque está dentro de su propia
+escritura.
+
+Y eso es exactamente el agujero que la sexta vuelta cierra: hasta ella, un
+emisor atascado **a media trama** absorbía la cancelación y seguía intentando
+escribir para siempre. Los tres arreglos anteriores no podían funcionar porque
+los tres dejaban al emisor dentro de `write`:
+
+| Vuelta | Dónde estaba el emisor | Por qué no servía |
+|---|---|---|
+| 1 (`GOODBYE_DRAIN`) | dentro de `write` | arreglaba el lado que **no** era |
+| 2 (`poll_frame` al empezar el paso) | dentro de `write` | no vuelve al principio del paso |
+| 4 (`write_frame_watching`, `bool`) | dentro de `write`, a media trama | absorbía y no actuaba |
+| 6 (`Wrote::PartialPeerSpoke`) | **sale** tras 250 ms | pendiente de CI |
+
+**Lo que esta ficha ha costado y lo que ha enseñado.** Seis vueltas, cuatro
+intentos de arreglo y dos de instrumentación. Los dos de instrumentación son los
+que movieron la aguja, y los dos midieron algo que el código ya sabía y estaba
+tirando: `wire_ending` detrás del nombre único `PeerUnreachable`, y
+`farewell_note` detrás de un `.ok()` y un `let _ =`. **En una plataforma que no
+se tiene delante, cada dato descartado es un ciclo de CI perdido**, y aquí
+costaron cuatro.
+
 ### Sexta vuelta: el arreglo de la cuarta tenía un agujero, y era el mismo pecado
 
 Releyendo `write_frame_watching` a la contra apareció el motivo por el que no
