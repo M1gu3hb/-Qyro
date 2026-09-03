@@ -2332,11 +2332,35 @@ fn un_cancelar_llega_mientras_el_emisor_empuja_y_no_al_final() {
         .ok()
         .and_then(qyro_session::Session::wire_ending)
         .unwrap_or("(ninguno)");
-    println!("final del cable segun el emisor: {ending}");
+    // **Dónde estuvo el emisor esos segundos**, con el contador que ya existía.
+    // Muchos pasos y muchas lecturas vencidas = estuvo dando vueltas y no le
+    // llegó nada. Pocos pasos = se quedó dentro de una llamada. Y los bytes
+    // dicen cuándo se quedó.
+    let tally = sender
+        .as_ref()
+        .ok()
+        .map(qyro_session::Session::step_tally)
+        .unwrap_or((0, 0));
+    let moved = sender
+        .as_ref()
+        .ok()
+        .map(|session| session.progress().done)
+        .unwrap_or(0);
+    let writes = sender
+        .as_ref()
+        .ok()
+        .map(qyro_session::Session::write_tally)
+        .unwrap_or((0, 0));
+    println!(
+        "emisor -- final: {ending}, pasos/vencidas: {tally:?}, \
+         escrituras paradas/con noticias: {writes:?}, bytes movidos: {moved}"
+    );
     assert!(
         !matches!(outcome, Err(SessionError::PeerUnreachable)),
         "el emisor leyo la cancelacion como «el otro aparato no responde»: \
-         {outcome:?}, final del cable: {ending}, tras {elapsed:?}. {receiver_note}"
+         {outcome:?}, final del cable: {ending}, tras {elapsed:?}, \
+         pasos/vencidas: {tally:?}, paradas/noticias: {writes:?}, \
+         bytes movidos: {moved}. {receiver_note}"
     );
     assert!(
         matches!(

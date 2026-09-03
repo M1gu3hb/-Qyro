@@ -83,6 +83,10 @@ pub struct FrameStream {
     /// for. Released when the handshake authenticates the peer, or when this
     /// stream drops — whichever happens first, which is the point.
     pending_slot: Option<PendingSlot>,
+    /// Cuántas veces una escritura no pudo avanzar, y cuántas de ellas trajeron
+    /// algo del par. Sólo para diagnóstico (QYR-0400).
+    write_stalls: u64,
+    write_absorbs: u64,
     /// Largest `FrameDecoder::buffer_capacity()` ever observed.
     ///
     /// `cfg(test)`, never a feature. It exists because "an unauthenticated peer
@@ -172,6 +176,8 @@ impl FrameStream {
             last_byte_at: Instant::now(),
             idle_timeout: IDLE_TIMEOUT,
             pending_slot: None,
+            write_stalls: 0,
+            write_absorbs: 0,
             #[cfg(test)]
             peak_decoder_capacity: 0,
             #[cfg(test)]
@@ -386,7 +392,11 @@ impl FrameStream {
                 Err(error) if is_read_timeout(error.kind()) => {
                     // El otro lado no acepta más. **Aquí es donde se mira el
                     // cable**, que es lo que no se hacía.
+                    self.write_stalls = self.write_stalls.saturating_add(1);
                     let arrived = self.absorb_once()?;
+                    if arrived {
+                        self.write_absorbs = self.write_absorbs.saturating_add(1);
+                    }
                     if arrived && sent == 0 {
                         return Ok(Wrote::NothingPeerSpoke);
                     }
@@ -420,6 +430,17 @@ impl FrameStream {
                 }
             }
         }
+    }
+
+    /// Cuántas veces una escritura se quedó sin poder avanzar, y cuántas de
+    /// ellas trajeron algo del par.
+    ///
+    /// Diagnóstico puro (QYR-0400). «Muchas paradas y cero absorciones» dice
+    /// que el emisor está atascado escribiendo **y no le llega nada**, que es
+    /// una frase distinta de «está dando vueltas sin enterarse».
+    #[must_use]
+    pub const fn write_tally(&self) -> (u64, u64) {
+        (self.write_stalls, self.write_absorbs)
     }
 
     /// Flushes anything the socket is holding.

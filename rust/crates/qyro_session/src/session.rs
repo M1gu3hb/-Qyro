@@ -1021,6 +1021,13 @@ impl Session {
         (self.steps, self.expired_reads)
     }
 
+    /// Cuántas veces una escritura propia se quedó parada, y cuántas de ellas
+    /// trajeron algo del par. Diagnóstico puro (QYR-0400).
+    #[must_use]
+    pub const fn write_tally(&self) -> (u64, u64) {
+        self.stream.write_tally()
+    }
+
     /// Offers the current progress to the observer, if there is one.
     fn emit(&mut self, terminal: bool) {
         let progress = self.progress;
